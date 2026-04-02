@@ -10,9 +10,16 @@ import (
 
 // Config 是 Spider 的全局配置。
 type Config struct {
-	DataDir string `yaml:"data_dir"` // SQLite 文件、master.key 等存放目录
-	LogLevel string `yaml:"log_level"`
-	SSH     SSHConfig `yaml:"ssh"`
+	DataDir  string    `yaml:"data_dir"` // SQLite 文件、master.key 等存放目录
+	LogLevel string    `yaml:"log_level"`
+	SSH      SSHConfig `yaml:"ssh"`
+	SSE      SSEConfig `yaml:"sse"`
+}
+
+// SSEConfig 是 MCP SSE server 相关配置。
+type SSEConfig struct {
+	Addr    string `yaml:"addr"`     // 监听地址，默认 :8080
+	BaseURL string `yaml:"base_url"` // 对外暴露的 URL，例如 http://localhost:8080
 }
 
 // SSHConfig 是 SSH 相关配置。
@@ -32,6 +39,10 @@ func DefaultConfig() *Config {
 			DefaultTimeout: 30,
 			PoolTTL:        300,
 			MaxPoolSize:    50,
+		},
+		SSE: SSEConfig{
+			Addr:    ":8080",
+			BaseURL: "http://localhost:8080",
 		},
 	}
 }

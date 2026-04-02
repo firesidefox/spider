@@ -1,7 +1,12 @@
 package mcp
 
 import (
+	"context"
 	"database/sql"
+	"fmt"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	mcpgo "github.com/mark3labs/mcp-go/mcp"
@@ -21,17 +26,41 @@ type App struct {
 	DB        *sql.DB
 }
 
-// Serve 启动 MCP stdio server（阻塞）。
-func Serve(app *App) error {
+// newMCPServer 创建并注册工具的 MCP server。
+func newMCPServer(app *App) *server.MCPServer {
 	s := server.NewMCPServer(
 		"spider",
 		"1.0.0",
 		server.WithToolCapabilities(true),
 	)
-
 	registerTools(s, app)
+	return s
+}
 
-	return server.ServeStdio(s)
+// Serve 以 SSE 模式启动 MCP server（阻塞，支持优雅关闭）。
+func Serve(app *App) error {
+	s := newMCPServer(app)
+	sse := server.NewSSEServer(s,
+		server.WithBaseURL(app.Config.SSE.BaseURL),
+	)
+
+	errCh := make(chan error, 1)
+	go func() {
+		fmt.Fprintf(os.Stderr, "Spider MCP server 启动，监听 %s\n", app.Config.SSE.Addr)
+		errCh <- sse.Start(app.Config.SSE.Addr)
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+
+	select {
+	case err := <-errCh:
+		return err
+	case <-quit:
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		return sse.Shutdown(ctx)
+	}
 }
 
 // registerTools 注册所有 MCP 工具。
