@@ -59,6 +59,7 @@ func run() error {
 		cli.NewExecCmd(hs, ls, pool, cfg),
 		cli.NewPingCmd(hs),
 		cli.NewHistoryCmd(hs, ls),
+		cli.NewMCPCmd(cfg),
 	)
 
 	return root.Execute()
