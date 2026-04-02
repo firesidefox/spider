@@ -31,7 +31,7 @@ make install      # 安装到 $GOPATH/bin
 ## 启动 MCP Server
 
 ```bash
-# 直接运行（默认监听 :8080）
+# 直接运行（默认监听 :8000）
 bin/spider
 
 # 自定义监听地址（通过配置文件）
@@ -46,7 +46,7 @@ bin/spider
 spider 以 SSE 模式运行，注册时使用 HTTP URL：
 
 ```bash
-claude mcp add --transport sse spider http://localhost:8080/sse
+claude mcp add --transport sse spider http://localhost:8000/sse
 ```
 
 或手动编辑 `~/.claude/settings.json`：
@@ -56,7 +56,7 @@ claude mcp add --transport sse spider http://localhost:8080/sse
   "mcpServers": {
     "spider": {
       "type": "sse",
-      "url": "http://localhost:8080/sse"
+      "url": "http://localhost:8000/sse"
     }
   }
 }
@@ -165,8 +165,8 @@ spdctl history --n 50
 ```yaml
 data_dir: ~/.spider
 sse:
-  addr: :8080
-  base_url: http://localhost:8080
+  addr: :8000
+  base_url: http://localhost:8000
 ssh:
   default_timeout_seconds: 30
   pool_ttl_seconds: 300
