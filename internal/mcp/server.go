@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -37,17 +38,21 @@ func newMCPServer(app *App) *server.MCPServer {
 	return s
 }
 
-// Serve 以 SSE 模式启动 MCP server（阻塞，支持优雅关闭）。
+// NewHTTPHandler 返回 MCP Streamable HTTP server 的 http.Handler，供外部 mux 挂载于 /mcp。
+func NewHTTPHandler(app *App) http.Handler {
+	s := newMCPServer(app)
+	return server.NewStreamableHTTPServer(s)
+}
+
+// Serve 以 Streamable HTTP 模式启动 MCP server（阻塞，支持优雅关闭）。
 func Serve(app *App) error {
 	s := newMCPServer(app)
-	sse := server.NewSSEServer(s,
-		server.WithBaseURL(app.Config.SSE.BaseURL),
-	)
+	h := server.NewStreamableHTTPServer(s)
 
 	errCh := make(chan error, 1)
 	go func() {
 		fmt.Fprintf(os.Stderr, "Spider MCP server 启动，监听 %s\n", app.Config.SSE.Addr)
-		errCh <- sse.Start(app.Config.SSE.Addr)
+		errCh <- h.Start(app.Config.SSE.Addr)
 	}()
 
 	quit := make(chan os.Signal, 1)
@@ -59,7 +64,7 @@ func Serve(app *App) error {
 	case <-quit:
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		return sse.Shutdown(ctx)
+		return h.Shutdown(ctx)
 	}
 }
 

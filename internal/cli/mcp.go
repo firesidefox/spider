@@ -14,7 +14,7 @@ import (
 func NewMCPCmd(cfg *config.Config) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "mcp",
-		Short: "管理 Claude Code MCP 注册",
+		Short: "管理 MCP 注册（支持 claude / opencode / codex）",
 	}
 	cmd.AddCommand(
 		newMCPRegisterCmd(cfg),
@@ -24,17 +24,104 @@ func NewMCPCmd(cfg *config.Config) *cobra.Command {
 	return cmd
 }
 
-// claudeSettings 是 ~/.claude/settings.json 的部分结构。
-type claudeSettings struct {
-	MCPServers map[string]mcpServerEntry `json:"mcpServers"`
+// ── register ──────────────────────────────────────────────────────────────────
+
+func newMCPRegisterCmd(cfg *config.Config) *cobra.Command {
+	var name, url, target string
+	cmd := &cobra.Command{
+		Use:   "register",
+		Short: "将 Spider MCP server 注册到 AI 工具（claude/opencode/codex）",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if url == "" {
+				url = cfg.SSE.BaseURL + "/sse"
+			}
+			switch target {
+			case "claude":
+				return registerClaude(name, url)
+			case "opencode":
+				return registerOpencode(name, url)
+			case "codex":
+				return registerCodex(name, url)
+			default:
+				return fmt.Errorf("不支持的工具: %s（可选: claude, opencode, codex）", target)
+			}
+		},
+	}
+	cmd.Flags().StringVar(&name, "name", "spider", "MCP server 名称")
+	cmd.Flags().StringVar(&url, "url", "", "SSE URL（默认使用配置中的 base_url）")
+	cmd.Flags().StringVar(&target, "tool", "claude", "目标工具: claude | opencode | codex")
+	return cmd
 }
 
-type mcpServerEntry struct {
+// ── unregister ────────────────────────────────────────────────────────────────
+
+func newMCPUnregisterCmd() *cobra.Command {
+	var name, target string
+	cmd := &cobra.Command{
+		Use:   "unregister",
+		Short: "从 AI 工具移除 Spider MCP 注册",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			switch target {
+			case "claude":
+				return unregisterClaude(name)
+			case "opencode":
+				return unregisterOpencode(name)
+			case "codex":
+				return unregisterCodex(name)
+			default:
+				return fmt.Errorf("不支持的工具: %s（可选: claude, opencode, codex）", target)
+			}
+		},
+	}
+	cmd.Flags().StringVar(&name, "name", "spider", "MCP server 名称")
+	cmd.Flags().StringVar(&target, "tool", "claude", "目标工具: claude | opencode | codex")
+	return cmd
+}
+
+// ── status ────────────────────────────────────────────────────────────────────
+
+func newMCPStatusCmd() *cobra.Command {
+	var target string
+	cmd := &cobra.Command{
+		Use:   "status",
+		Short: "查看 MCP 注册状态",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			switch target {
+			case "claude":
+				return statusClaude()
+			case "opencode":
+				return statusOpencode()
+			case "codex":
+				return statusCodex()
+			case "all":
+				fmt.Println("=== Claude Code ===")
+				_ = statusClaude()
+				fmt.Println("\n=== OpenCode ===")
+				_ = statusOpencode()
+				fmt.Println("\n=== Codex ===")
+				_ = statusCodex()
+				return nil
+			default:
+				return fmt.Errorf("不支持的工具: %s（可选: claude, opencode, codex, all）", target)
+			}
+		},
+	}
+	cmd.Flags().StringVar(&target, "tool", "all", "目标工具: claude | opencode | codex | all")
+	return cmd
+}
+
+// ── Claude Code (~/.claude/settings.json) ────────────────────────────────────
+
+type claudeSettings struct {
+	MCPServers map[string]claudeMCPEntry `json:"mcpServers"`
+}
+
+type claudeMCPEntry struct {
 	Type string `json:"type"`
 	URL  string `json:"url"`
 }
 
-func settingsPath() (string, error) {
+func claudeSettingsPath() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
@@ -42,8 +129,8 @@ func settingsPath() (string, error) {
 	return filepath.Join(home, ".claude", "settings.json"), nil
 }
 
-func loadSettings(path string) (*claudeSettings, error) {
-	s := &claudeSettings{MCPServers: map[string]mcpServerEntry{}}
+func loadClaudeSettings(path string) (*claudeSettings, error) {
+	s := &claudeSettings{MCPServers: map[string]claudeMCPEntry{}}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -51,40 +138,30 @@ func loadSettings(path string) (*claudeSettings, error) {
 		}
 		return nil, err
 	}
-	// 先解析为 map[string]any 以保留未知字段，再单独处理 mcpServers
 	var raw map[string]json.RawMessage
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return nil, fmt.Errorf("解析 settings.json 失败: %w", err)
 	}
 	if v, ok := raw["mcpServers"]; ok {
-		if err := json.Unmarshal(v, &s.MCPServers); err != nil {
-			return nil, fmt.Errorf("解析 mcpServers 失败: %w", err)
-		}
+		_ = json.Unmarshal(v, &s.MCPServers)
 	}
 	return s, nil
 }
 
-func saveSettings(path string, s *claudeSettings) error {
-	// 读取原始文件，合并 mcpServers 字段，保留其他字段
+func saveClaudeSettings(path string, s *claudeSettings) error {
 	var raw map[string]json.RawMessage
 	data, err := os.ReadFile(path)
 	if err != nil && !os.IsNotExist(err) {
 		return err
 	}
 	if len(data) > 0 {
-		if err := json.Unmarshal(data, &raw); err != nil {
-			return fmt.Errorf("解析 settings.json 失败: %w", err)
-		}
+		_ = json.Unmarshal(data, &raw)
 	}
 	if raw == nil {
 		raw = map[string]json.RawMessage{}
 	}
-	mcpJSON, err := json.Marshal(s.MCPServers)
-	if err != nil {
-		return err
-	}
-	raw["mcpServers"] = mcpJSON
-
+	b, _ := json.Marshal(s.MCPServers)
+	raw["mcpServers"] = b
 	out, err := json.MarshalIndent(raw, "", "  ")
 	if err != nil {
 		return err
@@ -95,87 +172,262 @@ func saveSettings(path string, s *claudeSettings) error {
 	return os.WriteFile(path, append(out, '\n'), 0600)
 }
 
-func newMCPRegisterCmd(cfg *config.Config) *cobra.Command {
-	var name string
-	var url string
-	cmd := &cobra.Command{
-		Use:   "register",
-		Short: "将 Spider MCP server 注册到 Claude Code",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if url == "" {
-				url = cfg.SSE.BaseURL + "/sse"
-			}
-			path, err := settingsPath()
-			if err != nil {
-				return err
-			}
-			s, err := loadSettings(path)
-			if err != nil {
-				return err
-			}
-			s.MCPServers[name] = mcpServerEntry{Type: "sse", URL: url}
-			if err := saveSettings(path, s); err != nil {
-				return fmt.Errorf("写入 settings.json 失败: %w", err)
-			}
-			fmt.Printf("已注册: %s -> %s\n", name, url)
-			fmt.Printf("配置文件: %s\n", path)
-			return nil
-		},
+func registerClaude(name, url string) error {
+	path, err := claudeSettingsPath()
+	if err != nil {
+		return err
 	}
-	cmd.Flags().StringVar(&name, "name", "spider", "MCP server 名称")
-	cmd.Flags().StringVar(&url, "url", "", "SSE URL（默认使用配置中的 base_url）")
-	return cmd
+	s, err := loadClaudeSettings(path)
+	if err != nil {
+		return err
+	}
+	s.MCPServers[name] = claudeMCPEntry{Type: "http", URL: url}
+	if err := saveClaudeSettings(path, s); err != nil {
+		return fmt.Errorf("写入失败: %w", err)
+	}
+	fmt.Printf("已注册到 Claude Code: %s -> %s\n配置文件: %s\n", name, url, path)
+	return nil
 }
 
-func newMCPUnregisterCmd() *cobra.Command {
-	var name string
-	cmd := &cobra.Command{
-		Use:   "unregister",
-		Short: "从 Claude Code 移除 Spider MCP 注册",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			path, err := settingsPath()
-			if err != nil {
-				return err
-			}
-			s, err := loadSettings(path)
-			if err != nil {
-				return err
-			}
-			if _, ok := s.MCPServers[name]; !ok {
-				return fmt.Errorf("未找到注册项: %s", name)
-			}
-			delete(s.MCPServers, name)
-			if err := saveSettings(path, s); err != nil {
-				return fmt.Errorf("写入 settings.json 失败: %w", err)
-			}
-			fmt.Printf("已移除: %s\n", name)
-			return nil
-		},
+func unregisterClaude(name string) error {
+	path, err := claudeSettingsPath()
+	if err != nil {
+		return err
 	}
-	cmd.Flags().StringVar(&name, "name", "spider", "MCP server 名称")
-	return cmd
+	s, err := loadClaudeSettings(path)
+	if err != nil {
+		return err
+	}
+	if _, ok := s.MCPServers[name]; !ok {
+		return fmt.Errorf("未找到注册项: %s", name)
+	}
+	delete(s.MCPServers, name)
+	if err := saveClaudeSettings(path, s); err != nil {
+		return fmt.Errorf("写入失败: %w", err)
+	}
+	fmt.Printf("已从 Claude Code 移除: %s\n", name)
+	return nil
 }
 
-func newMCPStatusCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "status",
-		Short: "查看当前 Claude Code MCP 注册状态",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			path, err := settingsPath()
-			if err != nil {
-				return err
-			}
-			s, err := loadSettings(path)
-			if err != nil {
-				return err
-			}
-			if len(s.MCPServers) == 0 {
-				fmt.Println("未注册任何 MCP server")
-				return nil
-			}
-			data, _ := json.MarshalIndent(s.MCPServers, "", "  ")
-			fmt.Println(string(data))
-			return nil
-		},
+func statusClaude() error {
+	path, err := claudeSettingsPath()
+	if err != nil {
+		return err
 	}
+	s, err := loadClaudeSettings(path)
+	if err != nil {
+		return err
+	}
+	if len(s.MCPServers) == 0 {
+		fmt.Println("未注册任何 MCP server")
+		return nil
+	}
+	data, _ := json.MarshalIndent(s.MCPServers, "", "  ")
+	fmt.Println(string(data))
+	return nil
+}
+
+// ── OpenCode (~/.opencode/config.json) ───────────────────────────────────────
+
+type opencodeConfig struct {
+	MCP map[string]opencodeMCPEntry `json:"mcp"`
+}
+
+type opencodeMCPEntry struct {
+	Type string `json:"type"`
+	URL  string `json:"url"`
+}
+
+func opencodeSettingsPath() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, ".opencode", "config.json"), nil
+}
+
+func loadOpencodeConfig(path string) (*opencodeConfig, error) {
+	s := &opencodeConfig{MCP: map[string]opencodeMCPEntry{}}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return s, nil
+		}
+		return nil, err
+	}
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return nil, fmt.Errorf("解析 config.json 失败: %w", err)
+	}
+	if v, ok := raw["mcp"]; ok {
+		_ = json.Unmarshal(v, &s.MCP)
+	}
+	return s, nil
+}
+
+func saveOpencodeConfig(path string, s *opencodeConfig) error {
+	var raw map[string]json.RawMessage
+	data, err := os.ReadFile(path)
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	if len(data) > 0 {
+		_ = json.Unmarshal(data, &raw)
+	}
+	if raw == nil {
+		raw = map[string]json.RawMessage{}
+	}
+	b, _ := json.Marshal(s.MCP)
+	raw["mcp"] = b
+	out, err := json.MarshalIndent(raw, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		return err
+	}
+	return os.WriteFile(path, append(out, '\n'), 0600)
+}
+
+func registerOpencode(name, url string) error {
+	path, err := opencodeSettingsPath()
+	if err != nil {
+		return err
+	}
+	s, err := loadOpencodeConfig(path)
+	if err != nil {
+		return err
+	}
+	s.MCP[name] = opencodeMCPEntry{Type: "remote", URL: url}
+	if err := saveOpencodeConfig(path, s); err != nil {
+		return fmt.Errorf("写入失败: %w", err)
+	}
+	fmt.Printf("已注册到 OpenCode: %s -> %s\n配置文件: %s\n", name, url, path)
+	return nil
+}
+
+func unregisterOpencode(name string) error {
+	path, err := opencodeSettingsPath()
+	if err != nil {
+		return err
+	}
+	s, err := loadOpencodeConfig(path)
+	if err != nil {
+		return err
+	}
+	if _, ok := s.MCP[name]; !ok {
+		return fmt.Errorf("未找到注册项: %s", name)
+	}
+	delete(s.MCP, name)
+	if err := saveOpencodeConfig(path, s); err != nil {
+		return fmt.Errorf("写入失败: %w", err)
+	}
+	fmt.Printf("已从 OpenCode 移除: %s\n", name)
+	return nil
+}
+
+func statusOpencode() error {
+	path, err := opencodeSettingsPath()
+	if err != nil {
+		return err
+	}
+	s, err := loadOpencodeConfig(path)
+	if err != nil {
+		return err
+	}
+	if len(s.MCP) == 0 {
+		fmt.Println("未注册任何 MCP server")
+		return nil
+	}
+	data, _ := json.MarshalIndent(s.MCP, "", "  ")
+	fmt.Println(string(data))
+	return nil
+}
+
+// ── Codex (~/.codex/config.toml) ─────────────────────────────────────────────
+// Codex 只支持 stdio，不支持 SSE。注册时写入 stdio 包装命令。
+
+func codexSettingsPath() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, ".codex", "config.toml"), nil
+}
+
+func registerCodex(name, url string) error {
+	path, err := codexSettingsPath()
+	if err != nil {
+		return err
+	}
+	fmt.Printf("注意: Codex 不支持 SSE，将跳过 URL %s\n", url)
+	fmt.Printf("Codex 只支持 stdio 模式，请手动在 %s 中添加：\n\n", path)
+	fmt.Printf("[mcp_servers.%s]\ncommand = \"/path/to/spider\"\nargs = []\n\n", name)
+	fmt.Println("其中 spider 二进制需以 stdio 模式运行（当前版本为 SSE 模式，暂不支持）。")
+	return nil
+}
+
+func unregisterCodex(name string) error {
+	path, err := codexSettingsPath()
+	if err != nil {
+		return err
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("配置文件不存在: %s", path)
+		}
+		return err
+	}
+	// 简单删除 [mcp_servers.<name>] 段落
+	content := string(data)
+	section := fmt.Sprintf("[mcp_servers.%s]", name)
+	start := indexOf(content, section)
+	if start < 0 {
+		return fmt.Errorf("未找到注册项: %s", name)
+	}
+	// 找到下一个 [ 或文件末尾
+	end := indexOf(content[start+len(section):], "\n[")
+	var newContent string
+	if end < 0 {
+		newContent = content[:start]
+	} else {
+		newContent = content[:start] + content[start+len(section)+end+1:]
+	}
+	if err := os.WriteFile(path, []byte(newContent), 0600); err != nil {
+		return fmt.Errorf("写入失败: %w", err)
+	}
+	fmt.Printf("已从 Codex 移除: %s\n", name)
+	return nil
+}
+
+func statusCodex() error {
+	path, err := codexSettingsPath()
+	if err != nil {
+		return err
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			fmt.Println("配置文件不存在")
+			return nil
+		}
+		return err
+	}
+	content := string(data)
+	if indexOf(content, "[mcp_servers.") < 0 {
+		fmt.Println("未注册任何 MCP server")
+		return nil
+	}
+	fmt.Println(content)
+	return nil
+}
+
+func indexOf(s, sub string) int {
+	for i := 0; i <= len(s)-len(sub); i++ {
+		if s[i:i+len(sub)] == sub {
+			return i
+		}
+	}
+	return -1
 }

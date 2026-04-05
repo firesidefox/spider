@@ -16,7 +16,7 @@ import (
 // makeListHosts 返回 list_hosts 的 handler。
 func makeListHosts(app *App) func(context.Context, mcpgo.CallToolRequest) (*mcpgo.CallToolResult, error) {
 	return func(ctx context.Context, req mcpgo.CallToolRequest) (*mcpgo.CallToolResult, error) {
-		tag := getString(req.Params.Arguments, "tag")
+		tag := getString(req.GetArguments(), "tag")
 		hosts, err := app.HostStore.List(tag)
 		if err != nil {
 			return toolError(fmt.Sprintf("查询主机列表失败: %v", err))
@@ -33,7 +33,7 @@ func makeListHosts(app *App) func(context.Context, mcpgo.CallToolRequest) (*mcpg
 // makeAddHost 返回 add_host 的 handler。
 func makeAddHost(app *App) func(context.Context, mcpgo.CallToolRequest) (*mcpgo.CallToolResult, error) {
 	return func(ctx context.Context, req mcpgo.CallToolRequest) (*mcpgo.CallToolResult, error) {
-		args := req.Params.Arguments
+		args := req.GetArguments()
 		authType := models.AuthType(getString(args, "auth_type"))
 		switch authType {
 		case models.AuthPassword, models.AuthKey, models.AuthKeyPassword:
@@ -65,7 +65,7 @@ func makeAddHost(app *App) func(context.Context, mcpgo.CallToolRequest) (*mcpgo.
 // makeRemoveHost 返回 remove_host 的 handler。
 func makeRemoveHost(app *App) func(context.Context, mcpgo.CallToolRequest) (*mcpgo.CallToolResult, error) {
 	return func(ctx context.Context, req mcpgo.CallToolRequest) (*mcpgo.CallToolResult, error) {
-		idOrName := getString(req.Params.Arguments, "id")
+		idOrName := getString(req.GetArguments(), "id")
 		if idOrName == "" {
 			return toolError("id 不能为空")
 		}
@@ -83,7 +83,7 @@ func makeRemoveHost(app *App) func(context.Context, mcpgo.CallToolRequest) (*mcp
 // makeUpdateHost 返回 update_host 的 handler。
 func makeUpdateHost(app *App) func(context.Context, mcpgo.CallToolRequest) (*mcpgo.CallToolResult, error) {
 	return func(ctx context.Context, req mcpgo.CallToolRequest) (*mcpgo.CallToolResult, error) {
-		args := req.Params.Arguments
+		args := req.GetArguments()
 		id := getString(args, "id")
 		if id == "" {
 			return toolError("id 不能为空")
@@ -136,7 +136,7 @@ func makeUpdateHost(app *App) func(context.Context, mcpgo.CallToolRequest) (*mcp
 // makeExecuteCommand 返回 execute_command 的 handler。
 func makeExecuteCommand(app *App) func(context.Context, mcpgo.CallToolRequest) (*mcpgo.CallToolResult, error) {
 	return func(ctx context.Context, req mcpgo.CallToolRequest) (*mcpgo.CallToolResult, error) {
-		args := req.Params.Arguments
+		args := req.GetArguments()
 		hostIDOrName := getString(args, "host_id")
 		command := getString(args, "command")
 		if hostIDOrName == "" || command == "" {
@@ -190,7 +190,7 @@ func makeExecuteCommand(app *App) func(context.Context, mcpgo.CallToolRequest) (
 // makeExecuteCommandBatch 返回 execute_command_batch 的 handler。
 func makeExecuteCommandBatch(app *App) func(context.Context, mcpgo.CallToolRequest) (*mcpgo.CallToolResult, error) {
 	return func(ctx context.Context, req mcpgo.CallToolRequest) (*mcpgo.CallToolResult, error) {
-		args := req.Params.Arguments
+		args := req.GetArguments()
 		command := getString(args, "command")
 		if command == "" {
 			return toolError("command 不能为空")
@@ -288,7 +288,7 @@ func makeExecuteCommandBatch(app *App) func(context.Context, mcpgo.CallToolReque
 // makeCheckConnectivity 返回 check_connectivity 的 handler。
 func makeCheckConnectivity(app *App) func(context.Context, mcpgo.CallToolRequest) (*mcpgo.CallToolResult, error) {
 	return func(ctx context.Context, req mcpgo.CallToolRequest) (*mcpgo.CallToolResult, error) {
-		hostIDOrName := getString(req.Params.Arguments, "host_id")
+		hostIDOrName := getString(req.GetArguments(), "host_id")
 		if hostIDOrName == "" {
 			return toolError("host_id 不能为空")
 		}
@@ -314,7 +314,7 @@ func makeCheckConnectivity(app *App) func(context.Context, mcpgo.CallToolRequest
 // makeUploadFile 返回 upload_file 的 handler。
 func makeUploadFile(app *App) func(context.Context, mcpgo.CallToolRequest) (*mcpgo.CallToolResult, error) {
 	return func(ctx context.Context, req mcpgo.CallToolRequest) (*mcpgo.CallToolResult, error) {
-		args := req.Params.Arguments
+		args := req.GetArguments()
 		hostIDOrName := getString(args, "host_id")
 		localPath := getString(args, "local_path")
 		remotePath := getString(args, "remote_path")
@@ -346,7 +346,7 @@ func makeUploadFile(app *App) func(context.Context, mcpgo.CallToolRequest) (*mcp
 // makeDownloadFile 返回 download_file 的 handler。
 func makeDownloadFile(app *App) func(context.Context, mcpgo.CallToolRequest) (*mcpgo.CallToolResult, error) {
 	return func(ctx context.Context, req mcpgo.CallToolRequest) (*mcpgo.CallToolResult, error) {
-		args := req.Params.Arguments
+		args := req.GetArguments()
 		hostIDOrName := getString(args, "host_id")
 		remotePath := getString(args, "remote_path")
 		localPath := getString(args, "local_path")
@@ -378,7 +378,7 @@ func makeDownloadFile(app *App) func(context.Context, mcpgo.CallToolRequest) (*m
 // makeGetExecutionHistory 返回 get_execution_history 的 handler。
 func makeGetExecutionHistory(app *App) func(context.Context, mcpgo.CallToolRequest) (*mcpgo.CallToolResult, error) {
 	return func(ctx context.Context, req mcpgo.CallToolRequest) (*mcpgo.CallToolResult, error) {
-		args := req.Params.Arguments
+		args := req.GetArguments()
 		hostIDOrName := getString(args, "host_id")
 		limit := getInt(args, "limit", 20)
 		offset := getInt(args, "offset", 0)

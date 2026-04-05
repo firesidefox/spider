@@ -1,10 +1,16 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"io/fs"
+	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
+	apipkg "github.com/spiderai/spider/internal/api"
 	mcppkg "github.com/spiderai/spider/internal/mcp"
 	sshpkg "github.com/spiderai/spider/internal/ssh"
 
@@ -48,12 +54,43 @@ func run() error {
 	pool.StartCleanup()
 	defer pool.Close()
 
-	return mcppkg.Serve(&mcppkg.App{
+	app := &mcppkg.App{
 		HostStore: hs,
 		LogStore:  ls,
 		Pool:      pool,
 		Config:    cfg,
 		DB:        database,
-	})
-}
+	}
 
+	mcpHandler := mcppkg.NewHTTPHandler(app)
+
+	mux := http.NewServeMux()
+	mux.Handle("/mcp", mcpHandler)
+	mux.Handle("/api/", apipkg.NewRouter(app))
+
+	sub, err := fs.Sub(webFS, "web/dist")
+	if err != nil {
+		return fmt.Errorf("加载 web 资源失败: %w", err)
+	}
+	mux.Handle("/", http.FileServer(http.FS(sub)))
+
+	srv := &http.Server{Addr: cfg.SSE.Addr, Handler: mux}
+
+	errCh := make(chan error, 1)
+	go func() {
+		fmt.Fprintf(os.Stderr, "Spider 启动，监听 %s\n", cfg.SSE.Addr)
+		errCh <- srv.ListenAndServe()
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+
+	select {
+	case err := <-errCh:
+		return err
+	case <-quit:
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		return srv.Shutdown(ctx)
+	}
+}
