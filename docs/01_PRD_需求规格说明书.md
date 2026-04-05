@@ -774,22 +774,6 @@ WantedBy=multi-user.target
 systemctl enable --now spider
 ```
 
-**建议配合 nginx 提供 HTTPS：**
-
-```nginx
-server {
-    listen 443 ssl;
-    server_name spider.internal.example.com;
-
-    location / {
-        proxy_pass http://127.0.0.1:8000;
-        proxy_set_header Connection '';
-        proxy_http_version 1.1;       # SSE 需要 HTTP/1.1
-        proxy_buffering off;          # SSE 需要关闭缓冲
-    }
-}
-```
-
 ### 9.3 Docker 部署（规划中）
 
 ```yaml
