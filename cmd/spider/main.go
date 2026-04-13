@@ -10,6 +10,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/spf13/cobra"
+
 	apipkg "github.com/spiderai/spider/internal/api"
 	mcppkg "github.com/spiderai/spider/internal/mcp"
 	sshpkg "github.com/spiderai/spider/internal/ssh"
@@ -20,18 +22,76 @@ import (
 	"github.com/spiderai/spider/internal/store"
 )
 
+// 由 ldflags 注入
+var (
+	version   = "dev"
+	commit    = "unknown"
+	buildTime = "unknown"
+)
+
 func main() {
-	if err := run(); err != nil {
-		fmt.Fprintln(os.Stderr, "错误:", err)
+	if err := newRootCmd().Execute(); err != nil {
 		os.Exit(1)
 	}
 }
 
-func run() error {
-	cfg, err := config.Load("")
+func newRootCmd() *cobra.Command {
+	var cfgFile string
+	var addr string
+	var dataDir string
+
+	root := &cobra.Command{
+		Use:          "spider",
+		Short:        "Spider — 智能运维平台 MCP Server",
+		SilenceUsage: true,
+		// 无子命令时直接启动服务
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return serve(cfgFile, addr, dataDir)
+		},
+	}
+
+	root.PersistentFlags().StringVar(&cfgFile, "config", "", "配置文件路径（默认 ~/.spider/config.yaml）")
+	root.PersistentFlags().StringVar(&addr, "addr", "", "监听地址（覆盖配置，如 :9090）")
+	root.PersistentFlags().StringVar(&dataDir, "data-dir", "", "数据目录（覆盖配置和 SPIDER_DATA_DIR）")
+
+	root.AddCommand(newServeCmd(&cfgFile, &addr, &dataDir))
+	root.AddCommand(newVersionCmd())
+
+	return root
+}
+
+func newServeCmd(cfgFile, addr, dataDir *string) *cobra.Command {
+	return &cobra.Command{
+		Use:   "serve",
+		Short: "启动 Spider MCP Server（默认行为）",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return serve(*cfgFile, *addr, *dataDir)
+		},
+	}
+}
+
+func newVersionCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "version",
+		Short: "显示版本信息",
+		Run: func(cmd *cobra.Command, args []string) {
+			fmt.Printf("spider %s (commit: %s, built: %s)\n", version, commit, buildTime)
+		},
+	}
+}
+
+func serve(cfgFile, addrOverride, dataDirOverride string) error {
+	cfg, err := config.Load(cfgFile)
 	if err != nil {
 		return fmt.Errorf("加载配置失败: %w", err)
 	}
+	if addrOverride != "" {
+		cfg.SSE.Addr = addrOverride
+	}
+	if dataDirOverride != "" {
+		cfg.DataDir = dataDirOverride
+	}
+
 	if err := cfg.EnsureDataDir(); err != nil {
 		return fmt.Errorf("初始化数据目录失败: %w", err)
 	}
@@ -78,7 +138,7 @@ func run() error {
 
 	errCh := make(chan error, 1)
 	go func() {
-		fmt.Fprintf(os.Stderr, "Spider 启动，监听 %s\n", cfg.SSE.Addr)
+		fmt.Fprintf(os.Stderr, "Spider %s 启动，监听 %s\n", version, cfg.SSE.Addr)
 		errCh <- srv.ListenAndServe()
 	}()
 
