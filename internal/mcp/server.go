@@ -51,7 +51,7 @@ func Serve(app *App) error {
 
 	errCh := make(chan error, 1)
 	go func() {
-		fmt.Fprintf(os.Stderr, "Spider MCP server 启动，监听 %s\n", app.Config.SSE.Addr)
+		fmt.Fprintf(os.Stderr, "Spider MCP server listening on %s\n", app.Config.SSE.Addr)
 		errCh <- h.Start(app.Config.SSE.Addr)
 	}()
 

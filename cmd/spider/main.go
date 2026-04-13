@@ -87,6 +87,7 @@ func serve(cfgFile, addrOverride, dataDirOverride string) error {
 	}
 	if addrOverride != "" {
 		cfg.SSE.Addr = addrOverride
+		cfg.SSE.BaseURL = "http://localhost" + addrOverride
 	}
 	if dataDirOverride != "" {
 		cfg.DataDir = dataDirOverride
@@ -138,7 +139,7 @@ func serve(cfgFile, addrOverride, dataDirOverride string) error {
 
 	errCh := make(chan error, 1)
 	go func() {
-		fmt.Fprintf(os.Stderr, "Spider %s 启动，监听 %s\n", version, cfg.SSE.Addr)
+		fmt.Fprintf(os.Stderr, "Spider %s listening on %s\n", version, cfg.SSE.Addr)
 		fmt.Fprintf(os.Stderr, "MCP endpoint:  %s/mcp\n", cfg.SSE.BaseURL)
 		fmt.Fprintf(os.Stderr, "Web dashboard: %s\n", cfg.SSE.BaseURL)
 		errCh <- srv.ListenAndServe()
