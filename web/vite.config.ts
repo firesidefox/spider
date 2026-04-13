@@ -6,12 +6,20 @@ export default defineConfig({
   build: {
     outDir: '../cmd/spider/web/dist',
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'shiki': ['shiki'],
+          'vue-vendor': ['vue', 'vue-router'],
+        },
+      },
+    },
   },
   server: {
     proxy: {
-      '/api': 'http://localhost:8000',
-      '/sse': 'http://localhost:8000',
-      '/message': 'http://localhost:8000',
+      '/api': 'http://localhost:9090',
+      '/sse': 'http://localhost:9090',
+      '/message': 'http://localhost:9090',
     },
   },
 })

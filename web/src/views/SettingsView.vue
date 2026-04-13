@@ -1,39 +1,48 @@
 <template>
-  <div>
-    <div class="page-header"><h2>设置</h2></div>
+  <div class="settings-page">
+    <div class="settings-container">
+      <div class="settings-header">
+        <h2>设置</h2>
+        <p>配置 Spider 服务参数</p>
+      </div>
 
-    <div class="settings-card">
-      <h3>MCP Server</h3>
-      <div class="form-row">
-        <label>监听地址</label>
-        <input v-model="form.sse_addr" class="input" placeholder=":8000" />
+      <div class="settings-block">
+        <div class="block-title">MCP Server</div>
+        <div class="block-grid">
+          <div class="form-row">
+            <label>监听地址</label>
+            <input v-model="form.sse_addr" class="input" placeholder=":8000" />
+          </div>
+          <div class="form-row">
+            <label>Base URL</label>
+            <input v-model="form.sse_base_url" class="input" placeholder="http://localhost:8000" />
+          </div>
+        </div>
       </div>
-      <div class="form-row">
-        <label>Base URL</label>
-        <input v-model="form.sse_base_url" class="input" placeholder="http://localhost:8000" />
-      </div>
-    </div>
 
-    <div class="settings-card">
-      <h3>SSH 默认配置</h3>
-      <div class="form-row">
-        <label>命令超时（秒）</label>
-        <input v-model.number="form.ssh_default_timeout_seconds" class="input" type="number" style="width:120px" />
+      <div class="settings-block">
+        <div class="block-title">SSH 默认配置</div>
+        <div class="block-grid">
+          <div class="form-row">
+            <label>命令超时（秒）</label>
+            <input v-model.number="form.ssh_default_timeout_seconds" class="input" type="number" />
+          </div>
+          <div class="form-row">
+            <label>连接池 TTL（秒）</label>
+            <input v-model.number="form.ssh_pool_ttl_seconds" class="input" type="number" />
+          </div>
+          <div class="form-row">
+            <label>最大连接数</label>
+            <input v-model.number="form.ssh_max_pool_size" class="input" type="number" />
+          </div>
+        </div>
       </div>
-      <div class="form-row">
-        <label>连接池 TTL（秒）</label>
-        <input v-model.number="form.ssh_pool_ttl_seconds" class="input" type="number" style="width:120px" />
-      </div>
-      <div class="form-row">
-        <label>最大连接数</label>
-        <input v-model.number="form.ssh_max_pool_size" class="input" type="number" style="width:120px" />
-      </div>
-    </div>
 
-    <div style="display:flex;gap:12px;align-items:center">
-      <button class="btn btn-primary" @click="save">保存</button>
-      <span v-if="saved" class="ok">已保存</span>
-      <span v-if="error" class="err">{{ error }}</span>
+      <div class="settings-footer">
+        <button class="btn btn-primary" @click="save">保存设置</button>
+        <span v-if="saved" class="ok">已保存</span>
+        <span v-if="error" class="err">{{ error }}</span>
+      </div>
     </div>
   </div>
 </template>
@@ -68,3 +77,64 @@ async function save() {
 
 onMounted(load)
 </script>
+
+<style scoped>
+.settings-page {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 32px 40px;
+}
+
+.settings-container {
+  max-width: 680px;
+}
+
+.settings-header {
+  margin-bottom: 24px;
+}
+
+.settings-header h2 {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.02em;
+  margin-bottom: 4px;
+}
+
+.settings-header p {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.settings-block {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px 24px;
+  box-shadow: var(--card-shadow);
+  margin-bottom: 16px;
+}
+
+.block-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.block-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.settings-footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 48px;
+}
+</style>
