@@ -127,6 +127,7 @@ func serve(cfgFile, addrOverride, dataDirOverride string) error {
 
 	mux := http.NewServeMux()
 	mux.Handle("/mcp", mcpHandler)
+	mux.HandleFunc("/install.sh", apipkg.InstallScriptHandler(app.Config.SSE.BaseURL))
 	mux.Handle("/api/", apipkg.NewRouter(app))
 
 	sub, err := fs.Sub(webFS, "web/dist")
