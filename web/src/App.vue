@@ -7,6 +7,7 @@
         <RouterLink to="/exec" class="nav-item">命令执行</RouterLink>
         <RouterLink to="/audit" class="nav-item">审计</RouterLink>
         <RouterLink to="/settings" class="nav-item">设置</RouterLink>
+        <RouterLink to="/install" class="nav-item">安装</RouterLink>
       </nav>
       <button class="theme-toggle" @click="toggleTheme" :title="isDark ? '切换亮色' : '切换暗色'">
         {{ isDark ? '☀️' : '🌙' }}

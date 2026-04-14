@@ -10,6 +10,7 @@ const router = createRouter({
     { path: '/exec',     component: () => import('./views/ExecView.vue') },
     { path: '/audit',    component: () => import('./views/AuditView.vue') },
     { path: '/settings', component: () => import('./views/SettingsView.vue') },
+    { path: '/install', component: () => import('./views/InstallView.vue') },
   ],
 })
 
