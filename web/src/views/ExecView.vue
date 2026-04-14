@@ -47,9 +47,8 @@
 
       <!-- 命令输入区 -->
       <div class="exec-input-area">
-        <textarea
+        <CodeEditor
           v-model="command"
-          class="input code exec-textarea"
           placeholder="输入要执行的命令..."
           @keydown.ctrl.enter="run"
           @keydown.meta.enter="run"
@@ -75,12 +74,9 @@
             </span>
             <span class="dim">{{ r.duration_ms }}ms</span>
           </div>
-          <template v-if="r.stdout">
-            <div v-if="hlReady && hl(r.stdout)" class="hl-wrap" v-html="hl(r.stdout)" />
-            <pre v-else class="output">{{ r.stdout }}</pre>
-          </template>
-          <pre v-if="r.stderr" class="output stderr">{{ r.stderr }}</pre>
-          <pre v-if="r.error" class="output stderr">{{ r.error }}</pre>
+          <CodeBlock v-if="r.stdout" :code="r.stdout" :html="hlReady ? hl(r.stdout) : ''" />
+          <CodeBlock v-if="r.stderr" :code="r.stderr" />
+          <CodeBlock v-if="r.error" :code="r.error" />
         </div>
       </div>
     </div>
@@ -93,6 +89,8 @@ import { useRoute } from 'vue-router'
 import { listHosts, type SafeHost } from '../api/hosts'
 import { execCommand, execBatch, type ExecResult } from '../api/exec'
 import { useHighlight } from '../composables/useHighlight'
+import CodeEditor from '../components/CodeEditor.vue'
+import CodeBlock from '../components/CodeBlock.vue'
 
 const { ready: hlReady, highlight } = useHighlight()
 const isDark = inject<() => boolean>('isDark', () => true)
@@ -297,18 +295,6 @@ onMounted(load)
   flex-shrink: 0;
 }
 
-.exec-textarea {
-  flex: 1;
-  resize: none;
-  min-height: 72px;
-  max-height: 200px;
-  overflow-y: auto;
-  font-size: 13px;
-  line-height: 1.6;
-  white-space: pre-wrap;
-  word-break: break-all;
-}
-
 .exec-run-btn {
   height: 72px;
   padding: 0 24px;
@@ -337,10 +323,10 @@ onMounted(load)
 .exec-results-area {
   flex: 1;
   overflow-y: auto;
-  padding: 16px 20px;
+  padding: 20px 24px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 16px;
 }
 
 .exec-empty {
@@ -358,17 +344,27 @@ onMounted(load)
 
 .result-host { font-weight: 600; color: var(--text); }
 
-.hl-wrap :deep(pre.shiki) {
-  margin: 0;
-  padding: 12px 14px;
-  border-radius: 0;
-  font-size: 13px;
-  line-height: 1.6;
-  overflow-x: hidden;
-  overflow-y: auto;
-  max-height: 400px;
-  white-space: pre-wrap;
-  word-break: break-all;
-  font-family: 'SF Mono', Consolas, 'Courier New', monospace;
+/* 结果块 */
+.result-block {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.result-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+}
+
+.result-host {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
 }
 </style>

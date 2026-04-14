@@ -95,7 +95,7 @@
         <form @submit.prevent="submitHost">
           <div class="form-row">
             <label>名称</label>
-            <input v-model="form.name" class="input" required :disabled="!!editTarget" />
+            <input v-model="form.name" class="input" required />
           </div>
           <div class="form-row">
             <label>IP</label>
@@ -187,7 +187,7 @@ function closeModal() {
 async function submitHost() {
   const tags = form.value.tagsStr.split(',').map(t => t.trim()).filter(Boolean)
   if (editTarget.value) {
-    await updateHost(editTarget.value.id, { ip: form.value.ip, port: form.value.port, username: form.value.username, auth_type: form.value.auth_type, credential: form.value.credential || undefined, passphrase: form.value.passphrase || undefined, tags })
+    await updateHost(editTarget.value.id, { name: form.value.name || undefined, ip: form.value.ip, port: form.value.port, username: form.value.username, auth_type: form.value.auth_type, credential: form.value.credential || undefined, passphrase: form.value.passphrase || undefined, tags })
     if (activeHost.value?.id === editTarget.value.id) {
       activeHost.value = { ...activeHost.value, ...form.value, tags }
     }

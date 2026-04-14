@@ -396,8 +396,8 @@ textarea.input { resize: vertical; }
 }
 
 .output {
-  background: #0d0f1a;
-  color: #cdd6f4;
+  background: var(--panel);
+  color: var(--text);
   padding: 12px 14px;
   border-radius: 8px;
   font-size: 13px;
@@ -407,7 +407,7 @@ textarea.input { resize: vertical; }
   word-break: break-all;
   margin-top: 8px;
   font-family: 'SF Mono', Consolas, 'Courier New', monospace;
-  border: 1px solid #1e2338;
+  border: 1px solid var(--border);
   line-height: 1.6;
   max-height: 400px;
 }

@@ -55,21 +55,19 @@
               <span class="section-title" style="margin-bottom:0">stdin</span>
               <span class="badge">{{ activeLog.triggered_by }}</span>
             </div>
-            <div v-if="hlReady && hl(activeLog.command)" class="hl-wrap" v-html="hl(activeLog.command)" />
-            <pre v-else class="output">{{ activeLog.command }}</pre>
+            <CodeBlock :code="activeLog.command" :html="hlReady ? hl(activeLog.command) : ''" />
           </div>
           <div v-if="activeLog.stdout" class="output-block">
             <div class="output-header">
               <span class="section-title" style="margin-bottom:0">stdout</span>
             </div>
-            <div v-if="hlReady && hl(activeLog.stdout)" class="hl-wrap" v-html="hl(activeLog.stdout)" />
-            <pre v-else class="output">{{ activeLog.stdout }}</pre>
+            <CodeBlock :code="activeLog.stdout" :html="hlReady ? hl(activeLog.stdout) : ''" />
           </div>
           <div v-if="activeLog.stderr" class="output-block">
             <div class="output-header">
               <span class="section-title" style="margin-bottom:0">stderr</span>
             </div>
-            <pre class="output stderr">{{ activeLog.stderr }}</pre>
+            <CodeBlock :code="activeLog.stderr" />
           </div>
         </div>
       </template>
@@ -86,6 +84,7 @@ import { ref, onMounted, inject } from 'vue'
 import { listLogs, type ExecutionLog } from '../api/logs'
 import { listHosts } from '../api/hosts'
 import { useHighlight } from '../composables/useHighlight'
+import CodeBlock from '../components/CodeBlock.vue'
 
 const { ready: hlReady, highlight } = useHighlight()
 const isDark = inject<() => boolean>('isDark', () => true)
@@ -258,22 +257,6 @@ onMounted(load)
   padding: 8px 14px;
   border-bottom: 1px solid var(--border);
   background: var(--surface);
-}
-
-.output-block .output { margin-top: 0; border-radius: 0; border: none; }
-
-.hl-wrap :deep(pre.shiki) {
-  margin: 0;
-  padding: 12px 14px;
-  border-radius: 0;
-  font-size: 13px;
-  line-height: 1.6;
-  overflow-x: hidden;
-  overflow-y: auto;
-  max-height: 400px;
-  white-space: pre-wrap;
-  word-break: break-all;
-  font-family: 'SF Mono', Consolas, 'Courier New', monospace;
 }
 
 .detail-empty {

@@ -23,8 +23,9 @@ type ExecResult struct {
 
 // Client 封装一个 SSH 连接。
 type Client struct {
-	conn    *gossh.Client
-	host    *models.Host
+	conn  *gossh.Client
+	host  *models.Host
+	proxy *Client // ProxyJump 跳板机连接，Close 时需一并关闭
 }
 
 // NewClient 根据主机信息建立 SSH 连接（支持密码、私钥、ProxyJump）。
@@ -72,10 +73,6 @@ func dialViaProxy(host *models.Host, targetCfg *gossh.ClientConfig, targetAddr s
 	if err != nil {
 		return nil, fmt.Errorf("连接跳板机 %s 失败: %w", proxy.Name, err)
 	}
-	defer func() {
-		// 注意：proxyClient 的底层连接需要保持，直到 targetConn 关闭
-		// 这里不 Close，由 targetClient 的 Close 负责
-	}()
 
 	// 通过跳板机 Dial 目标主机
 	netConn, err := proxyClient.conn.Dial("tcp", targetAddr)
@@ -93,7 +90,8 @@ func dialViaProxy(host *models.Host, targetCfg *gossh.ClientConfig, targetAddr s
 	}
 
 	conn := gossh.NewClient(sshConn, chans, reqs)
-	return &Client{conn: conn, host: host}, nil
+	// proxyClient 保存在 Client 中，Close() 时一并关闭
+	return &Client{conn: conn, host: host, proxy: proxyClient}, nil
 }
 
 // buildAuthMethods 根据认证类型构建 SSH 认证方法列表。
@@ -188,10 +186,16 @@ func CheckConnectivity(host *models.Host, hs *store.HostStore) (latency time.Dur
 	return time.Since(start), nil
 }
 
-// Close 关闭 SSH 连接。
+// Close 关闭 SSH 连接，若有跳板机则一并关闭。
 func (c *Client) Close() error {
+	var err error
 	if c.conn != nil {
-		return c.conn.Close()
+		err = c.conn.Close()
 	}
-	return nil
+	if c.proxy != nil {
+		if proxyErr := c.proxy.Close(); proxyErr != nil && err == nil {
+			err = proxyErr
+		}
+	}
+	return err
 }
