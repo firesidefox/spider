@@ -4,13 +4,11 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
-	"embed"
 	"io"
 	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 	"text/template"
 )
 
@@ -61,28 +59,12 @@ func InstallScriptHandler(baseURL string) http.HandlerFunc {
 	}
 }
 
-const embeddedSkillsPrefix = ".claude/skills/"
-
-// SkillsTarGzHandler merges embedded skills with disk skills and streams a tar.gz.
-func SkillsTarGzHandler(skillsFS embed.FS, dataDir string) http.HandlerFunc {
+// SkillsTarGzHandler streams all skills from <dataDir>/skills/ as a tar.gz.
+func SkillsTarGzHandler(dataDir string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		diskDir := filepath.Join(dataDir, "skills")
 		files := map[string][]byte{}
 
-		// 1. collect embedded skills
-		_ = fs.WalkDir(skillsFS, ".claude/skills", func(path string, d fs.DirEntry, err error) error {
-			if err != nil || d.IsDir() {
-				return err
-			}
-			rel := strings.TrimPrefix(path, embeddedSkillsPrefix)
-			data, readErr := skillsFS.ReadFile(path)
-			if readErr == nil {
-				files[rel] = data
-			}
-			return nil
-		})
-
-		// 2. overlay disk skills
-		diskDir := filepath.Join(dataDir, "skills")
 		_ = filepath.WalkDir(diskDir, func(path string, d fs.DirEntry, err error) error {
 			if err != nil || d.IsDir() {
 				return nil
@@ -95,22 +77,15 @@ func SkillsTarGzHandler(skillsFS embed.FS, dataDir string) http.HandlerFunc {
 			return nil
 		})
 
-		// 3. write tar.gz
 		w.Header().Set("Content-Type", "application/gzip")
 		gw := gzip.NewWriter(w)
 		tw := tar.NewWriter(gw)
 		for name, data := range files {
-			hdr := &tar.Header{
-				Name: name,
-				Mode: 0644,
-				Size: int64(len(data)),
-			}
+			hdr := &tar.Header{Name: name, Mode: 0644, Size: int64(len(data))}
 			if err := tw.WriteHeader(hdr); err != nil {
 				return
 			}
-			if _, err := io.Copy(tw, bytes.NewReader(data)); err != nil {
-				return
-			}
+			_, _ = io.Copy(tw, bytes.NewReader(data))
 		}
 		_ = tw.Close()
 		_ = gw.Close()
