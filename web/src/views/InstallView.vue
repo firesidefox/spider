@@ -38,6 +38,18 @@
       >
         <div class="card-header-row">
           <h3>Skills 管理</h3>
+          <span class="upload-status"
+            :class="{
+              'upload-status--uploading': status.type === 'uploading',
+              'upload-status--success': status.type === 'success',
+              'upload-status--error': status.type === 'error',
+            }"
+          >
+            <template v-if="status.type === 'idle'">拖拽 .md 文件到此处</template>
+            <template v-else-if="status.type === 'uploading'">⟳ 上传 {{ status.name }} 中…</template>
+            <template v-else-if="status.type === 'success'">✓ {{ status.name }} 已上传</template>
+            <template v-else-if="status.type === 'error'">✗ {{ status.msg }}</template>
+          </span>
           <button class="btn btn-sm btn-primary" @click="triggerUpload(null)">添加 Skill</button>
         </div>
         <input ref="fileInput" type="file" accept=".md" style="display:none" @change="onFileChange" />
@@ -263,6 +275,21 @@ onMounted(() => {
   border-color: var(--primary);
   box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
 }
+
+.upload-status {
+  flex: 1;
+  text-align: center;
+  font-size: 12px;
+  color: var(--muted);
+  padding: 0 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.upload-status--uploading { color: var(--text-sub); }
+.upload-status--success   { color: var(--green); font-weight: 600; }
+.upload-status--error     { color: var(--red); font-weight: 600; }
 
 .drop-hint {
   text-align: center;
