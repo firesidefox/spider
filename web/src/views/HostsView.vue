@@ -18,7 +18,7 @@
           v-for="h in filtered" :key="h.id"
           class="host-row"
           :class="{ selected: activeHost?.id === h.id }"
-          @click="activeHost = h"
+          @click="activeHost = h; pingResult = null"
         >
           <div class="host-row-left">
             <input type="checkbox" v-model="selected" :value="h.id" @click.stop />
@@ -51,11 +51,16 @@
           </div>
           <div class="detail-topbar-right">
             <button class="btn btn-sm" @click="goExec(activeHost)">▶ 执行</button>
+            <button class="btn btn-sm" :disabled="pinging" @click="pingActive">{{ pinging ? '测试中…' : '⚡ 测试' }}</button>
             <button class="btn btn-sm" @click="editHost(activeHost)">编辑</button>
             <button class="btn btn-sm btn-danger" @click="removeHost(activeHost)">删除</button>
           </div>
         </div>
         <div class="detail-body">
+          <div v-if="pingResult" class="ping-result" :class="pingResult.connected ? 'ping-ok' : 'ping-fail'">
+            <span v-if="pingResult.connected">● 已连接 ({{ pingResult.latency_ms }}ms)</span>
+            <span v-else>● 连接失败: {{ pingResult.error }}</span>
+          </div>
           <div class="detail-grid">
             <div class="detail-field">
               <div class="detail-label">IP 地址</div>
@@ -131,7 +136,12 @@
           </div>
           <div class="modal-footer">
             <button type="button" class="btn" @click="closeModal">取消</button>
+            <button v-if="editTarget" type="button" class="btn" :disabled="modalPinging" @click="pingModal">{{ modalPinging ? '测试中…' : '测试连接' }}</button>
             <button type="submit" class="btn btn-primary">{{ editTarget ? '保存' : '添加' }}</button>
+          </div>
+          <div v-if="modalPingResult" class="ping-result" :class="modalPingResult.connected ? 'ping-ok' : 'ping-fail'" style="margin-top:10px;margin-bottom:0">
+            <span v-if="modalPingResult.connected">● 已连接 ({{ modalPingResult.latency_ms }}ms)</span>
+            <span v-else>● 连接失败: {{ modalPingResult.error }}</span>
           </div>
         </form>
       </div>
@@ -142,7 +152,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { listHosts, addHost, updateHost, deleteHost, type SafeHost } from '../api/hosts'
+import { listHosts, addHost, updateHost, deleteHost, pingHost, type SafeHost } from '../api/hosts'
 
 const router = useRouter()
 const hosts = ref<SafeHost[]>([])
@@ -152,6 +162,11 @@ const selected = ref<string[]>([])
 const activeHost = ref<SafeHost | null>(null)
 const showAdd = ref(false)
 const editTarget = ref<SafeHost | null>(null)
+const pinging = ref(false)
+const pingResult = ref<{ connected: boolean; latency_ms?: number; error?: string } | null>(null)
+let pingTimer: ReturnType<typeof setTimeout> | null = null
+const modalPinging = ref(false)
+const modalPingResult = ref<{ connected: boolean; latency_ms?: number; error?: string } | null>(null)
 
 const emptyForm = () => ({ name: '', ip: '', port: 22, username: '', auth_type: 'password', credential: '', passphrase: '', tagsStr: '' })
 const form = ref(emptyForm())
@@ -169,6 +184,30 @@ const filtered = computed(() => hosts.value.filter(h => {
   return matchSearch && matchTag
 }))
 
+async function pingModal() {
+  if (!editTarget.value || modalPinging.value) return
+  modalPinging.value = true
+  modalPingResult.value = null
+  try {
+    modalPingResult.value = await pingHost(editTarget.value.id)
+  } finally {
+    modalPinging.value = false
+  }
+}
+
+async function pingActive() {
+  if (!activeHost.value || pinging.value) return
+  pinging.value = true
+  pingResult.value = null
+  if (pingTimer) clearTimeout(pingTimer)
+  try {
+    pingResult.value = await pingHost(activeHost.value.id)
+  } finally {
+    pinging.value = false
+    pingTimer = setTimeout(() => { pingResult.value = null }, 5000)
+  }
+}
+
 async function load() {
   hosts.value = await listHosts()
 }
@@ -182,6 +221,7 @@ function closeModal() {
   showAdd.value = false
   editTarget.value = null
   form.value = emptyForm()
+  modalPingResult.value = null
 }
 
 async function submitHost() {
@@ -395,4 +435,14 @@ onMounted(load)
 }
 
 .detail-empty-icon { color: var(--border); font-size: 40px; }
+
+.ping-result {
+  font-size: 13px;
+  font-weight: 500;
+  padding: 8px 14px;
+  border-radius: 8px;
+  margin-bottom: 14px;
+}
+.ping-ok { background: rgba(34,197,94,0.12); color: #16a34a; }
+.ping-fail { background: rgba(239,68,68,0.12); color: #dc2626; }
 </style>
