@@ -29,13 +29,20 @@
       </div>
 
       <!-- 卡片3：Skills 管理 -->
-      <div class="settings-card">
+      <div
+        class="settings-card"
+        :class="{ dragging }"
+        @dragover.prevent="dragging = true"
+        @dragleave.self="dragging = false"
+        @drop.prevent="onDrop"
+      >
         <div class="card-header-row">
           <h3>Skills 管理</h3>
           <button class="btn btn-sm btn-primary" @click="triggerUpload(null)">添加 Skill</button>
         </div>
         <input ref="fileInput" type="file" accept=".md" style="display:none" @change="onFileChange" />
-        <table class="table">
+        <p v-if="dragging" class="drop-hint">松手上传 .md 文件</p>
+        <table v-else class="table">
           <thead>
             <tr><th>名称</th><th>来源</th><th class="actions">操作</th></tr>
           </thead>
@@ -64,10 +71,18 @@ import { ref, computed, onMounted } from 'vue'
 
 interface Skill { name: string; source: string }
 
+type UploadStatus =
+  | { type: 'idle' }
+  | { type: 'uploading'; name: string }
+  | { type: 'success'; name: string }
+  | { type: 'error'; msg: string }
+
 const skills = ref<Skill[]>([])
 const scriptContent = ref('')
 const scriptOpen = ref(false)
 const copied = ref(false)
+const dragging = ref(false)
+const status = ref<UploadStatus>({ type: 'idle' })
 const fileInput = ref<HTMLInputElement | null>(null)
 const uploadTarget = ref<string | null>(null)
 
@@ -89,6 +104,12 @@ async function loadSkills() {
   if (res.ok) skills.value = await res.json()
 }
 
+function setStatus(s: UploadStatus) {
+  status.value = s
+  if (s.type === 'success') setTimeout(() => { status.value = { type: 'idle' } }, 2000)
+  if (s.type === 'error') setTimeout(() => { status.value = { type: 'idle' } }, 3000)
+}
+
 function triggerUpload(name: string | null) {
   uploadTarget.value = name
   fileInput.value?.click()
@@ -98,14 +119,44 @@ async function onFileChange(e: Event) {
   const file = (e.target as HTMLInputElement).files?.[0]
   if (!file) return
   const name = uploadTarget.value ?? file.name.replace(/\.md$/i, '')
+  setStatus({ type: 'uploading', name })
   const content = await file.text()
-  await fetch(`/api/v1/skills/${encodeURIComponent(name)}`, {
+  const res = await fetch(`/api/v1/skills/${encodeURIComponent(name)}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'text/plain' },
     body: content,
   })
   ;(e.target as HTMLInputElement).value = ''
-  await loadSkills()
+  if (res.ok) {
+    setStatus({ type: 'success', name })
+    await loadSkills()
+  } else {
+    setStatus({ type: 'error', msg: '上传失败，请重试' })
+  }
+}
+
+async function onDrop(e: DragEvent) {
+  dragging.value = false
+  const file = e.dataTransfer?.files?.[0]
+  if (!file) return
+  if (!file.name.endsWith('.md')) {
+    setStatus({ type: 'error', msg: '仅支持 .md 文件' })
+    return
+  }
+  const name = file.name.replace(/\.md$/i, '')
+  setStatus({ type: 'uploading', name })
+  const content = await file.text()
+  const res = await fetch(`/api/v1/skills/${encodeURIComponent(name)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'text/plain' },
+    body: content,
+  })
+  if (res.ok) {
+    setStatus({ type: 'success', name })
+    await loadSkills()
+  } else {
+    setStatus({ type: 'error', msg: '上传失败，请重试' })
+  }
 }
 
 async function deleteSkill(name: string) {
@@ -194,5 +245,20 @@ onMounted(() => {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 12px;
+}
+
+.settings-card.dragging {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+}
+
+.drop-hint {
+  text-align: center;
+  padding: 32px;
+  font-size: 14px;
+  color: var(--primary);
+  border: 2px dashed var(--primary);
+  border-radius: 8px;
+  background: rgba(99, 102, 241, 0.04);
 }
 </style>
