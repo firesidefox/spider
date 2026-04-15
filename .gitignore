@@ -4,3 +4,4 @@ web/node_modules/**
 .playwright-mcp/
 .claude/settings.local.json
 .spider/
+cmd/spider/web/dist/
