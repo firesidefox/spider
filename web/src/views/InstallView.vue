@@ -118,19 +118,27 @@ function triggerUpload(name: string | null) {
 async function onFileChange(e: Event) {
   const file = (e.target as HTMLInputElement).files?.[0]
   if (!file) return
+  if (!file.name.match(/\.md$/i)) {
+    setStatus({ type: 'error', msg: '仅支持 .md 文件' })
+    return
+  }
   const name = uploadTarget.value ?? file.name.replace(/\.md$/i, '')
   setStatus({ type: 'uploading', name })
-  const content = await file.text()
-  const res = await fetch(`/api/v1/skills/${encodeURIComponent(name)}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'text/plain' },
-    body: content,
-  })
-  ;(e.target as HTMLInputElement).value = ''
-  if (res.ok) {
-    setStatus({ type: 'success', name })
-    await loadSkills()
-  } else {
+  try {
+    const content = await file.text()
+    const res = await fetch(`/api/v1/skills/${encodeURIComponent(name)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'text/plain' },
+      body: content,
+    })
+    ;(e.target as HTMLInputElement).value = ''
+    if (res.ok) {
+      setStatus({ type: 'success', name })
+      await loadSkills()
+    } else {
+      setStatus({ type: 'error', msg: '上传失败，请重试' })
+    }
+  } catch {
     setStatus({ type: 'error', msg: '上传失败，请重试' })
   }
 }
@@ -145,16 +153,20 @@ async function onDrop(e: DragEvent) {
   }
   const name = file.name.replace(/\.md$/i, '')
   setStatus({ type: 'uploading', name })
-  const content = await file.text()
-  const res = await fetch(`/api/v1/skills/${encodeURIComponent(name)}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'text/plain' },
-    body: content,
-  })
-  if (res.ok) {
-    setStatus({ type: 'success', name })
-    await loadSkills()
-  } else {
+  try {
+    const content = await file.text()
+    const res = await fetch(`/api/v1/skills/${encodeURIComponent(name)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'text/plain' },
+      body: content,
+    })
+    if (res.ok) {
+      setStatus({ type: 'success', name })
+      await loadSkills()
+    } else {
+      setStatus({ type: 'error', msg: '上传失败，请重试' })
+    }
+  } catch {
     setStatus({ type: 'error', msg: '上传失败，请重试' })
   }
 }
