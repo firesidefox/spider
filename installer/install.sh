@@ -76,14 +76,17 @@ if ! launchctl bootstrap system "${PLIST_DST}" 2>/tmp/spider-bootstrap.err; then
 fi
 
 step "验证服务"
-for i in $(seq 10); do
+spinner="⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+for i in $(seq 5); do
+  frame="${spinner:$(( (i-1) % ${#spinner} )):1}"
+  printf "\r  ${blue}%s 等待服务就绪 (%d/5)...${reset}" "$frame" "$i"
   sleep 1
   if curl -sf http://localhost:8000/health >/dev/null 2>&1; then
-    success "Spider 已启动：http://localhost:8000"
+    printf "\r  ${green}✔ Spider 已启动：http://localhost:8000${reset}\n"
     break
   fi
-  if [[ $i -eq 10 ]]; then
-    warn "服务未响应，查看日志：tail -f /var/log/spider/spider.log"
+  if [[ $i -eq 5 ]]; then
+    printf "\r  ${yellow}⚠ 服务未响应，查看日志：tail -f /var/log/spider/spider.log${reset}\n"
   fi
 done
 
