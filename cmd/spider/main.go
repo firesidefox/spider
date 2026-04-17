@@ -128,9 +128,10 @@ func serve(cfgFile, addrOverride, dataDirOverride string) error {
 	mux := http.NewServeMux()
 	mux.Handle("/mcp", mcpHandler)
 	mux.HandleFunc("/install.sh", apipkg.InstallScriptHandler(app.Config.SSE.BaseURL))
+	mux.HandleFunc("/server-install.sh", apipkg.ServerInstallScriptHandler(app.Config.SSE.BaseURL))
 	mux.Handle("/api/", apipkg.NewRouter(app))
 
-	sub, err := fs.Sub(webFS, "web/dist")
+	sub, err := fs.Sub(webFS, "dist")
 	if err != nil {
 		return fmt.Errorf("加载 web 资源失败: %w", err)
 	}
