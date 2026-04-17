@@ -8,3 +8,5 @@ cmd/spider/dist/
 excalidraw.log
 *.log
 docs/superpowers/
+.DS_Store
+dist/
