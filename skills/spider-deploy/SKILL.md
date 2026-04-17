@@ -10,20 +10,33 @@ description: Use when user mentions deploying, releasing, or publishing to remot
 通过 `.spider/deploy.yaml` 配置文件和 spider MCP 工具，实现"一句话部署"。
 Claude 负责本地构建和配置管理，spider 负责 SSH 操作（上传、执行命令）。
 
+## 安装路径选择
+
+| 场景 | 使用环境 | 说明 |
+|------|---------|------|
+| 新服务器首次安装 | `bootstrap` | 无需目标服务器有任何服务，通过 `upload_file` 直接 SCP |
+| 已有服务升级 | `production` / `staging` | 先 stop 再上传再 start |
+| 已有 spider 实例，新服务器自助安装 | — | 目标服务器运行 `curl .../server-install.sh \| sh` |
+
+**首次安装必须用 `bootstrap` 环境**，`production` 的 `pre_deploy` 会 stop 服务，新机器上服务不存在时虽然加了 `|| true` 不会中止，但语义上 `bootstrap` 更清晰。
+
 ## 操作决策
 
 ```dot
 digraph deploy_flow {
     "用户意图" [shape=diamond];
-    "首次部署\n（无配置）" [shape=box];
-    "执行已有配置" [shape=box];
+    "新服务器首次安装" [shape=box];
+    "升级已有服务" [shape=box];
     "更新配置" [shape=box];
     "查看状态" [shape=box];
 
-    "用户意图" -> "首次部署\n（无配置）" [label="无 .spider/deploy.yaml\n或指定新环境"];
-    "用户意图" -> "执行已有配置" [label="部署到已知环境"];
+    "用户意图" -> "新服务器首次安装" [label="主机已加入列表\n但未安装 spider"];
+    "用户意图" -> "升级已有服务" [label="部署到已知环境"];
     "用户意图" -> "更新配置" [label="修改部署配置"];
     "用户意图" -> "查看状态" [label="查看/列出配置"];
+
+    "新服务器首次安装" -> "使用 bootstrap 环境" [label="upload_file + 写 systemd + start"];
+    "升级已有服务" -> "使用 production/staging 环境" [label="stop + upload + start"];
 }
 ```
 
