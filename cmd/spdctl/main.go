@@ -3,15 +3,9 @@ package main
 import (
 	"fmt"
 	"os"
-	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/spiderai/spider/internal/cli"
-	"github.com/spiderai/spider/internal/config"
-	"github.com/spiderai/spider/internal/crypto"
-	"github.com/spiderai/spider/internal/db"
-	sshpkg "github.com/spiderai/spider/internal/ssh"
-	"github.com/spiderai/spider/internal/store"
 )
 
 func main() {
@@ -22,50 +16,21 @@ func main() {
 }
 
 func run() error {
-	var dataDir string
-
-	cfg, err := config.Load("")
-	if err != nil {
-		return fmt.Errorf("加载配置失败: %w", err)
-	}
-	if dataDir != "" {
-		cfg.DataDir = dataDir
-	}
-	if err := cfg.EnsureDataDir(); err != nil {
-		return fmt.Errorf("初始化数据目录失败: %w", err)
-	}
-
-	cm, err := crypto.NewManager(cfg.DataDir)
-	if err != nil {
-		return fmt.Errorf("初始化加密模块失败: %w", err)
-	}
-
-	database, err := db.Open(cfg.DataDir)
-	if err != nil {
-		return fmt.Errorf("打开数据库失败: %w", err)
-	}
-	defer database.Close()
-
-	hs := store.NewHostStore(database, cm)
-	ls := store.NewLogStore(database)
-
-	pool := sshpkg.NewPool(time.Duration(cfg.SSH.PoolTTL) * time.Second)
-	pool.StartCleanup()
-	defer pool.Close()
+	var serverURL string
 
 	root := &cobra.Command{
 		Use:          "spdctl",
 		Short:        "spdctl — Spider 运维管理工具",
 		SilenceUsage: true,
 	}
-	root.PersistentFlags().StringVar(&dataDir, "data-dir", "", "数据目录（覆盖配置和 SPIDER_DATA_DIR）")
+	root.PersistentFlags().StringVar(&serverURL, "url", "http://localhost:8000", "Spider 服务地址")
 
 	root.AddCommand(
-		cli.NewHostCmd(hs),
-		cli.NewExecCmd(hs, ls, pool, cfg),
-		cli.NewPingCmd(hs),
-		cli.NewHistoryCmd(hs, ls),
-		cli.NewMCPCmd(cfg),
+		cli.NewHostCmd(&serverURL),
+		cli.NewExecCmd(&serverURL, 30),
+		cli.NewPingCmd(&serverURL),
+		cli.NewHistoryCmd(&serverURL),
+		cli.NewMCPCmd(&serverURL),
 	)
 
 	return root.Execute()

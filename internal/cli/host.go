@@ -8,26 +8,26 @@ import (
 	"text/tabwriter"
 
 	"github.com/spf13/cobra"
+	"github.com/spiderai/spider/internal/client"
 	"github.com/spiderai/spider/internal/models"
-	"github.com/spiderai/spider/internal/store"
 )
 
-// NewHostCmd 返回 host 子命令组。
-func NewHostCmd(hs *store.HostStore) *cobra.Command {
+// NewHostCmd 返回 host 子命令组。url 在执行时解引用，确保 --url flag 已解析。
+func NewHostCmd(url *string) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "host",
 		Short: "主机管理",
 	}
 	cmd.AddCommand(
-		newHostAddCmd(hs),
-		newHostListCmd(hs),
-		newHostRmCmd(hs),
-		newHostUpdateCmd(hs),
+		newHostAddCmd(url),
+		newHostListCmd(url),
+		newHostRmCmd(url),
+		newHostUpdateCmd(url),
 	)
 	return cmd
 }
 
-func newHostAddCmd(hs *store.HostStore) *cobra.Command {
+func newHostAddCmd(url *string) *cobra.Command {
 	var (
 		ip          string
 		port        int
@@ -44,10 +44,7 @@ func newHostAddCmd(hs *store.HostStore) *cobra.Command {
 		Short: "添加主机",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			name := args[0]
 			credential := password
-
-			// 如果指定了 key 文件，读取内容
 			if keyFile != "" {
 				data, err := os.ReadFile(keyFile)
 				if err != nil {
@@ -55,20 +52,18 @@ func newHostAddCmd(hs *store.HostStore) *cobra.Command {
 				}
 				credential = string(data)
 			}
-
-			at := models.AuthType(authType)
 			req := &models.AddHostRequest{
-				Name:        name,
+				Name:        args[0],
 				IP:          ip,
 				Port:        port,
 				Username:    username,
-				AuthType:    at,
+				AuthType:    models.AuthType(authType),
 				Credential:  credential,
 				Passphrase:  passphrase,
 				ProxyHostID: proxyHostID,
 				Tags:        splitTags(tags),
 			}
-			host, err := hs.Add(req)
+			host, err := client.New(*url).AddHost(req)
 			if err != nil {
 				return err
 			}
@@ -81,31 +76,27 @@ func newHostAddCmd(hs *store.HostStore) *cobra.Command {
 	cmd.Flags().StringVar(&username, "user", "root", "SSH 用户名")
 	cmd.Flags().StringVar(&authType, "auth", "key", "认证类型: password | key | key_password")
 	cmd.Flags().StringVar(&keyFile, "key", "", "SSH 私钥文件路径")
-	cmd.Flags().StringVar(&password, "password", "", "SSH 密码（auth=password 时使用）")
-	cmd.Flags().StringVar(&passphrase, "passphrase", "", "私钥 passphrase（auth=key_password 时使用）")
+	cmd.Flags().StringVar(&password, "password", "", "SSH 密码")
+	cmd.Flags().StringVar(&passphrase, "passphrase", "", "私钥 passphrase")
 	cmd.Flags().StringVar(&proxyHostID, "proxy", "", "跳板机主机 ID")
-	cmd.Flags().StringVar(&tags, "tag", "", "标签（逗号分隔，如 prod,web）")
+	cmd.Flags().StringVar(&tags, "tag", "", "标签（逗号分隔）")
 	_ = cmd.MarkFlagRequired("ip")
 	return cmd
 }
 
-func newHostListCmd(hs *store.HostStore) *cobra.Command {
+func newHostListCmd(url *string) *cobra.Command {
 	var tag string
 	var jsonOutput bool
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "列出所有主机",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			hosts, err := hs.List(tag)
+			hosts, err := client.New(*url).ListHosts(tag)
 			if err != nil {
 				return err
 			}
 			if jsonOutput {
-				safeHosts := make([]*models.SafeHost, len(hosts))
-				for i, h := range hosts {
-					safeHosts[i] = h.Safe()
-				}
-				data, _ := json.MarshalIndent(safeHosts, "", "  ")
+				data, _ := json.MarshalIndent(hosts, "", "  ")
 				fmt.Println(string(data))
 				return nil
 			}
@@ -126,17 +117,18 @@ func newHostListCmd(hs *store.HostStore) *cobra.Command {
 	return cmd
 }
 
-func newHostRmCmd(hs *store.HostStore) *cobra.Command {
+func newHostRmCmd(url *string) *cobra.Command {
 	return &cobra.Command{
 		Use:   "rm <id-or-name>",
 		Short: "删除主机",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			host, err := hs.GetByIDOrName(args[0])
+			c := client.New(*url)
+			host, err := c.GetHost(args[0])
 			if err != nil {
 				return err
 			}
-			if err := hs.Delete(host.ID); err != nil {
+			if err := c.DeleteHost(host.ID); err != nil {
 				return err
 			}
 			fmt.Printf("主机 %s 已删除\n", host.Name)
@@ -145,7 +137,7 @@ func newHostRmCmd(hs *store.HostStore) *cobra.Command {
 	}
 }
 
-func newHostUpdateCmd(hs *store.HostStore) *cobra.Command {
+func newHostUpdateCmd(url *string) *cobra.Command {
 	var (
 		name        string
 		ip          string
@@ -163,7 +155,8 @@ func newHostUpdateCmd(hs *store.HostStore) *cobra.Command {
 		Short: "更新主机信息",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			host, err := hs.GetByIDOrName(args[0])
+			c := client.New(*url)
+			host, err := c.GetHost(args[0])
 			if err != nil {
 				return err
 			}
@@ -204,7 +197,7 @@ func newHostUpdateCmd(hs *store.HostStore) *cobra.Command {
 			if cmd.Flags().Changed("tag") {
 				req.Tags = splitTags(tags)
 			}
-			updated, err := hs.Update(host.ID, req)
+			updated, err := c.UpdateHost(host.ID, req)
 			if err != nil {
 				return err
 			}

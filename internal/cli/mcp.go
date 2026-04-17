@@ -7,17 +7,16 @@ import (
 	"path/filepath"
 
 	"github.com/spf13/cobra"
-	"github.com/spiderai/spider/internal/config"
 )
 
-// NewMCPCmd 返回 mcp 子命令组。
-func NewMCPCmd(cfg *config.Config) *cobra.Command {
+// NewMCPCmd 返回 mcp 子命令组。url 是 Spider 服务地址，用作注册默认值。
+func NewMCPCmd(url *string) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "mcp",
 		Short: "管理 MCP 注册（支持 claude / opencode / codex）",
 	}
 	cmd.AddCommand(
-		newMCPRegisterCmd(cfg),
+		newMCPRegisterCmd(url),
 		newMCPUnregisterCmd(),
 		newMCPStatusCmd(),
 	)
@@ -26,29 +25,29 @@ func NewMCPCmd(cfg *config.Config) *cobra.Command {
 
 // ── register ──────────────────────────────────────────────────────────────────
 
-func newMCPRegisterCmd(cfg *config.Config) *cobra.Command {
-	var name, url, target string
+func newMCPRegisterCmd(url *string) *cobra.Command {
+	var name, mcpURL, target string
 	cmd := &cobra.Command{
 		Use:   "register",
 		Short: "将 Spider MCP server 注册到 AI 工具（claude/opencode/codex）",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if url == "" {
-				url = cfg.SSE.BaseURL + "/sse"
+			if mcpURL == "" {
+				mcpURL = *url + "/mcp"
 			}
 			switch target {
 			case "claude":
-				return registerClaude(name, url)
+				return registerClaude(name, mcpURL)
 			case "opencode":
-				return registerOpencode(name, url)
+				return registerOpencode(name, mcpURL)
 			case "codex":
-				return registerCodex(name, url)
+				return registerCodex(name, mcpURL)
 			default:
 				return fmt.Errorf("不支持的工具: %s（可选: claude, opencode, codex）", target)
 			}
 		},
 	}
 	cmd.Flags().StringVar(&name, "name", "spider", "MCP server 名称")
-	cmd.Flags().StringVar(&url, "url", "", "SSE URL（默认使用配置中的 base_url）")
+	cmd.Flags().StringVar(&mcpURL, "url", "", "MCP URL（默认使用 --url/mcp）")
 	cmd.Flags().StringVar(&target, "tool", "claude", "目标工具: claude | opencode | codex")
 	return cmd
 }
