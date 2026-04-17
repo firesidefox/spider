@@ -57,6 +57,9 @@ func Load(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
+			if v := os.Getenv("SPIDER_DATA_DIR"); v != "" {
+				cfg.DataDir = v
+			}
 			return cfg, nil
 		}
 		return nil, fmt.Errorf("读取配置文件失败: %w", err)
