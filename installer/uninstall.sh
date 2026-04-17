@@ -1,25 +1,45 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# ── 日志 ────────────────────────────────────────────────
+set +e
+bold=$(tput bold 2>/dev/null); reset=$(tput sgr0 2>/dev/null)
+red=$(tput setaf 1 2>/dev/null); green=$(tput setaf 76 2>/dev/null)
+yellow=$(tput setaf 202 2>/dev/null); blue=$(tput setaf 25 2>/dev/null)
+dim=$(tput dim 2>/dev/null || true)
+set -e
+
+h1()      { printf "\n${bold}${blue}══ %s ══${reset}\n" "$*"; }
+step()    { printf "  ${blue}▶ %s...${reset}\n" "$*"; }
+success() { printf "  ${green}✔ %s${reset}\n" "$*"; }
+warn()    { printf "  ${yellow}⚠ %s${reset}\n" "$*"; }
+error()   { printf "  ${red}✖ %s${reset}\n" "$*" >&2; }
+detail()  { printf "    ${dim}%s${reset}\n" "$*"; }
+# ────────────────────────────────────────────────────────
+
 if [[ $EUID -ne 0 ]]; then
-  echo "错误：请使用 sudo 运行此脚本" >&2
-  echo "  sudo ./uninstall.sh" >&2
+  error "请使用 sudo 运行此脚本"
+  detail "sudo ./uninstall.sh"
   exit 1
 fi
 
 PLIST_LABEL="ai.fty.spider"
 PLIST_PATH="/Library/LaunchDaemons/${PLIST_LABEL}.plist"
 
-echo "▶ 停止服务..."
+h1 "Spider 卸载"
+
+step "停止服务"
 launchctl bootout "system/${PLIST_LABEL}" 2>/dev/null || true
+success "服务已停止"
 
-echo "▶ 删除 launchd plist..."
+step "删除 launchd plist"
 rm -f "${PLIST_PATH}"
+success "${PLIST_PATH} 已删除"
 
-echo "▶ 删除二进制..."
+step "删除二进制"
 rm -f /usr/local/bin/spider /usr/local/bin/spdctl
+success "spider / spdctl 已删除"
 
-echo ""
-echo "✔ 卸载完成"
-echo "  数据目录 ~/.spider/ 已保留，如需删除请手动执行："
-echo "  rm -rf ~/.spider"
+h1 "卸载完成"
+warn "数据目录 ~/.spider/ 已保留，如需删除："
+detail "rm -rf ~/.spider"
