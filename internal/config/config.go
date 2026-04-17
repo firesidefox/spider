@@ -51,10 +51,14 @@ func DefaultConfig() *Config {
 func Load(path string) (*Config, error) {
 	cfg := DefaultConfig()
 
-	// 优先级 2：config.yaml
+	// 优先级 1：环境变量先确定 DataDir，再推导默认 config 路径
+	if v := os.Getenv("SPIDER_DATA_DIR"); v != "" {
+		cfg.DataDir = v
+	}
+
+	// 优先级 2：config.yaml（路径默认为 DataDir/config.yaml）
 	if path == "" {
-		home, _ := os.UserHomeDir()
-		path = filepath.Join(home, ".spider", "config.yaml")
+		path = filepath.Join(cfg.DataDir, "config.yaml")
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -66,7 +70,7 @@ func Load(path string) (*Config, error) {
 		return nil, fmt.Errorf("解析配置文件失败: %w", err)
 	}
 
-	// 优先级 1：环境变量（最高）
+	// 环境变量再次覆盖（config.yaml 可能改写了 DataDir）
 	if v := os.Getenv("SPIDER_DATA_DIR"); v != "" {
 		cfg.DataDir = v
 	}
