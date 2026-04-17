@@ -22,9 +22,14 @@ func main() {
 }
 
 func run() error {
+	var dataDir string
+
 	cfg, err := config.Load("")
 	if err != nil {
 		return fmt.Errorf("加载配置失败: %w", err)
+	}
+	if dataDir != "" {
+		cfg.DataDir = dataDir
 	}
 	if err := cfg.EnsureDataDir(); err != nil {
 		return fmt.Errorf("初始化数据目录失败: %w", err)
@@ -53,6 +58,7 @@ func run() error {
 		Short:        "spdctl — Spider 运维管理工具",
 		SilenceUsage: true,
 	}
+	root.PersistentFlags().StringVar(&dataDir, "data-dir", "", "数据目录（覆盖配置和 SPIDER_DATA_DIR）")
 
 	root.AddCommand(
 		cli.NewHostCmd(hs),

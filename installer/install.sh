@@ -48,6 +48,13 @@ mkdir -p /var/lib/spider
 chmod 700 /var/lib/spider
 success "/var/lib/spider 已就绪"
 
+step "配置环境变量"
+cat > /etc/profile.d/spider.sh <<'EOF'
+export SPIDER_DATA_DIR=/var/lib/spider
+EOF
+chmod 644 /etc/profile.d/spider.sh
+success "SPIDER_DATA_DIR=/var/lib/spider → /etc/profile.d/spider.sh"
+
 step "安装 launchd plist"
 install -m 644 "${SCRIPT_DIR}/spider.plist" "${PLIST_DST}"
 success "${PLIST_DST}"
