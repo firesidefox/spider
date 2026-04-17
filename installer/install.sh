@@ -25,6 +25,20 @@ chmod 755 /var/log/spider
 echo "▶ 安装 launchd plist..."
 install -m 644 "${SCRIPT_DIR}/spider.plist" "${PLIST_DST}"
 
+echo "▶ 检查端口 8000..."
+if lsof -iTCP:8000 -sTCP:LISTEN -t >/dev/null 2>&1; then
+  echo "✖ 错误：端口 8000 已被占用" >&2
+  echo "" >&2
+  echo "占用进程：" >&2
+  lsof -iTCP:8000 -sTCP:LISTEN >&2
+  echo "" >&2
+  echo "解决方案：" >&2
+  echo "  1. 停止占用进程：kill $(lsof -iTCP:8000 -sTCP:LISTEN -t 2>/dev/null)" >&2
+  echo "  2. 或修改 Spider 监听端口：编辑 /etc/spider/config.yaml，设置 addr: :9090" >&2
+  echo "     然后同步修改 spider.plist 中的健康检查地址，重新运行 install.sh" >&2
+  exit 1
+fi
+
 echo "▶ 启动服务..."
 launchctl bootstrap system "${PLIST_DST}"
 
