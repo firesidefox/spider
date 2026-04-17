@@ -128,7 +128,6 @@ func serve(cfgFile, addrOverride, dataDirOverride string) error {
 	mux := http.NewServeMux()
 	mux.Handle("/mcp", mcpHandler)
 	mux.HandleFunc("/install.sh", apipkg.InstallScriptHandler(app.Config.SSE.BaseURL))
-	mux.HandleFunc("/server-install.sh", apipkg.ServerInstallScriptHandler(app.Config.SSE.BaseURL))
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"status":"ok"}`))

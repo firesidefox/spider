@@ -41,5 +41,5 @@ rm -f /usr/local/bin/spider /usr/local/bin/spdctl
 success "spider / spdctl 已删除"
 
 h1 "卸载完成"
-warn "数据目录 ~/.spider/ 已保留，如需删除："
-detail "rm -rf ~/.spider"
+warn "数据目录 /var/lib/spider 已保留，如需删除："
+detail "rm -rf /var/lib/spider"

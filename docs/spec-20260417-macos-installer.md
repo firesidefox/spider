@@ -22,8 +22,8 @@
 
 | 产物 | 说明 |
 |------|------|
-| `dist/Spider-<version>-arm64.zip` | Apple Silicon 安装包 |
-| `dist/Spider-<version>-x86_64.zip` | Intel 安装包 |
+| `dist/spider-<version>-arm64.zip` | Apple Silicon 安装包 |
+| `dist/spider-<version>-x86_64.zip` | Intel 安装包 |
 
 每个 zip 内含：`spider`、`spdctl`、`install.sh`、`uninstall.sh`、`spider.plist`
 
@@ -39,7 +39,7 @@
 | `spdctl` 二进制 | `/usr/local/bin/spdctl` |
 | launchd plist | `/Library/LaunchDaemons/ai.fty.spider.plist` |
 | 日志目录 | `/var/log/spider/` |
-| 数据目录 | `~/.spider/`（首次启动时由 spider 自动创建） |
+| 数据目录 | `/var/lib/spider`（首次启动时由 spider 自动创建） |
 
 ### 3.2 install.sh 行为
 
@@ -86,7 +86,7 @@
 1. launchctl bootout system/ai.fty.spider（忽略"未加载"错误）
 2. rm -f /Library/LaunchDaemons/ai.fty.spider.plist
 3. rm -f /usr/local/bin/spider /usr/local/bin/spdctl
-4. 打印提示：数据目录 ~/.spider/ 已保留，如需删除请手动执行
+4. 打印提示：数据目录 /var/lib/spider 已保留，如需删除请手动执行
 ```
 
 ---
@@ -101,7 +101,7 @@
 ### 4.2 zip 内容结构
 
 ```
-Spider-<version>-arm64/
+spider-<version>-arm64/
 ├── spider              # 主服务二进制（darwin/arm64）
 ├── spdctl              # CLI 工具（darwin/arm64）
 ├── install.sh          # 安装脚本
@@ -121,14 +121,14 @@ Spider-<version>-arm64/
 
 ## 5. 验收标准
 
-- [ ] `make dist` 输出 `dist/Spider-<version>-arm64.zip` 和 `dist/Spider-<version>-x86_64.zip`
+- [ ] `make dist` 输出 `dist/spider-<version>-arm64.zip` 和 `dist/spider-<version>-x86_64.zip`
 - [ ] 解压后执行 `sudo ./install.sh` 无报错完成
 - [ ] `/usr/local/bin/spider` 和 `/usr/local/bin/spdctl` 存在且可执行
 - [ ] `launchctl print system/ai.fty.spider` 显示服务运行中
 - [ ] 重启 Mac 后 spider 自动启动
 - [ ] `curl http://localhost:8000/health` 返回 200
 - [ ] 执行 `sudo ./uninstall.sh` 后服务停止，二进制和 plist 被删除
-- [ ] 用户数据 `~/.spider/` 在卸载后保留
+- [ ] 用户数据 `/var/lib/spider` 在卸载后保留
 - [ ] 重复安装（升级场景）不报错，旧服务先停止再替换
 
 ---
@@ -138,12 +138,12 @@ Spider-<version>-arm64/
 **Always：**
 - install.sh / uninstall.sh 首行检测 root，非 root 立即退出并提示 `sudo`
 - launchd plist 放 `/Library/LaunchDaemons/`（系统级，所有用户可用）
-- 卸载脚本保留 `~/.spider/` 数据目录
+- 卸载脚本保留 `/var/lib/spider` 数据目录
 
 **Never：**
 - 不修改 spider 服务端代码
 - 不在安装包中存储任何凭据
-- 不强制删除用户已有的 `~/.spider/` 数据
+- 不强制删除用户已有的 `/var/lib/spider` 数据
 
 ---
 

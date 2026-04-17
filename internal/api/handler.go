@@ -103,7 +103,6 @@ func NewRouter(app *mcppkg.App) http.Handler {
 	})
 
 	mux.HandleFunc("GET /api/v1/install/skills.tar.gz", SkillsTarGzHandler(app.Config.DataDir))
-	mux.HandleFunc("GET /api/v1/install/spider", BinaryDownloadHandler(app.Config.DataDir))
 	mux.HandleFunc("GET /api/v1/skills", listSkillsHandler(app.Config.DataDir))
 	mux.HandleFunc("PUT /api/v1/skills/{name}", uploadSkillHandler(app.Config.DataDir))
 	mux.HandleFunc("DELETE /api/v1/skills/{name}", deleteSkillHandler(app.Config.DataDir))

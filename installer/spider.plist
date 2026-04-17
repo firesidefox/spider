@@ -8,6 +8,8 @@
   <key>ProgramArguments</key>
   <array>
     <string>/usr/local/bin/spider</string>
+    <string>--data-dir</string>
+    <string>/var/lib/spider</string>
   </array>
   <key>RunAtLoad</key>
   <true/>
