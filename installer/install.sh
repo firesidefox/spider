@@ -43,6 +43,11 @@ mkdir -p /var/log/spider
 chmod 755 /var/log/spider
 success "/var/log/spider 已就绪"
 
+step "创建数据目录"
+mkdir -p /var/lib/spider
+chmod 700 /var/lib/spider
+success "/var/lib/spider 已就绪"
+
 step "安装 launchd plist"
 install -m 644 "${SCRIPT_DIR}/spider.plist" "${PLIST_DST}"
 success "${PLIST_DST}"
@@ -62,15 +67,25 @@ fi
 success "端口 8000 可用"
 
 step "启动服务"
-launchctl bootstrap system "${PLIST_DST}"
+if ! launchctl bootstrap system "${PLIST_DST}" 2>/tmp/spider-bootstrap.err; then
+  error "launchctl bootstrap 失败"
+  cat /tmp/spider-bootstrap.err >&2
+  detail "查看日志：tail -f /var/log/spider/spider.log"
+  detail "手动启动：/usr/local/bin/spider"
+  exit 1
+fi
 
 step "验证服务"
-sleep 1
-if curl -sf http://localhost:8000/health >/dev/null 2>&1; then
-  success "Spider 已启动：http://localhost:8000"
-else
-  warn "服务可能尚未就绪，稍后执行：curl http://localhost:8000/health"
-fi
+for i in $(seq 10); do
+  sleep 1
+  if curl -sf http://localhost:8000/health >/dev/null 2>&1; then
+    success "Spider 已启动：http://localhost:8000"
+    break
+  fi
+  if [[ $i -eq 10 ]]; then
+    warn "服务未响应，查看日志：tail -f /var/log/spider/spider.log"
+  fi
+done
 
 h1 "安装完成"
 detail "spdctl host list    # 查看主机列表"
