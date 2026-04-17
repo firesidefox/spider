@@ -50,27 +50,27 @@ func DefaultConfig() *Config {
 // Load 从文件加载配置，文件不存在时返回默认配置。
 func Load(path string) (*Config, error) {
 	cfg := DefaultConfig()
+
+	// 优先级 2：config.yaml
 	if path == "" {
 		home, _ := os.UserHomeDir()
 		path = filepath.Join(home, ".spider", "config.yaml")
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
-		if os.IsNotExist(err) {
-			if v := os.Getenv("SPIDER_DATA_DIR"); v != "" {
-				cfg.DataDir = v
-			}
-			return cfg, nil
+		if !os.IsNotExist(err) {
+			return nil, fmt.Errorf("读取配置文件失败: %w", err)
 		}
-		return nil, fmt.Errorf("读取配置文件失败: %w", err)
-	}
-	if err := yaml.Unmarshal(data, cfg); err != nil {
+		fmt.Fprintf(os.Stderr, "config: %s not found, using defaults\n", path)
+	} else if err := yaml.Unmarshal(data, cfg); err != nil {
 		return nil, fmt.Errorf("解析配置文件失败: %w", err)
 	}
-	// 环境变量覆盖
+
+	// 优先级 1：环境变量（最高）
 	if v := os.Getenv("SPIDER_DATA_DIR"); v != "" {
 		cfg.DataDir = v
 	}
+
 	return cfg, nil
 }
 
