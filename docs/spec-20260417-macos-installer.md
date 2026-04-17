@@ -11,7 +11,7 @@
 
 - 解压 zip，执行 `sudo ./install.sh` 完成安装
 - 安装后 `spider` 作为 launchd 后台服务自动启动，开机自启
-- `spd` 加入 PATH，可直接使用
+- `spdctl` 加入 PATH，可直接使用
 - 支持卸载（提供 `uninstall.sh`）
 
 **目标用户：** 个人工程师，macOS 12+，arm64 / amd64。
@@ -25,7 +25,7 @@
 | `dist/spider-<version>-arm64.zip` | Apple Silicon 安装包 |
 | `dist/spider-<version>-x86_64.zip` | Intel 安装包 |
 
-每个 zip 内含：`spider`、`spd`、`install.sh`、`uninstall.sh`、`spider.plist`
+每个 zip 内含：`spider`、`spdctl`、`install.sh`、`uninstall.sh`、`spider.plist`
 
 ---
 
@@ -36,7 +36,7 @@
 | 文件 | 目标路径 |
 |------|----------|
 | `spider` 二进制 | `/usr/local/bin/spider` |
-| `spd` 二进制 | `/usr/local/bin/spd` |
+| `spdctl` 二进制 | `/usr/local/bin/spdctl` |
 | launchd plist | `/Library/LaunchDaemons/ai.fty.spider.plist` |
 | 日志目录 | `/var/log/spider/` |
 | 数据目录 | `/var/lib/spider`（首次启动时由 spider 自动创建） |
@@ -46,7 +46,7 @@
 ```
 前置检查：必须以 root 运行（检测 $EUID）
 1. 若服务已运行，先 launchctl bootout 停止旧版本
-2. 复制 spider / spd 到 /usr/local/bin/，chmod 755
+2. 复制 spider / spdctl 到 /usr/local/bin/，chmod 755
 3. 创建 /var/log/spider/ 目录，chmod 755
 4. 复制 ai.fty.spider.plist 到 /Library/LaunchDaemons/，chmod 644
 5. launchctl bootstrap system /Library/LaunchDaemons/ai.fty.spider.plist
@@ -85,7 +85,7 @@
 前置检查：必须以 root 运行
 1. launchctl bootout system/ai.fty.spider（忽略"未加载"错误）
 2. rm -f /Library/LaunchDaemons/ai.fty.spider.plist
-3. rm -f /usr/local/bin/spider /usr/local/bin/spd
+3. rm -f /usr/local/bin/spider /usr/local/bin/spdctl
 4. 打印提示：数据目录 /var/lib/spider 已保留，如需删除请手动执行
 ```
 
@@ -103,7 +103,7 @@
 ```
 spider-<version>-arm64/
 ├── spider              # 主服务二进制（darwin/arm64）
-├── spd              # CLI 工具（darwin/arm64）
+├── spdctl              # CLI 工具（darwin/arm64）
 ├── install.sh          # 安装脚本
 ├── uninstall.sh        # 卸载脚本
 └── spider.plist        # launchd plist
@@ -123,7 +123,7 @@ spider-<version>-arm64/
 
 - [ ] `make dist` 输出 `dist/spider-<version>-arm64.zip` 和 `dist/spider-<version>-x86_64.zip`
 - [ ] 解压后执行 `sudo ./install.sh` 无报错完成
-- [ ] `/usr/local/bin/spider` 和 `/usr/local/bin/spd` 存在且可执行
+- [ ] `/usr/local/bin/spider` 和 `/usr/local/bin/spdctl` 存在且可执行
 - [ ] `launchctl print system/ai.fty.spider` 显示服务运行中
 - [ ] 重启 Mac 后 spider 自动启动
 - [ ] `curl http://localhost:8000/health` 返回 200

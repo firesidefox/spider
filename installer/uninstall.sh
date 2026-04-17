@@ -37,8 +37,8 @@ rm -f "${PLIST_PATH}"
 success "${PLIST_PATH} 已删除"
 
 step "删除二进制"
-rm -f /usr/local/bin/spider /usr/local/bin/spd
-success "spider / spd 已删除"
+rm -f /usr/local/bin/spider /usr/local/bin/spdctl
+success "spider / spdctl 已删除"
 
 h1 "卸载完成"
 warn "数据目录 /var/lib/spider 已保留，如需删除："

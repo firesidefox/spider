@@ -1,7 +1,7 @@
 SHELL      := /bin/bash
 BIN_DIR    := bin
 SPIDER     := $(BIN_DIR)/spider
-SPDCTL     := $(BIN_DIR)/spd
+SPDCTL     := $(BIN_DIR)/spdctl
 VERSION    := $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 COMMIT     := $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
 BUILD_TIME := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
@@ -23,13 +23,26 @@ BOLD   := \033[1m
 DIM    := \033[2m
 RESET  := \033[0m
 
-.PHONY: all build web spider spider-only build-linux build-darwin dist publish install clean tidy help spd
+define log_h1
+@printf "\n$(BOLD)$(BLUE)══ %s ══$(RESET)\n" "$(1)"
+endef
+define log_info
+@printf "  $(BLUE)▶ %s$(RESET)\n" "$(1)"
+endef
+define log_ok
+@printf "  $(GREEN)✔ %s$(RESET)\n" "$(1)"
+endef
+define log_warn
+@printf "  $(YELLOW)⚠ %s$(RESET)\n" "$(1)"
+endef
+
+.PHONY: all build web spider spider-only build-linux build-darwin dist publish install clean tidy help
 
 all: build
 
 help:
-	@printf "\n$(BOLD)$(BLUE)══ Spider 智能运维平台 ══$(RESET)\n"
-	@printf "  $(DIM)make build         $(RESET)编译前端 + spider + spd\n"
+	$(call log_h1,Spider 智能运维平台)
+	@printf "  $(DIM)make build         $(RESET)编译前端 + spider + spdctl\n"
 	@printf "  $(DIM)make web           $(RESET)仅编译前端 (需要 Node.js)\n"
 	@printf "  $(DIM)make spider-only   $(RESET)编译 spider（跳过前端，开发用）\n"
 	@printf "  $(DIM)make build-linux   $(RESET)交叉编译 linux/amd64 二进制\n"
@@ -40,88 +53,96 @@ help:
 	@printf "  $(DIM)make clean         $(RESET)删除 bin/ dist/ 和前端产物\n"
 	@printf "  $(DIM)make tidy          $(RESET)go mod tidy\n"
 
-build: web spider spd
+build: web spider spdctl
 
 web:
-	@printf "\n$(BOLD)$(BLUE)══ 构建前端 ══$(RESET)\n"
-	@printf "  $(BLUE)▶ npm install$(RESET)\n"
+	$(call log_h1,构建前端)
+	$(call log_info,npm install)
 	@cd $(WEB_DIR) && npm install
-	@printf "  $(BLUE)▶ npm run build$(RESET)\n"
+	$(call log_info,npm run build)
 	@cd $(WEB_DIR) && npm run build
-	@printf "  $(GREEN)✔ 前端构建完成 → $(WEB_DIST)$(RESET)\n"
+	$(call log_ok,前端构建完成 → $(WEB_DIST))
 
 spider:
 	@mkdir -p $(BIN_DIR)
-	@printf "\n$(BOLD)$(BLUE)══ 编译 spider ══$(RESET)\n"
-	@printf "  $(BLUE)▶ 版本: $(VERSION)  commit: $(COMMIT)$(RESET)\n"
+	$(call log_h1,编译 spider)
+	$(call log_info,版本: $(VERSION)  commit: $(COMMIT))
 	@go build -ldflags "$(LDFLAGS)" -o $(SPIDER) ./cmd/spider
-	@printf "  $(GREEN)✔ spider → $(SPIDER)$(RESET)\n"
+	$(call log_ok,spider → $(SPIDER))
 
-spd:
+spider-only:
 	@mkdir -p $(BIN_DIR)
-	@printf "\n$(BOLD)$(BLUE)══ 编译 spd ══$(RESET)\n"
-	@go build -ldflags "$(LDFLAGS)" -o $(SPDCTL) ./cmd/spd
-	@printf "  $(GREEN)✔ spd → $(SPDCTL)$(RESET)\n"
+	$(call log_h1,编译 spider（跳过前端）)
+	$(call log_info,版本: $(VERSION)  commit: $(COMMIT))
+	@go build -ldflags "$(LDFLAGS)" -o $(SPIDER) ./cmd/spider
+	$(call log_ok,spider → $(SPIDER))
+
+spdctl:
+	@mkdir -p $(BIN_DIR)
+	$(call log_h1,编译 spdctl)
+	@go build -ldflags "$(LDFLAGS)" -o $(SPDCTL) ./cmd/spdctl
+	$(call log_ok,spdctl → $(SPDCTL))
 
 build-linux:
 	@mkdir -p $(BIN_DIR)
-	@printf "\n$(BOLD)$(BLUE)══ 交叉编译 spider → linux/amd64 ══$(RESET)\n"
-	@printf "  $(BLUE)▶ 版本: $(VERSION)  commit: $(COMMIT)$(RESET)\n"
+	$(call log_h1,交叉编译 spider → linux/amd64)
+	$(call log_info,版本: $(VERSION)  commit: $(COMMIT))
 	@GOOS=linux GOARCH=amd64 go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/spider-linux-amd64 ./cmd/spider
-	@printf "  $(GREEN)✔ spider-linux-amd64 → $(BIN_DIR)/spider-linux-amd64$(RESET)\n"
+	$(call log_ok,spider-linux-amd64 → $(BIN_DIR)/spider-linux-amd64)
 
 build-darwin:
 	@mkdir -p $(BIN_DIR)
-	@printf "\n$(BOLD)$(BLUE)══ 交叉编译 darwin arm64 + amd64 ══$(RESET)\n"
-	@printf "  $(BLUE)▶ 版本: $(VERSION)  commit: $(COMMIT)$(RESET)\n"
+	$(call log_h1,交叉编译 darwin arm64 + amd64)
+	$(call log_info,版本: $(VERSION)  commit: $(COMMIT))
 	@GOOS=darwin GOARCH=arm64 go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/spider-darwin-arm64 ./cmd/spider
-	@GOOS=darwin GOARCH=arm64 go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/spd-darwin-arm64 ./cmd/spd
+	@GOOS=darwin GOARCH=arm64 go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/spdctl-darwin-arm64 ./cmd/spdctl
 	@GOOS=darwin GOARCH=amd64 go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/spider-darwin-amd64 ./cmd/spider
-	@GOOS=darwin GOARCH=amd64 go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/spd-darwin-amd64 ./cmd/spd
-	@printf "  $(GREEN)✔ darwin binaries → $(BIN_DIR)/$(RESET)\n"
+	@GOOS=darwin GOARCH=amd64 go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/spdctl-darwin-amd64 ./cmd/spdctl
+	$(call log_ok,darwin binaries → $(BIN_DIR)/)
 
 dist: web build-darwin
-	@printf "\n$(BOLD)$(BLUE)══ 打包 macOS 安装包 ══$(RESET)\n"
-	@rm -rf $(DIST_DIR)
+	$(call log_h1,打包 macOS 安装包)
 	@mkdir -p $(DIST_DIR)
-	@mkdir -p $(DIST_DIR)/spider-$(VERSION)-arm64
-	@cp $(BIN_DIR)/spider-darwin-arm64   $(DIST_DIR)/spider-$(VERSION)-arm64/spider
-	@cp $(BIN_DIR)/spd-darwin-arm64      $(DIST_DIR)/spider-$(VERSION)-arm64/spd
-	@cp $(INSTALLER)/install.sh          $(DIST_DIR)/spider-$(VERSION)-arm64/install.sh
-	@cp $(INSTALLER)/uninstall.sh        $(DIST_DIR)/spider-$(VERSION)-arm64/uninstall.sh
-	@cp $(INSTALLER)/spider.plist        $(DIST_DIR)/spider-$(VERSION)-arm64/spider.plist
-	@chmod +x $(DIST_DIR)/spider-$(VERSION)-arm64/install.sh $(DIST_DIR)/spider-$(VERSION)-arm64/uninstall.sh
-	@cd $(DIST_DIR) && zip -qr spider-$(VERSION)-arm64.zip spider-$(VERSION)-arm64/
-	@rm -rf $(DIST_DIR)/spider-$(VERSION)-arm64
-	@mkdir -p $(DIST_DIR)/spider-$(VERSION)-x86_64
-	@cp $(BIN_DIR)/spider-darwin-amd64   $(DIST_DIR)/spider-$(VERSION)-x86_64/spider
-	@cp $(BIN_DIR)/spd-darwin-amd64      $(DIST_DIR)/spider-$(VERSION)-x86_64/spd
-	@cp $(INSTALLER)/install.sh          $(DIST_DIR)/spider-$(VERSION)-x86_64/install.sh
-	@cp $(INSTALLER)/uninstall.sh        $(DIST_DIR)/spider-$(VERSION)-x86_64/uninstall.sh
-	@cp $(INSTALLER)/spider.plist        $(DIST_DIR)/spider-$(VERSION)-x86_64/spider.plist
-	@chmod +x $(DIST_DIR)/spider-$(VERSION)-x86_64/install.sh $(DIST_DIR)/spider-$(VERSION)-x86_64/uninstall.sh
-	@cd $(DIST_DIR) && zip -qr spider-$(VERSION)-x86_64.zip spider-$(VERSION)-x86_64/
-	@rm -rf $(DIST_DIR)/spider-$(VERSION)-x86_64
-	@printf "  $(GREEN)✔ dist/spider-$(VERSION)-arm64.zip$(RESET)\n"
-	@printf "  $(GREEN)✔ dist/spider-$(VERSION)-x86_64.zip$(RESET)\n"
+	@rm -f  $(DIST_DIR)/Spider-$(VERSION)-arm64.zip $(DIST_DIR)/Spider-$(VERSION)-x86_64.zip
+	@rm -rf $(DIST_DIR)/Spider-$(VERSION)-arm64 $(DIST_DIR)/Spider-$(VERSION)-x86_64
+	@mkdir -p $(DIST_DIR)/Spider-$(VERSION)-arm64
+	@cp $(BIN_DIR)/spider-darwin-arm64   $(DIST_DIR)/Spider-$(VERSION)-arm64/spider
+	@cp $(BIN_DIR)/spdctl-darwin-arm64   $(DIST_DIR)/Spider-$(VERSION)-arm64/spdctl
+	@cp $(INSTALLER)/install.sh          $(DIST_DIR)/Spider-$(VERSION)-arm64/install.sh
+	@cp $(INSTALLER)/uninstall.sh        $(DIST_DIR)/Spider-$(VERSION)-arm64/uninstall.sh
+	@cp $(INSTALLER)/spider.plist        $(DIST_DIR)/Spider-$(VERSION)-arm64/spider.plist
+	@chmod +x $(DIST_DIR)/Spider-$(VERSION)-arm64/install.sh $(DIST_DIR)/Spider-$(VERSION)-arm64/uninstall.sh
+	@cd $(DIST_DIR) && zip -qr Spider-$(VERSION)-arm64.zip Spider-$(VERSION)-arm64/
+	@rm -rf $(DIST_DIR)/Spider-$(VERSION)-arm64
+	@mkdir -p $(DIST_DIR)/Spider-$(VERSION)-x86_64
+	@cp $(BIN_DIR)/spider-darwin-amd64   $(DIST_DIR)/Spider-$(VERSION)-x86_64/spider
+	@cp $(BIN_DIR)/spdctl-darwin-amd64   $(DIST_DIR)/Spider-$(VERSION)-x86_64/spdctl
+	@cp $(INSTALLER)/install.sh          $(DIST_DIR)/Spider-$(VERSION)-x86_64/install.sh
+	@cp $(INSTALLER)/uninstall.sh        $(DIST_DIR)/Spider-$(VERSION)-x86_64/uninstall.sh
+	@cp $(INSTALLER)/spider.plist        $(DIST_DIR)/Spider-$(VERSION)-x86_64/spider.plist
+	@chmod +x $(DIST_DIR)/Spider-$(VERSION)-x86_64/install.sh $(DIST_DIR)/Spider-$(VERSION)-x86_64/uninstall.sh
+	@cd $(DIST_DIR) && zip -qr Spider-$(VERSION)-x86_64.zip Spider-$(VERSION)-x86_64/
+	@rm -rf $(DIST_DIR)/Spider-$(VERSION)-x86_64
+	$(call log_ok,dist/Spider-$(VERSION)-arm64.zip)
+	$(call log_ok,dist/Spider-$(VERSION)-x86_64.zip)
 
 publish: build-linux
-	@printf "\n$(BOLD)$(BLUE)══ 发布二进制到 DataDir ══$(RESET)\n"
+	$(call log_h1,发布二进制到 DataDir)
 	@mkdir -p ~/.spider/bin
 	@cp $(BIN_DIR)/spider-linux-amd64 ~/.spider/bin/spider-linux-amd64
-	@printf "  $(GREEN)✔ 已复制到 ~/.spider/bin/spider-linux-amd64$(RESET)\n"
+	$(call log_ok,已复制到 ~/.spider/bin/spider-linux-amd64)
 
 install:
-	@printf "\n$(BOLD)$(BLUE)══ 安装 ══$(RESET)\n"
-	@go install -ldflags "$(LDFLAGS)" ./cmd/spider ./cmd/spd
-	@printf "  $(GREEN)✔ 已安装到 $$GOPATH/bin$(RESET)\n"
+	$(call log_h1,安装)
+	@go install -ldflags "$(LDFLAGS)" ./cmd/spider ./cmd/spdctl
+	$(call log_ok,已安装到 $$GOPATH/bin)
 
 clean:
-	@printf "  $(YELLOW)⚠ 删除 $(BIN_DIR)/ $(DIST_DIR)/ 和前端产物...$(RESET)\n"
+	$(call log_warn,删除 $(BIN_DIR)/ $(DIST_DIR)/ 和前端产物...)
 	@rm -rf $(BIN_DIR) $(WEB_DIST) $(DIST_DIR)
-	@printf "  $(GREEN)✔ 清理完成$(RESET)\n"
+	$(call log_ok,清理完成)
 
 tidy:
-	@printf "  $(BLUE)▶ go mod tidy$(RESET)\n"
+	$(call log_info,go mod tidy)
 	@go mod tidy
-	@printf "  $(GREEN)✔ 依赖整理完成$(RESET)\n"
+	$(call log_ok,依赖整理完成)

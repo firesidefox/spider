@@ -19,12 +19,12 @@ Claude Code
 | 程序 | 用途 |
 |------|------|
 | `spider` | MCP SSE server，作为后台服务运行 |
-| `spd` | 命令行管理工具，供运维人员手动操作 |
+| `spdctl` | 命令行管理工具，供运维人员手动操作 |
 
 ## 构建
 
 ```bash
-make build        # 编译到 bin/spider 和 bin/spd
+make build        # 编译到 bin/spider 和 bin/spdctl
 make install      # 安装到 $GOPATH/bin
 ```
 
@@ -62,60 +62,60 @@ claude mcp add --transport sse spider http://localhost:8000/sse
 }
 ```
 
-## spd 使用说明
+## spdctl 使用说明
 
 ### 主机管理
 
 ```bash
 # 添加主机（SSH 私钥认证）
-spd host add --name web01 --ip 10.0.0.1 --user root --auth key --key ~/.ssh/id_rsa
+spdctl host add --name web01 --ip 10.0.0.1 --user root --auth key --key ~/.ssh/id_rsa
 
 # 添加主机（密码认证）
-spd host add --name db01 --ip 10.0.0.2 --user admin --auth password --password mypass
+spdctl host add --name db01 --ip 10.0.0.2 --user admin --auth password --password mypass
 
 # 添加主机（带 passphrase 的私钥）
-spd host add --name app01 --ip 10.0.0.3 --user deploy --auth key_password \
+spdctl host add --name app01 --ip 10.0.0.3 --user deploy --auth key_password \
   --key ~/.ssh/id_rsa --passphrase mypassphrase
 
 # 添加主机（通过跳板机）
-spd host add --name internal01 --ip 192.168.1.10 --user root --auth key \
+spdctl host add --name internal01 --ip 192.168.1.10 --user root --auth key \
   --key ~/.ssh/id_rsa --proxy <bastion-host-id>
 
 # 添加标签
-spd host add --name web02 --ip 10.0.0.4 --user root --auth key \
+spdctl host add --name web02 --ip 10.0.0.4 --user root --auth key \
   --key ~/.ssh/id_rsa --tag prod,web
 
 # 列出所有主机
-spd host list
+spdctl host list
 
 # 按标签过滤
-spd host list --tag prod
+spdctl host list --tag prod
 
 # JSON 格式输出
-spd host list --json
+spdctl host list --json
 
 # 更新主机信息
-spd host update web01 --ip 10.0.0.10 --tag prod,web,nginx
+spdctl host update web01 --ip 10.0.0.10 --tag prod,web,nginx
 
 # 删除主机
-spd host rm web01
+spdctl host rm web01
 ```
 
 ### 远程执行
 
 ```bash
 # 执行命令
-spd exec web01 "df -h"
-spd exec web01 "systemctl status nginx"
+spdctl exec web01 "df -h"
+spdctl exec web01 "systemctl status nginx"
 
 # 自定义超时（秒）
-spd exec web01 "apt upgrade -y" --timeout 300
+spdctl exec web01 "apt upgrade -y" --timeout 300
 ```
 
 ### 连通性测试
 
 ```bash
-spd ping web01
+spdctl ping web01
 # 输出：{"host":"web01","connected":true,"latency_ms":12}
 ```
 
@@ -123,13 +123,13 @@ spd ping web01
 
 ```bash
 # 查看最近 20 条
-spd history
+spdctl history
 
 # 按主机过滤
-spd history --host web01
+spdctl history --host web01
 
 # 指定返回条数
-spd history --n 50
+spdctl history --n 50
 ```
 
 ## 使用场景

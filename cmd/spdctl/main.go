@@ -19,8 +19,8 @@ func run() error {
 	var serverURL string
 
 	root := &cobra.Command{
-		Use:          "spd",
-		Short:        "spd — Spider 运维管理工具",
+		Use:          "spdctl",
+		Short:        "spdctl — Spider 运维管理工具",
 		SilenceUsage: true,
 	}
 	root.PersistentFlags().StringVar(&serverURL, "url", "http://localhost:8000", "Spider 服务地址")

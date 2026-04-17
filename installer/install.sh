@@ -35,8 +35,8 @@ success "旧服务已停止（或不存在）"
 
 step "安装二进制"
 install -m 755 "${SCRIPT_DIR}/spider" /usr/local/bin/spider
-install -m 755 "${SCRIPT_DIR}/spd" /usr/local/bin/spd
-success "spider / spd → /usr/local/bin/"
+install -m 755 "${SCRIPT_DIR}/spdctl" /usr/local/bin/spdctl
+success "spider / spdctl → /usr/local/bin/"
 
 step "创建日志目录"
 mkdir -p /var/log/spider
@@ -91,5 +91,5 @@ for i in $(seq 5); do
 done
 
 h1 "安装完成"
-detail "spd host list    # 查看主机列表"
-detail "spd mcp register # 注册到 Claude Code"
+detail "spdctl host list    # 查看主机列表"
+detail "spdctl mcp register # 注册到 Claude Code"
