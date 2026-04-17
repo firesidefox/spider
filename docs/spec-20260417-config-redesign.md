@@ -11,8 +11,8 @@
 这导致：
 
 1. **系统级安装**（launchd 以 root 运行）必须通过 `SPIDER_DATA_DIR=/var/lib/spider`
-   环境变量绕过，否则 `spdctl` 找不到数据（因为 root 的 `~` 是 `/var/root`）。
-2. **`spdctl` 的 `--data-dir` flag 存在 bug**：flag 在 `cobra.Execute()` 之前就被读取，
+   环境变量绕过，否则 `spd` 找不到数据（因为 root 的 `~` 是 `/var/root`）。
+2. **`spd` 的 `--data-dir` flag 存在 bug**：flag 在 `cobra.Execute()` 之前就被读取，
    永远不生效（`dataDir` 始终为空字符串）。
 3. 配置文件路径从 DataDir 推导，但 DataDir 本身依赖用户目录，逻辑耦合。
 
@@ -26,7 +26,7 @@
   1. 命令行 flag `--data-dir`
   2. 配置文件 `config.yaml` 中的 `data_dir` 字段
   3. 内置默认值 `/var/lib/spider`
-- 修复 `spdctl` 的 `--data-dir` flag 不生效的 bug。
+- 修复 `spd` 的 `--data-dir` flag 不生效的 bug。
 
 ---
 
@@ -64,10 +64,10 @@ spider [--config <path>] [--data-dir <path>] [--addr <addr>] [serve|version]
 错误: 未指定数据目录，请通过 --data-dir 指定
 ```
 
-### 4.2 `spdctl`（管理工具）
+### 4.2 `spd`（管理工具）
 
 ```
-spdctl --data-dir <path> <subcommand>
+spd --data-dir <path> <subcommand>
 ```
 
 **修复**：`--data-dir` flag 必须在 `cobra.Execute()` 之后、子命令执行之前生效。
@@ -94,7 +94,7 @@ func Load(path string) (*Config, error)
 |------|----------|
 | `internal/config/config.go` | 移除 UserHomeDir，移除 Validate()，调整 Load() |
 | `cmd/spider/main.go` | --config 无默认值，启动前无需 Validate() |
-| `cmd/spdctl/main.go` | 修复 --data-dir bug，移入 PersistentPreRunE |
+| `cmd/spd/main.go` | 修复 --data-dir bug，移入 PersistentPreRunE |
 | `installer/spider.plist` | 移除 `SPIDER_DATA_DIR` 环境变量，改用 `--data-dir /var/lib/spider` flag |
 | `internal/api/install.go` | 删除 `serverInstallScript`、`ServerInstallScriptHandler`、`BinaryDownloadHandler` 及相关路由 |
 | `cmd/spider/main.go` | 移除 `/server-install.sh` 路由注册 |
@@ -106,8 +106,8 @@ func Load(path string) (*Config, error)
 
 - [ ] `spider` 不带任何参数启动时，使用 `/var/lib/spider` 作为数据目录
 - [ ] `spider --data-dir /tmp/test` 正常启动，DataDir 为 `/tmp/test`
-- [ ] `spdctl --data-dir /var/lib/spider host list` 正确读取数据（bug 修复验证）
-- [ ] `spdctl` 不带 `--data-dir` 时，使用 `/var/lib/spider`
+- [ ] `spd --data-dir /var/lib/spider host list` 正确读取数据（bug 修复验证）
+- [ ] `spd` 不带 `--data-dir` 时，使用 `/var/lib/spider`
 - [ ] `SPIDER_DATA_DIR` 环境变量被忽略（不再读取）
 - [ ] `config.Load("")` 不再打印 "config: ... not found" 警告
 - [ ] 单元测试覆盖 Load() 的三种优先级场景

@@ -238,20 +238,20 @@ Claude：[调用 get_execution_history，过滤 host=db-01，时间范围=昨天
 | `download_file` | 从远程主机下载文件 |
 | `get_execution_history` | 查询执行历史 |
 
-#### 3.1.6 CLI 工具（spdctl）
+#### 3.1.6 CLI 工具（spd）
 
 | 命令 | 说明 |
 |------|------|
-| `spdctl host add` | 添加主机 |
-| `spdctl host list` | 列出主机 |
-| `spdctl host update` | 更新主机 |
-| `spdctl host rm` | 删除主机 |
-| `spdctl exec <host> <cmd>` | 执行命令 |
-| `spdctl ping <host>` | 连通性测试 |
-| `spdctl history` | 查看执行历史 |
-| `spdctl mcp register` | 注册 MCP 到 Claude Code |
-| `spdctl mcp unregister` | 取消注册 |
-| `spdctl mcp status` | 查看注册状态 |
+| `spd host add` | 添加主机 |
+| `spd host list` | 列出主机 |
+| `spd host update` | 更新主机 |
+| `spd host rm` | 删除主机 |
+| `spd exec <host> <cmd>` | 执行命令 |
+| `spd ping <host>` | 连通性测试 |
+| `spd history` | 查看执行历史 |
+| `spd mcp register` | 注册 MCP 到 Claude Code |
+| `spd mcp unregister` | 取消注册 |
+| `spd mcp status` | 查看注册状态 |
 
 ### 3.2 Phase 1 — Web UI 完善
 
@@ -743,7 +743,7 @@ spider &
 claude mcp add --transport sse spider http://localhost:8000/sse
 
 # 4. 添加第一台主机
-spdctl host add --name web01 --ip 10.0.0.1 --user root \
+spd host add --name web01 --ip 10.0.0.1 --user root \
   --auth key --key ~/.ssh/id_rsa
 ```
 
@@ -799,7 +799,7 @@ volumes:
 
 | 阶段 | 主要内容 | 状态 |
 |------|----------|------|
-| **基线** | MCP SSE Server、spdctl CLI、SSH 执行、文件传输、执行历史、AES-256-GCM 凭据加密 | ✅ 已完成 |
+| **基线** | MCP SSE Server、spd CLI、SSH 执行、文件传输、执行历史、AES-256-GCM 凭据加密 | ✅ 已完成 |
 | **Phase 1** | Web UI 完善：主机管理界面、实时命令执行、历史日志查看、文件上传 | 🔄 规划中 |
 | **Phase 2** | 多用户与权限控制：账号管理、RBAC、API Token、操作审计日志 | 📋 待规划 |
 | **Phase 3** | 告警与监控：SSH 状态监控、阈值告警规则、钉钉/Slack 通知、监控仪表盘 | 📋 待规划 |
