@@ -31,7 +31,10 @@ type SSHConfig struct {
 
 // DefaultConfig 返回默认配置。
 func DefaultConfig() *Config {
-	home, _ := os.UserHomeDir()
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		home = "/var/lib/spider"
+	}
 	return &Config{
 		DataDir:  filepath.Join(home, ".spider"),
 		LogLevel: "info",
