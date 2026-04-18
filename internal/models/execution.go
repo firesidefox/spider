@@ -13,5 +13,6 @@ type ExecutionLog struct {
 	ExitCode    int       `json:"exit_code"`
 	DurationMs  int64     `json:"duration_ms"`
 	TriggeredBy string    `json:"triggered_by"` // mcp | cli
+	UserID      string    `json:"user_id,omitempty"`
 	CreatedAt   time.Time `json:"created_at"`
 }
