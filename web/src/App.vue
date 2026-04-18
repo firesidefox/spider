@@ -8,7 +8,7 @@
         <RouterLink to="/audit" class="nav-item">审计</RouterLink>
         <RouterLink to="/settings" class="nav-item">设置</RouterLink>
         <RouterLink to="/install" class="nav-item">安装</RouterLink>
-        <RouterLink v-if="isAdmin" to="/users" class="nav-item">用户</RouterLink>
+        <RouterLink v-if="isAdmin" to="/users" class="nav-item">用户管理</RouterLink>
         <RouterLink to="/profile" class="nav-item">个人设置</RouterLink>
       </nav>
       <div v-if="currentUser" class="nav-user">

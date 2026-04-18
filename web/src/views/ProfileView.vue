@@ -25,20 +25,20 @@
       <div v-if="activeTab === 'info'">
         <div class="settings-card">
           <h3>账号信息</h3>
-          <div class="info-grid">
-            <div class="info-item">
+          <div class="info-list">
+            <div class="info-row">
               <span class="info-label">用户名</span>
               <span class="info-value">{{ currentUser?.username }}</span>
             </div>
-            <div class="info-item">
+            <div class="info-row">
               <span class="info-label">角色</span>
               <span class="role-badge" :class="currentUser?.role">{{ roleLabel }}</span>
             </div>
-            <div class="info-item" v-if="currentUser?.created_at">
+            <div class="info-row" v-if="currentUser?.created_at">
               <span class="info-label">注册时间</span>
               <span class="info-value dim">{{ new Date(currentUser.created_at).toLocaleString() }}</span>
             </div>
-            <div class="info-item" v-if="currentUser?.last_login">
+            <div class="info-row" v-if="currentUser?.last_login">
               <span class="info-label">上次登录</span>
               <span class="info-value dim">{{ new Date(currentUser.last_login).toLocaleString() }}</span>
             </div>
@@ -364,9 +364,9 @@ function toggleLog(id: string) {
 .role-badge.viewer  { background: rgba(167,139,250,0.1); color: var(--purple);  border-color: rgba(167,139,250,0.25); }
 
 /* ── 账号信息网格 ── */
-.info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-.info-item { display: flex; flex-direction: column; gap: 4px; }
-.info-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); }
+.info-list { display: flex; flex-direction: column; gap: 10px; }
+.info-row { display: flex; align-items: center; gap: 12px; }
+.info-label { font-size: 12px; font-weight: 600; color: var(--muted); width: 72px; flex-shrink: 0; }
 .info-value { font-size: 14px; color: var(--text); }
 
 /* ── 卡片工具栏 ── */
