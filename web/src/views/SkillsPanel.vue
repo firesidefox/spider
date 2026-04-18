@@ -43,12 +43,7 @@
         <div class="sp-body">
           <div class="sp-card">
             <div v-if="loading" class="sp-loading">加载中…</div>
-            <div v-else class="sp-lined">
-              <template v-for="(line, i) in rawLines" :key="i">
-                <div class="sp-ln">{{ i + 1 }}</div>
-                <div class="sp-lc">{{ line }}</div>
-              </template>
-            </div>
+            <CodeBlock v-else :code="rawContent" wrap />
           </div>
         </div>
       </template>
@@ -64,8 +59,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-
-const rawLines = computed(() => rawContent.value.split('\n'))
+import CodeBlock from '../components/CodeBlock.vue'
 
 const encodeSkillName = (name: string) => name.split('/').map(encodeURIComponent).join('/')
 
@@ -216,29 +210,5 @@ onMounted(() => { loadSkills() })
 .sp-loading { color: var(--muted); font-size: 13px; padding: 24px 28px; }
 .sp-empty-state { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--muted); font-size: 14px; }
 .sp-empty-icon { color: var(--border); font-size: 40px; }
-
-.sp-lined {
-  display: grid;
-  grid-template-columns: 44px 1fr;
-  font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', monospace;
-  font-size: 12.5px;
-  line-height: 1.65;
-  padding: 14px 0;
-}
-.sp-ln {
-  text-align: right;
-  padding: 0 10px 0 0;
-  color: var(--label);
-  user-select: none;
-  background: var(--panel);
-  border-right: 1px solid var(--border);
-}
-.sp-lc {
-  padding: 0 18px;
-  color: var(--text);
-  white-space: pre-wrap;
-  word-break: break-word;
-  min-height: 1.65em;
-}
 
 </style>

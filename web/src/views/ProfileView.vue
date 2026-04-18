@@ -243,7 +243,7 @@
           <button class="btn btn-sm" :class="{ 'btn-copied': copied }" @click="copyToken">{{ copied ? '✓ 已复制' : '复制' }}</button>
         </div>
         <div class="modal-footer">
-          <button class="btn btn-primary" @click="newToken = ''">我已复制</button>
+          <button class="btn btn-primary" @click="newToken = ''; copied = false">我已复制</button>
         </div>
       </div>
     </div>
@@ -340,10 +340,14 @@ async function handleDelete(id: string) {
   tokens.value = await listTokens()
 }
 
-function copyToken() {
-  navigator.clipboard.writeText(newToken.value)
-  copied.value = true
-  setTimeout(() => { copied.value = false }, 2000)
+async function copyToken() {
+  try {
+    await navigator.clipboard.writeText(newToken.value)
+    copied.value = true
+    setTimeout(() => { copied.value = false }, 2000)
+  } catch {
+    // clipboard 不可用时（HTTP 环境/权限拒绝），静默失败，用户可手动复制
+  }
 }
 function isExpired(expiresAt: string) { return new Date(expiresAt) < new Date() }
 
