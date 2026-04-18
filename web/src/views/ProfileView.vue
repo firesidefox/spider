@@ -42,6 +42,14 @@
       <template v-else>
         <div class="detail-topbar">
           <span class="detail-title">{{ tabTitle }}</span>
+          <button v-if="activeTab === 'info'" class="btn btn-sm" @click="showPwModal = true">修改密码</button>
+          <template v-if="activeTab === 'settings'">
+            <div v-if="settingsEditing" style="display:flex;gap:8px">
+              <button class="btn btn-primary btn-sm" @click="saveSettings">保存</button>
+              <button class="btn btn-sm" @click="cancelSettings">取消</button>
+            </div>
+            <button v-else class="btn btn-sm" @click="settingsEditing = true">编辑</button>
+          </template>
         </div>
         <div class="detail-body">
         <template v-if="activeTab === 'info'">
@@ -62,17 +70,6 @@
               <div class="detail-label">上次登录</div>
               <div class="detail-value dim">{{ new Date(currentUser.last_login).toLocaleString() }}</div>
             </div>
-          </div>
-          <div class="edit-card">
-            <div class="edit-card-title">修改密码</div>
-            <div class="form-row"><label>旧密码</label><input v-model="pw.old" type="password" class="input" placeholder="当前密码" /></div>
-            <div class="form-row"><label>新密码</label><input v-model="pw.new1" type="password" class="input" placeholder="至少 6 位" /></div>
-            <div class="form-row"><label>确认新密码</label><input v-model="pw.new2" type="password" class="input" placeholder="再次输入新密码" /></div>
-            <div v-if="pwError" class="err" style="margin-bottom:10px">{{ pwError }}</div>
-            <div v-if="pwSuccess" class="ok" style="margin-bottom:10px">{{ pwSuccess }}</div>
-            <button class="btn btn-primary btn-sm" @click="handleChangePassword" :disabled="pwLoading">
-              {{ pwLoading ? '保存中…' : '保存密码' }}
-            </button>
           </div>
         </template>
 
@@ -150,26 +147,50 @@
 
         <!-- Tab: 系统设置 -->
         <template v-if="activeTab === 'settings'">
-          <div class="edit-card">
-            <div class="edit-card-title">MCP Server</div>
-            <div class="block-grid">
-              <div class="form-row"><label>监听地址</label><input v-model="settings.sse_addr" class="input" placeholder=":8000" /></div>
-              <div class="form-row"><label>Base URL</label><input v-model="settings.sse_base_url" class="input" placeholder="http://localhost:8000" /></div>
+          <!-- 只读视图 -->
+          <template v-if="!settingsEditing">
+            <div class="detail-grid">
+              <div class="detail-field">
+                <div class="detail-label">监听地址</div>
+                <div class="detail-value">{{ settings.sse_addr || '—' }}</div>
+              </div>
+              <div class="detail-field">
+                <div class="detail-label">Base URL</div>
+                <div class="detail-value">{{ settings.sse_base_url || '—' }}</div>
+              </div>
+              <div class="detail-field">
+                <div class="detail-label">命令超时（秒）</div>
+                <div class="detail-value">{{ settings.ssh_default_timeout_seconds }}</div>
+              </div>
+              <div class="detail-field">
+                <div class="detail-label">连接池 TTL（秒）</div>
+                <div class="detail-value">{{ settings.ssh_pool_ttl_seconds }}</div>
+              </div>
+              <div class="detail-field">
+                <div class="detail-label">最大连接数</div>
+                <div class="detail-value">{{ settings.ssh_max_pool_size }}</div>
+              </div>
             </div>
-          </div>
-          <div class="edit-card">
-            <div class="edit-card-title">SSH 默认配置</div>
-            <div class="block-grid">
-              <div class="form-row"><label>命令超时（秒）</label><input v-model.number="settings.ssh_default_timeout_seconds" class="input" type="number" /></div>
-              <div class="form-row"><label>连接池 TTL（秒）</label><input v-model.number="settings.ssh_pool_ttl_seconds" class="input" type="number" /></div>
-              <div class="form-row"><label>最大连接数</label><input v-model.number="settings.ssh_max_pool_size" class="input" type="number" /></div>
+          </template>
+          <!-- 编辑视图 -->
+          <template v-else>
+            <div class="edit-card">
+              <div class="edit-card-title">MCP Server</div>
+              <div class="block-grid">
+                <div class="form-row"><label>监听地址</label><input v-model="settings.sse_addr" class="input" placeholder=":8000" /></div>
+                <div class="form-row"><label>Base URL</label><input v-model="settings.sse_base_url" class="input" placeholder="http://localhost:8000" /></div>
+              </div>
             </div>
-          </div>
-          <div style="display:flex;align-items:center;gap:12px">
-            <button class="btn btn-primary btn-sm" @click="saveSettings">保存设置</button>
-            <span v-if="settingsSaved" class="ok">已保存</span>
-            <span v-if="settingsError" class="err">{{ settingsError }}</span>
-          </div>
+            <div class="edit-card">
+              <div class="edit-card-title">SSH 默认配置</div>
+              <div class="block-grid">
+                <div class="form-row"><label>命令超时（秒）</label><input v-model.number="settings.ssh_default_timeout_seconds" class="input" type="number" /></div>
+                <div class="form-row"><label>连接池 TTL（秒）</label><input v-model.number="settings.ssh_pool_ttl_seconds" class="input" type="number" /></div>
+                <div class="form-row"><label>最大连接数</label><input v-model.number="settings.ssh_max_pool_size" class="input" type="number" /></div>
+              </div>
+            </div>
+            <div v-if="settingsError" class="err" style="margin-top:4px">{{ settingsError }}</div>
+          </template>
         </template>
 
       </div>
@@ -189,6 +210,22 @@
         <div class="modal-footer">
           <button class="btn" @click="showCreate = false">取消</button>
           <button class="btn btn-primary" @click="handleCreate">创建</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 修改密码弹窗 -->
+    <div v-if="showPwModal" class="modal-overlay" @click.self="showPwModal = false">
+      <div class="modal">
+        <h3>修改密码</h3>
+        <div class="form-row"><label>旧密码</label><input v-model="pw.old" type="password" class="input" placeholder="当前密码" /></div>
+        <div class="form-row"><label>新密码</label><input v-model="pw.new1" type="password" class="input" placeholder="至少 6 位" /></div>
+        <div class="form-row"><label>确认新密码</label><input v-model="pw.new2" type="password" class="input" placeholder="再次输入新密码" /></div>
+        <div v-if="pwError" class="err" style="margin-bottom:10px">{{ pwError }}</div>
+        <div v-if="pwSuccess" class="ok" style="margin-bottom:10px">{{ pwSuccess }}</div>
+        <div class="modal-footer">
+          <button class="btn" @click="showPwModal = false; pw = { old: '', new1: '', new2: '' }; pwError = ''; pwSuccess = ''">取消</button>
+          <button class="btn btn-primary" @click="handleChangePassword" :disabled="pwLoading">{{ pwLoading ? '保存中…' : '保存密码' }}</button>
         </div>
       </div>
     </div>
@@ -236,6 +273,7 @@ const pw = ref({ old: '', new1: '', new2: '' })
 const pwError = ref('')
 const pwSuccess = ref('')
 const pwLoading = ref(false)
+const showPwModal = ref(false)
 
 async function handleChangePassword() {
   pwError.value = ''
@@ -257,7 +295,7 @@ async function handleChangePassword() {
     }
     pw.value = { old: '', new1: '', new2: '' }
     pwSuccess.value = '密码已修改'
-    setTimeout(() => { pwSuccess.value = '' }, 3000)
+    setTimeout(() => { pwSuccess.value = ''; showPwModal.value = false }, 1500)
   } catch { pwError.value = '修改失败' }
   finally { pwLoading.value = false }
 }
@@ -327,7 +365,7 @@ interface Settings {
   ssh_default_timeout_seconds: number; ssh_pool_ttl_seconds: number; ssh_max_pool_size: number
 }
 const settings = ref<Settings>({ sse_addr: '', sse_base_url: '', ssh_default_timeout_seconds: 30, ssh_pool_ttl_seconds: 300, ssh_max_pool_size: 50 })
-const settingsSaved = ref(false)
+const settingsEditing = ref(false)
 const settingsError = ref('')
 let settingsLoaded = false
 
@@ -339,15 +377,20 @@ async function loadSettings() {
 }
 
 async function saveSettings() {
-  settingsSaved.value = false
   settingsError.value = ''
   const res = await fetch('/api/v1/settings', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify(settings.value),
   })
-  if (res.ok) { settingsSaved.value = true; setTimeout(() => { settingsSaved.value = false }, 2000) }
+  if (res.ok) { settingsEditing.value = false }
   else settingsError.value = (await res.json()).error
+}
+
+function cancelSettings() {
+  settingsEditing.value = false
+  settingsLoaded = false
+  loadSettings()
 }
 </script>
 

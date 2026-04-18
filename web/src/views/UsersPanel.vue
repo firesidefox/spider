@@ -33,6 +33,13 @@
             <span :class="selectedUser.enabled ? 'status-ok' : 'status-err'">{{ selectedUser.enabled ? '启用' : '禁用' }}</span>
           </div>
           <div class="up-topbar-right">
+            <template v-if="!editing">
+              <button class="btn btn-sm btn-primary" @click="startEdit">编辑</button>
+            </template>
+            <template v-else>
+              <button class="btn btn-sm btn-primary" @click="handleDetailSave">保存</button>
+              <button class="btn btn-sm" @click="cancelEdit">取消</button>
+            </template>
             <button class="btn btn-sm" @click="toggleEnabled(selectedUser)" :disabled="selectedUser.id === currentUser?.id">
               {{ selectedUser.enabled ? '禁用' : '启用' }}
             </button>
@@ -44,7 +51,7 @@
             <div class="up-field"><div class="up-label">用户名</div><div class="up-value">{{ selectedUser.username }}</div></div>
             <div class="up-field"><div class="up-label">最后登录</div><div class="up-value dim">{{ selectedUser.last_login ? new Date(selectedUser.last_login).toLocaleString() : '从未' }}</div></div>
           </div>
-          <div class="edit-card">
+          <div v-if="editing" class="edit-card">
             <div class="edit-card-title">修改</div>
             <div class="form-row">
               <label>角色</label>
@@ -57,8 +64,6 @@
             <div class="form-row"><label>新密码</label><input v-model="detailForm.password" type="password" class="input" placeholder="留空不修改" /></div>
             <div class="form-row"><label>确认新密码</label><input v-model="detailForm.confirmPassword" type="password" class="input" placeholder="留空不修改" /></div>
             <div v-if="detailError" class="err" style="margin-bottom:10px">{{ detailError }}</div>
-            <div v-if="detailSuccess" class="ok" style="margin-bottom:10px">{{ detailSuccess }}</div>
-            <button class="btn btn-primary btn-sm" @click="handleDetailSave">保存修改</button>
           </div>
         </div>
       </template>
@@ -92,7 +97,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted } from 'vue'
 import { listUsers, createUser, updateUser, deleteUser } from '../api/users'
 import { useAuth } from '../composables/useAuth'
 import type { UserInfo } from '../api/auth'
@@ -100,23 +105,33 @@ import type { UserInfo } from '../api/auth'
 const { currentUser } = useAuth()
 const users = ref<UserInfo[]>([])
 const selectedUser = ref<UserInfo | null>(null)
+const editing = ref(false)
 const showCreate = ref(false)
 const formError = ref('')
 const form = ref({ username: '', password: '', role: 'operator' })
 const detailForm = ref({ role: 'operator', password: '', confirmPassword: '' })
 const detailError = ref('')
-const detailSuccess = ref('')
 
 onMounted(async () => { users.value = await listUsers() })
 
 function selectUser(u: UserInfo) {
   selectedUser.value = u
+  editing.value = false
   detailForm.value = { role: u.role, password: '', confirmPassword: '' }
   detailError.value = ''
-  detailSuccess.value = ''
 }
 
-watch(selectedUser, (u) => { if (u) detailForm.value.role = u.role })
+function startEdit() {
+  detailForm.value = { role: selectedUser.value!.role, password: '', confirmPassword: '' }
+  detailError.value = ''
+  editing.value = true
+}
+
+function cancelEdit() {
+  editing.value = false
+  detailForm.value = { role: selectedUser.value!.role, password: '', confirmPassword: '' }
+  detailError.value = ''
+}
 
 async function toggleEnabled(u: UserInfo) {
   await updateUser(u.id, { enabled: !u.enabled })
@@ -144,7 +159,6 @@ async function handleCreate() {
 
 async function handleDetailSave() {
   detailError.value = ''
-  detailSuccess.value = ''
   if (detailForm.value.password !== detailForm.value.confirmPassword) {
     detailError.value = '两次密码不一致'; return
   }
@@ -153,9 +167,7 @@ async function handleDetailSave() {
   if (detailForm.value.password) data.password = detailForm.value.password
   try {
     await updateUser(selectedUser.value!.id, data)
-    detailForm.value.password = ''
-    detailForm.value.confirmPassword = ''
-    detailSuccess.value = '保存成功'
+    editing.value = false
     users.value = await listUsers()
     const updated = users.value.find(x => x.id === selectedUser.value?.id)
     if (updated) selectedUser.value = updated
