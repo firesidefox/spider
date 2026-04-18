@@ -109,6 +109,7 @@ func NewRouter(app *mcppkg.App) http.Handler {
 	mux.HandleFunc("PUT /api/v1/skills/{name}", uploadSkillHandler(app.Config.DataDir))
 	mux.HandleFunc("DELETE /api/v1/skills/{name}", deleteSkillHandler(app.Config.DataDir))
 	mux.HandleFunc("GET /api/v1/me", meHandler(app))
+	mux.HandleFunc("PUT /api/v1/me/password", changePasswordHandler(app))
 
 	// Phase 2: 用户管理（admin only）
 	adminOnly := authmw.RequireRole(models.RoleAdmin)

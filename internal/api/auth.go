@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"time"
 
+	"golang.org/x/crypto/bcrypt"
+
 	authmw "github.com/spiderai/spider/internal/auth"
 	mcppkg "github.com/spiderai/spider/internal/mcp"
 )
@@ -69,5 +71,41 @@ func meHandler(app *mcppkg.App) http.HandlerFunc {
 			return
 		}
 		writeJSON(w, http.StatusOK, user.ToInfo())
+	}
+}
+
+func changePasswordHandler(app *mcppkg.App) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		uc := authmw.GetUser(r.Context())
+		if uc == nil {
+			writeError(w, http.StatusUnauthorized, "unauthorized")
+			return
+		}
+		var req struct {
+			OldPassword string `json:"old_password"`
+			NewPassword string `json:"new_password"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid request")
+			return
+		}
+		if len(req.NewPassword) < 8 {
+			writeError(w, http.StatusBadRequest, "password too short")
+			return
+		}
+		user, err := app.UserStore.GetByID(uc.UserID)
+		if err != nil {
+			writeError(w, http.StatusNotFound, "user not found")
+			return
+		}
+		if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.OldPassword)); err != nil {
+			writeError(w, http.StatusForbidden, "invalid password")
+			return
+		}
+		if _, err := app.UserStore.Update(uc.UserID, nil, nil, &req.NewPassword); err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to update password")
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
 	}
 }

@@ -21,6 +21,7 @@
           <td class="dim">{{ u.last_login ? new Date(u.last_login).toLocaleString() : '从未' }}</td>
           <td>
             <div class="actions">
+              <button class="btn btn-sm" @click="openEdit(u)">编辑</button>
               <button class="btn btn-sm" @click="toggleEnabled(u)" :disabled="u.id === currentUser?.id">
                 {{ u.enabled ? '禁用' : '启用' }}
               </button>
@@ -51,6 +52,27 @@
         </div>
       </div>
     </div>
+
+    <div v-if="showEdit" class="modal-overlay" @click.self="closeEdit">
+      <div class="modal">
+        <h3>编辑用户</h3>
+        <div class="form-row">
+          <label>角色</label>
+          <select v-model="editForm.role" class="input" :disabled="editTarget?.id === currentUser?.id">
+            <option value="admin">admin</option>
+            <option value="operator">operator</option>
+            <option value="viewer">viewer</option>
+          </select>
+        </div>
+        <div class="form-row"><label>新密码</label><input v-model="editForm.password" type="password" class="input" placeholder="留空不修改" /></div>
+        <div class="form-row"><label>确认新密码</label><input v-model="editForm.confirmPassword" type="password" class="input" placeholder="留空不修改" /></div>
+        <div v-if="editError" class="err" style="margin-bottom:12px">{{ editError }}</div>
+        <div class="modal-footer">
+          <button class="btn" @click="closeEdit">取消</button>
+          <button class="btn btn-primary" @click="handleEdit">保存</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -66,7 +88,24 @@ const showCreate = ref(false)
 const formError = ref('')
 const form = ref({ username: '', password: '', role: 'operator' })
 
+const showEdit = ref(false)
+const editTarget = ref<UserInfo | null>(null)
+const editForm = ref({ role: 'operator', password: '', confirmPassword: '' })
+const editError = ref('')
+
 onMounted(async () => { users.value = await listUsers() })
+
+function openEdit(u: UserInfo) {
+  editTarget.value = u
+  editForm.value = { role: u.role, password: '', confirmPassword: '' }
+  editError.value = ''
+  showEdit.value = true
+}
+
+function closeEdit() {
+  showEdit.value = false
+  editTarget.value = null
+}
 
 async function toggleEnabled(u: UserInfo) {
   await updateUser(u.id, { enabled: !u.enabled })
@@ -88,6 +127,28 @@ async function handleCreate() {
     users.value = await listUsers()
   } catch (e: any) {
     formError.value = e.message
+  }
+}
+
+async function handleEdit() {
+  editError.value = ''
+  if (editForm.value.password !== editForm.value.confirmPassword) {
+    editError.value = '两次密码不一致'
+    return
+  }
+  const data: { role?: string; password?: string } = {}
+  if (editTarget.value?.id !== currentUser.value?.id) {
+    data.role = editForm.value.role
+  }
+  if (editForm.value.password) {
+    data.password = editForm.value.password
+  }
+  try {
+    await updateUser(editTarget.value!.id, data)
+    closeEdit()
+    users.value = await listUsers()
+  } catch (e: any) {
+    editError.value = e.message
   }
 }
 </script>
