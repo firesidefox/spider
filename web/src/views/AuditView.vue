@@ -55,19 +55,19 @@
               <span class="section-title" style="margin-bottom:0">stdin</span>
               <span class="badge">{{ activeLog.triggered_by }}</span>
             </div>
-            <CodeBlock :code="activeLog.command" :html="hlReady ? hl(activeLog.command) : ''" />
+            <CodeBlock :code="activeLog.command" :html="hlReady ? hl(activeLog.command) : ''" wrap />
           </div>
           <div v-if="activeLog.stdout" class="output-block">
             <div class="output-header">
               <span class="section-title" style="margin-bottom:0">stdout</span>
             </div>
-            <CodeBlock :code="activeLog.stdout" :html="hlReady ? hl(activeLog.stdout) : ''" />
+            <CodeBlock :code="activeLog.stdout" :html="hlReady ? hl(activeLog.stdout) : ''" wrap />
           </div>
           <div v-if="activeLog.stderr" class="output-block">
             <div class="output-header">
               <span class="section-title" style="margin-bottom:0">stderr</span>
             </div>
-            <CodeBlock :code="activeLog.stderr" />
+            <CodeBlock :code="activeLog.stderr" wrap />
           </div>
         </div>
       </template>
@@ -214,7 +214,7 @@ onMounted(load)
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 20px;
+  padding: 14px 24px;
   border-bottom: 1px solid var(--border);
   background: var(--surface);
   flex-shrink: 0;
@@ -236,17 +236,16 @@ onMounted(load)
 .detail-body {
   flex: 1;
   overflow-y: auto;
-  padding: 16px 20px;
+  padding: 20px 24px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 14px;
 }
 
 .output-block {
   background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: 10px;
-  overflow: hidden;
   box-shadow: var(--card-shadow);
 }
 
@@ -254,7 +253,7 @@ onMounted(load)
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 14px;
+  padding: 10px 16px;
   border-bottom: 1px solid var(--border);
   background: var(--surface);
 }
