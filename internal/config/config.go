@@ -10,10 +10,16 @@ import (
 
 // Config 是 Spider 的全局配置。
 type Config struct {
-	DataDir  string    `yaml:"data_dir"` // SQLite 文件、master.key 等存放目录
-	LogLevel string    `yaml:"log_level"`
-	SSH      SSHConfig `yaml:"ssh"`
-	SSE      SSEConfig `yaml:"sse"`
+	DataDir  string     `yaml:"data_dir"` // SQLite 文件、master.key 等存放目录
+	LogLevel string     `yaml:"log_level"`
+	SSH      SSHConfig  `yaml:"ssh"`
+	SSE      SSEConfig  `yaml:"sse"`
+	Auth     AuthConfig `yaml:"auth"`
+}
+
+// AuthConfig 是认证相关配置。
+type AuthConfig struct {
+	Enabled bool `yaml:"enabled"` // 默认 false
 }
 
 // SSEConfig 是 MCP SSE server 相关配置。
