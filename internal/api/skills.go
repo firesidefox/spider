@@ -2,6 +2,7 @@ package api
 
 import (
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -18,30 +19,41 @@ func isValidSkillName(name string) bool {
 	if name == "" {
 		return false
 	}
-	return !strings.ContainsAny(name, `/\.`)
+	// 允许一级斜杠（如 spider/cron），但不允许 .. 或多级
+	parts := strings.SplitN(name, "/", 3)
+	if len(parts) > 2 {
+		return false
+	}
+	for _, p := range parts {
+		if p == "" || strings.ContainsAny(p, `\.`) {
+			return false
+		}
+	}
+	return true
 }
 
 func listSkillsHandler(dataDir string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		base := filepath.Join(dataDir, "skills")
-		entries, err := os.ReadDir(base)
-		if err != nil {
-			if os.IsNotExist(err) {
-				writeJSON(w, http.StatusOK, []skillInfo{})
-				return
+		var skills []skillInfo
+		err := filepath.WalkDir(base, func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				if os.IsNotExist(err) {
+					return filepath.SkipAll
+				}
+				return err
 			}
+			if d.IsDir() || d.Name() != "SKILL.md" {
+				return nil
+			}
+			dir := filepath.Dir(path)
+			rel, _ := filepath.Rel(base, dir)
+			skills = append(skills, skillInfo{Name: rel, Source: "custom"})
+			return nil
+		})
+		if err != nil && !os.IsNotExist(err) {
 			writeError(w, http.StatusInternalServerError, "failed to read skills dir")
 			return
-		}
-		var skills []skillInfo
-		for _, e := range entries {
-			if !e.IsDir() {
-				continue
-			}
-			mdPath := filepath.Join(base, e.Name(), "SKILL.md")
-			if _, err := os.Stat(mdPath); err == nil {
-				skills = append(skills, skillInfo{Name: e.Name(), Source: "custom"})
-			}
 		}
 		sort.Slice(skills, func(i, j int) bool { return skills[i].Name < skills[j].Name })
 		if skills == nil {
@@ -93,5 +105,27 @@ func deleteSkillHandler(dataDir string) http.HandlerFunc {
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+func getSkillHandler(dataDir string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		name := r.PathValue("name")
+		if !isValidSkillName(name) {
+			writeError(w, http.StatusBadRequest, "invalid skill name")
+			return
+		}
+		mdPath := filepath.Join(dataDir, "skills", filepath.FromSlash(name), "SKILL.md")
+		data, err := os.ReadFile(mdPath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				writeError(w, http.StatusNotFound, "skill not found")
+				return
+			}
+			writeError(w, http.StatusInternalServerError, "failed to read skill")
+			return
+		}
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.Write(data)
 	}
 }

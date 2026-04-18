@@ -53,6 +53,14 @@ mkdir -p /var/lib/spider
 chmod 700 /var/lib/spider
 success "/var/lib/spider 已就绪"
 
+step "安装内置 Skills"
+if [ -d "${SCRIPT_DIR}/skills" ]; then
+  cp -r "${SCRIPT_DIR}/skills/." /var/lib/spider/skills/
+  success "Skills → /var/lib/spider/skills/"
+else
+  warn "未找到 skills 目录，跳过"
+fi
+
 step "安装 launchd plist"
 install -m 644 "${SCRIPT_DIR}/spider.plist" "${PLIST_DST}"
 success "${PLIST_DST}"

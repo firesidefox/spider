@@ -110,6 +110,7 @@ dist: web build-darwin
 	@cp $(INSTALLER)/install.sh          $(DIST_DIR)/spider-$(VERSION)-arm64/install.sh
 	@cp $(INSTALLER)/uninstall.sh        $(DIST_DIR)/spider-$(VERSION)-arm64/uninstall.sh
 	@cp $(INSTALLER)/spider.plist        $(DIST_DIR)/spider-$(VERSION)-arm64/spider.plist
+	@if [ -d skills ]; then cp -r skills $(DIST_DIR)/spider-$(VERSION)-arm64/skills; fi
 	@chmod +x $(DIST_DIR)/spider-$(VERSION)-arm64/install.sh $(DIST_DIR)/spider-$(VERSION)-arm64/uninstall.sh
 	@cd $(DIST_DIR) && zip -qr spider-$(VERSION)-arm64.zip spider-$(VERSION)-arm64/
 	@rm -rf $(DIST_DIR)/spider-$(VERSION)-arm64
@@ -119,6 +120,7 @@ dist: web build-darwin
 	@cp $(INSTALLER)/install.sh          $(DIST_DIR)/spider-$(VERSION)-x86_64/install.sh
 	@cp $(INSTALLER)/uninstall.sh        $(DIST_DIR)/spider-$(VERSION)-x86_64/uninstall.sh
 	@cp $(INSTALLER)/spider.plist        $(DIST_DIR)/spider-$(VERSION)-x86_64/spider.plist
+	@if [ -d skills ]; then cp -r skills $(DIST_DIR)/spider-$(VERSION)-x86_64/skills; fi
 	@chmod +x $(DIST_DIR)/spider-$(VERSION)-x86_64/install.sh $(DIST_DIR)/spider-$(VERSION)-x86_64/uninstall.sh
 	@cd $(DIST_DIR) && zip -qr spider-$(VERSION)-x86_64.zip spider-$(VERSION)-x86_64/
 	@rm -rf $(DIST_DIR)/spider-$(VERSION)-x86_64
