@@ -36,7 +36,7 @@ if [ -z "$TOKEN" ]; then
   warn "未提供 --token，MCP 服务器将以匿名方式注册（可能无法正常使用）"
   claude mcp add --scope global --transport http spider "$SPIDER_URL/mcp"
 else
-  claude mcp add --scope global --transport http --header "Authorization: Bearer $TOKEN" spider "$SPIDER_URL/mcp"
+  claude mcp add --scope global --transport http spider "$SPIDER_URL/mcp" --header "Authorization: Bearer $TOKEN"
 fi
 success "已注册：spider → $SPIDER_URL/mcp"
 

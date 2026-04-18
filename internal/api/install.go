@@ -38,7 +38,12 @@ func SkillsTarGzHandler(dataDir string) http.HandlerFunc {
 		diskDir := filepath.Join(dataDir, "skills")
 
 		if _, err := os.Stat(diskDir); os.IsNotExist(err) {
-			http.Error(w, "skills directory not found: "+diskDir, http.StatusNotFound)
+			// 目录不存在时返回空 tar.gz，不中断客户端安装
+			w.Header().Set("Content-Type", "application/gzip")
+			gw := gzip.NewWriter(w)
+			tw := tar.NewWriter(gw)
+			_ = tw.Close()
+			_ = gw.Close()
 			return
 		}
 
