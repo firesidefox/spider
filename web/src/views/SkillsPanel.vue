@@ -45,7 +45,15 @@
         <div class="sp-body">
           <div class="sp-card">
             <div v-if="loading" class="sp-loading">加载中…</div>
-            <div v-else-if="viewMode === 'rendered'" class="sp-markdown" v-html="renderedContent"></div>
+            <template v-else-if="viewMode === 'rendered'">
+              <template v-for="(block, i) in mdBlocks" :key="i">
+                <div v-if="block.type === 'html'" class="sp-markdown" v-html="block.content"></div>
+                <div v-else class="sp-code-block">
+                  <div v-if="block.lang" class="sp-code-lang">{{ block.lang }}</div>
+                  <CodeBlock :code="block.content" />
+                </div>
+              </template>
+            </template>
             <pre v-else class="sp-raw">{{ rawContent }}</pre>
           </div>
         </div>
@@ -62,19 +70,30 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { marked, Renderer } from 'marked'
+import { marked } from 'marked'
+import CodeBlock from '../components/CodeBlock.vue'
 
-// 自定义 renderer：代码块加行号
-const renderer = new Renderer()
-renderer.code = ({ text, lang }) => {
-  const lines = text.split('\n')
-  const rows = lines.map((line, i) =>
-    `<tr><td class="ln">${i + 1}</td><td class="lc">${line || ' '}</td></tr>`
-  ).join('')
-  const langLabel = lang ? `<span class="cb-lang">${lang}</span>` : ''
-  return `<div class="cb-wrap">${langLabel}<table class="cb-table"><tbody>${rows}</tbody></table></div>`
+// 斜杠不编码，只编码各段（支持 spider/cron 格式）
+const encodeSkillName = (name: string) => name.split('/').map(encodeURIComponent).join('/')
+
+type MdBlock = { type: 'html'; content: string } | { type: 'code'; content: string; lang: string }
+
+function parseMdBlocks(src: string): MdBlock[] {
+  const tokens = marked.lexer(src)
+  const blocks: MdBlock[] = []
+  let htmlBuf = ''
+  for (const tok of tokens) {
+    if (tok.type === 'code') {
+      if (htmlBuf) { blocks.push({ type: 'html', content: marked.parser([]) }); htmlBuf = '' }
+      // 收集非代码 token 渲染成 html
+      blocks.push({ type: 'code', content: tok.text, lang: tok.lang ?? '' })
+    } else {
+      htmlBuf += marked.parser([tok as any])
+    }
+  }
+  if (htmlBuf) blocks.push({ type: 'html', content: htmlBuf })
+  return blocks
 }
-marked.use({ renderer })
 
 interface Skill { name: string; source: string }
 type UploadStatus = { type: 'idle' } | { type: 'uploading'; name: string } | { type: 'success'; name: string } | { type: 'error'; msg: string }
@@ -90,6 +109,7 @@ const fileInput = ref<HTMLInputElement | null>(null)
 const uploadTarget = ref<string | null>(null)
 
 const renderedContent = computed(() => marked.parse(rawContent.value) as string)
+const mdBlocks = computed(() => parseMdBlocks(rawContent.value))
 
 const statusClass = computed(() => ({
   'sp-status--uploading': status.value.type === 'uploading',
@@ -115,7 +135,7 @@ async function selectSkill(skill: Skill) {
   loading.value = true
   rawContent.value = ''
   try {
-    const res = await fetch(`/api/v1/skills/${encodeURIComponent(skill.name)}`)
+    const res = await fetch(`/api/v1/skills/${encodeSkillName(skill.name)}`)
     if (res.ok) rawContent.value = await res.text()
   } finally {
     loading.value = false
@@ -137,7 +157,7 @@ async function uploadFile(file: File, name: string) {
   setStatus({ type: 'uploading', name })
   try {
     const content = await file.text()
-    const res = await fetch(`/api/v1/skills/${encodeURIComponent(name)}`, {
+    const res = await fetch(`/api/v1/skills/${encodeSkillName(name)}`, {
       method: 'PUT', headers: { 'Content-Type': 'text/plain' }, body: content,
     })
     if (res.ok) {
@@ -169,7 +189,7 @@ async function onDrop(e: DragEvent) {
 
 async function deleteSkill(name: string) {
   if (!confirm(`确认删除 Skill "${name}"？`)) return
-  await fetch(`/api/v1/skills/${encodeURIComponent(name)}`, { method: 'DELETE' })
+  await fetch(`/api/v1/skills/${encodeSkillName(name)}`, { method: 'DELETE' })
   if (selected.value?.name === name) selected.value = null
   await loadSkills()
 }
@@ -234,36 +254,20 @@ onMounted(() => { loadSkills() })
   white-space: pre-wrap; word-break: break-word; margin: 0;
 }
 
-.sp-markdown { color: var(--text); font-size: 14px; line-height: 1.7; }
+.sp-markdown { color: var(--text); font-size: 14px; line-height: 1.7; margin-bottom: 4px; }
 .sp-markdown :deep(h1) { font-size: 20px; font-weight: 700; margin: 0 0 16px; color: var(--text); border-bottom: 1px solid var(--border); padding-bottom: 8px; }
 .sp-markdown :deep(h2) { font-size: 16px; font-weight: 700; margin: 24px 0 10px; color: var(--text); }
 .sp-markdown :deep(h3) { font-size: 14px; font-weight: 600; margin: 18px 0 8px; color: var(--text); }
 .sp-markdown :deep(p) { margin: 0 0 12px; }
 .sp-markdown :deep(code) { font-family: 'JetBrains Mono', monospace; font-size: 12px; background: rgba(99,102,241,0.1); color: var(--primary); padding: 1px 5px; border-radius: 4px; }
 
-/* 代码块：行号样式 */
-.sp-markdown :deep(.cb-wrap) {
+.sp-code-block {
   background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
-  overflow: hidden; margin: 0 0 16px; font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  overflow: hidden; margin: 0 0 16px;
 }
-.sp-markdown :deep(.cb-lang) {
-  display: block; padding: 8px 16px 6px;
-  font-size: 11px; font-weight: 600; color: var(--muted);
-  border-bottom: 1px solid var(--border); letter-spacing: 0.04em;
-}
-.sp-markdown :deep(.cb-table) {
-  width: 100%; border-collapse: collapse; padding: 8px 0;
-}
-.sp-markdown :deep(.cb-table tbody) { display: block; padding: 8px 0; }
-.sp-markdown :deep(.cb-table tr) { display: flex; line-height: 1.8; }
-.sp-markdown :deep(.cb-table tr:hover) { background: var(--row-hover); }
-.sp-markdown :deep(.ln) {
-  width: 40px; min-width: 40px; text-align: right; padding: 0 16px 0 0;
-  color: var(--label); font-size: 12px; user-select: none; flex-shrink: 0;
-}
-.sp-markdown :deep(.lc) {
-  flex: 1; padding: 0 16px 0 0; font-size: 12px; color: var(--text);
-  white-space: pre; overflow-x: auto;
+.sp-code-lang {
+  padding: 7px 16px 6px; font-size: 11px; font-weight: 600;
+  color: var(--muted); border-bottom: 1px solid var(--border); letter-spacing: 0.04em;
 }
 
 .sp-markdown :deep(table) { width: 100%; border-collapse: collapse; margin: 0 0 14px; font-size: 13px; }
