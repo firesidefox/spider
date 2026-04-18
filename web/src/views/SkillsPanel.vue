@@ -43,9 +43,11 @@
           </div>
         </div>
         <div class="sp-body">
-          <div v-if="loading" class="sp-loading">加载中…</div>
-          <div v-else-if="viewMode === 'rendered'" class="sp-markdown" v-html="renderedContent"></div>
-          <pre v-else class="sp-raw">{{ rawContent }}</pre>
+          <div class="sp-card">
+            <div v-if="loading" class="sp-loading">加载中…</div>
+            <div v-else-if="viewMode === 'rendered'" class="sp-markdown" v-html="renderedContent"></div>
+            <pre v-else class="sp-raw">{{ rawContent }}</pre>
+          </div>
         </div>
       </template>
       <div v-else class="sp-empty-state">
@@ -206,6 +208,10 @@ onMounted(() => { loadSkills() })
 .sp-topbar-right { display: flex; gap: 8px; }
 .btn.active { background: rgba(99,102,241,0.15); color: var(--primary); border-color: rgba(99,102,241,0.4); }
 .sp-body { flex: 1; overflow-y: auto; padding: 20px 24px; }
+.sp-card {
+  background: var(--card-bg); border: 1px solid var(--border);
+  border-radius: 10px; padding: 20px 24px; box-shadow: var(--card-shadow);
+}
 .sp-loading { color: var(--muted); font-size: 13px; }
 .sp-empty-state { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--muted); font-size: 14px; }
 .sp-empty-icon { color: var(--border); font-size: 40px; }
