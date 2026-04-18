@@ -93,3 +93,7 @@ done
 h1 "安装完成"
 detail "spdctl host list    # 查看主机列表"
 detail "spdctl mcp register # 注册到 Claude Code"
+
+printf "\n  ${yellow}首次登录提示：${reset}\n"
+printf "  初始管理员密码已打印到服务日志，运行以下命令查看：\n"
+printf "  ${bold}sudo grep 'default admin created' /var/log/spider/spider.log${reset}\n"
