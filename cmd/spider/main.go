@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 
 	apipkg "github.com/spiderai/spider/internal/api"
+	"github.com/spiderai/spider/internal/auth"
 	mcppkg "github.com/spiderai/spider/internal/mcp"
 	sshpkg "github.com/spiderai/spider/internal/ssh"
 
@@ -110,17 +111,31 @@ func serve(cfgFile, addrOverride, dataDirOverride string) error {
 
 	hs := store.NewHostStore(database, cm)
 	ls := store.NewLogStore(database)
+	us := store.NewUserStore(database)
+	ts := store.NewTokenStore(database)
+
+	jwtMgr, err := auth.NewJWTManager(cfg.DataDir)
+	if err != nil {
+		return fmt.Errorf("初始化 JWT 模块失败: %w", err)
+	}
+
+	if err := us.EnsureDefaultAdmin(); err != nil {
+		return fmt.Errorf("初始化默认管理员失败: %w", err)
+	}
 
 	pool := sshpkg.NewPool(time.Duration(cfg.SSH.PoolTTL) * time.Second)
 	pool.StartCleanup()
 	defer pool.Close()
 
 	app := &mcppkg.App{
-		HostStore: hs,
-		LogStore:  ls,
-		Pool:      pool,
-		Config:    cfg,
-		DB:        database,
+		HostStore:  hs,
+		LogStore:   ls,
+		Pool:       pool,
+		Config:     cfg,
+		DB:         database,
+		UserStore:  us,
+		TokenStore: ts,
+		JWTManager: jwtMgr,
 	}
 
 	mcpHandler := mcppkg.NewHTTPHandler(app)
