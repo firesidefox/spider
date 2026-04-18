@@ -380,7 +380,7 @@ func makeGetExecutionHistory(app *App) func(context.Context, mcpgo.CallToolReque
 			hostID = host.ID
 		}
 
-		logs, err := app.LogStore.List(hostID, limit, offset)
+		logs, err := app.LogStore.List(hostID, "", limit, offset)
 		if err != nil {
 			return toolError(fmt.Sprintf("查询执行历史失败: %v", err))
 		}

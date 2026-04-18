@@ -11,4 +11,4 @@ excalidraw.log
 docs/superpowers/
 .DS_Store
 dist/
-build-arm64.sh
+install-arm64.sh

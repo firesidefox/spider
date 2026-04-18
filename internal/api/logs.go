@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 
+	authmw "github.com/spiderai/spider/internal/auth"
 	mcppkg "github.com/spiderai/spider/internal/mcp"
 	"github.com/spiderai/spider/internal/models"
 )
@@ -28,7 +29,22 @@ func listLogs(app *mcppkg.App, w http.ResponseWriter, r *http.Request) {
 		hostID = h.ID
 	}
 
-	logs, err := app.LogStore.List(hostID, limit, offset)
+	triggeredBy := q.Get("triggered_by")
+	if triggeredBy == "me" {
+		uc := authmw.GetUser(r.Context())
+		if uc == nil || uc.UserID == "anonymous" {
+			triggeredBy = ""
+		} else {
+			user, err := app.UserStore.GetByID(uc.UserID)
+			if err != nil {
+				writeError(w, http.StatusInternalServerError, err.Error())
+				return
+			}
+			triggeredBy = user.Username
+		}
+	}
+
+	logs, err := app.LogStore.List(hostID, triggeredBy, limit, offset)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

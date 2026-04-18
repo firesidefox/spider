@@ -3,6 +3,7 @@ package store
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -40,33 +41,34 @@ func (s *LogStore) Save(log *models.ExecutionLog) error {
 	return nil
 }
 
-// List 查询执行历史，可按 hostID 过滤。
-func (s *LogStore) List(hostID string, limit, offset int) ([]*models.ExecutionLog, error) {
+// List 查询执行历史，可按 hostID 和 triggeredBy 过滤。
+func (s *LogStore) List(hostID, triggeredBy string, limit, offset int) ([]*models.ExecutionLog, error) {
 	if limit <= 0 {
 		limit = 20
 	}
-	var rows *sql.Rows
-	var err error
-	if hostID == "" {
-		rows, err = s.db.Query(
-			`SELECT l.id, l.host_id, h.name, l.command, l.stdout, l.stderr,
-			 l.exit_code, l.duration_ms, l.triggered_by, l.created_at
-			 FROM execution_logs l
-			 LEFT JOIN hosts h ON h.id = l.host_id
-			 ORDER BY l.created_at DESC LIMIT ? OFFSET ?`,
-			limit, offset,
-		)
-	} else {
-		rows, err = s.db.Query(
-			`SELECT l.id, l.host_id, h.name, l.command, l.stdout, l.stderr,
-			 l.exit_code, l.duration_ms, l.triggered_by, l.created_at
-			 FROM execution_logs l
-			 LEFT JOIN hosts h ON h.id = l.host_id
-			 WHERE l.host_id = ?
-			 ORDER BY l.created_at DESC LIMIT ? OFFSET ?`,
-			hostID, limit, offset,
-		)
+
+	query := `SELECT l.id, l.host_id, h.name, l.command, l.stdout, l.stderr,
+	 l.exit_code, l.duration_ms, l.triggered_by, l.created_at
+	 FROM execution_logs l
+	 LEFT JOIN hosts h ON h.id = l.host_id`
+
+	var args []interface{}
+	var conditions []string
+	if hostID != "" {
+		conditions = append(conditions, "l.host_id = ?")
+		args = append(args, hostID)
 	}
+	if triggeredBy != "" {
+		conditions = append(conditions, "l.triggered_by = ?")
+		args = append(args, triggeredBy)
+	}
+	if len(conditions) > 0 {
+		query += " WHERE " + strings.Join(conditions, " AND ")
+	}
+	query += " ORDER BY l.created_at DESC LIMIT ? OFFSET ?"
+	args = append(args, limit, offset)
+
+	rows, err := s.db.Query(query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("查询执行历史失败: %w", err)
 	}

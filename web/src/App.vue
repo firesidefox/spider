@@ -9,12 +9,15 @@
         <RouterLink to="/settings" class="nav-item">设置</RouterLink>
         <RouterLink to="/install" class="nav-item">安装</RouterLink>
         <RouterLink v-if="isAdmin" to="/users" class="nav-item">用户</RouterLink>
-        <RouterLink to="/tokens" class="nav-item">Token</RouterLink>
       </nav>
       <div v-if="currentUser" class="nav-user">
-        <span class="nav-username">{{ currentUser.username }}</span>
-        <button class="btn btn-sm" @click="showChangePwd = true">改密码</button>
-        <button class="btn btn-sm" @click="handleLogout">登出</button>
+        <div class="user-dropdown" @click.stop="showUserMenu = !showUserMenu">
+          <span class="nav-username nav-username--clickable">{{ currentUser.username }} ▾</span>
+          <div v-if="showUserMenu" class="dropdown-menu">
+            <button class="dropdown-item" @click="router.push('/profile')">用户设置</button>
+            <button class="dropdown-item" @click="handleLogout">登出</button>
+          </div>
+        </div>
       </div>
       <button class="theme-toggle" @click="toggleTheme" :title="isDark ? '切换亮色' : '切换暗色'">
         {{ isDark ? '☀️' : '🌙' }}
@@ -24,33 +27,11 @@
       <RouterView />
     </main>
 
-    <div v-if="showChangePwd" class="modal-overlay" @click.self="closePwdModal">
-      <div class="modal">
-        <h3 style="margin-bottom:16px">修改密码</h3>
-        <div class="form-group">
-          <label>旧密码</label>
-          <input v-model="pwdForm.oldPwd" type="password" class="input" placeholder="旧密码" />
-        </div>
-        <div class="form-group">
-          <label>新密码</label>
-          <input v-model="pwdForm.newPwd" type="password" class="input" placeholder="新密码" />
-        </div>
-        <div class="form-group">
-          <label>确认新密码</label>
-          <input v-model="pwdForm.confirmPwd" type="password" class="input" placeholder="确认新密码" />
-        </div>
-        <p v-if="pwdError" class="text-error" style="margin-bottom:8px">{{ pwdError }}</p>
-        <div style="display:flex;gap:8px;justify-content:flex-end">
-          <button class="btn btn-sm" @click="closePwdModal">取消</button>
-          <button class="btn btn-sm btn-primary" @click="handleChangePwd">确认</button>
-        </div>
-      </div>
-    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, watchEffect, provide } from 'vue'
+import { ref, watchEffect, provide, onMounted, onUnmounted } from 'vue'
 import { themes, getSavedTheme, saveTheme, type Theme } from './theme'
 
 const theme = ref<Theme>(getSavedTheme())
@@ -66,49 +47,21 @@ provide('isDark', () => isDark.value)
 
 import { useRouter } from 'vue-router'
 import { useAuth } from './composables/useAuth'
-import { logout, authHeaders } from './api/auth'
+import { logout } from './api/auth'
 
 const router = useRouter()
 const { currentUser, isAdmin, clearUser } = useAuth()
+
+const showUserMenu = ref(false)
+
+function closeUserMenu() { showUserMenu.value = false }
+onMounted(() => document.addEventListener('click', closeUserMenu))
+onUnmounted(() => document.removeEventListener('click', closeUserMenu))
 
 async function handleLogout() {
   await logout().catch(() => {})
   clearUser()
   router.push('/login')
-}
-
-const showChangePwd = ref(false)
-const pwdForm = ref({ oldPwd: '', newPwd: '', confirmPwd: '' })
-const pwdError = ref('')
-
-function closePwdModal() {
-  showChangePwd.value = false
-  pwdForm.value = { oldPwd: '', newPwd: '', confirmPwd: '' }
-  pwdError.value = ''
-}
-
-async function handleChangePwd() {
-  pwdError.value = ''
-  if (pwdForm.value.newPwd !== pwdForm.value.confirmPwd) {
-    pwdError.value = '两次新密码不一致'
-    return
-  }
-  try {
-    const res = await fetch('/api/v1/me/password', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', ...authHeaders() },
-      body: JSON.stringify({ old_password: pwdForm.value.oldPwd, new_password: pwdForm.value.newPwd }),
-    })
-    if (!res.ok) {
-      if (res.status === 403) { pwdError.value = '旧密码错误'; return }
-      const data = await res.json().catch(() => ({}))
-      pwdError.value = data.error || '修改失败'
-      return
-    }
-    closePwdModal()
-  } catch {
-    pwdError.value = '修改失败'
-  }
 }
 
 watchEffect(() => {
@@ -545,4 +498,31 @@ textarea.input { resize: vertical; }
 
 .nav-user { display: flex; align-items: center; gap: 10px; margin-right: 12px; }
 .nav-username { font-size: 13px; color: var(--text-sub); }
+.nav-username--clickable { cursor: pointer; user-select: none; }
+.nav-username--clickable:hover { color: var(--text); }
+.user-dropdown { position: relative; display: flex; align-items: center; }
+.dropdown-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  min-width: 120px;
+  box-shadow: var(--card-shadow);
+  z-index: 100;
+  overflow: hidden;
+}
+.dropdown-item {
+  display: block;
+  width: 100%;
+  padding: 8px 16px;
+  font-size: 13px;
+  color: var(--text);
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+}
+.dropdown-item:hover { background: var(--surface); }
 </style>
