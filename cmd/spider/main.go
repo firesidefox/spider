@@ -81,6 +81,23 @@ func newVersionCmd() *cobra.Command {
 	}
 }
 
+// spaHandler serves static files and falls back to index.html for SPA routing.
+func spaHandler(fsys http.FileSystem) http.Handler {
+	fileServer := http.FileServer(fsys)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		f, err := fsys.Open(r.URL.Path)
+		if err != nil {
+			// file not found → serve index.html for SPA client-side routing
+			r2 := *r
+			r2.URL.Path = "/"
+			fileServer.ServeHTTP(w, &r2)
+			return
+		}
+		f.Close()
+		fileServer.ServeHTTP(w, r)
+	})
+}
+
 func serve(cfgFile, addrOverride, dataDirOverride string) error {
 	cfg, err := config.Load(cfgFile)
 	if err != nil {
@@ -153,7 +170,7 @@ func serve(cfgFile, addrOverride, dataDirOverride string) error {
 	if err != nil {
 		return fmt.Errorf("加载 web 资源失败: %w", err)
 	}
-	mux.Handle("/", http.FileServer(http.FS(sub)))
+	mux.Handle("/", spaHandler(http.FS(sub)))
 
 	srv := &http.Server{Addr: cfg.SSE.Addr, Handler: mux}
 
