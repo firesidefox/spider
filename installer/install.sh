@@ -36,11 +36,6 @@ success "旧服务已停止（或不存在）"
 step "安装二进制"
 install -m 755 "${SCRIPT_DIR}/spider" /usr/local/bin/spider
 install -m 755 "${SCRIPT_DIR}/spdctl" /usr/local/bin/spdctl
-# macOS 15+ 要求 system daemon 二进制有签名，ad-hoc 签名即可
-if command -v codesign >/dev/null 2>&1; then
-  codesign --force --sign - /usr/local/bin/spider 2>/dev/null || true
-  codesign --force --sign - /usr/local/bin/spdctl 2>/dev/null || true
-fi
 success "spider / spdctl → /usr/local/bin/"
 
 step "创建日志目录"
@@ -72,13 +67,20 @@ fi
 success "端口 8000 可用"
 
 step "启动服务"
-if ! launchctl bootstrap system "${PLIST_DST}" 2>/tmp/spider-bootstrap.err; then
-  error "launchctl bootstrap 失败"
-  cat /tmp/spider-bootstrap.err >&2
-  detail "查看日志：tail -f /var/log/spider/spider.log"
-  detail "手动启动：/usr/local/bin/spider"
-  exit 1
-fi
+for i in 1 2 3; do
+  if launchctl bootstrap system "${PLIST_DST}" 2>/tmp/spider-bootstrap.err; then
+    break
+  fi
+  if [[ $i -lt 3 ]]; then
+    sleep 2
+  else
+    error "launchctl bootstrap 失败"
+    cat /tmp/spider-bootstrap.err >&2
+    detail "查看日志：tail -f /var/log/spider/spider.log"
+    detail "手动启动：/usr/local/bin/spider"
+    exit 1
+  fi
+done
 
 step "验证服务"
 spinner="⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
