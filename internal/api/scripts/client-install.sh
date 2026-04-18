@@ -2,6 +2,14 @@
 SPIDER_URL="{{.BaseURL}}"
 SKILLS_DIR="$HOME/.claude/skills/spider"
 
+TOKEN=""
+while [ $# -gt 0 ]; do
+  case $1 in
+    --token) TOKEN="$2"; shift 2 ;;
+    *) shift ;;
+  esac
+done
+
 set -e
 
 RED='\033[31m'; GREEN='\033[32m'; YELLOW='\033[33m'
@@ -24,7 +32,12 @@ step "注册 MCP 服务器"
 if ! command -v claude >/dev/null 2>&1; then
   error "未找到 claude CLI，请先安装 Claude Code"; exit 1
 fi
-claude mcp add --scope global --transport http spider "$SPIDER_URL/mcp"
+if [ -z "$TOKEN" ]; then
+  warn "未提供 --token，MCP 服务器将以匿名方式注册（可能无法正常使用）"
+  claude mcp add --scope global --transport http spider "$SPIDER_URL/mcp"
+else
+  claude mcp add --scope global --transport http --header "Authorization: Bearer $TOKEN" spider "$SPIDER_URL/mcp"
+fi
 success "已注册：spider → $SPIDER_URL/mcp"
 
 h1 "安装完成 — 重启 Claude Code 即可使用 Spider"

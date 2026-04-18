@@ -26,6 +26,9 @@
           <div class="nav-row" :class="{ selected: activeTab === 'install' }" @click="activeTab = 'install'">
             <span class="nav-icon">📦</span><span class="nav-label">安装</span>
           </div>
+          <div class="nav-row" :class="{ selected: activeTab === 'skills' }" @click="activeTab = 'skills'">
+            <span class="nav-icon">🧩</span><span class="nav-label">Skills</span>
+          </div>
           <div class="nav-row" :class="{ selected: activeTab === 'settings' }" @click="activeTab = 'settings'; loadSettings()">
             <span class="nav-icon">⚙️</span><span class="nav-label">系统设置</span>
           </div>
@@ -37,7 +40,10 @@
         <UsersPanel />
       </template>
       <template v-else-if="activeTab === 'install'">
-        <InstallPanel />
+        <InstallPanel @switch-tab="activeTab = $event as any" />
+      </template>
+      <template v-else-if="activeTab === 'skills'">
+        <SkillsPanel />
       </template>
       <template v-else>
         <div class="detail-topbar">
@@ -252,6 +258,7 @@ import { listTokens, createToken, deleteToken } from '../api/tokens'
 import type { TokenInfo } from '../api/tokens'
 import UsersPanel from './UsersPanel.vue'
 import InstallPanel from './InstallPanel.vue'
+import SkillsPanel from './SkillsPanel.vue'
 
 const { currentUser, isAdmin } = useAuth()
 
@@ -260,7 +267,7 @@ const roleLabel = computed(() => {
   return map[currentUser.value?.role ?? ''] ?? currentUser.value?.role ?? '—'
 })
 
-const activeTab = ref<'info' | 'tokens' | 'logs' | 'users' | 'install' | 'settings'>('info')
+const activeTab = ref<'info' | 'tokens' | 'logs' | 'users' | 'install' | 'skills' | 'settings'>('info')
 const tabTitle = computed(() => ({
   info: '基本信息', tokens: '访问令牌', logs: '操作日志',
   users: '用户管理', install: '安装', settings: '系统设置',
