@@ -81,17 +81,19 @@ type MdBlock = { type: 'html'; content: string } | { type: 'code'; content: stri
 function parseMdBlocks(src: string): MdBlock[] {
   const tokens = marked.lexer(src)
   const blocks: MdBlock[] = []
-  let htmlBuf = ''
+  const htmlTokens: any[] = []
   for (const tok of tokens) {
     if (tok.type === 'code') {
-      if (htmlBuf) { blocks.push({ type: 'html', content: marked.parser([]) }); htmlBuf = '' }
-      // 收集非代码 token 渲染成 html
+      if (htmlTokens.length) {
+        blocks.push({ type: 'html', content: marked.parser(htmlTokens) })
+        htmlTokens.length = 0
+      }
       blocks.push({ type: 'code', content: tok.text, lang: tok.lang ?? '' })
     } else {
-      htmlBuf += marked.parser([tok as any])
+      htmlTokens.push(tok)
     }
   }
-  if (htmlBuf) blocks.push({ type: 'html', content: htmlBuf })
+  if (htmlTokens.length) blocks.push({ type: 'html', content: marked.parser(htmlTokens) })
   return blocks
 }
 
