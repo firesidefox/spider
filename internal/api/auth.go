@@ -56,6 +56,13 @@ func meHandler(app *mcppkg.App) http.HandlerFunc {
 			writeError(w, http.StatusUnauthorized, "unauthorized")
 			return
 		}
+		if uc.UserID == "anonymous" {
+			writeJSON(w, http.StatusOK, map[string]any{
+				"id": "anonymous", "username": "admin",
+				"role": "admin", "enabled": true,
+			})
+			return
+		}
 		user, err := app.UserStore.GetByID(uc.UserID)
 		if err != nil {
 			writeError(w, http.StatusNotFound, "user not found")

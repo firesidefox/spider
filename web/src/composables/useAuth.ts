@@ -10,6 +10,7 @@ export function useAuth() {
   const isAdmin = computed(() => currentUser.value?.role === 'admin')
 
   async function checkAuth(): Promise<boolean> {
+    if (currentUser.value !== null) return true
     if (!getStoredToken()) {
       authChecked.value = true
       return false
