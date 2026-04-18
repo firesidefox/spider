@@ -43,6 +43,7 @@
         <div class="detail-topbar">
           <span class="detail-title">{{ tabTitle }}</span>
           <button v-if="activeTab === 'info'" class="btn btn-sm" @click="showPwModal = true">修改密码</button>
+          <button v-if="activeTab === 'tokens'" class="btn btn-primary btn-sm" @click="showCreate = true">+ 新建 Token</button>
           <template v-if="activeTab === 'settings'">
             <div v-if="settingsEditing" style="display:flex;gap:8px">
               <button class="btn btn-primary btn-sm" @click="saveSettings">保存</button>
@@ -75,10 +76,6 @@
 
         <template v-if="activeTab === 'tokens'">
           <div class="edit-card">
-            <div class="edit-card-toolbar">
-              <span class="edit-card-title" style="margin:0;border:none;padding:0">访问令牌</span>
-              <button class="btn btn-primary btn-sm" @click="showCreate = true">+ 新建 Token</button>
-            </div>
             <p class="dim" style="margin-bottom:16px;font-size:13px">Token 可用于 MCP 工具或 API 调用，权限与账号角色一致。</p>
             <table class="table">
               <thead><tr><th>名称</th><th>创建时间</th><th>过期时间</th><th>最后使用</th><th>操作</th></tr></thead>
