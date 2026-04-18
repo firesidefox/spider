@@ -1,0 +1,12 @@
+{
+  "name": "misc-skills",
+  "owner": { "name": "Chen Wei" },
+  "metadata": { "description": "Miscellaneous engineering skills: logging, UI style, and more." },
+  "plugins": [
+    {
+      "name": "misc",
+      "source": "./",
+      "description": "Miscellaneous skills for logging, UI style guidelines, and general engineering workflows."
+    }
+  ]
+}
