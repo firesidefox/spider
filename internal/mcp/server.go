@@ -16,15 +16,19 @@ import (
 	"github.com/spiderai/spider/internal/config"
 	"github.com/spiderai/spider/internal/store"
 	sshpkg "github.com/spiderai/spider/internal/ssh"
+	"github.com/spiderai/spider/internal/auth"
 )
 
 // App 聚合所有依赖，供 MCP tool handler 使用。
 type App struct {
-	HostStore *store.HostStore
-	LogStore  *store.LogStore
-	Pool      *sshpkg.Pool
-	Config    *config.Config
-	DB        *sql.DB
+	HostStore  *store.HostStore
+	LogStore   *store.LogStore
+	Pool       *sshpkg.Pool
+	Config     *config.Config
+	DB         *sql.DB
+	UserStore  *store.UserStore   // Phase 2
+	TokenStore *store.TokenStore  // Phase 2
+	JWTManager *auth.JWTManager   // Phase 2
 }
 
 // newMCPServer 创建并注册工具的 MCP server。
@@ -86,7 +90,6 @@ func registerTools(s *server.MCPServer, app *App) {
 		mcpgo.WithString("auth_type", mcpgo.Required(), mcpgo.Description("认证类型: password | key | key_password")),
 		mcpgo.WithString("credential", mcpgo.Required(), mcpgo.Description("密码明文 或 SSH 私钥内容（PEM 格式）")),
 		mcpgo.WithString("passphrase", mcpgo.Description("私钥 passphrase（auth_type=key_password 时使用）")),
-		mcpgo.WithString("proxy_host_id", mcpgo.Description("跳板机主机 ID（ProxyJump）")),
 		mcpgo.WithString("tags", mcpgo.Description("逗号分隔的标签，例如 prod,web")),
 	), makeAddHost(app))
 
@@ -107,7 +110,6 @@ func registerTools(s *server.MCPServer, app *App) {
 		mcpgo.WithString("auth_type", mcpgo.Description("新认证类型")),
 		mcpgo.WithString("credential", mcpgo.Description("新凭据")),
 		mcpgo.WithString("passphrase", mcpgo.Description("新 passphrase")),
-		mcpgo.WithString("proxy_host_id", mcpgo.Description("新跳板机 ID")),
 		mcpgo.WithString("tags", mcpgo.Description("新标签（逗号分隔）")),
 	), makeUpdateHost(app))
 
@@ -136,7 +138,7 @@ func registerTools(s *server.MCPServer, app *App) {
 
 	// upload_file
 	s.AddTool(mcpgo.NewTool("upload_file",
-		mcpgo.WithDescription("将本地文件上传到远程主机"),
+		mcpgo.WithDescription("将本地文件上传到远程主机（SCP）"),
 		mcpgo.WithString("host_id", mcpgo.Required(), mcpgo.Description("主机 ID 或名称")),
 		mcpgo.WithString("local_path", mcpgo.Required(), mcpgo.Description("本地文件路径")),
 		mcpgo.WithString("remote_path", mcpgo.Required(), mcpgo.Description("远程目标路径")),
@@ -144,7 +146,7 @@ func registerTools(s *server.MCPServer, app *App) {
 
 	// download_file
 	s.AddTool(mcpgo.NewTool("download_file",
-		mcpgo.WithDescription("从远程主机下载文件到本地"),
+		mcpgo.WithDescription("从远程主机下载文件到本地（SCP）"),
 		mcpgo.WithString("host_id", mcpgo.Required(), mcpgo.Description("主机 ID 或名称")),
 		mcpgo.WithString("remote_path", mcpgo.Required(), mcpgo.Description("远程文件路径")),
 		mcpgo.WithString("local_path", mcpgo.Required(), mcpgo.Description("本地保存路径")),

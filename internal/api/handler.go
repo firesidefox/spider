@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	authmw "github.com/spiderai/spider/internal/auth"
 	mcppkg "github.com/spiderai/spider/internal/mcp"
 )
 
@@ -106,8 +107,21 @@ func NewRouter(app *mcppkg.App) http.Handler {
 	mux.HandleFunc("GET /api/v1/skills", listSkillsHandler(app.Config.DataDir))
 	mux.HandleFunc("PUT /api/v1/skills/{name}", uploadSkillHandler(app.Config.DataDir))
 	mux.HandleFunc("DELETE /api/v1/skills/{name}", deleteSkillHandler(app.Config.DataDir))
+	mux.HandleFunc("GET /api/v1/me", meHandler(app))
 
-	return mux
+	// Auth middleware wraps the inner mux; login/logout are exposed without auth.
+	authMW := authmw.AuthMiddleware(
+		app.Config.Auth.Enabled,
+		app.JWTManager,
+		app.UserStore,
+		app.TokenStore,
+	)
+
+	outer := http.NewServeMux()
+	outer.HandleFunc("POST /api/v1/auth/login", loginHandler(app))
+	outer.HandleFunc("POST /api/v1/auth/logout", logoutHandler(app))
+	outer.Handle("/", authMW(mux))
+	return outer
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
