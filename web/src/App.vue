@@ -8,7 +8,13 @@
         <RouterLink to="/audit" class="nav-item">审计</RouterLink>
         <RouterLink to="/settings" class="nav-item">设置</RouterLink>
         <RouterLink to="/install" class="nav-item">安装</RouterLink>
+        <RouterLink v-if="isAdmin" to="/users" class="nav-item">用户</RouterLink>
+        <RouterLink to="/tokens" class="nav-item">Token</RouterLink>
       </nav>
+      <div v-if="currentUser" class="nav-user">
+        <span class="nav-username">{{ currentUser.username }}</span>
+        <button class="btn btn-sm" @click="handleLogout">登出</button>
+      </div>
       <button class="theme-toggle" @click="toggleTheme" :title="isDark ? '切换亮色' : '切换暗色'">
         {{ isDark ? '☀️' : '🌙' }}
       </button>
@@ -33,6 +39,19 @@ function toggleTheme() {
 }
 
 provide('isDark', () => isDark.value)
+
+import { useRouter } from 'vue-router'
+import { useAuth } from './composables/useAuth'
+import { logout } from './api/auth'
+
+const router = useRouter()
+const { currentUser, isAdmin, clearUser } = useAuth()
+
+async function handleLogout() {
+  await logout().catch(() => {})
+  clearUser()
+  router.push('/login')
+}
 
 watchEffect(() => {
   const c = themes[theme.value]
@@ -465,4 +484,7 @@ textarea.input { resize: vertical; }
   margin-top: 16px;
   justify-content: center;
 }
+
+.nav-user { display: flex; align-items: center; gap: 10px; margin-right: 12px; }
+.nav-username { font-size: 13px; color: var(--text-sub); }
 </style>
