@@ -1,6 +1,6 @@
 ---
 name: spider-monitor
-description: Use when checking host health, inspecting services, or running batch inspections via Spider. Triggers: 巡检、健康检查、检查服务状态、check service、monitor、服务是否正常、哪台机器有问题、批量检查、系统状态。
+description: Use when checking host health, running batch inspections, or monitoring service status via Spider. Triggers: 巡检、健康检查、检查服务状态、服务是否正常、哪台机器有问题、批量检查、系统状态、check service、monitor、磁盘使用率、内存使用、CPU 负载、所有主机状态。
 ---
 
 # Spider Monitor — 主机巡检

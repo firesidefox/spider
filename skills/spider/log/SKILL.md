@@ -1,6 +1,6 @@
 ---
 name: spider-log
-description: Use when viewing, searching, or analyzing logs on remote hosts via Spider. Triggers: 看日志、查日志、tail log、排查报错、下载日志、grep 日志、log、error log、access log、journal、journalctl。
+description: Use when viewing, searching, downloading, or analyzing logs on remote hosts via Spider. Triggers: 看日志、查日志、tail log、排查报错、下载日志、grep 日志、log、error log、access log、journal、journalctl、日志分析、最近错误、应用报错。
 ---
 
 # Spider Log — 远程日志查看与分析

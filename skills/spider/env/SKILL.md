@@ -1,6 +1,6 @@
 ---
 name: spider-env
-description: Use when initializing or configuring a new remote server via Spider. Triggers: 初始化服务器、配置新机器、装依赖、setup server、install docker、配置环境、新机器、环境准备、init server。
+description: Use when initializing or configuring a new remote server via Spider. Triggers: 初始化服务器、配置新机器、装依赖、setup server、install docker、配置环境、新机器、环境准备、init server、安装软件、新服务器第一次配置。
 ---
 
 # Spider-Env — 远程服务器初始化

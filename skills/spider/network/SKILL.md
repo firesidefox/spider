@@ -1,6 +1,6 @@
 ---
 name: spider-network
-description: Use when diagnosing network issues on remote hosts via Spider. Triggers: 网络、ping、连通性、traceroute、DNS、端口、网络慢、丢包、带宽、curl 不通、网络诊断、能不能访问。
+description: Use when diagnosing network issues on remote hosts via Spider. Triggers: 网络、ping、连通性、traceroute、DNS、端口不通、网络慢、丢包、带宽、curl 不通、网络诊断、能不能访问、防火墙、iptables、路由。
 ---
 
 # Spider Network — 远程主机网络诊断

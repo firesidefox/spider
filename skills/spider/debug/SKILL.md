@@ -1,6 +1,6 @@
 ---
 name: spider-debug
-description: Use when diagnosing system-level issues on remote hosts via Spider. Triggers: 排查、故障、CPU 高、内存不足、OOM、磁盘满、系统慢、load 高、服务挂了、debug、诊断、为什么慢、为什么挂。
+description: Use when diagnosing system-level failures or performance issues on remote hosts via Spider. Triggers: 排查、故障、CPU 高、内存不足、OOM、磁盘满、系统慢、load 高、服务挂了、debug、诊断、为什么慢、为什么挂、系统异常、响应慢、卡死。
 ---
 
 # Spider Debug — 远程主机系统故障排查

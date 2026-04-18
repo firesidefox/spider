@@ -1,6 +1,6 @@
 ---
 name: spider
-description: Use whenever operating on remote hosts via Spider MCP tools. Triggers on: 查看主机、执行命令、批量执行、检查服务、上传文件、下载文件、SSH 连通性、执行历史、审计日志、list hosts, run command, batch exec, check service, upload, download, connectivity, execution history. This is the primary skill for all Spider SSH operations.
+description: Use for Spider host asset management and general SSH operations not covered by a specific spider sub-skill. Triggers: 添加主机、删除主机、更新主机、查看主机列表、add host、remove host、上传文件、下载文件、执行历史、审计日志、upload file、download file、check connectivity、SSH 连通性。Do NOT trigger for: 巡检、故障排查、日志、进程、nginx、cron、网络诊断、环境初始化（these have dedicated sub-skills）.
 ---
 
 # Spider — SSH 通道管理平台

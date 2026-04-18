@@ -1,6 +1,6 @@
 ---
 name: spider-process
-description: Use when finding, killing, or managing processes on remote hosts via Spider. Triggers: 进程、process、kill、杀进程、查进程、重启进程、ps、pgrep、进程占用、端口占用、谁在用这个端口。
+description: Use when finding, killing, or managing processes on remote hosts via Spider. Triggers: 进程、process、kill、杀进程、查进程、重启进程、ps、pgrep、进程占用、端口占用、谁在用这个端口、僵尸进程、内存泄漏进程。
 ---
 
 # Spider Process — 远程进程管理
