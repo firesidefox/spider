@@ -62,7 +62,19 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { marked } from 'marked'
+import { marked, Renderer } from 'marked'
+
+// 自定义 renderer：代码块加行号
+const renderer = new Renderer()
+renderer.code = ({ text, lang }) => {
+  const lines = text.split('\n')
+  const rows = lines.map((line, i) =>
+    `<tr><td class="ln">${i + 1}</td><td class="lc">${line || ' '}</td></tr>`
+  ).join('')
+  const langLabel = lang ? `<span class="cb-lang">${lang}</span>` : ''
+  return `<div class="cb-wrap">${langLabel}<table class="cb-table"><tbody>${rows}</tbody></table></div>`
+}
+marked.use({ renderer })
 
 interface Skill { name: string; source: string }
 type UploadStatus = { type: 'idle' } | { type: 'uploading'; name: string } | { type: 'success'; name: string } | { type: 'error'; msg: string }
@@ -228,8 +240,32 @@ onMounted(() => { loadSkills() })
 .sp-markdown :deep(h3) { font-size: 14px; font-weight: 600; margin: 18px 0 8px; color: var(--text); }
 .sp-markdown :deep(p) { margin: 0 0 12px; }
 .sp-markdown :deep(code) { font-family: 'JetBrains Mono', monospace; font-size: 12px; background: rgba(99,102,241,0.1); color: var(--primary); padding: 1px 5px; border-radius: 4px; }
-.sp-markdown :deep(pre) { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; overflow-x: auto; margin: 0 0 14px; }
-.sp-markdown :deep(pre code) { background: none; color: var(--text); padding: 0; font-size: 12px; line-height: 1.6; }
+
+/* 代码块：行号样式 */
+.sp-markdown :deep(.cb-wrap) {
+  background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+  overflow: hidden; margin: 0 0 16px; font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+.sp-markdown :deep(.cb-lang) {
+  display: block; padding: 8px 16px 6px;
+  font-size: 11px; font-weight: 600; color: var(--muted);
+  border-bottom: 1px solid var(--border); letter-spacing: 0.04em;
+}
+.sp-markdown :deep(.cb-table) {
+  width: 100%; border-collapse: collapse; padding: 8px 0;
+}
+.sp-markdown :deep(.cb-table tbody) { display: block; padding: 8px 0; }
+.sp-markdown :deep(.cb-table tr) { display: flex; line-height: 1.8; }
+.sp-markdown :deep(.cb-table tr:hover) { background: var(--row-hover); }
+.sp-markdown :deep(.ln) {
+  width: 40px; min-width: 40px; text-align: right; padding: 0 16px 0 0;
+  color: var(--label); font-size: 12px; user-select: none; flex-shrink: 0;
+}
+.sp-markdown :deep(.lc) {
+  flex: 1; padding: 0 16px 0 0; font-size: 12px; color: var(--text);
+  white-space: pre; overflow-x: auto;
+}
+
 .sp-markdown :deep(table) { width: 100%; border-collapse: collapse; margin: 0 0 14px; font-size: 13px; }
 .sp-markdown :deep(th) { background: var(--panel); color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; padding: 8px 12px; border: 1px solid var(--border); text-align: left; }
 .sp-markdown :deep(td) { padding: 8px 12px; border: 1px solid var(--border); color: var(--text); }
