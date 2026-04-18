@@ -12,3 +12,4 @@ docs/superpowers/
 .DS_Store
 dist/
 install-arm64.sh
+*.png
