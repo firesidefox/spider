@@ -9,12 +9,12 @@
         <RouterLink to="/settings" class="nav-item">设置</RouterLink>
         <RouterLink to="/install" class="nav-item">安装</RouterLink>
         <RouterLink v-if="isAdmin" to="/users" class="nav-item">用户</RouterLink>
+        <RouterLink to="/profile" class="nav-item">个人设置</RouterLink>
       </nav>
       <div v-if="currentUser" class="nav-user">
         <div class="user-dropdown" @click.stop="showUserMenu = !showUserMenu">
           <span class="nav-username nav-username--clickable">{{ currentUser.username }} ▾</span>
           <div v-if="showUserMenu" class="dropdown-menu">
-            <button class="dropdown-item" @click="router.push('/profile')">用户设置</button>
             <button class="dropdown-item" @click="handleLogout">登出</button>
           </div>
         </div>

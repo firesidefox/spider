@@ -1,123 +1,137 @@
 <template>
-  <div class="page-content">
-    <div class="page-header"><h2>个人设置</h2></div>
-
-    <div class="profile-tabs">
-      <button class="tab-btn" :class="{ active: activeTab === 'info' }" @click="activeTab = 'info'">基本信息</button>
-      <button class="tab-btn" :class="{ active: activeTab === 'tokens' }" @click="activeTab = 'tokens'; loadTokens()">访问令牌</button>
-      <button class="tab-btn" :class="{ active: activeTab === 'logs' }" @click="activeTab = 'logs'; loadLogs()">操作日志</button>
-    </div>
-
-    <!-- Tab 1: 基本信息 -->
-    <div v-if="activeTab === 'info'">
-      <div class="settings-card">
-        <h3>账号信息</h3>
-        <div class="info-grid">
-          <div class="info-item">
-            <span class="info-label">用户名</span>
-            <span class="info-value">{{ currentUser?.username }}</span>
-          </div>
-          <div class="info-item">
-            <span class="info-label">角色</span>
-            <span class="role-badge" :class="currentUser?.role">{{ roleLabel }}</span>
-          </div>
-          <div class="info-item" v-if="currentUser?.created_at">
-            <span class="info-label">注册时间</span>
-            <span class="info-value dim">{{ new Date(currentUser.created_at).toLocaleString() }}</span>
-          </div>
-          <div class="info-item" v-if="currentUser?.last_login">
-            <span class="info-label">上次登录</span>
-            <span class="info-value dim">{{ new Date(currentUser.last_login).toLocaleString() }}</span>
-          </div>
-        </div>
+  <div class="fullscreen-page profile-page">
+    <!-- 左侧菜单 -->
+    <aside class="profile-sidebar">
+      <div class="profile-user">
+        <div class="profile-username">{{ currentUser?.username }}</div>
+        <span class="role-badge" :class="currentUser?.role">{{ roleLabel }}</span>
       </div>
-
-      <div class="settings-card">
-        <h3>修改密码</h3>
-        <div class="pwd-form">
-          <div class="form-row"><label>旧密码</label><input v-model="pw.old" type="password" class="input" placeholder="当前密码" /></div>
-          <div class="form-row"><label>新密码</label><input v-model="pw.new1" type="password" class="input" placeholder="至少 6 位" /></div>
-          <div class="form-row"><label>确认新密码</label><input v-model="pw.new2" type="password" class="input" placeholder="再次输入新密码" /></div>
-        </div>
-        <div v-if="pwError" class="err" style="margin-bottom:12px">{{ pwError }}</div>
-        <div v-if="pwSuccess" class="ok" style="margin-bottom:12px">{{ pwSuccess }}</div>
-        <button class="btn btn-primary" @click="handleChangePassword" :disabled="pwLoading">
-          {{ pwLoading ? '保存中…' : '保存密码' }}
+      <nav class="profile-nav">
+        <button class="profile-nav-item" :class="{ active: activeTab === 'info' }" @click="activeTab = 'info'">
+          <span class="nav-icon">👤</span> 基本信息
         </button>
-      </div>
-    </div>
+        <button class="profile-nav-item" :class="{ active: activeTab === 'tokens' }" @click="activeTab = 'tokens'; loadTokens()">
+          <span class="nav-icon">🔑</span> 访问令牌
+        </button>
+        <button class="profile-nav-item" :class="{ active: activeTab === 'logs' }" @click="activeTab = 'logs'; loadLogs()">
+          <span class="nav-icon">📋</span> 操作日志
+        </button>
+      </nav>
+    </aside>
 
-    <!-- Tab 2: 访问令牌 -->
-    <div v-if="activeTab === 'tokens'">
-      <div class="settings-card">
-        <div class="card-toolbar">
-          <h3 style="margin:0;border:none;padding:0">访问令牌</h3>
-          <button class="btn btn-primary btn-sm" @click="showCreate = true">+ 新建 Token</button>
+    <!-- 右侧内容 -->
+    <div class="profile-content">
+      <!-- Tab 1: 基本信息 -->
+      <div v-if="activeTab === 'info'">
+        <div class="settings-card">
+          <h3>账号信息</h3>
+          <div class="info-grid">
+            <div class="info-item">
+              <span class="info-label">用户名</span>
+              <span class="info-value">{{ currentUser?.username }}</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">角色</span>
+              <span class="role-badge" :class="currentUser?.role">{{ roleLabel }}</span>
+            </div>
+            <div class="info-item" v-if="currentUser?.created_at">
+              <span class="info-label">注册时间</span>
+              <span class="info-value dim">{{ new Date(currentUser.created_at).toLocaleString() }}</span>
+            </div>
+            <div class="info-item" v-if="currentUser?.last_login">
+              <span class="info-label">上次登录</span>
+              <span class="info-value dim">{{ new Date(currentUser.last_login).toLocaleString() }}</span>
+            </div>
+          </div>
         </div>
-        <p class="dim" style="margin-bottom:16px;font-size:13px">Token 可用于 MCP 工具或 API 调用，权限与账号角色一致。</p>
-        <table class="table">
-          <thead><tr><th>名称</th><th>创建时间</th><th>过期时间</th><th>最后使用</th><th>操作</th></tr></thead>
-          <tbody>
-            <tr v-for="t in tokens" :key="t.id">
-              <td style="font-weight:500;color:var(--text)">{{ t.name }}</td>
-              <td class="dim">{{ new Date(t.created_at).toLocaleString() }}</td>
-              <td>
-                <span v-if="t.expires_at" :class="isExpired(t.expires_at) ? 'err' : 'dim'">
-                  {{ new Date(t.expires_at).toLocaleString() }}
-                </span>
-                <span v-else class="dim">永不过期</span>
-              </td>
-              <td class="dim">{{ t.last_used ? new Date(t.last_used).toLocaleString() : '从未' }}</td>
-              <td><button class="btn btn-sm btn-danger" @click="handleDelete(t.id)">撤销</button></td>
-            </tr>
-            <tr v-if="tokens.length === 0">
-              <td colspan="5" class="dim" style="text-align:center;padding:32px">暂无 Token</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
 
-    <!-- Tab 3: 操作日志 -->
-    <div v-if="activeTab === 'logs'">
-      <div class="settings-card">
-        <h3>我的操作日志</h3>
-        <table class="table">
-          <thead><tr><th>主机</th><th>命令</th><th>状态</th><th>耗时</th><th>时间</th></tr></thead>
-          <tbody>
-            <template v-for="log in logs" :key="log.id">
-              <tr class="log-row" @click="toggleLog(log.id)">
-                <td style="font-weight:500;color:var(--text)">{{ log.host_name || '—' }}</td>
-                <td class="cmd-cell">{{ log.command.length > 48 ? log.command.slice(0, 48) + '…' : log.command }}</td>
+        <div class="settings-card">
+          <h3>修改密码</h3>
+          <div class="pwd-form">
+            <div class="form-row"><label>旧密码</label><input v-model="pw.old" type="password" class="input" placeholder="当前密码" /></div>
+            <div class="form-row"><label>新密码</label><input v-model="pw.new1" type="password" class="input" placeholder="至少 6 位" /></div>
+            <div class="form-row"><label>确认新密码</label><input v-model="pw.new2" type="password" class="input" placeholder="再次输入新密码" /></div>
+          </div>
+          <div v-if="pwError" class="err" style="margin-bottom:12px">{{ pwError }}</div>
+          <div v-if="pwSuccess" class="ok" style="margin-bottom:12px">{{ pwSuccess }}</div>
+          <button class="btn btn-primary" @click="handleChangePassword" :disabled="pwLoading">
+            {{ pwLoading ? '保存中…' : '保存密码' }}
+          </button>
+        </div>
+      </div>
+
+      <!-- Tab 2: 访问令牌 -->
+      <div v-if="activeTab === 'tokens'">
+        <div class="settings-card">
+          <div class="card-toolbar">
+            <h3 style="margin:0;border:none;padding:0">访问令牌</h3>
+            <button class="btn btn-primary btn-sm" @click="showCreate = true">+ 新建 Token</button>
+          </div>
+          <p class="dim" style="margin-bottom:16px;font-size:13px">Token 可用于 MCP 工具或 API 调用，权限与账号角色一致。</p>
+          <table class="table">
+            <thead><tr><th>名称</th><th>创建时间</th><th>过期时间</th><th>最后使用</th><th>操作</th></tr></thead>
+            <tbody>
+              <tr v-for="t in tokens" :key="t.id">
+                <td style="font-weight:500;color:var(--text)">{{ t.name }}</td>
+                <td class="dim">{{ new Date(t.created_at).toLocaleString() }}</td>
                 <td>
-                  <span class="status-badge" :class="log.exit_code === 0 ? 'ok' : 'fail'">
-                    {{ log.exit_code === 0 ? '✓ 成功' : `✗ ${log.exit_code}` }}
+                  <span v-if="t.expires_at" :class="isExpired(t.expires_at) ? 'err' : 'dim'">
+                    {{ new Date(t.expires_at).toLocaleString() }}
                   </span>
+                  <span v-else class="dim">永不过期</span>
                 </td>
-                <td class="dim">{{ log.duration_ms != null ? log.duration_ms + 'ms' : '—' }}</td>
-                <td class="dim">{{ new Date(log.created_at).toLocaleString() }}</td>
+                <td class="dim">{{ t.last_used ? new Date(t.last_used).toLocaleString() : '从未' }}</td>
+                <td><button class="btn btn-sm btn-danger" @click="handleDelete(t.id)">撤销</button></td>
               </tr>
-              <tr v-if="expandedLog === log.id" class="log-expand">
-                <td colspan="5">
-                  <div class="log-output">
-                    <div v-if="log.stdout" class="output-block">
-                      <div class="output-label">stdout</div>
-                      <pre class="code output-pre">{{ log.stdout }}</pre>
-                    </div>
-                    <div v-if="log.stderr" class="output-block">
-                      <div class="output-label err-label">stderr</div>
-                      <pre class="code output-pre err-pre">{{ log.stderr }}</pre>
-                    </div>
-                    <div v-if="!log.stdout && !log.stderr" class="dim" style="padding:8px 0">无输出</div>
-                  </div>
-                </td>
+              <tr v-if="tokens.length === 0">
+                <td colspan="5" class="dim" style="text-align:center;padding:32px">暂无 Token</td>
               </tr>
-            </template>
-            <tr v-if="logs.length === 0">
-              <td colspan="5" class="dim" style="text-align:center;padding:32px">暂无操作日志</td>
-            </tr>
-          </tbody>
-        </table>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Tab 3: 操作日志 -->
+      <div v-if="activeTab === 'logs'">
+        <div class="settings-card">
+          <h3>我的操作日志</h3>
+          <table class="table">
+            <thead><tr><th>主机</th><th>命令</th><th>状态</th><th>耗时</th><th>时间</th></tr></thead>
+            <tbody>
+              <template v-for="log in logs" :key="log.id">
+                <tr class="log-row" @click="toggleLog(log.id)">
+                  <td style="font-weight:500;color:var(--text)">{{ log.host_name || '—' }}</td>
+                  <td class="cmd-cell">{{ log.command.length > 48 ? log.command.slice(0, 48) + '…' : log.command }}</td>
+                  <td>
+                    <span class="status-badge" :class="log.exit_code === 0 ? 'ok' : 'fail'">
+                      {{ log.exit_code === 0 ? '✓ 成功' : `✗ ${log.exit_code}` }}
+                    </span>
+                  </td>
+                  <td class="dim">{{ log.duration_ms != null ? log.duration_ms + 'ms' : '—' }}</td>
+                  <td class="dim">{{ new Date(log.created_at).toLocaleString() }}</td>
+                </tr>
+                <tr v-if="expandedLog === log.id" class="log-expand">
+                  <td colspan="5">
+                    <div class="log-output">
+                      <div v-if="log.stdout" class="output-block">
+                        <div class="output-label">stdout</div>
+                        <pre class="code output-pre">{{ log.stdout }}</pre>
+                      </div>
+                      <div v-if="log.stderr" class="output-block">
+                        <div class="output-label err-label">stderr</div>
+                        <pre class="code output-pre err-pre">{{ log.stderr }}</pre>
+                      </div>
+                      <div v-if="!log.stdout && !log.stderr" class="dim" style="padding:8px 0">无输出</div>
+                    </div>
+                  </td>
+                </tr>
+              </template>
+              <tr v-if="logs.length === 0">
+                <td colspan="5" class="dim" style="text-align:center;padding:32px">暂无操作日志</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
 
@@ -239,7 +253,6 @@ async function handleDelete(id: string) {
 }
 
 function copyToken() { navigator.clipboard.writeText(newToken.value) }
-
 function isExpired(expiresAt: string) { return new Date(expiresAt) < new Date() }
 
 // ── 操作日志 ───────────────────────────────────────────
@@ -267,81 +280,104 @@ function toggleLog(id: string) {
 </script>
 
 <style scoped>
-.profile-tabs {
+/* ── 左右分栏布局 ── */
+.profile-page {
   display: flex;
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 24px;
+  height: calc(100vh - 52px);
+  overflow: hidden;
 }
-.tab-btn {
-  padding: 8px 22px;
+
+.profile-sidebar {
+  width: 220px;
+  flex-shrink: 0;
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+}
+
+.profile-user {
+  padding: 20px 16px 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.profile-username {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.profile-nav {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 0;
+}
+
+.profile-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
   border: none;
   background: none;
   cursor: pointer;
-  color: var(--text-sub);
   font-size: 14px;
-  font-weight: 500;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
-  transition: color 0.15s;
+  color: var(--text-sub);
+  text-align: left;
+  border-left: 3px solid transparent;
+  transition: background 0.12s, color 0.12s;
 }
-.tab-btn:hover { color: var(--text); }
-.tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); }
 
-/* 账号信息网格 */
-.info-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
+.profile-nav-item:hover {
+  background: var(--row-hover);
 }
-.info-item { display: flex; flex-direction: column; gap: 4px; }
-.info-label {
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-  color: var(--muted);
-}
-.info-value { font-size: 14px; color: var(--text); }
 
-/* 角色徽章 */
+.profile-nav-item.active {
+  color: var(--primary);
+  background: var(--row-hover);
+  border-left-color: var(--primary);
+}
+
+.nav-icon { font-size: 15px; }
+
+.profile-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+  min-width: 0;
+}
+
+/* ── 角色徽章 ── */
 .role-badge {
   display: inline-block;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
-  padding: 2px 10px;
+  padding: 2px 8px;
   border-radius: 4px;
   border: 1px solid;
 }
-.role-badge.admin {
-  background: rgba(99,102,241,0.12);
-  color: var(--primary);
-  border-color: rgba(99,102,241,0.3);
-}
-.role-badge.operator {
-  background: rgba(74,222,128,0.12);
-  color: var(--green);
-  border-color: rgba(74,222,128,0.3);
-}
-.role-badge.viewer {
-  background: rgba(167,139,250,0.1);
-  color: var(--purple);
-  border-color: rgba(167,139,250,0.25);
-}
+.role-badge.admin   { background: rgba(99,102,241,0.12); color: var(--primary); border-color: rgba(99,102,241,0.3); }
+.role-badge.operator{ background: rgba(74,222,128,0.12); color: var(--green);   border-color: rgba(74,222,128,0.3); }
+.role-badge.viewer  { background: rgba(167,139,250,0.1); color: var(--purple);  border-color: rgba(167,139,250,0.25); }
 
-/* 密码表单 */
-.pwd-form { max-width: 400px; }
+/* ── 账号信息网格 ── */
+.info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.info-item { display: flex; flex-direction: column; gap: 4px; }
+.info-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); }
+.info-value { font-size: 14px; color: var(--text); }
 
-/* Token 卡片工具栏 */
+/* ── 卡片工具栏 ── */
 .card-toolbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--border);
+  margin-bottom: 12px;
 }
 
-/* 日志行 */
+/* ── 日志行 ── */
 .log-row { cursor: pointer; }
 .cmd-cell { font-family: 'SF Mono', Consolas, monospace; font-size: 12px; color: var(--text-sub); }
 
@@ -352,27 +388,11 @@ function toggleLog(id: string) {
   border-radius: 4px;
   border: 1px solid;
 }
-.status-badge.ok {
-  background: rgba(74,222,128,0.12);
-  color: var(--green);
-  border-color: rgba(74,222,128,0.3);
-}
-.status-badge.fail {
-  background: rgba(248,113,113,0.12);
-  color: var(--red);
-  border-color: rgba(248,113,113,0.3);
-}
+.status-badge.ok   { background: rgba(74,222,128,0.12); color: var(--green); border-color: rgba(74,222,128,0.3); }
+.status-badge.fail { background: rgba(248,113,113,0.12); color: var(--red);  border-color: rgba(248,113,113,0.3); }
 
-/* 日志展开区 */
 .log-expand td { padding: 0 !important; }
-.log-output {
-  padding: 12px 16px;
-  background: var(--surface);
-  border-top: 1px solid var(--border);
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
+.log-output { padding: 12px 16px; display: flex; flex-direction: column; gap: 8px; }
 .output-block { display: flex; flex-direction: column; gap: 4px; }
 .output-label {
   font-size: 11px;
@@ -397,7 +417,7 @@ function toggleLog(id: string) {
 }
 .err-pre { color: var(--red); }
 
-/* Token 明文展示 */
+/* ── Token 明文展示 ── */
 .token-display {
   display: flex;
   align-items: center;
@@ -408,10 +428,5 @@ function toggleLog(id: string) {
   padding: 10px 12px;
   margin-bottom: 16px;
 }
-.token-code {
-  flex: 1;
-  word-break: break-all;
-  font-size: 12px;
-  color: var(--green);
-}
+.token-code { flex: 1; word-break: break-all; font-size: 12px; color: var(--green); }
 </style>
