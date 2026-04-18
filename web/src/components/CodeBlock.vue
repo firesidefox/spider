@@ -40,7 +40,7 @@ const gutterRef = ref<HTMLElement | null>(null)
 const contentRef = ref<HTMLElement | null>(null)
 
 const lines = computed(() => props.code.split('\n'))
-const lineCount = computed(() => Math.max(props.code.split('\n').length, 1))
+const lineCount = computed(() => Math.max(lines.value.length, 1))
 
 function syncScroll() {
   if (gutterRef.value && contentRef.value) {
@@ -77,20 +77,12 @@ watch(() => props.code, () => nextTick(syncScroll))
   border-right: 1px solid var(--border);
 }
 
-.wl-num:last-of-type {
-  padding-bottom: 14px;
-}
-
 .wl-text {
   padding: 0 18px;
   color: var(--text);
   white-space: pre-wrap;
   word-break: break-all;
   min-height: 1.7em;
-}
-
-.wl-text:last-of-type {
-  padding-bottom: 14px;
 }
 
 .line-numbers {
