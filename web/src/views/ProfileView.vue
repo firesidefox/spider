@@ -240,7 +240,7 @@
         <p class="dim" style="margin-bottom:12px;font-size:13px">请立即复制，此后不再显示。</p>
         <div class="token-display">
           <code class="code token-code">{{ newToken }}</code>
-          <button class="btn btn-sm" @click="copyToken">复制</button>
+          <button class="btn btn-sm" :class="{ 'btn-copied': copied }" @click="copyToken">{{ copied ? '✓ 已复制' : '复制' }}</button>
         </div>
         <div class="modal-footer">
           <button class="btn btn-primary" @click="newToken = ''">我已复制</button>
@@ -307,6 +307,7 @@ async function handleChangePassword() {
 const tokens = ref<TokenInfo[]>([])
 const showCreate = ref(false)
 const newToken = ref('')
+const copied = ref(false)
 const formError = ref('')
 const form = ref({ name: '', expiresAt: '' })
 let tokensLoaded = false
@@ -339,7 +340,11 @@ async function handleDelete(id: string) {
   tokens.value = await listTokens()
 }
 
-function copyToken() { navigator.clipboard.writeText(newToken.value) }
+function copyToken() {
+  navigator.clipboard.writeText(newToken.value)
+  copied.value = true
+  setTimeout(() => { copied.value = false }, 2000)
+}
 function isExpired(expiresAt: string) { return new Date(expiresAt) < new Date() }
 
 interface LogEntry {
@@ -578,4 +583,5 @@ function cancelSettings() {
   border-radius: 8px; padding: 10px 12px; margin-bottom: 16px;
 }
 .token-code { flex: 1; word-break: break-all; font-size: 12px; color: var(--green); }
+.btn-copied { background: rgba(74,222,128,0.15) !important; color: var(--green) !important; border-color: rgba(74,222,128,0.4) !important; }
 </style>

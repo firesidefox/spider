@@ -36,8 +36,6 @@
         <div class="sp-topbar">
           <span class="sp-detail-title">{{ selected.name }}</span>
           <div class="sp-topbar-right">
-            <button class="btn btn-sm" :class="{ active: viewMode === 'rendered' }" @click="viewMode = 'rendered'">渲染</button>
-            <button class="btn btn-sm" :class="{ active: viewMode === 'raw' }" @click="viewMode = 'raw'">原文</button>
             <button class="btn btn-sm btn-primary" @click="triggerUpload(selected.name)">上传新版本</button>
             <button v-if="selected.source === 'custom'" class="btn btn-sm btn-danger" @click="deleteSkill(selected.name)">删除</button>
           </div>
@@ -45,16 +43,12 @@
         <div class="sp-body">
           <div class="sp-card">
             <div v-if="loading" class="sp-loading">加载中…</div>
-            <template v-else-if="viewMode === 'rendered'">
-              <template v-for="(block, i) in mdBlocks" :key="i">
-                <div v-if="block.type === 'html'" class="sp-markdown" v-html="block.content"></div>
-                <div v-else class="sp-code-block">
-                  <div v-if="block.lang" class="sp-code-lang">{{ block.lang }}</div>
-                  <CodeBlock :code="block.content" />
-                </div>
+            <div v-else class="sp-lined">
+              <template v-for="(line, i) in rawLines" :key="i">
+                <div class="sp-ln">{{ i + 1 }}</div>
+                <div class="sp-lc">{{ line }}</div>
               </template>
-            </template>
-            <pre v-else class="sp-raw">{{ rawContent }}</pre>
+            </div>
           </div>
         </div>
       </template>
@@ -70,32 +64,10 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { marked } from 'marked'
-import CodeBlock from '../components/CodeBlock.vue'
 
-// 斜杠不编码，只编码各段（支持 spider/cron 格式）
+const rawLines = computed(() => rawContent.value.split('\n'))
+
 const encodeSkillName = (name: string) => name.split('/').map(encodeURIComponent).join('/')
-
-type MdBlock = { type: 'html'; content: string } | { type: 'code'; content: string; lang: string }
-
-function parseMdBlocks(src: string): MdBlock[] {
-  const tokens = marked.lexer(src)
-  const blocks: MdBlock[] = []
-  const htmlTokens: any[] = []
-  for (const tok of tokens) {
-    if (tok.type === 'code') {
-      if (htmlTokens.length) {
-        blocks.push({ type: 'html', content: marked.parser(htmlTokens) })
-        htmlTokens.length = 0
-      }
-      blocks.push({ type: 'code', content: tok.text, lang: tok.lang ?? '' })
-    } else {
-      htmlTokens.push(tok)
-    }
-  }
-  if (htmlTokens.length) blocks.push({ type: 'html', content: marked.parser(htmlTokens) })
-  return blocks
-}
 
 interface Skill { name: string; source: string }
 type UploadStatus = { type: 'idle' } | { type: 'uploading'; name: string } | { type: 'success'; name: string } | { type: 'error'; msg: string }
@@ -104,14 +76,10 @@ const skills = ref<Skill[]>([])
 const selected = ref<Skill | null>(null)
 const rawContent = ref('')
 const loading = ref(false)
-const viewMode = ref<'rendered' | 'raw'>('rendered')
 const dragging = ref(false)
 const status = ref<UploadStatus>({ type: 'idle' })
 const fileInput = ref<HTMLInputElement | null>(null)
 const uploadTarget = ref<string | null>(null)
-
-const renderedContent = computed(() => marked.parse(rawContent.value) as string)
-const mdBlocks = computed(() => parseMdBlocks(rawContent.value))
 
 const statusClass = computed(() => ({
   'sp-status--uploading': status.value.type === 'uploading',
@@ -240,46 +208,37 @@ onMounted(() => { loadSkills() })
 }
 .sp-detail-title { font-size: 14px; font-weight: 700; color: var(--text); }
 .sp-topbar-right { display: flex; gap: 8px; }
-.btn.active { background: rgba(99,102,241,0.15); color: var(--primary); border-color: rgba(99,102,241,0.4); }
-.sp-body { flex: 1; overflow-y: auto; padding: 20px 24px; }
+.sp-body { flex: 1; overflow-y: auto; padding: 24px 28px; }
 .sp-card {
   background: var(--card-bg); border: 1px solid var(--border);
-  border-radius: 10px; padding: 20px 24px; box-shadow: var(--card-shadow);
+  border-radius: 10px; overflow: hidden; box-shadow: var(--card-shadow);
 }
-.sp-loading { color: var(--muted); font-size: 13px; }
+.sp-loading { color: var(--muted); font-size: 13px; padding: 24px 28px; }
 .sp-empty-state { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--muted); font-size: 14px; }
 .sp-empty-icon { color: var(--border); font-size: 40px; }
 
-.sp-raw {
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
-  font-size: 12px; line-height: 1.6; color: var(--text);
-  white-space: pre-wrap; word-break: break-word; margin: 0;
+.sp-lined {
+  display: grid;
+  grid-template-columns: 44px 1fr;
+  font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', monospace;
+  font-size: 12.5px;
+  line-height: 1.65;
+  padding: 14px 0;
+}
+.sp-ln {
+  text-align: right;
+  padding: 0 10px 0 0;
+  color: var(--label);
+  user-select: none;
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+}
+.sp-lc {
+  padding: 0 18px;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
+  min-height: 1.65em;
 }
 
-.sp-markdown { color: var(--text); font-size: 14px; line-height: 1.7; margin-bottom: 4px; }
-.sp-markdown :deep(h1) { font-size: 20px; font-weight: 700; margin: 0 0 16px; color: var(--text); border-bottom: 1px solid var(--border); padding-bottom: 8px; }
-.sp-markdown :deep(h2) { font-size: 16px; font-weight: 700; margin: 24px 0 10px; color: var(--text); }
-.sp-markdown :deep(h3) { font-size: 14px; font-weight: 600; margin: 18px 0 8px; color: var(--text); }
-.sp-markdown :deep(p) { margin: 0 0 12px; }
-.sp-markdown :deep(code) { font-family: 'JetBrains Mono', monospace; font-size: 12px; background: rgba(99,102,241,0.1); color: var(--primary); padding: 1px 5px; border-radius: 4px; }
-
-.sp-code-block {
-  background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
-  overflow: hidden; margin: 0 0 16px;
-}
-.sp-code-lang {
-  padding: 7px 16px 6px; font-size: 11px; font-weight: 600;
-  color: var(--muted); border-bottom: 1px solid var(--border); letter-spacing: 0.04em;
-}
-
-.sp-markdown :deep(table) { width: 100%; border-collapse: collapse; margin: 0 0 14px; font-size: 13px; }
-.sp-markdown :deep(th) { background: var(--panel); color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; padding: 8px 12px; border: 1px solid var(--border); text-align: left; }
-.sp-markdown :deep(td) { padding: 8px 12px; border: 1px solid var(--border); color: var(--text); }
-.sp-markdown :deep(tr:nth-child(even) td) { background: var(--row-alt); }
-.sp-markdown :deep(ul), .sp-markdown :deep(ol) { padding-left: 20px; margin: 0 0 12px; }
-.sp-markdown :deep(li) { margin-bottom: 4px; }
-.sp-markdown :deep(blockquote) { border-left: 3px solid var(--primary); margin: 0 0 12px; padding: 8px 16px; background: rgba(99,102,241,0.05); color: var(--muted); }
-.sp-markdown :deep(hr) { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
-.sp-markdown :deep(a) { color: var(--primary); text-decoration: none; }
-.sp-markdown :deep(a:hover) { text-decoration: underline; }
 </style>
