@@ -32,11 +32,12 @@ step "注册 MCP 服务器"
 if ! command -v claude >/dev/null 2>&1; then
   error "未找到 claude CLI，请先安装 Claude Code"; exit 1
 fi
+claude mcp remove spider --scope user 2>/dev/null || true
 if [ -z "$TOKEN" ]; then
   warn "未提供 --token，MCP 服务器将以匿名方式注册（可能无法正常使用）"
-  claude mcp add --scope global --transport http spider "$SPIDER_URL/mcp"
+  claude mcp add --scope user --transport http spider "$SPIDER_URL/mcp"
 else
-  claude mcp add --scope global --transport http spider "$SPIDER_URL/mcp" --header "Authorization: Bearer $TOKEN"
+  claude mcp add --scope user --transport http spider "$SPIDER_URL/mcp" --header "Authorization: Bearer $TOKEN"
 fi
 success "已注册：spider → $SPIDER_URL/mcp"
 
