@@ -1,0 +1,12 @@
+{
+  "name": "spider-skills",
+  "owner": { "name": "Chen Wei" },
+  "metadata": { "description": "Spider SSH host management and deployment skills." },
+  "plugins": [
+    {
+      "name": "spider",
+      "source": "./",
+      "description": "Spider SSH host management, deployment, and operations skills."
+    }
+  ]
+}

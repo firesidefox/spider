@@ -1,0 +1,9 @@
+{
+  "name": "spider",
+  "description": "Spider SSH host management, deployment, and operations skills.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Chen Wei"
+  },
+  "license": "MIT"
+}
