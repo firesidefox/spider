@@ -8,6 +8,7 @@
         </div>
       </div>
       <nav class="sidebar-list">
+        <div class="nav-section-label">个人</div>
         <div class="nav-row" :class="{ selected: activeTab === 'info' }" @click="activeTab = 'info'">
           <span class="nav-icon">👤</span><span class="nav-label">基本信息</span>
         </div>
@@ -17,13 +18,32 @@
         <div class="nav-row" :class="{ selected: activeTab === 'logs' }" @click="activeTab = 'logs'; loadLogs()">
           <span class="nav-icon">📋</span><span class="nav-label">操作日志</span>
         </div>
+        <template v-if="isAdmin">
+          <div class="nav-section-label">管理</div>
+          <div class="nav-row" :class="{ selected: activeTab === 'users' }" @click="activeTab = 'users'">
+            <span class="nav-icon">👥</span><span class="nav-label">用户管理</span>
+          </div>
+          <div class="nav-row" :class="{ selected: activeTab === 'install' }" @click="activeTab = 'install'">
+            <span class="nav-icon">📦</span><span class="nav-label">安装</span>
+          </div>
+          <div class="nav-row" :class="{ selected: activeTab === 'settings' }" @click="activeTab = 'settings'; loadSettings()">
+            <span class="nav-icon">⚙️</span><span class="nav-label">系统设置</span>
+          </div>
+        </template>
       </nav>
     </aside>
     <div class="profile-detail">
-      <div class="detail-topbar">
-        <span class="detail-title">{{ tabTitle }}</span>
-      </div>
-      <div class="detail-body">
+      <template v-if="activeTab === 'users'">
+        <UsersPanel />
+      </template>
+      <template v-else-if="activeTab === 'install'">
+        <InstallPanel />
+      </template>
+      <template v-else>
+        <div class="detail-topbar">
+          <span class="detail-title">{{ tabTitle }}</span>
+        </div>
+        <div class="detail-body">
         <template v-if="activeTab === 'info'">
           <div class="detail-grid">
             <div class="detail-field">
@@ -128,7 +148,32 @@
           </div>
         </template>
 
+        <!-- Tab: 系统设置 -->
+        <template v-if="activeTab === 'settings'">
+          <div class="edit-card">
+            <div class="edit-card-title">MCP Server</div>
+            <div class="block-grid">
+              <div class="form-row"><label>监听地址</label><input v-model="settings.sse_addr" class="input" placeholder=":8000" /></div>
+              <div class="form-row"><label>Base URL</label><input v-model="settings.sse_base_url" class="input" placeholder="http://localhost:8000" /></div>
+            </div>
+          </div>
+          <div class="edit-card">
+            <div class="edit-card-title">SSH 默认配置</div>
+            <div class="block-grid">
+              <div class="form-row"><label>命令超时（秒）</label><input v-model.number="settings.ssh_default_timeout_seconds" class="input" type="number" /></div>
+              <div class="form-row"><label>连接池 TTL（秒）</label><input v-model.number="settings.ssh_pool_ttl_seconds" class="input" type="number" /></div>
+              <div class="form-row"><label>最大连接数</label><input v-model.number="settings.ssh_max_pool_size" class="input" type="number" /></div>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px">
+            <button class="btn btn-primary btn-sm" @click="saveSettings">保存设置</button>
+            <span v-if="settingsSaved" class="ok">已保存</span>
+            <span v-if="settingsError" class="err">{{ settingsError }}</span>
+          </div>
+        </template>
+
       </div>
+      </template><!-- end v-else -->
     </div>
 
     <!-- 新建 Token 弹窗 -->
@@ -171,16 +216,21 @@ import { useAuth } from '../composables/useAuth'
 import { authHeaders } from '../api/auth'
 import { listTokens, createToken, deleteToken } from '../api/tokens'
 import type { TokenInfo } from '../api/tokens'
+import UsersPanel from './UsersPanel.vue'
+import InstallPanel from './InstallPanel.vue'
 
-const { currentUser } = useAuth()
+const { currentUser, isAdmin } = useAuth()
 
 const roleLabel = computed(() => {
   const map: Record<string, string> = { admin: '管理员', operator: '操作员', viewer: '只读' }
   return map[currentUser.value?.role ?? ''] ?? currentUser.value?.role ?? '—'
 })
 
-const activeTab = ref<'info' | 'tokens' | 'logs'>('info')
-const tabTitle = computed(() => ({ info: '基本信息', tokens: '访问令牌', logs: '操作日志' }[activeTab.value]))
+const activeTab = ref<'info' | 'tokens' | 'logs' | 'users' | 'install' | 'settings'>('info')
+const tabTitle = computed(() => ({
+  info: '基本信息', tokens: '访问令牌', logs: '操作日志',
+  users: '用户管理', install: '安装', settings: '系统设置',
+}[activeTab.value]))
 
 const pw = ref({ old: '', new1: '', new2: '' })
 const pwError = ref('')
@@ -270,6 +320,34 @@ async function loadLogs() {
 
 function toggleLog(id: string) {
   expandedLog.value = expandedLog.value === id ? null : id
+}
+
+interface Settings {
+  sse_addr: string; sse_base_url: string
+  ssh_default_timeout_seconds: number; ssh_pool_ttl_seconds: number; ssh_max_pool_size: number
+}
+const settings = ref<Settings>({ sse_addr: '', sse_base_url: '', ssh_default_timeout_seconds: 30, ssh_pool_ttl_seconds: 300, ssh_max_pool_size: 50 })
+const settingsSaved = ref(false)
+const settingsError = ref('')
+let settingsLoaded = false
+
+async function loadSettings() {
+  if (settingsLoaded) return
+  settingsLoaded = true
+  const res = await fetch('/api/v1/settings', { headers: authHeaders() })
+  if (res.ok) settings.value = await res.json()
+}
+
+async function saveSettings() {
+  settingsSaved.value = false
+  settingsError.value = ''
+  const res = await fetch('/api/v1/settings', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify(settings.value),
+  })
+  if (res.ok) { settingsSaved.value = true; setTimeout(() => { settingsSaved.value = false }, 2000) }
+  else settingsError.value = (await res.json()).error
 }
 </script>
 
@@ -430,6 +508,21 @@ function toggleLog(id: string) {
   max-height: 240px; overflow-y: auto;
 }
 .err-pre { color: var(--red); }
+
+.nav-section-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  padding: 12px 16px 4px;
+}
+
+.block-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
 
 .token-display {
   display: flex; align-items: center; gap: 8px;
