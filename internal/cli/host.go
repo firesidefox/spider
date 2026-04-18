@@ -29,15 +29,14 @@ func NewHostCmd(url *string) *cobra.Command {
 
 func newHostAddCmd(url *string) *cobra.Command {
 	var (
-		ip          string
-		port        int
-		username    string
-		authType    string
-		keyFile     string
-		password    string
-		passphrase  string
-		proxyHostID string
-		tags        string
+		ip         string
+		port       int
+		username   string
+		authType   string
+		keyFile    string
+		password   string
+		passphrase string
+		tags       string
 	)
 	cmd := &cobra.Command{
 		Use:   "add <name>",
@@ -53,15 +52,14 @@ func newHostAddCmd(url *string) *cobra.Command {
 				credential = string(data)
 			}
 			req := &models.AddHostRequest{
-				Name:        args[0],
-				IP:          ip,
-				Port:        port,
-				Username:    username,
-				AuthType:    models.AuthType(authType),
-				Credential:  credential,
-				Passphrase:  passphrase,
-				ProxyHostID: proxyHostID,
-				Tags:        splitTags(tags),
+				Name:       args[0],
+				IP:         ip,
+				Port:       port,
+				Username:   username,
+				AuthType:   models.AuthType(authType),
+				Credential: credential,
+				Passphrase: passphrase,
+				Tags:       splitTags(tags),
 			}
 			host, err := client.New(*url).AddHost(req)
 			if err != nil {
@@ -78,7 +76,6 @@ func newHostAddCmd(url *string) *cobra.Command {
 	cmd.Flags().StringVar(&keyFile, "key", "", "SSH 私钥文件路径")
 	cmd.Flags().StringVar(&password, "password", "", "SSH 密码")
 	cmd.Flags().StringVar(&passphrase, "passphrase", "", "私钥 passphrase")
-	cmd.Flags().StringVar(&proxyHostID, "proxy", "", "跳板机主机 ID")
 	cmd.Flags().StringVar(&tags, "tag", "", "标签（逗号分隔）")
 	_ = cmd.MarkFlagRequired("ip")
 	return cmd
@@ -139,16 +136,15 @@ func newHostRmCmd(url *string) *cobra.Command {
 
 func newHostUpdateCmd(url *string) *cobra.Command {
 	var (
-		name        string
-		ip          string
-		port        int
-		username    string
-		authType    string
-		keyFile     string
-		password    string
-		passphrase  string
-		proxyHostID string
-		tags        string
+		name       string
+		ip         string
+		port       int
+		username   string
+		authType   string
+		keyFile    string
+		password   string
+		passphrase string
+		tags       string
 	)
 	cmd := &cobra.Command{
 		Use:   "update <id-or-name>",
@@ -191,9 +187,6 @@ func newHostUpdateCmd(url *string) *cobra.Command {
 			if cmd.Flags().Changed("passphrase") {
 				req.Passphrase = &passphrase
 			}
-			if cmd.Flags().Changed("proxy") {
-				req.ProxyHostID = &proxyHostID
-			}
 			if cmd.Flags().Changed("tag") {
 				req.Tags = splitTags(tags)
 			}
@@ -213,7 +206,6 @@ func newHostUpdateCmd(url *string) *cobra.Command {
 	cmd.Flags().StringVar(&keyFile, "key", "", "新私钥文件")
 	cmd.Flags().StringVar(&password, "password", "", "新密码")
 	cmd.Flags().StringVar(&passphrase, "passphrase", "", "新 passphrase")
-	cmd.Flags().StringVar(&proxyHostID, "proxy", "", "新跳板机 ID")
 	cmd.Flags().StringVar(&tags, "tag", "", "新标签（逗号分隔）")
 	return cmd
 }

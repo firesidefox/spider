@@ -47,10 +47,10 @@ func (s *HostStore) Add(req *models.AddHostRequest) (*models.Host, error) {
 
 	_, err = s.db.Exec(
 		`INSERT INTO hosts (id, name, ip, port, username, auth_type, encrypted_credential,
-		 encrypted_passphrase, proxy_host_id, tags, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		 encrypted_passphrase, tags, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		id, req.Name, req.IP, req.Port, req.Username, string(req.AuthType),
-		encCred, encPass, req.ProxyHostID, string(tagsJSON), now, now,
+		encCred, encPass, string(tagsJSON), now, now,
 	)
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE constraint") {
@@ -66,7 +66,7 @@ func (s *HostStore) Add(req *models.AddHostRequest) (*models.Host, error) {
 func (s *HostStore) GetByID(id string) (*models.Host, error) {
 	row := s.db.QueryRow(
 		`SELECT id, name, ip, port, username, auth_type, encrypted_credential,
-		 encrypted_passphrase, proxy_host_id, tags, created_at, updated_at
+		 encrypted_passphrase, tags, created_at, updated_at
 		 FROM hosts WHERE id = ?`, id,
 	)
 	return scanHost(row)
@@ -76,7 +76,7 @@ func (s *HostStore) GetByID(id string) (*models.Host, error) {
 func (s *HostStore) GetByName(name string) (*models.Host, error) {
 	row := s.db.QueryRow(
 		`SELECT id, name, ip, port, username, auth_type, encrypted_credential,
-		 encrypted_passphrase, proxy_host_id, tags, created_at, updated_at
+		 encrypted_passphrase, tags, created_at, updated_at
 		 FROM hosts WHERE name = ?`, name,
 	)
 	return scanHost(row)
@@ -98,14 +98,13 @@ func (s *HostStore) List(tag string) ([]*models.Host, error) {
 	if tag == "" {
 		rows, err = s.db.Query(
 			`SELECT id, name, ip, port, username, auth_type, encrypted_credential,
-			 encrypted_passphrase, proxy_host_id, tags, created_at, updated_at
+			 encrypted_passphrase, tags, created_at, updated_at
 			 FROM hosts ORDER BY name`,
 		)
 	} else {
-		// 使用 SQLite json_each 虚拟表过滤 tag
 		rows, err = s.db.Query(
 			`SELECT h.id, h.name, h.ip, h.port, h.username, h.auth_type,
-			 h.encrypted_credential, h.encrypted_passphrase, h.proxy_host_id,
+			 h.encrypted_credential, h.encrypted_passphrase,
 			 h.tags, h.created_at, h.updated_at
 			 FROM hosts h, json_each(h.tags)
 			 WHERE json_each.value = ?
@@ -162,9 +161,6 @@ func (s *HostStore) Update(id string, req *models.UpdateHostRequest) (*models.Ho
 			return nil, fmt.Errorf("加密 passphrase 失败: %w", err)
 		}
 	}
-	if req.ProxyHostID != nil {
-		h.ProxyHostID = *req.ProxyHostID
-	}
 	if req.Tags != nil {
 		h.Tags = req.Tags
 	}
@@ -174,10 +170,10 @@ func (s *HostStore) Update(id string, req *models.UpdateHostRequest) (*models.Ho
 
 	_, err = s.db.Exec(
 		`UPDATE hosts SET name=?, ip=?, port=?, username=?, auth_type=?,
-		 encrypted_credential=?, encrypted_passphrase=?, proxy_host_id=?,
+		 encrypted_credential=?, encrypted_passphrase=?,
 		 tags=?, updated_at=? WHERE id=?`,
 		h.Name, h.IP, h.Port, h.Username, string(h.AuthType),
-		h.EncryptedCredential, h.EncryptedPassphrase, h.ProxyHostID,
+		h.EncryptedCredential, h.EncryptedPassphrase,
 		string(tagsJSON), h.UpdatedAt, id,
 	)
 	if err != nil {
@@ -219,7 +215,7 @@ func scanHost(row *sql.Row) (*models.Host, error) {
 	var authType string
 	err := row.Scan(
 		&h.ID, &h.Name, &h.IP, &h.Port, &h.Username, &authType,
-		&h.EncryptedCredential, &h.EncryptedPassphrase, &h.ProxyHostID,
+		&h.EncryptedCredential, &h.EncryptedPassphrase,
 		&tagsJSON, &h.CreatedAt, &h.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {
@@ -243,7 +239,7 @@ func scanHostRows(rows *sql.Rows) (*models.Host, error) {
 	var authType string
 	err := rows.Scan(
 		&h.ID, &h.Name, &h.IP, &h.Port, &h.Username, &authType,
-		&h.EncryptedCredential, &h.EncryptedPassphrase, &h.ProxyHostID,
+		&h.EncryptedCredential, &h.EncryptedPassphrase,
 		&tagsJSON, &h.CreatedAt, &h.UpdatedAt,
 	)
 	if err != nil {

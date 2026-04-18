@@ -5,7 +5,6 @@ export interface SafeHost {
   port: number
   username: string
   auth_type: string
-  proxy_host_id?: string
   tags: string[]
   created_at: string
   updated_at: string
@@ -19,7 +18,6 @@ export interface AddHostRequest {
   auth_type: string
   credential: string
   passphrase?: string
-  proxy_host_id?: string
   tags: string[]
 }
 

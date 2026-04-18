@@ -102,29 +102,28 @@ build-darwin:
 
 dist: web build-darwin
 	$(call log_h1,打包 macOS 安装包)
+	@rm -rf $(DIST_DIR)
 	@mkdir -p $(DIST_DIR)
-	@rm -f  $(DIST_DIR)/Spider-$(VERSION)-arm64.zip $(DIST_DIR)/Spider-$(VERSION)-x86_64.zip
-	@rm -rf $(DIST_DIR)/Spider-$(VERSION)-arm64 $(DIST_DIR)/Spider-$(VERSION)-x86_64
-	@mkdir -p $(DIST_DIR)/Spider-$(VERSION)-arm64
-	@cp $(BIN_DIR)/spider-darwin-arm64   $(DIST_DIR)/Spider-$(VERSION)-arm64/spider
-	@cp $(BIN_DIR)/spdctl-darwin-arm64   $(DIST_DIR)/Spider-$(VERSION)-arm64/spdctl
-	@cp $(INSTALLER)/install.sh          $(DIST_DIR)/Spider-$(VERSION)-arm64/install.sh
-	@cp $(INSTALLER)/uninstall.sh        $(DIST_DIR)/Spider-$(VERSION)-arm64/uninstall.sh
-	@cp $(INSTALLER)/spider.plist        $(DIST_DIR)/Spider-$(VERSION)-arm64/spider.plist
-	@chmod +x $(DIST_DIR)/Spider-$(VERSION)-arm64/install.sh $(DIST_DIR)/Spider-$(VERSION)-arm64/uninstall.sh
-	@cd $(DIST_DIR) && zip -qr Spider-$(VERSION)-arm64.zip Spider-$(VERSION)-arm64/
-	@rm -rf $(DIST_DIR)/Spider-$(VERSION)-arm64
-	@mkdir -p $(DIST_DIR)/Spider-$(VERSION)-x86_64
-	@cp $(BIN_DIR)/spider-darwin-amd64   $(DIST_DIR)/Spider-$(VERSION)-x86_64/spider
-	@cp $(BIN_DIR)/spdctl-darwin-amd64   $(DIST_DIR)/Spider-$(VERSION)-x86_64/spdctl
-	@cp $(INSTALLER)/install.sh          $(DIST_DIR)/Spider-$(VERSION)-x86_64/install.sh
-	@cp $(INSTALLER)/uninstall.sh        $(DIST_DIR)/Spider-$(VERSION)-x86_64/uninstall.sh
-	@cp $(INSTALLER)/spider.plist        $(DIST_DIR)/Spider-$(VERSION)-x86_64/spider.plist
-	@chmod +x $(DIST_DIR)/Spider-$(VERSION)-x86_64/install.sh $(DIST_DIR)/Spider-$(VERSION)-x86_64/uninstall.sh
-	@cd $(DIST_DIR) && zip -qr Spider-$(VERSION)-x86_64.zip Spider-$(VERSION)-x86_64/
-	@rm -rf $(DIST_DIR)/Spider-$(VERSION)-x86_64
-	$(call log_ok,dist/Spider-$(VERSION)-arm64.zip)
-	$(call log_ok,dist/Spider-$(VERSION)-x86_64.zip)
+	@mkdir -p $(DIST_DIR)/spider-$(VERSION)-arm64
+	@cp $(BIN_DIR)/spider-darwin-arm64   $(DIST_DIR)/spider-$(VERSION)-arm64/spider
+	@cp $(BIN_DIR)/spdctl-darwin-arm64   $(DIST_DIR)/spider-$(VERSION)-arm64/spdctl
+	@cp $(INSTALLER)/install.sh          $(DIST_DIR)/spider-$(VERSION)-arm64/install.sh
+	@cp $(INSTALLER)/uninstall.sh        $(DIST_DIR)/spider-$(VERSION)-arm64/uninstall.sh
+	@cp $(INSTALLER)/spider.plist        $(DIST_DIR)/spider-$(VERSION)-arm64/spider.plist
+	@chmod +x $(DIST_DIR)/spider-$(VERSION)-arm64/install.sh $(DIST_DIR)/spider-$(VERSION)-arm64/uninstall.sh
+	@cd $(DIST_DIR) && zip -qr spider-$(VERSION)-arm64.zip spider-$(VERSION)-arm64/
+	@rm -rf $(DIST_DIR)/spider-$(VERSION)-arm64
+	@mkdir -p $(DIST_DIR)/spider-$(VERSION)-x86_64
+	@cp $(BIN_DIR)/spider-darwin-amd64   $(DIST_DIR)/spider-$(VERSION)-x86_64/spider
+	@cp $(BIN_DIR)/spdctl-darwin-amd64   $(DIST_DIR)/spider-$(VERSION)-x86_64/spdctl
+	@cp $(INSTALLER)/install.sh          $(DIST_DIR)/spider-$(VERSION)-x86_64/install.sh
+	@cp $(INSTALLER)/uninstall.sh        $(DIST_DIR)/spider-$(VERSION)-x86_64/uninstall.sh
+	@cp $(INSTALLER)/spider.plist        $(DIST_DIR)/spider-$(VERSION)-x86_64/spider.plist
+	@chmod +x $(DIST_DIR)/spider-$(VERSION)-x86_64/install.sh $(DIST_DIR)/spider-$(VERSION)-x86_64/uninstall.sh
+	@cd $(DIST_DIR) && zip -qr spider-$(VERSION)-x86_64.zip spider-$(VERSION)-x86_64/
+	@rm -rf $(DIST_DIR)/spider-$(VERSION)-x86_64
+	$(call log_ok,dist/spider-$(VERSION)-arm64.zip)
+	$(call log_ok,dist/spider-$(VERSION)-x86_64.zip)
 
 publish: build-linux
 	$(call log_h1,发布二进制到 DataDir)

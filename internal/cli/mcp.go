@@ -109,99 +109,81 @@ func newMCPStatusCmd() *cobra.Command {
 	return cmd
 }
 
-// ── Claude Code (~/.claude/settings.json) ────────────────────────────────────
-
-type claudeSettings struct {
-	MCPServers map[string]claudeMCPEntry `json:"mcpServers"`
-}
+// ── Claude Code (~/.claude.json 全局 mcpServers) ─────────────────────────────
 
 type claudeMCPEntry struct {
 	Type string `json:"type"`
 	URL  string `json:"url"`
 }
 
-func claudeSettingsPath() (string, error) {
+func claudeJSONPath() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, ".claude", "settings.json"), nil
+	return filepath.Join(home, ".claude.json"), nil
 }
 
-func loadClaudeSettings(path string) (*claudeSettings, error) {
-	s := &claudeSettings{MCPServers: map[string]claudeMCPEntry{}}
+func loadClaudeMCPServers(path string) (map[string]claudeMCPEntry, map[string]json.RawMessage, error) {
+	servers := map[string]claudeMCPEntry{}
+	raw := map[string]json.RawMessage{}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return s, nil
+			return servers, raw, nil
 		}
-		return nil, err
+		return nil, nil, err
 	}
-	var raw map[string]json.RawMessage
 	if err := json.Unmarshal(data, &raw); err != nil {
-		return nil, fmt.Errorf("解析 settings.json 失败: %w", err)
+		return nil, nil, fmt.Errorf("解析 .claude.json 失败: %w", err)
 	}
 	if v, ok := raw["mcpServers"]; ok {
-		_ = json.Unmarshal(v, &s.MCPServers)
+		_ = json.Unmarshal(v, &servers)
 	}
-	return s, nil
+	return servers, raw, nil
 }
 
-func saveClaudeSettings(path string, s *claudeSettings) error {
-	var raw map[string]json.RawMessage
-	data, err := os.ReadFile(path)
-	if err != nil && !os.IsNotExist(err) {
-		return err
-	}
-	if len(data) > 0 {
-		_ = json.Unmarshal(data, &raw)
-	}
-	if raw == nil {
-		raw = map[string]json.RawMessage{}
-	}
-	b, _ := json.Marshal(s.MCPServers)
+func saveClaudeMCPServers(path string, servers map[string]claudeMCPEntry, raw map[string]json.RawMessage) error {
+	b, _ := json.Marshal(servers)
 	raw["mcpServers"] = b
 	out, err := json.MarshalIndent(raw, "", "  ")
 	if err != nil {
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		return err
 	}
 	return os.WriteFile(path, append(out, '\n'), 0600)
 }
 
 func registerClaude(name, url string) error {
-	path, err := claudeSettingsPath()
+	path, err := claudeJSONPath()
 	if err != nil {
 		return err
 	}
-	s, err := loadClaudeSettings(path)
+	servers, raw, err := loadClaudeMCPServers(path)
 	if err != nil {
 		return err
 	}
-	s.MCPServers[name] = claudeMCPEntry{Type: "http", URL: url}
-	if err := saveClaudeSettings(path, s); err != nil {
+	servers[name] = claudeMCPEntry{Type: "http", URL: url}
+	if err := saveClaudeMCPServers(path, servers, raw); err != nil {
 		return fmt.Errorf("写入失败: %w", err)
 	}
-	fmt.Printf("已注册到 Claude Code: %s -> %s\n配置文件: %s\n", name, url, path)
+	fmt.Printf("已注册到 Claude Code（全局）: %s -> %s\n配置文件: %s\n", name, url, path)
 	return nil
 }
 
 func unregisterClaude(name string) error {
-	path, err := claudeSettingsPath()
+	path, err := claudeJSONPath()
 	if err != nil {
 		return err
 	}
-	s, err := loadClaudeSettings(path)
+	servers, raw, err := loadClaudeMCPServers(path)
 	if err != nil {
 		return err
 	}
-	if _, ok := s.MCPServers[name]; !ok {
+	if _, ok := servers[name]; !ok {
 		return fmt.Errorf("未找到注册项: %s", name)
 	}
-	delete(s.MCPServers, name)
-	if err := saveClaudeSettings(path, s); err != nil {
+	delete(servers, name)
+	if err := saveClaudeMCPServers(path, servers, raw); err != nil {
 		return fmt.Errorf("写入失败: %w", err)
 	}
 	fmt.Printf("已从 Claude Code 移除: %s\n", name)
@@ -209,19 +191,19 @@ func unregisterClaude(name string) error {
 }
 
 func statusClaude() error {
-	path, err := claudeSettingsPath()
+	path, err := claudeJSONPath()
 	if err != nil {
 		return err
 	}
-	s, err := loadClaudeSettings(path)
+	servers, _, err := loadClaudeMCPServers(path)
 	if err != nil {
 		return err
 	}
-	if len(s.MCPServers) == 0 {
+	if len(servers) == 0 {
 		fmt.Println("未注册任何 MCP server")
 		return nil
 	}
-	data, _ := json.MarshalIndent(s.MCPServers, "", "  ")
+	data, _ := json.MarshalIndent(servers, "", "  ")
 	fmt.Println(string(data))
 	return nil
 }

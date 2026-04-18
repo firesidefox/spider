@@ -10,16 +10,14 @@ import (
 	gossh "golang.org/x/crypto/ssh"
 )
 
-// Upload 通过 SFTP 协议将本地文件上传到远程主机。
+// Upload 通过 SCP 协议将本地文件上传到远程主机。
 func (c *Client) Upload(ctx context.Context, localPath, remotePath string) error {
-	// 使用 SSH 的 exec 通道模拟 SCP
 	session, err := c.conn.NewSession()
 	if err != nil {
 		return fmt.Errorf("创建 session 失败: %w", err)
 	}
 	defer session.Close()
 
-	// 打开本地文件
 	f, err := os.Open(localPath)
 	if err != nil {
 		return fmt.Errorf("打开本地文件失败: %w", err)
@@ -31,7 +29,6 @@ func (c *Client) Upload(ctx context.Context, localPath, remotePath string) error
 		return fmt.Errorf("获取文件信息失败: %w", err)
 	}
 
-	// 通过 stdin pipe 传输文件内容（SCP 协议）
 	w, err := session.StdinPipe()
 	if err != nil {
 		return fmt.Errorf("获取 stdin pipe 失败: %w", err)
@@ -40,17 +37,15 @@ func (c *Client) Upload(ctx context.Context, localPath, remotePath string) error
 	errCh := make(chan error, 1)
 	go func() {
 		defer w.Close()
-		// SCP 协议头
 		fmt.Fprintf(w, "C0644 %d %s\n", stat.Size(), filepath.Base(remotePath))
 		if _, err := io.Copy(w, f); err != nil {
 			errCh <- fmt.Errorf("传输文件内容失败: %w", err)
 			return
 		}
-		fmt.Fprint(w, "\x00") // SCP 结束符
+		fmt.Fprint(w, "\x00")
 		errCh <- nil
 	}()
 
-	// 启动远程 scp 接收进程
 	remoteDir := filepath.Dir(remotePath)
 	if err := session.Run(fmt.Sprintf("scp -t %s", remoteDir)); err != nil {
 		return fmt.Errorf("远程 scp 执行失败: %w", err)
@@ -72,12 +67,10 @@ func (c *Client) Download(ctx context.Context, remotePath, localPath string) err
 	}
 	defer session.Close()
 
-	// 确保本地目录存在
 	if err := os.MkdirAll(filepath.Dir(localPath), 0755); err != nil {
 		return fmt.Errorf("创建本地目录失败: %w", err)
 	}
 
-	// 通过 exec cat 获取文件内容
 	r, err := session.StdoutPipe()
 	if err != nil {
 		return fmt.Errorf("获取 stdout pipe 失败: %w", err)

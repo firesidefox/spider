@@ -13,12 +13,17 @@ import (
 func NewRouter(app *mcppkg.App) http.Handler {
 	mux := http.NewServeMux()
 
+	adminOnly := authmw.RequireRole(models.RoleAdmin)
+	operatorOrAbove := authmw.RequireRole(models.RoleAdmin, models.RoleOperator)
+
 	mux.HandleFunc("/api/v1/hosts", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
 			listHosts(app, w, r)
 		case http.MethodPost:
-			addHost(app, w, r)
+			operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				addHost(app, w, r)
+			})).ServeHTTP(w, r)
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -44,9 +49,13 @@ func NewRouter(app *mcppkg.App) http.Handler {
 		case http.MethodGet:
 			getHost(app, w, r, id)
 		case http.MethodPut:
-			updateHost(app, w, r, id)
+			operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				updateHost(app, w, r, id)
+			})).ServeHTTP(w, r)
 		case http.MethodDelete:
-			deleteHost(app, w, r, id)
+			operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				deleteHost(app, w, r, id)
+			})).ServeHTTP(w, r)
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -54,7 +63,9 @@ func NewRouter(app *mcppkg.App) http.Handler {
 
 	mux.HandleFunc("/api/v1/exec", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
-			execCommand(app, w, r)
+			operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				execCommand(app, w, r)
+			})).ServeHTTP(w, r)
 			return
 		}
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -62,7 +73,9 @@ func NewRouter(app *mcppkg.App) http.Handler {
 
 	mux.HandleFunc("/api/v1/exec/stream", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet {
-			streamCommand(app, w, r)
+			operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				streamCommand(app, w, r)
+			})).ServeHTTP(w, r)
 			return
 		}
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -70,7 +83,9 @@ func NewRouter(app *mcppkg.App) http.Handler {
 
 	mux.HandleFunc("/api/v1/exec/batch", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
-			execBatch(app, w, r)
+			operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				execBatch(app, w, r)
+			})).ServeHTTP(w, r)
 			return
 		}
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -98,7 +113,9 @@ func NewRouter(app *mcppkg.App) http.Handler {
 		case http.MethodGet:
 			getSettings(app, w, r)
 		case http.MethodPut:
-			updateSettings(app, w, r)
+			adminOnly(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				updateSettings(app, w, r)
+			})).ServeHTTP(w, r)
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -112,8 +129,6 @@ func NewRouter(app *mcppkg.App) http.Handler {
 	mux.HandleFunc("PUT /api/v1/me/password", changePasswordHandler(app))
 
 	// Phase 2: 用户管理（admin only）
-	adminOnly := authmw.RequireRole(models.RoleAdmin)
-
 	mux.Handle("/api/v1/users", adminOnly(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:

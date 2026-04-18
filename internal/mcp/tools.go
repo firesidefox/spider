@@ -42,15 +42,14 @@ func makeAddHost(app *App) func(context.Context, mcpgo.CallToolRequest) (*mcpgo.
 		}
 
 		addReq := &models.AddHostRequest{
-			Name:        getString(args, "name"),
-			IP:          getString(args, "ip"),
-			Port:        getInt(args, "port", 22),
-			Username:    getString(args, "username"),
-			AuthType:    authType,
-			Credential:  getString(args, "credential"),
-			Passphrase:  getString(args, "passphrase"),
-			ProxyHostID: getString(args, "proxy_host_id"),
-			Tags:        splitTags(getString(args, "tags")),
+			Name:       getString(args, "name"),
+			IP:         getString(args, "ip"),
+			Port:       getInt(args, "port", 22),
+			Username:   getString(args, "username"),
+			AuthType:   authType,
+			Credential: getString(args, "credential"),
+			Passphrase: getString(args, "passphrase"),
+			Tags:       splitTags(getString(args, "tags")),
 		}
 
 		host, err := app.HostStore.Add(addReq)
@@ -116,9 +115,6 @@ func makeUpdateHost(app *App) func(context.Context, mcpgo.CallToolRequest) (*mcp
 		}
 		if v := getString(args, "passphrase"); v != "" {
 			updateReq.Passphrase = &v
-		}
-		if v := getString(args, "proxy_host_id"); v != "" {
-			updateReq.ProxyHostID = &v
 		}
 		if v := getString(args, "tags"); v != "" {
 			updateReq.Tags = splitTags(v)
@@ -321,21 +317,17 @@ func makeUploadFile(app *App) func(context.Context, mcpgo.CallToolRequest) (*mcp
 		if hostIDOrName == "" || localPath == "" || remotePath == "" {
 			return toolError("host_id、local_path、remote_path 不能为空")
 		}
-
 		host, err := app.HostStore.GetByIDOrName(hostIDOrName)
 		if err != nil {
 			return toolError(fmt.Sprintf("主机不存在: %s", hostIDOrName))
 		}
-
 		client, err := app.Pool.Get(host, app.HostStore)
 		if err != nil {
 			return toolError(fmt.Sprintf("建立 SSH 连接失败: %v", err))
 		}
 		defer app.Pool.Release(host.ID)
-
 		uploadCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 		defer cancel()
-
 		if err := client.Upload(uploadCtx, localPath, remotePath); err != nil {
 			return toolError(fmt.Sprintf("上传文件失败: %v", err))
 		}
@@ -353,21 +345,17 @@ func makeDownloadFile(app *App) func(context.Context, mcpgo.CallToolRequest) (*m
 		if hostIDOrName == "" || remotePath == "" || localPath == "" {
 			return toolError("host_id、remote_path、local_path 不能为空")
 		}
-
 		host, err := app.HostStore.GetByIDOrName(hostIDOrName)
 		if err != nil {
 			return toolError(fmt.Sprintf("主机不存在: %s", hostIDOrName))
 		}
-
 		client, err := app.Pool.Get(host, app.HostStore)
 		if err != nil {
 			return toolError(fmt.Sprintf("建立 SSH 连接失败: %v", err))
 		}
 		defer app.Pool.Release(host.ID)
-
 		downloadCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 		defer cancel()
-
 		if err := client.Download(downloadCtx, remotePath, localPath); err != nil {
 			return toolError(fmt.Sprintf("下载文件失败: %v", err))
 		}

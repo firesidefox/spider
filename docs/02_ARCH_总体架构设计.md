@@ -121,7 +121,7 @@ type App struct {
 
 包含三个子模块：
 
-- **`client.go`**：封装单条 SSH 连接，支持 `password`、`key`、`key_password` 三种认证方式，以及通过 `proxy_host_id` 实现 ProxyJump 跳板机。
+- **`client.go`**：封装单条 SSH 连接，支持 `password`、`key`、`key_password` 三种认证方式。
 - **`pool.go`**：按 `host_id` 缓存 SSH 连接，TTL 到期或连接空闲时自动清理。后台 goroutine 每 `ttl/2` 执行一次清理。
 - **`scp.go`**：基于 SCP 协议实现文件上传（`upload_file`）和下载（`download_file`）。
 
@@ -273,7 +273,6 @@ Close()
 | `auth_type` | TEXT | `password` / `key` / `key_password` |
 | `encrypted_credential` | TEXT | AES-256-GCM 加密后的 base64 |
 | `encrypted_passphrase` | TEXT | 私钥 passphrase（可为空） |
-| `proxy_host_id` | TEXT | 跳板机主机 ID（可为空） |
 | `tags` | TEXT | JSON 数组，如 `["prod","web"]` |
 | `created_at` / `updated_at` | DATETIME | UTC 时间戳 |
 

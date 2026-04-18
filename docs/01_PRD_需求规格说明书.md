@@ -187,8 +187,6 @@ Claude：[调用 get_execution_history，过滤 host=db-01，时间范围=昨天
 | 删除主机 | 按名称或 ID 删除，同时清理关联凭据 | P0 |
 | 更新主机 | 更新 IP、用户名、认证方式、标签等字段 | P0 |
 | 列出主机 | 支持按标签过滤，支持 JSON 格式输出 | P0 |
-| 跳板机支持 | 通过 proxy_id 指定跳板机，支持多级跳转 | P1 |
-| 标签管理 | 多标签，用于分组和批量操作 | P0 |
 | 连通性测试 | SSH ping，返回连接状态和延迟 | P0 |
 
 **认证方式规格：**
@@ -292,11 +290,7 @@ Claude：[调用 get_execution_history，过滤 host=db-01，时间范围=昨天
 
 #### 3.2.4 文件管理
 
-| 功能 | 描述 | 优先级 |
-|------|------|--------|
-| 文件上传 | 拖拽或选择本地文件，指定目标主机和远程路径 | P1 |
-| 上传进度 | 显示上传进度条 | P1 |
-| 下载记录 | 查看历史下载记录 | P2 |
+Web UI 不提供文件传输入口。文件上传/下载通过 MCP 工具（`upload_file` / `download_file`）由 AI Agent 直接操作 SSH 通道完成。
 
 ---
 
@@ -524,7 +518,6 @@ CREATE TABLE hosts (
     user        TEXT NOT NULL,             -- SSH 登录用户名
     auth_type   TEXT NOT NULL,             -- key | password | key_password
     credential  BLOB NOT NULL,             -- AES-256-GCM 加密的凭据 JSON
-    proxy_id    TEXT,                      -- 跳板机 host.id，可空
     tags        TEXT NOT NULL DEFAULT '[]',-- JSON 字符串数组
     status      TEXT NOT NULL DEFAULT 'unknown', -- online | offline | unknown
     created_at  DATETIME NOT NULL,
@@ -626,7 +619,7 @@ CREATE TABLE alert_events (
 | 工具 | 必填参数 | 可选参数 | 返回 |
 |------|----------|----------|------|
 | `list_hosts` | — | `tag: string`, `json: bool` | 主机列表文本或 JSON |
-| `add_host` | `name`, `ip`, `user`, `auth_type` | `port`, `key`, `password`, `passphrase`, `proxy`, `tag` | 成功消息 + host_id |
+| `add_host` | `name`, `ip`, `user`, `auth_type` | `port`, `key`, `password`, `passphrase`, `tag` | 成功消息 + host_id |
 | `remove_host` | `name_or_id` | — | 成功消息 |
 | `update_host` | `name_or_id` | `ip`, `user`, `tag`, `port` 等 | 成功消息 |
 | `execute_command` | `host`, `command` | `timeout: int` | stdout/stderr/exit_code |
@@ -800,7 +793,7 @@ volumes:
 | 阶段 | 主要内容 | 状态 |
 |------|----------|------|
 | **基线** | MCP SSE Server、spdctl CLI、SSH 执行、文件传输、执行历史、AES-256-GCM 凭据加密 | ✅ 已完成 |
-| **Phase 1** | Web UI 完善：主机管理界面、实时命令执行、历史日志查看、文件上传 | 🔄 规划中 |
+| **Phase 1** | Web UI 完善：主机管理界面、实时命令执行、历史日志查看 | 🔄 规划中 |
 | **Phase 2** | 多用户与权限控制：账号管理、RBAC、API Token、操作审计日志 | 📋 待规划 |
 | **Phase 3** | 告警与监控：SSH 状态监控、阈值告警规则、钉钉/Slack 通知、监控仪表盘 | 📋 待规划 |
 | **未来** | Docker 镜像发布、多 spider 实例联邦、Webhook 触发器 | 💡 探索中 |
