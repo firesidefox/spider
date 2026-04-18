@@ -36,6 +36,11 @@ success "旧服务已停止（或不存在）"
 step "安装二进制"
 install -m 755 "${SCRIPT_DIR}/spider" /usr/local/bin/spider
 install -m 755 "${SCRIPT_DIR}/spdctl" /usr/local/bin/spdctl
+# macOS 15+ 要求 system daemon 二进制有签名，ad-hoc 签名即可
+if command -v codesign >/dev/null 2>&1; then
+  codesign --force --sign - /usr/local/bin/spider 2>/dev/null || true
+  codesign --force --sign - /usr/local/bin/spdctl 2>/dev/null || true
+fi
 success "spider / spdctl → /usr/local/bin/"
 
 step "创建日志目录"
