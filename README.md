@@ -43,7 +43,11 @@ bin/spider
 ### 安装插件
 
 ```bash
-claude plugins add /path/to/spider.ai/skills/spider
+# 1. 添加 marketplace
+claude plugin marketplace add firesidefox/spider
+
+# 2. 安装插件
+claude plugin install spider@spider
 ```
 
 安装后在 `/plugins` 界面可以看到：
