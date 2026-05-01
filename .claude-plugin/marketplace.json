@@ -7,7 +7,7 @@
   "plugins": [
     {
       "name": "spider",
-      "source": "./skills/spider",
+      "source": "./skills",
       "description": "Spider SSH host management, deployment, and operations skills."
     }
   ]
