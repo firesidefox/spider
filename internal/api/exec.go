@@ -41,7 +41,7 @@ func runExec(ctx context.Context, app *mcppkg.App, host *models.Host, command st
 	execCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	client, err := app.Pool.Get(host, app.HostStore)
+	client, err := app.Pool.Get(host, app.HostStore, app.SSHKeyStore)
 	if err != nil {
 		return execResult{Host: host.Name, Command: command, Error: fmt.Sprintf("SSH 连接失败: %v", err)}
 	}
@@ -133,7 +133,7 @@ func streamCommand(app *mcppkg.App, w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 
 	start := time.Now()
-	client, err := app.Pool.Get(host, app.HostStore)
+	client, err := app.Pool.Get(host, app.HostStore, app.SSHKeyStore)
 	if err != nil {
 		sendEvent(map[string]any{"type": "done", "exit_code": -1, "error": err.Error()})
 		return

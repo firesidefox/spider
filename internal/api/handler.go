@@ -129,6 +129,29 @@ func NewRouter(app *mcppkg.App) http.Handler {
 	mux.HandleFunc("GET /api/v1/me", meHandler(app))
 	mux.HandleFunc("PUT /api/v1/me/password", changePasswordHandler(app))
 
+	mux.HandleFunc("/api/v1/me/ssh-keys", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			listSSHKeys(app, w, r)
+		case http.MethodPost:
+			addSSHKey(app, w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	mux.HandleFunc("/api/v1/me/ssh-keys/", func(w http.ResponseWriter, r *http.Request) {
+		id := r.URL.Path[len("/api/v1/me/ssh-keys/"):]
+		switch r.Method {
+		case http.MethodGet:
+			getSSHKey(app, w, r, id)
+		case http.MethodDelete:
+			deleteSSHKey(app, w, r, id)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
 	// Phase 2: 用户管理（admin only）
 	mux.Handle("/api/v1/users", adminOnly(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {

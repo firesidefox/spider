@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	authmw "github.com/spiderai/spider/internal/auth"
 	mcppkg "github.com/spiderai/spider/internal/mcp"
 	"github.com/spiderai/spider/internal/models"
 	sshpkg "github.com/spiderai/spider/internal/ssh"
@@ -28,6 +29,18 @@ func addHost(app *mcppkg.App, w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "请求体解析失败: "+err.Error())
 		return
+	}
+	if req.SSHKeyID != "" && req.Credential != "" {
+		writeError(w, http.StatusBadRequest, "ssh_key_id 和 credential 不能同时提供")
+		return
+	}
+	if req.SSHKeyID != "" {
+		uc := authmw.GetUser(r.Context())
+		key, err := app.SSHKeyStore.GetByID(req.SSHKeyID)
+		if err != nil || key.UserID != uc.UserID {
+			writeError(w, http.StatusBadRequest, "ssh_key_id 无效或不属于当前用户")
+			return
+		}
 	}
 	h, err := app.HostStore.Add(&req)
 	if err != nil {
@@ -57,6 +70,14 @@ func updateHost(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id stri
 		writeError(w, http.StatusBadRequest, "请求体解析失败: "+err.Error())
 		return
 	}
+	if req.SSHKeyID != nil && *req.SSHKeyID != "" {
+		uc := authmw.GetUser(r.Context())
+		key, err := app.SSHKeyStore.GetByID(*req.SSHKeyID)
+		if err != nil || key.UserID != uc.UserID {
+			writeError(w, http.StatusBadRequest, "ssh_key_id 无效或不属于当前用户")
+			return
+		}
+	}
 	updated, err := app.HostStore.Update(h.ID, &req)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
@@ -84,7 +105,7 @@ func pingHost(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id string
 		writeError(w, http.StatusNotFound, err.Error())
 		return
 	}
-	latency, err := sshpkg.CheckConnectivity(h, app.HostStore)
+	latency, err := sshpkg.CheckConnectivity(h, app.HostStore, app.SSHKeyStore)
 	if err != nil {
 		writeJSON(w, http.StatusOK, map[string]any{"connected": false, "error": err.Error()})
 		return

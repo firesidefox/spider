@@ -52,6 +52,12 @@ func makeAddHost(app *App) func(context.Context, mcpgo.CallToolRequest) (*mcpgo.
 			Tags:       splitTags(getString(args, "tags")),
 		}
 
+		sshKeyID := getString(args, "ssh_key_id")
+		if sshKeyID != "" && addReq.Credential != "" {
+			return toolError("ssh_key_id 和 credential 不能同时提供")
+		}
+		addReq.SSHKeyID = sshKeyID
+
 		host, err := app.HostStore.Add(addReq)
 		if err != nil {
 			return toolError(fmt.Sprintf("添加主机失败: %v", err))
@@ -119,6 +125,9 @@ func makeUpdateHost(app *App) func(context.Context, mcpgo.CallToolRequest) (*mcp
 		if v := getString(args, "tags"); v != "" {
 			updateReq.Tags = splitTags(v)
 		}
+		if v := getString(args, "ssh_key_id"); v != "" {
+			updateReq.SSHKeyID = &v
+		}
 
 		updated, err := app.HostStore.Update(host.ID, updateReq)
 		if err != nil {
@@ -148,7 +157,7 @@ func makeExecuteCommand(app *App) func(context.Context, mcpgo.CallToolRequest) (
 		execCtx, cancel := context.WithTimeout(ctx, timeout)
 		defer cancel()
 
-		client, err := app.Pool.Get(host, app.HostStore)
+		client, err := app.Pool.Get(host, app.HostStore, app.SSHKeyStore)
 		if err != nil {
 			return toolError(fmt.Sprintf("建立 SSH 连接失败: %v", err))
 		}
@@ -247,7 +256,7 @@ func makeExecuteCommandBatch(app *App) func(context.Context, mcpgo.CallToolReque
 				execCtx, cancel := context.WithTimeout(ctx, timeout)
 				defer cancel()
 
-				client, err := app.Pool.Get(j.host, app.HostStore)
+				client, err := app.Pool.Get(j.host, app.HostStore, app.SSHKeyStore)
 				if err != nil {
 					results[j.idx] = hostResult{Host: j.host.Name, Command: command, Error: err.Error()}
 					return
@@ -293,7 +302,7 @@ func makeCheckConnectivity(app *App) func(context.Context, mcpgo.CallToolRequest
 			return toolError(fmt.Sprintf("主机不存在: %s", hostIDOrName))
 		}
 
-		latency, err := sshpkg.CheckConnectivity(host, app.HostStore)
+		latency, err := sshpkg.CheckConnectivity(host, app.HostStore, app.SSHKeyStore)
 		result := map[string]any{
 			"host":       host.Name,
 			"connected":  err == nil,
@@ -321,7 +330,7 @@ func makeUploadFile(app *App) func(context.Context, mcpgo.CallToolRequest) (*mcp
 		if err != nil {
 			return toolError(fmt.Sprintf("主机不存在: %s", hostIDOrName))
 		}
-		client, err := app.Pool.Get(host, app.HostStore)
+		client, err := app.Pool.Get(host, app.HostStore, app.SSHKeyStore)
 		if err != nil {
 			return toolError(fmt.Sprintf("建立 SSH 连接失败: %v", err))
 		}
@@ -349,7 +358,7 @@ func makeDownloadFile(app *App) func(context.Context, mcpgo.CallToolRequest) (*m
 		if err != nil {
 			return toolError(fmt.Sprintf("主机不存在: %s", hostIDOrName))
 		}
-		client, err := app.Pool.Get(host, app.HostStore)
+		client, err := app.Pool.Get(host, app.HostStore, app.SSHKeyStore)
 		if err != nil {
 			return toolError(fmt.Sprintf("建立 SSH 连接失败: %v", err))
 		}
@@ -389,5 +398,53 @@ func makeGetExecutionHistory(app *App) func(context.Context, mcpgo.CallToolReque
 		}
 		data, _ := json.MarshalIndent(logs, "", "  ")
 		return toolText(string(data))
+	}
+}
+
+// makeListSSHKeys 返回 list_ssh_keys 的 handler。
+func makeListSSHKeys(app *App) func(context.Context, mcpgo.CallToolRequest) (*mcpgo.CallToolResult, error) {
+	return func(ctx context.Context, req mcpgo.CallToolRequest) (*mcpgo.CallToolResult, error) {
+		keys, err := app.SSHKeyStore.ListByUser("anonymous")
+		if err != nil {
+			return toolError(fmt.Sprintf("查询 SSH 密钥列表失败: %v", err))
+		}
+		safe := make([]*models.SafeSSHKey, 0, len(keys))
+		for _, k := range keys {
+			safe = append(safe, k.Safe())
+		}
+		data, _ := json.MarshalIndent(safe, "", "  ")
+		return toolText(string(data))
+	}
+}
+
+// makeAddSSHKey 返回 add_ssh_key 的 handler。
+func makeAddSSHKey(app *App) func(context.Context, mcpgo.CallToolRequest) (*mcpgo.CallToolResult, error) {
+	return func(ctx context.Context, req mcpgo.CallToolRequest) (*mcpgo.CallToolResult, error) {
+		args := req.GetArguments()
+		addReq := &models.AddSSHKeyRequest{
+			Name:       getString(args, "name"),
+			PrivateKey: getString(args, "private_key"),
+			Passphrase: getString(args, "passphrase"),
+		}
+		key, err := app.SSHKeyStore.Add("anonymous", addReq)
+		if err != nil {
+			return toolError(fmt.Sprintf("添加 SSH 密钥失败: %v", err))
+		}
+		data, _ := json.MarshalIndent(key.Safe(), "", "  ")
+		return toolText(fmt.Sprintf("SSH 密钥添加成功:\n%s", string(data)))
+	}
+}
+
+// makeRemoveSSHKey 返回 remove_ssh_key 的 handler。
+func makeRemoveSSHKey(app *App) func(context.Context, mcpgo.CallToolRequest) (*mcpgo.CallToolResult, error) {
+	return func(ctx context.Context, req mcpgo.CallToolRequest) (*mcpgo.CallToolResult, error) {
+		id := getString(req.GetArguments(), "id")
+		if id == "" {
+			return toolError("id 不能为空")
+		}
+		if err := app.SSHKeyStore.Delete(id, "anonymous"); err != nil {
+			return toolError(fmt.Sprintf("删除 SSH 密钥失败: %v", err))
+		}
+		return toolText(fmt.Sprintf("SSH 密钥 %s 已删除", id))
 	}
 }

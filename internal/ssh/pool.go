@@ -32,7 +32,7 @@ func NewPool(ttl time.Duration) *Pool {
 }
 
 // Get 从池中获取连接，不存在或已过期则新建。
-func (p *Pool) Get(host *models.Host, hs *store.HostStore) (*Client, error) {
+func (p *Pool) Get(host *models.Host, hs *store.HostStore, ks *store.SSHKeyStore) (*Client, error) {
 	p.mu.Lock()
 	entry, ok := p.entries[host.ID]
 	if ok && !entry.inUse && time.Since(entry.lastUsed) < p.ttl {
@@ -42,8 +42,23 @@ func (p *Pool) Get(host *models.Host, hs *store.HostStore) (*Client, error) {
 	}
 	p.mu.Unlock()
 
-	// 新建连接
-	client, err := NewClient(host, hs)
+	// 解密凭据
+	var credential, passphrase string
+	var err error
+	if host.SSHKeyID != "" && ks != nil {
+		key, kerr := ks.GetByID(host.SSHKeyID)
+		if kerr != nil {
+			return nil, fmt.Errorf("获取 SSH key 失败: %w", kerr)
+		}
+		credential, passphrase, err = ks.DecryptKey(key)
+	} else {
+		credential, passphrase, err = hs.DecryptCredential(host)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	client, err := NewClientWithCredential(host, credential, passphrase)
 	if err != nil {
 		return nil, fmt.Errorf("创建 SSH 连接失败: %w", err)
 	}

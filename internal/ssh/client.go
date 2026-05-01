@@ -54,6 +54,26 @@ func NewClient(host *models.Host, hs *store.HostStore) (*Client, error) {
 	return &Client{conn: conn, host: host}, nil
 }
 
+// NewClientWithCredential 根据预解密的凭据建立 SSH 连接。
+func NewClientWithCredential(host *models.Host, credential, passphrase string) (*Client, error) {
+	authMethods, err := buildAuthMethods(host.AuthType, credential, passphrase)
+	if err != nil {
+		return nil, err
+	}
+	cfg := &gossh.ClientConfig{
+		User:            host.Username,
+		Auth:            authMethods,
+		HostKeyCallback: gossh.InsecureIgnoreHostKey(),
+		Timeout:         15 * time.Second,
+	}
+	addr := fmt.Sprintf("%s:%d", host.IP, host.Port)
+	conn, err := gossh.Dial("tcp", addr, cfg)
+	if err != nil {
+		return nil, fmt.Errorf("SSH 连接 %s 失败: %w", addr, err)
+	}
+	return &Client{conn: conn, host: host}, nil
+}
+
 // buildAuthMethods 根据认证类型构建 SSH 认证方法列表。
 func buildAuthMethods(authType models.AuthType, credential, passphrase string) ([]gossh.AuthMethod, error) {
 	switch authType {
@@ -126,7 +146,7 @@ func (c *Client) Execute(ctx context.Context, command string) (*ExecResult, erro
 }
 
 // CheckConnectivity 测试 SSH 连通性，返回延迟。
-func CheckConnectivity(host *models.Host, hs *store.HostStore) (latency time.Duration, err error) {
+func CheckConnectivity(host *models.Host, hs *store.HostStore, ks *store.SSHKeyStore) (latency time.Duration, err error) {
 	start := time.Now()
 	// 先测试 TCP 连通性
 	addr := fmt.Sprintf("%s:%d", host.IP, host.Port)
@@ -137,8 +157,23 @@ func CheckConnectivity(host *models.Host, hs *store.HostStore) (latency time.Dur
 	conn.Close()
 	tcpLatency := time.Since(start)
 
+	// 解密凭据
+	var credential, passphrase string
+	if host.SSHKeyID != "" && ks != nil {
+		key, kerr := ks.GetByID(host.SSHKeyID)
+		if kerr != nil {
+			return tcpLatency, fmt.Errorf("获取 SSH key 失败: %w", kerr)
+		}
+		credential, passphrase, err = ks.DecryptKey(key)
+	} else {
+		credential, passphrase, err = hs.DecryptCredential(host)
+	}
+	if err != nil {
+		return tcpLatency, fmt.Errorf("解密凭据失败: %w", err)
+	}
+
 	// 再测试 SSH 握手
-	client, err := NewClient(host, hs)
+	client, err := NewClientWithCredential(host, credential, passphrase)
 	if err != nil {
 		return tcpLatency, fmt.Errorf("SSH 握手失败: %w", err)
 	}

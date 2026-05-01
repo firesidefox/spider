@@ -21,14 +21,15 @@ import (
 
 // App 聚合所有依赖，供 MCP tool handler 使用。
 type App struct {
-	HostStore  *store.HostStore
-	LogStore   *store.LogStore
-	Pool       *sshpkg.Pool
-	Config     *config.Config
-	DB         *sql.DB
-	UserStore  *store.UserStore   // Phase 2
-	TokenStore *store.TokenStore  // Phase 2
-	JWTManager *auth.JWTManager   // Phase 2
+	HostStore   *store.HostStore
+	SSHKeyStore *store.SSHKeyStore
+	LogStore    *store.LogStore
+	Pool        *sshpkg.Pool
+	Config      *config.Config
+	DB          *sql.DB
+	UserStore   *store.UserStore   // Phase 2
+	TokenStore  *store.TokenStore  // Phase 2
+	JWTManager  *auth.JWTManager   // Phase 2
 }
 
 // newMCPServer 创建并注册工具的 MCP server。
@@ -88,8 +89,9 @@ func registerTools(s *server.MCPServer, app *App) {
 		mcpgo.WithNumber("port", mcpgo.Description("SSH 端口，默认 22")),
 		mcpgo.WithString("username", mcpgo.Required(), mcpgo.Description("SSH 登录用户名")),
 		mcpgo.WithString("auth_type", mcpgo.Required(), mcpgo.Description("认证类型: password | key | key_password")),
-		mcpgo.WithString("credential", mcpgo.Required(), mcpgo.Description("密码明文 或 SSH 私钥内容（PEM 格式）")),
+		mcpgo.WithString("credential", mcpgo.Description("密码明文 或 SSH 私钥内容（PEM 格式）")),
 		mcpgo.WithString("passphrase", mcpgo.Description("私钥 passphrase（auth_type=key_password 时使用）")),
+		mcpgo.WithString("ssh_key_id", mcpgo.Description("SSH 密钥 ID（与 credential 二选一）")),
 		mcpgo.WithString("tags", mcpgo.Description("逗号分隔的标签，例如 prod,web")),
 	), makeAddHost(app))
 
@@ -110,6 +112,7 @@ func registerTools(s *server.MCPServer, app *App) {
 		mcpgo.WithString("auth_type", mcpgo.Description("新认证类型")),
 		mcpgo.WithString("credential", mcpgo.Description("新凭据")),
 		mcpgo.WithString("passphrase", mcpgo.Description("新 passphrase")),
+		mcpgo.WithString("ssh_key_id", mcpgo.Description("SSH 密钥 ID")),
 		mcpgo.WithString("tags", mcpgo.Description("新标签（逗号分隔）")),
 	), makeUpdateHost(app))
 
@@ -159,6 +162,25 @@ func registerTools(s *server.MCPServer, app *App) {
 		mcpgo.WithNumber("limit", mcpgo.Description("返回条数，默认 20")),
 		mcpgo.WithNumber("offset", mcpgo.Description("分页偏移，默认 0")),
 	), makeGetExecutionHistory(app))
+
+	// list_ssh_keys
+	s.AddTool(mcpgo.NewTool("list_ssh_keys",
+		mcpgo.WithDescription("列出当前用户的所有 SSH 密钥"),
+	), makeListSSHKeys(app))
+
+	// add_ssh_key
+	s.AddTool(mcpgo.NewTool("add_ssh_key",
+		mcpgo.WithDescription("添加一个新的 SSH 密钥"),
+		mcpgo.WithString("name", mcpgo.Required(), mcpgo.Description("密钥名称")),
+		mcpgo.WithString("private_key", mcpgo.Required(), mcpgo.Description("SSH 私钥内容（PEM 格式）")),
+		mcpgo.WithString("passphrase", mcpgo.Description("私钥 passphrase（可选）")),
+	), makeAddSSHKey(app))
+
+	// remove_ssh_key
+	s.AddTool(mcpgo.NewTool("remove_ssh_key",
+		mcpgo.WithDescription("删除一个 SSH 密钥"),
+		mcpgo.WithString("id", mcpgo.Required(), mcpgo.Description("密钥 ID")),
+	), makeRemoveSSHKey(app))
 }
 
 // toolError 返回 MCP 错误响应。

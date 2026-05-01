@@ -130,6 +130,7 @@ func serve(cfgFile, addrOverride, dataDirOverride string) error {
 	ls := store.NewLogStore(database)
 	us := store.NewUserStore(database)
 	ts := store.NewTokenStore(database)
+	ks := store.NewSSHKeyStore(database, cm)
 
 	jwtMgr, err := auth.NewJWTManager(cfg.DataDir)
 	if err != nil {
@@ -145,14 +146,15 @@ func serve(cfgFile, addrOverride, dataDirOverride string) error {
 	defer pool.Close()
 
 	app := &mcppkg.App{
-		HostStore:  hs,
-		LogStore:   ls,
-		Pool:       pool,
-		Config:     cfg,
-		DB:         database,
-		UserStore:  us,
-		TokenStore: ts,
-		JWTManager: jwtMgr,
+		HostStore:   hs,
+		SSHKeyStore: ks,
+		LogStore:    ls,
+		Pool:        pool,
+		Config:      cfg,
+		DB:          database,
+		UserStore:   us,
+		TokenStore:  ts,
+		JWTManager:  jwtMgr,
 	}
 
 	mcpHandler := mcppkg.NewHTTPHandler(app)
