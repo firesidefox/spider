@@ -47,10 +47,10 @@ func (s *HostStore) Add(req *models.AddHostRequest) (*models.Host, error) {
 
 	_, err = s.db.Exec(
 		`INSERT INTO hosts (id, name, ip, port, username, auth_type, encrypted_credential,
-		 encrypted_passphrase, tags, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		 encrypted_passphrase, tags, ssh_key_id, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		id, req.Name, req.IP, req.Port, req.Username, string(req.AuthType),
-		encCred, encPass, string(tagsJSON), now, now,
+		encCred, encPass, string(tagsJSON), req.SSHKeyID, now, now,
 	)
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE constraint") {
@@ -66,7 +66,7 @@ func (s *HostStore) Add(req *models.AddHostRequest) (*models.Host, error) {
 func (s *HostStore) GetByID(id string) (*models.Host, error) {
 	row := s.db.QueryRow(
 		`SELECT id, name, ip, port, username, auth_type, encrypted_credential,
-		 encrypted_passphrase, tags, created_at, updated_at
+		 encrypted_passphrase, tags, ssh_key_id, created_at, updated_at
 		 FROM hosts WHERE id = ?`, id,
 	)
 	return scanHost(row)
@@ -76,7 +76,7 @@ func (s *HostStore) GetByID(id string) (*models.Host, error) {
 func (s *HostStore) GetByName(name string) (*models.Host, error) {
 	row := s.db.QueryRow(
 		`SELECT id, name, ip, port, username, auth_type, encrypted_credential,
-		 encrypted_passphrase, tags, created_at, updated_at
+		 encrypted_passphrase, tags, ssh_key_id, created_at, updated_at
 		 FROM hosts WHERE name = ?`, name,
 	)
 	return scanHost(row)
@@ -98,14 +98,14 @@ func (s *HostStore) List(tag string) ([]*models.Host, error) {
 	if tag == "" {
 		rows, err = s.db.Query(
 			`SELECT id, name, ip, port, username, auth_type, encrypted_credential,
-			 encrypted_passphrase, tags, created_at, updated_at
+			 encrypted_passphrase, tags, ssh_key_id, created_at, updated_at
 			 FROM hosts ORDER BY name`,
 		)
 	} else {
 		rows, err = s.db.Query(
 			`SELECT h.id, h.name, h.ip, h.port, h.username, h.auth_type,
 			 h.encrypted_credential, h.encrypted_passphrase,
-			 h.tags, h.created_at, h.updated_at
+			 h.tags, h.ssh_key_id, h.created_at, h.updated_at
 			 FROM hosts h, json_each(h.tags)
 			 WHERE json_each.value = ?
 			 ORDER BY h.name`, tag,
@@ -164,6 +164,9 @@ func (s *HostStore) Update(id string, req *models.UpdateHostRequest) (*models.Ho
 	if req.Tags != nil {
 		h.Tags = req.Tags
 	}
+	if req.SSHKeyID != nil {
+		h.SSHKeyID = *req.SSHKeyID
+	}
 
 	tagsJSON, _ := json.Marshal(h.Tags)
 	h.UpdatedAt = time.Now().UTC()
@@ -171,10 +174,10 @@ func (s *HostStore) Update(id string, req *models.UpdateHostRequest) (*models.Ho
 	_, err = s.db.Exec(
 		`UPDATE hosts SET name=?, ip=?, port=?, username=?, auth_type=?,
 		 encrypted_credential=?, encrypted_passphrase=?,
-		 tags=?, updated_at=? WHERE id=?`,
+		 tags=?, ssh_key_id=?, updated_at=? WHERE id=?`,
 		h.Name, h.IP, h.Port, h.Username, string(h.AuthType),
 		h.EncryptedCredential, h.EncryptedPassphrase,
-		string(tagsJSON), h.UpdatedAt, id,
+		string(tagsJSON), h.SSHKeyID, h.UpdatedAt, id,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("更新主机失败: %w", err)
@@ -216,7 +219,7 @@ func scanHost(row *sql.Row) (*models.Host, error) {
 	err := row.Scan(
 		&h.ID, &h.Name, &h.IP, &h.Port, &h.Username, &authType,
 		&h.EncryptedCredential, &h.EncryptedPassphrase,
-		&tagsJSON, &h.CreatedAt, &h.UpdatedAt,
+		&tagsJSON, &h.SSHKeyID, &h.CreatedAt, &h.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("主机不存在")
@@ -240,7 +243,7 @@ func scanHostRows(rows *sql.Rows) (*models.Host, error) {
 	err := rows.Scan(
 		&h.ID, &h.Name, &h.IP, &h.Port, &h.Username, &authType,
 		&h.EncryptedCredential, &h.EncryptedPassphrase,
-		&tagsJSON, &h.CreatedAt, &h.UpdatedAt,
+		&tagsJSON, &h.SSHKeyID, &h.CreatedAt, &h.UpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("扫描主机数据失败: %w", err)

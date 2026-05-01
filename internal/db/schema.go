@@ -58,6 +58,20 @@ CREATE TABLE IF NOT EXISTS api_tokens (
 
 CREATE INDEX IF NOT EXISTS idx_api_tokens_user_id ON api_tokens(user_id);
 CREATE INDEX IF NOT EXISTS idx_api_tokens_token_hash ON api_tokens(token_hash);
+
+CREATE TABLE IF NOT EXISTS ssh_keys (
+    id                    TEXT PRIMARY KEY,
+    user_id               TEXT NOT NULL,
+    name                  TEXT NOT NULL,
+    encrypted_private_key TEXT NOT NULL,
+    encrypted_passphrase  TEXT NOT NULL DEFAULT '',
+    fingerprint           TEXT NOT NULL DEFAULT '',
+    created_at            DATETIME NOT NULL,
+    updated_at            DATETIME NOT NULL,
+    UNIQUE(user_id, name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_ssh_keys_user_id ON ssh_keys(user_id);
 `
 
 // migrate 创建所有表（幂等）。
@@ -67,6 +81,10 @@ func migrate(db *sql.DB) error {
 	}
 	// 幂等追加 user_id 列（SQLite ALTER TABLE 不支持 IF NOT EXISTS）
 	_, err := db.Exec(`ALTER TABLE execution_logs ADD COLUMN user_id TEXT`)
+	if err != nil && !strings.Contains(err.Error(), "duplicate column name") {
+		return err
+	}
+	_, err = db.Exec(`ALTER TABLE hosts ADD COLUMN ssh_key_id TEXT NOT NULL DEFAULT ''`)
 	if err != nil && !strings.Contains(err.Error(), "duplicate column name") {
 		return err
 	}

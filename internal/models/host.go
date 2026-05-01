@@ -21,6 +21,7 @@ type Host struct {
 	AuthType            AuthType  `json:"auth_type"`
 	EncryptedCredential string    `json:"-"`
 	EncryptedPassphrase string    `json:"-"`
+	SSHKeyID            string    `json:"-"`
 	Tags                []string  `json:"tags"`
 	CreatedAt           time.Time `json:"created_at"`
 	UpdatedAt           time.Time `json:"updated_at"`
@@ -33,8 +34,10 @@ type SafeHost struct {
 	IP        string    `json:"ip"`
 	Port      int       `json:"port"`
 	Username  string    `json:"username"`
-	AuthType  AuthType  `json:"auth_type"`
-	Tags      []string  `json:"tags"`
+	AuthType   AuthType  `json:"auth_type"`
+	SSHKeyID   string    `json:"ssh_key_id,omitempty"`
+	SSHKeyName string    `json:"ssh_key_name,omitempty"`
+	Tags       []string  `json:"tags"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
@@ -48,6 +51,7 @@ func (h *Host) Safe() *SafeHost {
 		Port:      h.Port,
 		Username:  h.Username,
 		AuthType:  h.AuthType,
+		SSHKeyID:  h.SSHKeyID,
 		Tags:      h.Tags,
 		CreatedAt: h.CreatedAt,
 		UpdatedAt: h.UpdatedAt,
@@ -64,6 +68,7 @@ type AddHostRequest struct {
 	Credential string   `json:"credential"`
 	Passphrase string   `json:"passphrase"`
 	Tags       []string `json:"tags"`
+	SSHKeyID   string   `json:"ssh_key_id"`
 }
 
 // UpdateHostRequest 是更新主机的请求参数（所有字段可选）。
@@ -76,4 +81,5 @@ type UpdateHostRequest struct {
 	Credential *string   `json:"credential"`
 	Passphrase *string   `json:"passphrase"`
 	Tags       []string  `json:"tags"`
+	SSHKeyID   *string   `json:"ssh_key_id"`
 }
