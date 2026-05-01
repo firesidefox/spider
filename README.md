@@ -28,38 +28,39 @@ make build        # 编译到 bin/spider 和 bin/spdctl
 make install      # 安装到 $GOPATH/bin
 ```
 
-## 启动 MCP Server
+## 安装到 Claude Code
+
+Spider 以 Claude Code Plugin 形式分发，一次安装同时注册 Skills（运维技能）和 MCP Server（工具接口）。
+
+### 前置条件
+
+确保 spider 后台服务已启动（默认监听 `:8000`）：
 
 ```bash
-# 直接运行（默认监听 :8000）
 bin/spider
-
-# 自定义监听地址（通过配置文件）
-# ~/.spider/config.yaml:
-# sse:
-#   addr: :9090
-#   base_url: http://my-server:9090
 ```
 
-## 注册到 Claude Code
-
-spider 以 SSE 模式运行，注册时使用 HTTP URL：
+### 安装插件
 
 ```bash
-claude mcp add --transport sse spider http://localhost:8000/sse
+claude plugins add /path/to/spider.ai/skills/spider
 ```
 
-或手动编辑 `~/.claude/settings.json`：
+安装后在 `/plugins` 界面可以看到：
 
-```json
-{
-  "mcpServers": {
-    "spider": {
-      "type": "sse",
-      "url": "http://localhost:8000/sse"
-    }
-  }
-}
+```
+spider Plugin · ✓ enabled
+└ spider MCP · ✓ connected
+```
+
+Plugin 包含：
+- **10 个 Skills**：主机管理、部署、巡检、日志分析、Nginx、Cron 等运维技能
+- **10 个 MCP Tools**：`list_hosts`、`execute_command`、`upload_file` 等工具接口
+
+### 卸载
+
+```bash
+claude plugins remove spider
 ```
 
 ## spdctl 使用说明
