@@ -5,6 +5,8 @@ export interface SafeHost {
   port: number
   username: string
   auth_type: string
+  ssh_key_id?: string
+  ssh_key_name?: string
   tags: string[]
   created_at: string
   updated_at: string
@@ -16,7 +18,8 @@ export interface AddHostRequest {
   port: number
   username: string
   auth_type: string
-  credential: string
+  credential?: string
+  ssh_key_id?: string
   passphrase?: string
   tags: string[]
 }

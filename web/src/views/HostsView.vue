@@ -78,6 +78,10 @@
               <div class="detail-label">认证方式</div>
               <div class="detail-value">{{ activeHost.auth_type }}</div>
             </div>
+            <div v-if="activeHost.ssh_key_id" class="detail-field">
+              <div class="detail-label">SSH Key</div>
+              <div class="detail-value">{{ activeHost.ssh_key_name || activeHost.ssh_key_id }}</div>
+            </div>
           </div>
           <div v-if="activeHost.tags.length" class="detail-field" style="margin-top:16px">
             <div class="detail-label">标签</div>
@@ -122,10 +126,27 @@
               <option value="key_password">私钥+密码</option>
             </select>
           </div>
-          <div class="form-row">
-            <label>{{ form.auth_type === 'password' ? '密码' : '私钥内容' }}</label>
-            <textarea v-model="form.credential" class="input" rows="3" :placeholder="form.auth_type === 'password' ? '登录密码' : 'PEM 格式私钥'" />
-          </div>
+          <template v-if="form.auth_type === 'key' || form.auth_type === 'key_password'">
+            <div class="form-row">
+              <label>SSH Key</label>
+              <select v-model="form.ssh_key_id" class="input" @change="form.ssh_key_id && (form.credential = '')">
+                <option value="">不使用已有 Key</option>
+                <option v-for="k in sshKeys" :key="k.id" :value="k.id">
+                  {{ k.name }} ({{ k.fingerprint.slice(0, 16) }}…)
+                </option>
+              </select>
+            </div>
+            <div class="form-row">
+              <label>私钥内容</label>
+              <textarea v-model="form.credential" class="input" rows="3" placeholder="PEM 格式私钥" :disabled="!!form.ssh_key_id" @input="form.credential && (form.ssh_key_id = '')" />
+            </div>
+          </template>
+          <template v-else>
+            <div class="form-row">
+              <label>密码</label>
+              <textarea v-model="form.credential" class="input" rows="3" placeholder="登录密码" />
+            </div>
+          </template>
           <div v-if="form.auth_type === 'key_password'" class="form-row">
             <label>Passphrase</label>
             <input v-model="form.passphrase" class="input" type="password" />
@@ -153,6 +174,8 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { listHosts, addHost, updateHost, deleteHost, pingHost, type SafeHost } from '../api/hosts'
+import { listSSHKeys } from '../api/ssh-keys'
+import type { SafeSSHKey } from '../api/ssh-keys'
 
 const router = useRouter()
 const hosts = ref<SafeHost[]>([])
@@ -167,8 +190,9 @@ const pingResult = ref<{ connected: boolean; latency_ms?: number; error?: string
 let pingTimer: ReturnType<typeof setTimeout> | null = null
 const modalPinging = ref(false)
 const modalPingResult = ref<{ connected: boolean; latency_ms?: number; error?: string } | null>(null)
+const sshKeys = ref<SafeSSHKey[]>([])
 
-const emptyForm = () => ({ name: '', ip: '', port: 22, username: '', auth_type: 'password', credential: '', passphrase: '', tagsStr: '' })
+const emptyForm = () => ({ name: '', ip: '', port: 22, username: '', auth_type: 'password', credential: '', passphrase: '', tagsStr: '', ssh_key_id: '' })
 const form = ref(emptyForm())
 
 const allTags = computed(() => {
@@ -212,9 +236,13 @@ async function load() {
   hosts.value = await listHosts()
 }
 
+async function loadSSHKeys() {
+  sshKeys.value = await listSSHKeys()
+}
+
 function editHost(h: SafeHost) {
   editTarget.value = h
-  form.value = { name: h.name, ip: h.ip, port: h.port, username: h.username, auth_type: h.auth_type, credential: '', passphrase: '', tagsStr: h.tags.join(',') }
+  form.value = { name: h.name, ip: h.ip, port: h.port, username: h.username, auth_type: h.auth_type, credential: '', passphrase: '', tagsStr: h.tags.join(','), ssh_key_id: h.ssh_key_id || '' }
 }
 
 function closeModal() {
@@ -227,7 +255,7 @@ function closeModal() {
 async function submitHost() {
   const tags = form.value.tagsStr.split(',').map(t => t.trim()).filter(Boolean)
   if (editTarget.value) {
-    await updateHost(editTarget.value.id, { name: form.value.name || undefined, ip: form.value.ip, port: form.value.port, username: form.value.username, auth_type: form.value.auth_type, credential: form.value.credential || undefined, passphrase: form.value.passphrase || undefined, tags })
+    await updateHost(editTarget.value.id, { name: form.value.name || undefined, ip: form.value.ip, port: form.value.port, username: form.value.username, auth_type: form.value.auth_type, credential: form.value.credential || undefined, passphrase: form.value.passphrase || undefined, ssh_key_id: form.value.ssh_key_id || undefined, tags })
     if (activeHost.value?.id === editTarget.value.id) {
       activeHost.value = { ...activeHost.value, ...form.value, tags }
     }
@@ -261,7 +289,7 @@ function bulkExecSelected() {
   router.push({ path: '/exec', query: { hosts: selected.value.join(',') } })
 }
 
-onMounted(load)
+onMounted(() => { load(); loadSSHKeys() })
 </script>
 
 <style scoped>

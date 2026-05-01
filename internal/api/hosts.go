@@ -10,6 +10,16 @@ import (
 	sshpkg "github.com/spiderai/spider/internal/ssh"
 )
 
+func enrichSafeHost(app *mcppkg.App, h *models.Host) *models.SafeHost {
+	safe := h.Safe()
+	if safe.SSHKeyID != "" && app.SSHKeyStore != nil {
+		if key, err := app.SSHKeyStore.GetByID(safe.SSHKeyID); err == nil {
+			safe.SSHKeyName = key.Name
+		}
+	}
+	return safe
+}
+
 func listHosts(app *mcppkg.App, w http.ResponseWriter, r *http.Request) {
 	tag := r.URL.Query().Get("tag")
 	hosts, err := app.HostStore.List(tag)
@@ -19,7 +29,7 @@ func listHosts(app *mcppkg.App, w http.ResponseWriter, r *http.Request) {
 	}
 	safe := make([]*models.SafeHost, 0, len(hosts))
 	for _, h := range hosts {
-		safe = append(safe, h.Safe())
+		safe = append(safe, enrichSafeHost(app, h))
 	}
 	writeJSON(w, http.StatusOK, safe)
 }
@@ -47,7 +57,7 @@ func addHost(app *mcppkg.App, w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusCreated, h.Safe())
+	writeJSON(w, http.StatusCreated, enrichSafeHost(app, h))
 }
 
 func getHost(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id string) {
@@ -56,7 +66,7 @@ func getHost(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id string)
 		writeError(w, http.StatusNotFound, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, h.Safe())
+	writeJSON(w, http.StatusOK, enrichSafeHost(app, h))
 }
 
 func updateHost(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id string) {
@@ -83,7 +93,7 @@ func updateHost(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id stri
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, updated.Safe())
+	writeJSON(w, http.StatusOK, enrichSafeHost(app, updated))
 }
 
 func deleteHost(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id string) {

@@ -15,6 +15,9 @@
         <div class="nav-row" :class="{ selected: activeTab === 'tokens' }" @click="activeTab = 'tokens'; loadTokens()">
           <span class="nav-icon">🔑</span><span class="nav-label">访问令牌</span>
         </div>
+        <div class="nav-row" :class="{ selected: activeTab === 'ssh-keys' }" @click="activeTab = 'ssh-keys'; loadSSHKeys()">
+          <span class="nav-icon">🔐</span><span class="nav-label">SSH Keys</span>
+        </div>
         <div class="nav-row" :class="{ selected: activeTab === 'logs' }" @click="activeTab = 'logs'; loadLogs()">
           <span class="nav-icon">📋</span><span class="nav-label">操作日志</span>
         </div>
@@ -50,6 +53,7 @@
           <span class="detail-title">{{ tabTitle }}</span>
           <button v-if="activeTab === 'info'" class="btn btn-sm" @click="showPwModal = true">修改密码</button>
           <button v-if="activeTab === 'tokens'" class="btn btn-primary btn-sm" @click="showCreate = true">+ 新建 Token</button>
+          <button v-if="activeTab === 'ssh-keys'" class="btn btn-primary btn-sm" @click="showAddKey = true">+ 添加 Key</button>
           <template v-if="activeTab === 'settings'">
             <div v-if="settingsEditing" style="display:flex;gap:8px">
               <button class="btn btn-primary btn-sm" @click="saveSettings">保存</button>
@@ -100,6 +104,26 @@
                 </tr>
                 <tr v-if="tokens.length === 0">
                   <td colspan="5" class="dim" style="text-align:center;padding:32px">暂无 Token</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </template>
+
+        <template v-if="activeTab === 'ssh-keys'">
+          <div class="edit-card">
+            <p class="dim" style="margin-bottom:16px;font-size:13px">管理 SSH 私钥，可在添加主机时引用。</p>
+            <table class="table">
+              <thead><tr><th>名称</th><th>指纹</th><th>创建时间</th><th>操作</th></tr></thead>
+              <tbody>
+                <tr v-for="k in sshKeys" :key="k.id">
+                  <td style="font-weight:500;color:var(--text)">{{ k.name }}</td>
+                  <td class="dim" style="font-family:'SF Mono',Consolas,monospace;font-size:12px">{{ k.fingerprint.slice(0, 24) }}…</td>
+                  <td class="dim">{{ new Date(k.created_at).toLocaleString() }}</td>
+                  <td><button class="btn btn-sm btn-danger" @click="handleDeleteKey(k.id)">删除</button></td>
+                </tr>
+                <tr v-if="sshKeys.length === 0">
+                  <td colspan="4" class="dim" style="text-align:center;padding:32px">暂无 SSH Key</td>
                 </tr>
               </tbody>
             </table>
@@ -247,6 +271,24 @@
         </div>
       </div>
     </div>
+
+    <!-- 添加 SSH Key 弹窗 -->
+    <div v-if="showAddKey" class="modal-overlay" @click.self="showAddKey = false">
+      <div class="modal">
+        <h3>添加 SSH Key</h3>
+        <div class="form-row"><label>名称</label><input v-model="keyForm.name" class="input" placeholder="prod-key" /></div>
+        <div class="form-row">
+          <label>私钥内容</label>
+          <textarea v-model="keyForm.privateKey" class="input" rows="5" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----" />
+        </div>
+        <div class="form-row"><label>Passphrase（可选）</label><input v-model="keyForm.passphrase" type="password" class="input" /></div>
+        <div v-if="keyFormError" class="err" style="margin-bottom:12px">{{ keyFormError }}</div>
+        <div class="modal-footer">
+          <button class="btn" @click="showAddKey = false">取消</button>
+          <button class="btn btn-primary" @click="handleAddKey">添加</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -256,6 +298,8 @@ import { useAuth } from '../composables/useAuth'
 import { authHeaders } from '../api/auth'
 import { listTokens, createToken, deleteToken } from '../api/tokens'
 import type { TokenInfo } from '../api/tokens'
+import { listSSHKeys, addSSHKey, deleteSSHKey } from '../api/ssh-keys'
+import type { SafeSSHKey } from '../api/ssh-keys'
 import UsersPanel from './UsersPanel.vue'
 import InstallPanel from './InstallPanel.vue'
 import SkillsPanel from './SkillsPanel.vue'
@@ -267,9 +311,9 @@ const roleLabel = computed(() => {
   return map[currentUser.value?.role ?? ''] ?? currentUser.value?.role ?? '—'
 })
 
-const activeTab = ref<'info' | 'tokens' | 'logs' | 'users' | 'install' | 'skills' | 'settings'>('info')
+const activeTab = ref<'info' | 'tokens' | 'ssh-keys' | 'logs' | 'users' | 'install' | 'skills' | 'settings'>('info')
 const tabTitle = computed(() => ({
-  info: '基本信息', tokens: '访问令牌', logs: '操作日志',
+  info: '基本信息', tokens: '访问令牌', 'ssh-keys': 'SSH Keys', logs: '操作日志',
   users: '用户管理', install: '安装', settings: '系统设置',
 }[activeTab.value]))
 
@@ -350,6 +394,41 @@ async function copyToken() {
   }
 }
 function isExpired(expiresAt: string) { return new Date(expiresAt) < new Date() }
+
+// ── SSH Keys ──
+const sshKeys = ref<SafeSSHKey[]>([])
+const showAddKey = ref(false)
+const keyForm = ref({ name: '', privateKey: '', passphrase: '' })
+const keyFormError = ref('')
+let sshKeysLoaded = false
+
+async function loadSSHKeys() {
+  if (sshKeysLoaded) return
+  sshKeysLoaded = true
+  sshKeys.value = await listSSHKeys()
+}
+
+async function handleAddKey() {
+  keyFormError.value = ''
+  if (!keyForm.value.name.trim()) { keyFormError.value = '请输入名称'; return }
+  if (!keyForm.value.privateKey.trim()) { keyFormError.value = '请输入私钥内容'; return }
+  try {
+    await addSSHKey(keyForm.value.name, keyForm.value.privateKey, keyForm.value.passphrase || undefined)
+    showAddKey.value = false
+    keyForm.value = { name: '', privateKey: '', passphrase: '' }
+    sshKeysLoaded = false
+    sshKeys.value = await listSSHKeys()
+    sshKeysLoaded = true
+  } catch (e: any) { keyFormError.value = e.message }
+}
+
+async function handleDeleteKey(id: string) {
+  if (!confirm('确认删除此 SSH Key？')) return
+  try {
+    await deleteSSHKey(id)
+    sshKeys.value = await listSSHKeys()
+  } catch (e: any) { alert(e.message) }
+}
 
 interface LogEntry {
   id: string; host_name: string; command: string; exit_code: number
