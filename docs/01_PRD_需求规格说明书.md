@@ -1,8 +1,8 @@
 # Spider 智能运维平台 — 产品需求规格说明书
 
-**版本：** v0.1  
-**日期：** 2026-04-05  
-**状态：** 草稿
+**版本：** v0.2  
+**日期：** 2026-05-01  
+**状态：** 迭代中
 
 ---
 
@@ -183,7 +183,7 @@ Claude：[调用 get_execution_history，过滤 host=db-01，时间范围=昨天
 
 | 功能 | 描述 | 优先级 |
 |------|------|--------|
-| 添加主机 | 支持 SSH 私钥、密码、带 passphrase 私钥三种认证方式 | P0 |
+| 添加主机 | 支持 SSH 私钥、密码、带 passphrase 私钥三种认证方式；支持引用已有 SSH Key 或内联粘贴私钥 | P0 |
 | 删除主机 | 按名称或 ID 删除，同时清理关联凭据 | P0 |
 | 更新主机 | 更新 IP、用户名、认证方式、标签等字段 | P0 |
 | 列出主机 | 支持按标签过滤，支持 JSON 格式输出 | P0 |
@@ -221,22 +221,36 @@ Claude：[调用 get_execution_history，过滤 host=db-01，时间范围=昨天
 | 按主机过滤 | 查询指定主机的历史记录 | P0 |
 | 分页查询 | 支持指定返回条数（默认 20） | P0 |
 
-#### 3.1.5 MCP 接口（10 个工具）
+#### 3.1.5 MCP 接口（13 个工具）
 
 | 工具名 | 说明 |
 |--------|------|
 | `list_hosts` | 列出主机，支持 tag 过滤 |
-| `add_host` | 添加主机 |
+| `add_host` | 添加主机（支持 ssh_key_id 或 credential） |
 | `remove_host` | 删除主机 |
-| `update_host` | 更新主机信息 |
+| `update_host` | 更新主机信息（支持 ssh_key_id） |
 | `execute_command` | 在单台主机执行命令 |
 | `execute_command_batch` | 按 tag 或 ID 列表批量执行 |
 | `check_connectivity` | 测试 SSH 连通性 |
 | `upload_file` | 上传本地文件到远程主机 |
 | `download_file` | 从远程主机下载文件 |
 | `get_execution_history` | 查询执行历史 |
+| `list_ssh_keys` | 列出当前用户的 SSH 密钥 |
+| `add_ssh_key` | 添加 SSH 私钥（自动解析指纹） |
+| `remove_ssh_key` | 删除 SSH 密钥（被引用时拒绝） |
 
-#### 3.1.6 CLI 工具（spdctl）
+#### 3.1.6 SSH 密钥管理
+
+| 功能 | 描述 | 优先级 |
+|------|------|--------|
+| 添加密钥 | 上传 SSH 私钥，支持带 passphrase，自动解析 SHA256 指纹 | P0 |
+| 密钥列表 | 展示名称、指纹、创建时间，个人资源（用户隔离） | P0 |
+| 删除密钥 | 删除前检查引用关系，被主机引用时返回 409 | P0 |
+| 主机引用 | 添加/编辑主机时可从下拉列表选择已有密钥，与内联粘贴互斥 | P0 |
+| 加密存储 | 私钥使用 AES-256-GCM 加密，复用 master.key | P0 |
+| 私钥不可读 | GET 接口永远不返回私钥内容，仅创建时接收 | P0 |
+
+#### 3.1.7 CLI 工具（spdctl）
 
 | 命令 | 说明 |
 |------|------|
@@ -578,7 +592,27 @@ CREATE TABLE api_tokens (
 );
 ```
 
-### 6.5 AlertRule（告警规则）— Phase 3
+### 6.5 SSHKey（SSH 密钥）
+
+```sql
+CREATE TABLE ssh_keys (
+    id                    TEXT PRIMARY KEY,     -- k_<nanoid>
+    user_id               TEXT NOT NULL,        -- 归属用户
+    name                  TEXT NOT NULL,        -- 用户自定义名称，同用户下唯一
+    encrypted_private_key TEXT NOT NULL,        -- AES-256-GCM 加密的私钥
+    encrypted_passphrase  TEXT NOT NULL DEFAULT '',
+    fingerprint           TEXT NOT NULL DEFAULT '', -- SHA256 指纹
+    created_at            DATETIME NOT NULL,
+    updated_at            DATETIME NOT NULL,
+    UNIQUE(user_id, name)
+);
+```
+
+主机通过 `hosts.ssh_key_id` 引用密钥，与 `encrypted_credential` 并存：
+- `ssh_key_id` 非空时优先使用引用的密钥
+- 否则 fallback 到 `encrypted_credential`（内联私钥或密码）
+
+### 6.6 AlertRule（告警规则）— Phase 3
 
 ```sql
 CREATE TABLE alert_rules (
@@ -595,7 +629,7 @@ CREATE TABLE alert_rules (
 );
 ```
 
-### 6.6 AlertEvent（告警事件）— Phase 3
+### 6.7 AlertEvent（告警事件）— Phase 3
 
 ```sql
 CREATE TABLE alert_events (
@@ -667,6 +701,12 @@ GET    /version                    版本信息
 POST   /api/auth/login             登录，返回 JWT
 POST   /api/auth/logout            登出
 POST   /api/auth/refresh           刷新 JWT
+GET    /api/me                     当前用户信息
+PUT    /api/me/password            修改密码
+GET    /api/me/ssh-keys            SSH 密钥列表（个人资源）
+POST   /api/me/ssh-keys            添加 SSH 密钥
+GET    /api/me/ssh-keys/:id        密钥详情（不含私钥）
+DELETE /api/me/ssh-keys/:id        删除密钥（被引用时 409）
 GET    /api/users                  用户列表（Admin）
 POST   /api/users                  创建用户（Admin）
 PUT    /api/users/:id              更新用户
@@ -793,8 +833,8 @@ volumes:
 | 阶段 | 主要内容 | 状态 |
 |------|----------|------|
 | **基线** | MCP SSE Server、spdctl CLI、SSH 执行、文件传输、执行历史、AES-256-GCM 凭据加密 | ✅ 已完成 |
-| **Phase 1** | Web UI 完善：主机管理界面、实时命令执行、历史日志查看 | 🔄 规划中 |
-| **Phase 2** | 多用户与权限控制：账号管理、RBAC、API Token、操作审计日志 | 📋 待规划 |
+| **Phase 1** | Web UI：主机管理界面、实时命令执行、历史日志查看 | ✅ 已完成 |
+| **Phase 2** | 多用户与权限控制：账号管理、RBAC、API Token、操作审计日志、SSH 密钥管理 | ✅ 已完成 |
 | **Phase 3** | 告警与监控：SSH 状态监控、阈值告警规则、钉钉/Slack 通知、监控仪表盘 | 📋 待规划 |
 | **未来** | Docker 镜像发布、多 spider 实例联邦、Webhook 触发器 | 💡 探索中 |
 
