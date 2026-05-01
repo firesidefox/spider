@@ -1,9 +1,0 @@
-{
-  "name": "misc",
-  "description": "Miscellaneous skills: logging, UI style, and general engineering workflows.",
-  "version": "1.0.0",
-  "author": {
-    "name": "Chen Wei"
-  },
-  "license": "MIT"
-}
