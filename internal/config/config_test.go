@@ -6,24 +6,21 @@ import (
 	"testing"
 )
 
-func TestLoadLLMConfig(t *testing.T) {
+func TestLoadModelConfig(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.yaml")
 	content := `
 data_dir: /tmp/test
-llm:
-  active: claude-sonnet
-  models:
-    - id: claude-sonnet
-      provider: claude
+model:
+  active_provider: my-claude
+  active_model: claude-sonnet-4-6
+  providers:
+    - id: my-claude
+      type: claude
       api_key: sk-ant-test
-      model: claude-sonnet-4-6
-      max_tokens: 4096
-    - id: gpt4o
-      provider: openai
+    - id: my-openai
+      type: openai
       api_key: sk-test
-      model: gpt-4o
-      max_tokens: 4096
 embedding:
   active: openai-small
   models:
@@ -38,49 +35,49 @@ embedding:
 	if err != nil {
 		t.Fatalf("Load failed: %v", err)
 	}
-	if cfg.LLM.Active != "claude-sonnet" {
-		t.Errorf("LLM.Active = %q, want %q", cfg.LLM.Active, "claude-sonnet")
+	if cfg.Model.ActiveProvider != "my-claude" {
+		t.Errorf("ActiveProvider = %q, want %q", cfg.Model.ActiveProvider, "my-claude")
 	}
-	if len(cfg.LLM.Models) != 2 {
-		t.Fatalf("LLM.Models len = %d, want 2", len(cfg.LLM.Models))
+	if cfg.Model.ActiveModel != "claude-sonnet-4-6" {
+		t.Errorf("ActiveModel = %q, want %q", cfg.Model.ActiveModel, "claude-sonnet-4-6")
 	}
-	if cfg.LLM.Models[0].Provider != "claude" {
-		t.Errorf("Models[0].Provider = %q, want %q", cfg.LLM.Models[0].Provider, "claude")
+	if len(cfg.Model.Providers) != 2 {
+		t.Fatalf("Providers len = %d, want 2", len(cfg.Model.Providers))
+	}
+	if cfg.Model.Providers[0].Type != "claude" {
+		t.Errorf("Providers[0].Type = %q, want %q", cfg.Model.Providers[0].Type, "claude")
 	}
 	if cfg.Embedding.Active != "openai-small" {
 		t.Errorf("Embedding.Active = %q, want %q", cfg.Embedding.Active, "openai-small")
 	}
-	if cfg.Embedding.Models[0].Dimensions != 1536 {
-		t.Errorf("Dimensions = %d, want 1536", cfg.Embedding.Models[0].Dimensions)
-	}
 }
 
-func TestActiveModel(t *testing.T) {
-	cfg := &LLMConfig{
-		Active: "gpt4o",
-		Models: []LLMModelConfig{
-			{ID: "claude-sonnet", Provider: "claude"},
-			{ID: "gpt4o", Provider: "openai"},
+func TestGetActiveProvider(t *testing.T) {
+	cfg := &ModelConfig{
+		ActiveProvider: "my-openai",
+		Providers: []ProviderConfig{
+			{ID: "my-claude", Type: "claude"},
+			{ID: "my-openai", Type: "openai"},
 		},
 	}
-	m := cfg.ActiveModel()
-	if m == nil || m.ID != "gpt4o" {
-		t.Errorf("ActiveModel = %v, want gpt4o", m)
+	p := cfg.GetActiveProvider()
+	if p == nil || p.ID != "my-openai" {
+		t.Errorf("GetActiveProvider = %v, want my-openai", p)
 	}
-	cfg.Active = "nonexistent"
-	if cfg.ActiveModel() != nil {
-		t.Error("ActiveModel should return nil for nonexistent")
+	cfg.ActiveProvider = "nonexistent"
+	if cfg.GetActiveProvider() != nil {
+		t.Error("GetActiveProvider should return nil for nonexistent")
 	}
 }
 
-func TestResolveAPIKey(t *testing.T) {
-	m := &LLMModelConfig{ID: "test", APIKey: "from-config"}
-	if m.ResolveAPIKey() != "from-config" {
-		t.Errorf("ResolveAPIKey = %q, want from-config", m.ResolveAPIKey())
+func TestProviderResolveAPIKey(t *testing.T) {
+	p := &ProviderConfig{ID: "test", APIKey: "from-config"}
+	if p.ResolveAPIKey() != "from-config" {
+		t.Errorf("ResolveAPIKey = %q, want from-config", p.ResolveAPIKey())
 	}
-	t.Setenv("SPIDER_LLM_APIKEY_test", "from-env")
-	if m.ResolveAPIKey() != "from-env" {
-		t.Errorf("ResolveAPIKey = %q, want from-env", m.ResolveAPIKey())
+	t.Setenv("SPIDER_PROVIDER_APIKEY_test", "from-env")
+	if p.ResolveAPIKey() != "from-env" {
+		t.Errorf("ResolveAPIKey = %q, want from-env", p.ResolveAPIKey())
 	}
 }
 

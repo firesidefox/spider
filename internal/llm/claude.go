@@ -9,8 +9,6 @@ import (
 	"io"
 	"net/http"
 	"time"
-
-	"github.com/spiderai/spider/internal/config"
 )
 
 type ClaudeClient struct {
@@ -19,10 +17,10 @@ type ClaudeClient struct {
 	http   *http.Client
 }
 
-func NewClaudeClient(cfg *config.LLMModelConfig) *ClaudeClient {
+func NewClaudeClient(apiKey, model string) *ClaudeClient {
 	return &ClaudeClient{
-		apiKey: cfg.ResolveAPIKey(),
-		model:  cfg.Model,
+		apiKey: apiKey,
+		model:  model,
 		http: &http.Client{
 			Transport: &http.Transport{
 				ResponseHeaderTimeout: 30 * time.Second,

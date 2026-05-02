@@ -1,0 +1,137 @@
+<h2>Chat 交互样式 — 参考 Claude Code</h2>
+<p class="subtitle">终端风格对话 + 设备面板</p>
+
+<div class="mockup">
+  <div class="mockup-header">Spider Chat — 参考 Claude Code 风格</div>
+  <div class="mockup-body" style="display:flex;gap:0;height:480px;padding:0;">
+
+    <!-- 左侧 Chat 区 -->
+    <div style="flex:1;display:flex;flex-direction:column;background:#1a1a2e;">
+
+      <!-- 顶部栏 -->
+      <div style="padding:8px 16px;border-bottom:1px solid rgba(255,255,255,0.08);display:flex;align-items:center;gap:8px;">
+        <span style="font-size:12px;color:#888;cursor:pointer;">≡</span>
+        <span style="font-size:13px;font-weight:600;">配置 GW-01 接口地址</span>
+        <span style="font-size:11px;color:#555;margin-left:auto;">3 分钟前</span>
+      </div>
+
+      <!-- 消息区 -->
+      <div style="flex:1;overflow:auto;padding:16px;font-family:'SF Mono',Monaco,monospace;">
+
+        <!-- 用户消息 — 简洁，无气泡 -->
+        <div style="margin-bottom:16px;">
+          <div style="font-size:11px;color:#6366f1;font-weight:600;margin-bottom:4px;">❯ 你</div>
+          <div style="font-size:13px;color:#e2e8f0;padding-left:16px;">把 GW-01 的 eth0 配置为 10.0.1.1/24</div>
+        </div>
+
+        <!-- 助手消息 -->
+        <div style="margin-bottom:16px;">
+          <div style="font-size:11px;color:#f59e0b;font-weight:600;margin-bottom:4px;">◆ Spider</div>
+          <div style="padding-left:16px;">
+
+            <!-- Tool 调用 — 可折叠 -->
+            <div style="margin-bottom:8px;border:1px solid rgba(255,255,255,0.08);border-radius:6px;overflow:hidden;">
+              <div style="padding:6px 10px;background:rgba(255,255,255,0.03);font-size:11px;color:#888;display:flex;align-items:center;gap:6px;">
+                <span style="color:#4ade80;">✓</span> search_docs <span style="color:#555;">— 检索华为 VRP 接口配置文档</span>
+                <span style="margin-left:auto;color:#555;font-size:10px;">▶</span>
+              </div>
+            </div>
+
+            <!-- 生成的命令 — 代码块 -->
+            <div style="font-size:13px;color:#e2e8f0;margin-bottom:8px;">检测到目标设备 GW-01 为华为 NE40E (VRP)。将执行：</div>
+            <div style="background:#0d1117;border:1px solid rgba(255,255,255,0.1);border-radius:6px;padding:10px 12px;margin-bottom:10px;font-size:12px;">
+              <div style="color:#7dd3fc;">system-view</div>
+              <div style="color:#7dd3fc;">interface GigabitEthernet 0/0/0</div>
+              <div style="color:#7dd3fc;">ip address 10.0.1.1 255.255.255.0</div>
+              <div style="color:#7dd3fc;">quit</div>
+              <div style="color:#7dd3fc;">quit</div>
+            </div>
+
+            <!-- 确认栏 — 醒目但不突兀 -->
+            <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.2);border-radius:6px;">
+              <span style="font-size:12px;color:#fbbf24;">⚠ moderate risk</span>
+              <span style="margin-left:auto;display:flex;gap:6px;">
+                <span style="padding:4px 14px;background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.3);border-radius:4px;font-size:12px;color:#4ade80;cursor:pointer;">确认执行</span>
+                <span style="padding:4px 14px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);border-radius:4px;font-size:12px;color:#f87171;cursor:pointer;">取消</span>
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 执行结果 -->
+        <div style="margin-bottom:16px;">
+          <div style="padding-left:16px;">
+            <div style="margin-bottom:8px;border:1px solid rgba(255,255,255,0.08);border-radius:6px;overflow:hidden;">
+              <div style="padding:6px 10px;background:rgba(255,255,255,0.03);font-size:11px;color:#888;display:flex;align-items:center;gap:6px;">
+                <span style="color:#4ade80;">✓</span> execute_cli <span style="color:#555;">— GW-01 · 0.8s</span>
+                <span style="margin-left:auto;color:#555;font-size:10px;">▶</span>
+              </div>
+            </div>
+
+            <!-- Verify 进度 -->
+            <div style="margin-bottom:8px;border:1px solid rgba(255,255,255,0.08);border-radius:6px;overflow:hidden;">
+              <div style="padding:6px 10px;background:rgba(255,255,255,0.03);font-size:11px;color:#888;display:flex;align-items:center;gap:6px;">
+                <span style="color:#4ade80;">✓</span> verify <span style="color:#555;">— 接口配置已生效 (attempt 1/12)</span>
+                <span style="margin-left:auto;color:#555;font-size:10px;">▶</span>
+              </div>
+            </div>
+
+            <div style="font-size:13px;color:#e2e8f0;">配置完成。GW-01 eth0 已设置为 10.0.1.1/24，验证通过。</div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- 输入区 — 类 Claude Code -->
+      <div style="border-top:1px solid rgba(255,255,255,0.08);padding:12px 16px;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="color:#6366f1;font-size:13px;font-family:monospace;">❯</span>
+          <input class="mock-input" style="flex:1;font-size:13px;font-family:'SF Mono',Monaco,monospace;background:transparent;border:none;color:#e2e8f0;" placeholder="输入运维指令...">
+          <span style="font-size:11px;color:#555;">⌘↵</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 右侧设备面板 -->
+    <div style="width:240px;border-left:1px solid rgba(255,255,255,0.08);background:#16162a;padding:12px;flex-shrink:0;overflow:auto;">
+      <div style="font-size:11px;color:#888;font-weight:600;margin-bottom:10px;text-transform:uppercase;letter-spacing:0.5px;">相关设备</div>
+
+      <!-- 设备卡片 -->
+      <div style="padding:10px;background:rgba(255,255,255,0.04);border:1px solid rgba(74,222,128,0.2);border-radius:6px;margin-bottom:8px;">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+          <span style="width:6px;height:6px;border-radius:50%;background:#4ade80;"></span>
+          <span style="font-size:12px;font-weight:600;color:#e2e8f0;">GW-01</span>
+        </div>
+        <div style="font-size:11px;color:#888;margin-bottom:2px;">华为 NE40E · VRP</div>
+        <div style="font-size:11px;color:#888;margin-bottom:6px;">10.0.0.1:22</div>
+        <div style="border-top:1px solid rgba(255,255,255,0.06);padding-top:6px;margin-top:4px;">
+          <div style="font-size:11px;display:flex;justify-content:space-between;margin-bottom:2px;">
+            <span style="color:#888;">eth0</span>
+            <span style="color:#4ade80;">10.0.1.1/24 ✓</span>
+          </div>
+          <div style="font-size:11px;display:flex;justify-content:space-between;">
+            <span style="color:#888;">eth1</span>
+            <span style="color:#888;">192.168.1.1/24</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="padding:10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06);border-radius:6px;margin-bottom:8px;">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+          <span style="width:6px;height:6px;border-radius:50%;background:#4ade80;"></span>
+          <span style="font-size:12px;font-weight:600;color:#e2e8f0;">GW-02</span>
+        </div>
+        <div style="font-size:11px;color:#888;margin-bottom:2px;">华为 NE40E · VRP</div>
+        <div style="font-size:11px;color:#888;">10.0.0.2:22</div>
+      </div>
+
+      <!-- 批量操作进度示例 -->
+      <div style="margin-top:16px;border-top:1px solid rgba(255,255,255,0.06);padding-top:10px;">
+        <div style="font-size:11px;color:#888;font-weight:600;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px;">最近操作</div>
+        <div style="font-size:11px;color:#4ade80;margin-bottom:4px;">✓ eth0 配置 10.0.1.1/24</div>
+        <div style="font-size:11px;color:#4ade80;">✓ 验证通过</div>
+      </div>
+    </div>
+
+  </div>
+</div>

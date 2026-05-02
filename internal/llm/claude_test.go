@@ -1,19 +1,9 @@
 package llm
 
-import (
-	"testing"
-
-	"github.com/spiderai/spider/internal/config"
-)
+import "testing"
 
 func TestNewClaudeClient(t *testing.T) {
-	cfg := &config.LLMModelConfig{
-		ID:       "test",
-		Provider: "claude",
-		APIKey:   "sk-test-key",
-		Model:    "claude-sonnet-4-6",
-	}
-	client := NewClaudeClient(cfg)
+	client := NewClaudeClient("sk-test-key", "claude-sonnet-4-6")
 	if client.model != "claude-sonnet-4-6" {
 		t.Errorf("model = %q, want claude-sonnet-4-6", client.model)
 	}
