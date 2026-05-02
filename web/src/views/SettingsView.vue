@@ -144,8 +144,12 @@ async function load() {
   const res = await fetch('/api/v1/settings')
   if (!res.ok) return
   const data = await res.json()
-  if (data.llm?.models) data.llm.models.forEach((m: any) => m._uid = uid())
-  if (data.embedding?.models) data.embedding.models.forEach((m: any) => m._uid = uid())
+  if (!data.llm) data.llm = { active: '', models: [] }
+  if (!data.llm.models) data.llm.models = []
+  if (!data.embedding) data.embedding = { active: '', models: [] }
+  if (!data.embedding.models) data.embedding.models = []
+  data.llm.models.forEach((m: any) => m._uid = uid())
+  data.embedding.models.forEach((m: any) => m._uid = uid())
   form.value = data
 }
 
