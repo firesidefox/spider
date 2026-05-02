@@ -13,7 +13,6 @@ const router = createRouter({
     { path: '/audit',    component: () => import('./views/AuditView.vue') },
     { path: '/chat',     component: () => import('./views/ChatView.vue') },
     { path: '/chat/:id', component: () => import('./views/ChatView.vue') },
-    { path: '/settings', component: () => import('./views/SettingsView.vue') },
     { path: '/install',  component: () => import('./views/InstallView.vue') },
     { path: '/users',    component: () => import('./views/UsersView.vue') },
     { path: '/profile',  component: () => import('./views/ProfileView.vue') },

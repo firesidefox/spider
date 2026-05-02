@@ -32,6 +32,9 @@
           <div class="nav-row" :class="{ selected: activeTab === 'skills' }" @click="activeTab = 'skills'">
             <span class="nav-icon">🧩</span><span class="nav-label">Skills</span>
           </div>
+          <div class="nav-row" :class="{ selected: activeTab === 'llm' }" @click="activeTab = 'llm'; loadSettings()">
+            <span class="nav-icon">🤖</span><span class="nav-label">LLM 模型</span>
+          </div>
           <div class="nav-row" :class="{ selected: activeTab === 'settings' }" @click="activeTab = 'settings'; loadSettings()">
             <span class="nav-icon">⚙️</span><span class="nav-label">系统设置</span>
           </div>
@@ -54,7 +57,7 @@
           <button v-if="activeTab === 'info'" class="btn btn-sm" @click="showPwModal = true">修改密码</button>
           <button v-if="activeTab === 'tokens'" class="btn btn-primary btn-sm" @click="showCreate = true">+ 新建 Token</button>
           <button v-if="activeTab === 'ssh-keys'" class="btn btn-primary btn-sm" @click="showAddKey = true">+ 添加 Key</button>
-          <template v-if="activeTab === 'settings'">
+          <template v-if="activeTab === 'settings' || activeTab === 'llm'">
             <div v-if="settingsEditing" style="display:flex;gap:8px">
               <button class="btn btn-primary btn-sm" @click="saveSettings">保存</button>
               <button class="btn btn-sm" @click="cancelSettings">取消</button>
@@ -172,6 +175,63 @@
                 </tr>
               </tbody>
             </table>
+          </div>
+        </template>
+
+        <!-- Tab: LLM 模型 -->
+        <template v-if="activeTab === 'llm'">
+          <div class="edit-card">
+            <div class="edit-card-title">LLM 模型</div>
+            <table class="table">
+              <thead><tr><th style="width:30px"></th><th>ID</th><th>Provider</th><th>模型</th><th>API Key</th><th>Max Tokens</th><th>操作</th></tr></thead>
+              <tbody>
+                <tr v-for="(m, i) in settings.llm.models" :key="i">
+                  <td><input type="radio" :value="m.id" v-model="settings.llm.active" @change="settingsEditing = true" style="accent-color:var(--primary)" /></td>
+                  <td><input v-model="m.id" class="input input-inline" placeholder="ID" @input="settingsEditing = true" /></td>
+                  <td>
+                    <select v-model="m.provider" class="input input-inline" @change="settingsEditing = true">
+                      <option value="claude">Claude</option>
+                      <option value="openai">OpenAI</option>
+                    </select>
+                  </td>
+                  <td><input v-model="m.model" class="input input-inline" placeholder="模型名称" @input="settingsEditing = true" /></td>
+                  <td><input v-model="m.api_key" class="input input-inline" placeholder="API Key" @input="settingsEditing = true" /></td>
+                  <td><input v-model.number="m.max_tokens" class="input input-inline" type="number" style="width:80px" @input="settingsEditing = true" /></td>
+                  <td><button class="btn btn-sm btn-danger" @click="removeLLMModel(i); settingsEditing = true">删除</button></td>
+                </tr>
+                <tr v-if="settings.llm.models.length === 0">
+                  <td colspan="7" class="dim" style="text-align:center;padding:24px">暂无 LLM 模型</td>
+                </tr>
+              </tbody>
+            </table>
+            <button class="btn btn-sm" style="margin-top:8px" @click="addLLMModel">+ 添加模型</button>
+          </div>
+
+          <div class="edit-card" style="margin-top:16px">
+            <div class="edit-card-title">Embedding 模型</div>
+            <table class="table">
+              <thead><tr><th style="width:30px"></th><th>ID</th><th>Provider</th><th>模型</th><th>API Key</th><th>维度</th><th>操作</th></tr></thead>
+              <tbody>
+                <tr v-for="(m, i) in settings.embedding.models" :key="i">
+                  <td><input type="radio" :value="m.id" v-model="settings.embedding.active" @change="settingsEditing = true" style="accent-color:var(--primary)" /></td>
+                  <td><input v-model="m.id" class="input input-inline" placeholder="ID" @input="settingsEditing = true" /></td>
+                  <td>
+                    <select v-model="m.provider" class="input input-inline" @change="settingsEditing = true">
+                      <option value="openai">OpenAI</option>
+                      <option value="voyage">Voyage</option>
+                    </select>
+                  </td>
+                  <td><input v-model="m.model" class="input input-inline" placeholder="模型名称" @input="settingsEditing = true" /></td>
+                  <td><input v-model="m.api_key" class="input input-inline" placeholder="API Key" @input="settingsEditing = true" /></td>
+                  <td><input v-model.number="m.dimensions" class="input input-inline" type="number" style="width:80px" @input="settingsEditing = true" /></td>
+                  <td><button class="btn btn-sm btn-danger" @click="removeEmbeddingModel(i); settingsEditing = true">删除</button></td>
+                </tr>
+                <tr v-if="settings.embedding.models.length === 0">
+                  <td colspan="7" class="dim" style="text-align:center;padding:24px">暂无 Embedding 模型</td>
+                </tr>
+              </tbody>
+            </table>
+            <button class="btn btn-sm" style="margin-top:8px" @click="addEmbeddingModel">+ 添加模型</button>
           </div>
         </template>
 
@@ -314,10 +374,10 @@ const roleLabel = computed(() => {
   return map[currentUser.value?.role ?? ''] ?? currentUser.value?.role ?? '—'
 })
 
-const activeTab = ref<'info' | 'tokens' | 'ssh-keys' | 'logs' | 'users' | 'install' | 'skills' | 'settings'>('info')
+const activeTab = ref<'info' | 'tokens' | 'ssh-keys' | 'logs' | 'users' | 'install' | 'skills' | 'llm' | 'settings'>('info')
 const tabTitle = computed(() => ({
   info: '基本信息', tokens: '访问令牌', 'ssh-keys': 'SSH Keys', logs: '操作日志',
-  users: '用户管理', install: '安装', settings: '系统设置',
+  users: '用户管理', install: '安装', llm: 'LLM 模型', settings: '系统设置',
 }[activeTab.value]))
 
 const pw = ref({ old: '', new1: '', new2: '' })
@@ -462,11 +522,24 @@ function toggleLog(id: string) {
   expandedLog.value = expandedLog.value === id ? null : id
 }
 
+interface LLMModel {
+  id: string; provider: string; api_key: string; model: string; max_tokens: number
+}
+interface EmbeddingModel {
+  id: string; provider: string; api_key: string; model: string; dimensions: number
+}
 interface Settings {
   sse_addr: string; sse_base_url: string
   ssh_default_timeout_seconds: number; ssh_pool_ttl_seconds: number; ssh_max_pool_size: number
+  llm: { active: string; models: LLMModel[] }
+  embedding: { active: string; models: EmbeddingModel[] }
 }
-const settings = ref<Settings>({ sse_addr: '', sse_base_url: '', ssh_default_timeout_seconds: 30, ssh_pool_ttl_seconds: 300, ssh_max_pool_size: 50 })
+const settings = ref<Settings>({
+  sse_addr: '', sse_base_url: '',
+  ssh_default_timeout_seconds: 30, ssh_pool_ttl_seconds: 300, ssh_max_pool_size: 50,
+  llm: { active: '', models: [] },
+  embedding: { active: '', models: [] },
+})
 const settingsEditing = ref(false)
 const settingsError = ref('')
 let settingsLoaded = false
@@ -475,7 +548,13 @@ async function loadSettings() {
   if (settingsLoaded) return
   settingsLoaded = true
   const res = await fetch('/api/v1/settings', { headers: authHeaders() })
-  if (res.ok) settings.value = await res.json()
+  if (!res.ok) return
+  const data = await res.json()
+  if (!data.llm) data.llm = { active: '', models: [] }
+  if (!data.llm.models) data.llm.models = []
+  if (!data.embedding) data.embedding = { active: '', models: [] }
+  if (!data.embedding.models) data.embedding.models = []
+  settings.value = data
 }
 
 async function saveSettings() {
@@ -487,6 +566,25 @@ async function saveSettings() {
   })
   if (res.ok) { settingsEditing.value = false }
   else settingsError.value = (await res.json()).error
+}
+
+function addLLMModel() {
+  settings.value.llm.models.push({ id: '', provider: 'claude', api_key: '', model: '', max_tokens: 4096 })
+  settingsEditing.value = true
+}
+function removeLLMModel(idx: number) {
+  const m = settings.value.llm.models[idx]
+  if (m.id === settings.value.llm.active) settings.value.llm.active = ''
+  settings.value.llm.models.splice(idx, 1)
+}
+function addEmbeddingModel() {
+  settings.value.embedding.models.push({ id: '', provider: 'openai', api_key: '', model: '', dimensions: 1536 })
+  settingsEditing.value = true
+}
+function removeEmbeddingModel(idx: number) {
+  const m = settings.value.embedding.models[idx]
+  if (m.id === settings.value.embedding.active) settings.value.embedding.active = ''
+  settings.value.embedding.models.splice(idx, 1)
 }
 
 function cancelSettings() {
@@ -677,4 +775,5 @@ function cancelSettings() {
 }
 .token-code { flex: 1; word-break: break-all; font-size: 12px; color: var(--green); }
 .btn-copied { background: rgba(74,222,128,0.15) !important; color: var(--green) !important; border-color: rgba(74,222,128,0.4) !important; }
+.input-inline { padding: 4px 8px !important; font-size: 12px !important; width: 100%; }
 </style>

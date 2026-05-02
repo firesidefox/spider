@@ -26,32 +26,32 @@ type AuthConfig struct {
 
 // LLMModelConfig 是单个 LLM 模型的配置。
 type LLMModelConfig struct {
-	ID        string `yaml:"id"`
-	Provider  string `yaml:"provider"`
-	APIKey    string `yaml:"api_key"`
-	Model     string `yaml:"model"`
-	MaxTokens int    `yaml:"max_tokens"`
+	ID        string `yaml:"id" json:"id"`
+	Provider  string `yaml:"provider" json:"provider"`
+	APIKey    string `yaml:"api_key" json:"api_key"`
+	Model     string `yaml:"model" json:"model"`
+	MaxTokens int    `yaml:"max_tokens" json:"max_tokens"`
 }
 
 // LLMConfig 是 LLM 多模型配置。
 type LLMConfig struct {
-	Active string           `yaml:"active"`
-	Models []LLMModelConfig `yaml:"models"`
+	Active string           `yaml:"active" json:"active"`
+	Models []LLMModelConfig `yaml:"models" json:"models"`
 }
 
 // EmbeddingModelConfig 是单个 Embedding 模型的配置。
 type EmbeddingModelConfig struct {
-	ID         string `yaml:"id"`
-	Provider   string `yaml:"provider"`
-	APIKey     string `yaml:"api_key"`
-	Model      string `yaml:"model"`
-	Dimensions int    `yaml:"dimensions"`
+	ID         string `yaml:"id" json:"id"`
+	Provider   string `yaml:"provider" json:"provider"`
+	APIKey     string `yaml:"api_key" json:"api_key"`
+	Model      string `yaml:"model" json:"model"`
+	Dimensions int    `yaml:"dimensions" json:"dimensions"`
 }
 
 // EmbeddingConfig 是 Embedding 多模型配置。
 type EmbeddingConfig struct {
-	Active string                 `yaml:"active"`
-	Models []EmbeddingModelConfig `yaml:"models"`
+	Active string                 `yaml:"active" json:"active"`
+	Models []EmbeddingModelConfig `yaml:"models" json:"models"`
 }
 
 // SSEConfig 是 MCP SSE server 相关配置。
