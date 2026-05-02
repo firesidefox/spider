@@ -155,8 +155,8 @@ func setActiveModel(app *mcppkg.App, w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "invalid request")
 		return
 	}
-	if req.Model == "" {
-		writeError(w, 400, "model is required")
+	if req.ProviderID == "" {
+		writeError(w, 400, "provider_id is required")
 		return
 	}
 	app.ConfigMu.Lock()
