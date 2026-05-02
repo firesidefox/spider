@@ -190,11 +190,10 @@
           <div class="edit-card">
             <p class="dim" style="margin-bottom:16px;font-size:13px">配置 AI 模型供应商，用于智能运维对话和工具调用。</p>
             <table class="table">
-              <thead><tr><th style="width:30px"></th><th>ID</th><th>名称</th><th>类型</th><th>API Key</th><th>请求地址</th><th>操作</th></tr></thead>
+              <thead><tr><th style="width:30px"></th><th>名称</th><th>类型</th><th>API Key</th><th>请求地址</th><th>操作</th></tr></thead>
               <tbody>
-                <tr v-for="(p, i) in settings.model.providers" :key="i">
+                <tr v-for="(p, i) in settings.model.providers" :key="p.id">
                   <td><input type="radio" :value="p.id" v-model="settings.model.active_provider" @change="settingsEditing = true" style="accent-color:var(--primary)" /></td>
-                  <td><input v-model="p.id" class="input input-inline" placeholder="my-claude" @input="settingsEditing = true" /></td>
                   <td><input v-model="p.name" class="input input-inline" placeholder="供应商名称" @input="settingsEditing = true" /></td>
                   <td>
                     <select v-model="p.type" class="input input-inline" @change="settingsEditing = true">
@@ -210,7 +209,7 @@
                   </td>
                 </tr>
                 <tr v-if="settings.model.providers.length === 0">
-                  <td colspan="7" class="dim" style="text-align:center;padding:24px">暂无供应商配置</td>
+                  <td colspan="6" class="dim" style="text-align:center;padding:24px">暂无供应商配置</td>
                 </tr>
               </tbody>
             </table>
@@ -557,7 +556,8 @@ async function saveSettings() {
 }
 
 function addProvider() {
-  settings.value.model.providers.push({ id: '', name: '', type: 'claude', api_key: '', base_url: '' })
+  const id = crypto.randomUUID()
+  settings.value.model.providers.push({ id, name: '', type: 'claude', api_key: '', base_url: '' })
   settingsEditing.value = true
 }
 function removeProvider(idx: number) {
