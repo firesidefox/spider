@@ -1,0 +1,98 @@
+package llm
+
+import (
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"strings"
+	"time"
+)
+
+// ModelInfo describes a single model available from a provider.
+type ModelInfo struct {
+	ID          string `json:"id"`
+	DisplayName string `json:"display_name,omitempty"`
+}
+
+// ListModels returns the available models for the given provider type and API key.
+func ListModels(providerType, apiKey string) ([]ModelInfo, error) {
+	switch providerType {
+	case "claude":
+		return listClaudeModels(apiKey)
+	case "openai":
+		return listOpenAIModels(apiKey)
+	default:
+		return nil, fmt.Errorf("unsupported provider: %s", providerType)
+	}
+}
+
+func listClaudeModels(apiKey string) ([]ModelInfo, error) {
+	client := &http.Client{Timeout: 15 * time.Second}
+	req, err := http.NewRequest(http.MethodGet, "https://api.anthropic.com/v1/models", nil)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+	req.Header.Set("x-api-key", apiKey)
+	req.Header.Set("anthropic-version", "2023-06-01")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("http request: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("claude API error %d: %s", resp.StatusCode, string(body))
+	}
+
+	var result struct {
+		Data []struct {
+			ID          string `json:"id"`
+			DisplayName string `json:"display_name"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+	models := make([]ModelInfo, 0, len(result.Data))
+	for _, m := range result.Data {
+		models = append(models, ModelInfo{ID: m.ID, DisplayName: m.DisplayName})
+	}
+	return models, nil
+}
+
+func listOpenAIModels(apiKey string) ([]ModelInfo, error) {
+	client := &http.Client{Timeout: 15 * time.Second}
+	req, err := http.NewRequest(http.MethodGet, "https://api.openai.com/v1/models", nil)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("http request: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("openai API error %d: %s", resp.StatusCode, string(body))
+	}
+
+	var result struct {
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+	models := make([]ModelInfo, 0)
+	for _, m := range result.Data {
+		if strings.HasPrefix(m.ID, "gpt-") {
+			models = append(models, ModelInfo{ID: m.ID, DisplayName: m.ID})
+		}
+	}
+	return models, nil
+}
