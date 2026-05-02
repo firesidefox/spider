@@ -1,13 +1,10 @@
 package agent
 
 import (
-	"database/sql"
 	"fmt"
 	"strings"
 
-	"github.com/spiderai/spider/internal/config"
 	"github.com/spiderai/spider/internal/llm"
-	"github.com/spiderai/spider/internal/rag"
 	"github.com/spiderai/spider/internal/ssh"
 	"github.com/spiderai/spider/internal/store"
 )
@@ -15,31 +12,51 @@ import (
 // Factory holds shared dependencies for creating Agent instances.
 type Factory struct {
 	LLMClient llm.Client
-	RAGStore  *rag.Store
 	Hosts     *store.HostStore
 	SSHPool   *ssh.Pool
 	SSHKeys   *store.SSHKeyStore
 	Logs      *store.LogStore
 	MsgStore  MessageStorer
-	cfg       *config.Config
-	db        *sql.DB
-	docStore  *store.DocumentStore
 }
 
-// NewFactory creates a Factory.
-// NOTE: This is a stub — Task 6 will rewrite it to read providers from the DB.
-// Returns an error until the ProviderStore is wired in.
+// NewFactory creates a Factory by reading the active provider from the DB.
 func NewFactory(
-	cfg *config.Config,
-	database *sql.DB,
+	providerStore *store.ProviderStore,
 	hosts *store.HostStore,
 	pool *ssh.Pool,
 	keys *store.SSHKeyStore,
 	logs *store.LogStore,
 	msgs MessageStorer,
-	docs *store.DocumentStore,
 ) (*Factory, error) {
-	return nil, fmt.Errorf("factory requires ProviderStore (not yet wired)")
+	provider, err := providerStore.GetActive()
+	if err != nil {
+		return nil, fmt.Errorf("get active provider: %w", err)
+	}
+	if provider == nil {
+		return nil, fmt.Errorf("no active provider configured")
+	}
+	if provider.SelectedModel == "" {
+		return nil, fmt.Errorf("no model selected for provider %s", provider.Name)
+	}
+
+	apiKey, err := providerStore.DecryptAPIKey(provider)
+	if err != nil {
+		return nil, fmt.Errorf("decrypt API key: %w", err)
+	}
+
+	llmClient, err := llm.NewClient(provider.Type, apiKey, provider.SelectedModel, provider.BaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("create LLM client: %w", err)
+	}
+
+	return &Factory{
+		LLMClient: llmClient,
+		Hosts:     hosts,
+		SSHPool:   pool,
+		SSHKeys:   keys,
+		Logs:      logs,
+		MsgStore:  msgs,
+	}, nil
 }
 
 // NewAgent creates a new Agent with all tools registered.
@@ -50,9 +67,6 @@ func (f *Factory) NewAgent(systemPrompt string) *Agent {
 	registry.Register(NewBatchExecuteTool(f.Hosts, f.SSHPool, f.Logs, f.SSHKeys))
 	registry.Register(NewVerifyTool(f.Hosts, f.SSHPool, f.SSHKeys))
 	registry.Register(NewCallRESTAPITool())
-	if f.RAGStore != nil {
-		registry.Register(NewSearchDocsTool(f.RAGStore))
-	}
 
 	hooks := NewHookChain()
 	hooks.AddBefore(DefaultRiskHook())
