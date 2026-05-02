@@ -194,19 +194,25 @@
               <tbody>
                 <tr v-for="(p, i) in providers" :key="p.id">
                   <td><input type="radio" :value="p.id" :checked="activeProvider === p.id" @change="setActiveProvider(p.id)" style="accent-color:var(--primary)" /></td>
-                  <td><input v-model="p.name" class="input input-inline" placeholder="供应商名称" @input="settingsEditing = true" /></td>
-                  <td>
-                    <select v-model="p.type" class="input input-inline" @change="settingsEditing = true">
-                      <option value="claude">Claude</option>
-                      <option value="openai">OpenAI</option>
-                    </select>
-                  </td>
-                  <td><input v-model="p.api_key" class="input input-inline" placeholder="API Key" @input="settingsEditing = true" /></td>
-                  <td><input v-model="p.base_url" class="input input-inline" placeholder="留空使用默认地址" @input="settingsEditing = true" /></td>
-                  <td style="white-space:nowrap">
-                    <button class="btn btn-sm" @click="fetchModels(p.id)" style="margin-right:4px">获取模型</button>
-                    <button class="btn btn-sm btn-danger" @click="removeProvider(i)">删除</button>
-                  </td>
+                  <template v-if="settingsEditing">
+                    <td><input v-model="p.name" class="input input-inline" placeholder="供应商名称" /></td>
+                    <td>
+                      <select v-model="p.type" class="input input-inline">
+                        <option value="claude">Claude</option>
+                        <option value="openai">OpenAI</option>
+                      </select>
+                    </td>
+                    <td><input v-model="p.api_key" class="input input-inline" placeholder="API Key" /></td>
+                    <td><input v-model="p.base_url" class="input input-inline" placeholder="留空使用默认地址" /></td>
+                    <td><button class="btn btn-sm btn-danger" @click="removeProvider(i)">删除</button></td>
+                  </template>
+                  <template v-else>
+                    <td style="font-weight:500;color:var(--text)">{{ p.name || '未命名' }}</td>
+                    <td>{{ p.type }}</td>
+                    <td class="dim">{{ p.api_key || '—' }}</td>
+                    <td class="dim">{{ p.base_url || '默认' }}</td>
+                    <td><button class="btn btn-sm" @click="fetchModels(p.id)">获取模型</button></td>
+                  </template>
                 </tr>
                 <tr v-if="providers.length === 0">
                   <td colspan="6" class="dim" style="text-align:center;padding:24px">暂无供应商配置</td>
@@ -593,6 +599,7 @@ async function addProvider() {
   if (!res.ok) return
   const p = await res.json()
   providers.value.push(p)
+  settingsEditing.value = true
 }
 
 async function removeProvider(idx: number) {
@@ -630,7 +637,7 @@ const providerModels = ref<Record<string, {id: string, display_name: string}[]>>
 async function fetchModels(providerId: string) {
   const res = await fetch(`/api/v1/providers/${providerId}/models`, { headers: authHeaders() })
   if (!res.ok) return
-  providerModels.value[providerId] = await res.json()
+  providerModels.value = { ...providerModels.value, [providerId]: await res.json() }
 }
 
 function cancelSettings() {
