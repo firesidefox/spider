@@ -100,7 +100,10 @@
                     <span v-else class="dim">永不过期</span>
                   </td>
                   <td class="dim">{{ t.last_used ? new Date(t.last_used).toLocaleString() : '从未' }}</td>
-                  <td><button class="btn btn-sm btn-danger" @click="handleDelete(t.id)">撤销</button></td>
+                  <td>
+                    <button class="btn btn-sm" @click="handleCopyToken(t.id)">{{ copiedTokenId === t.id ? '已复制 ✓' : '复制' }}</button>
+                    <button class="btn btn-sm btn-danger" style="margin-left:6px" @click="handleDelete(t.id)">撤销</button>
+                  </td>
                 </tr>
                 <tr v-if="tokens.length === 0">
                   <td colspan="5" class="dim" style="text-align:center;padding:32px">暂无 Token</td>
@@ -352,6 +355,7 @@ const tokens = ref<TokenInfo[]>([])
 const showCreate = ref(false)
 const newToken = ref('')
 const copied = ref(false)
+const copiedTokenId = ref('')
 const formError = ref('')
 const form = ref({ name: '', expiresAt: '' })
 let tokensLoaded = false
@@ -376,6 +380,12 @@ async function handleCreate() {
     tokens.value = await listTokens()
     tokensLoaded = true
   } catch (e: any) { formError.value = e.message }
+}
+
+async function handleCopyToken(id: string) {
+  await navigator.clipboard.writeText(id)
+  copiedTokenId.value = id
+  setTimeout(() => { copiedTokenId.value = '' }, 2000)
 }
 
 async function handleDelete(id: string) {
