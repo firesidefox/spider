@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io/fs"
+	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -13,6 +14,7 @@ import (
 	"github.com/spf13/cobra"
 
 	apipkg "github.com/spiderai/spider/internal/api"
+	"github.com/spiderai/spider/internal/agent"
 	"github.com/spiderai/spider/internal/auth"
 	mcppkg "github.com/spiderai/spider/internal/mcp"
 	sshpkg "github.com/spiderai/spider/internal/ssh"
@@ -155,6 +157,19 @@ func serve(cfgFile, addrOverride, dataDirOverride string) error {
 		UserStore:   us,
 		TokenStore:  ts,
 		JWTManager:  jwtMgr,
+	}
+
+	app.ConvStore = store.NewConversationStore(database)
+	app.MsgStore = store.NewMessageStore(database)
+	app.DocStore = store.NewDocumentStore(database)
+
+	agentFactory, err := agent.NewFactory(
+		cfg, database, hs, pool, ks, ls, app.MsgStore, app.DocStore,
+	)
+	if err != nil {
+		log.Printf("WARNING: agent factory not available: %v", err)
+	} else {
+		app.AgentFactory = agentFactory
 	}
 
 	mcpHandler := mcppkg.NewHTTPHandler(app)
