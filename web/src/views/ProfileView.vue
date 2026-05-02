@@ -556,8 +556,7 @@ async function saveSettings() {
 }
 
 function addProvider() {
-  const id = crypto.randomUUID()
-  settings.value.model.providers.push({ id, name: '', type: 'claude', api_key: '', base_url: '' })
+  settings.value.model.providers.push({ id: '', name: '', type: 'claude', api_key: '', base_url: '' })
   settingsEditing.value = true
 }
 function removeProvider(idx: number) {

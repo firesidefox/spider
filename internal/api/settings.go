@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/spiderai/spider/internal/config"
 	mcppkg "github.com/spiderai/spider/internal/mcp"
 	"gopkg.in/yaml.v3"
@@ -81,6 +82,9 @@ func updateSettings(app *mcppkg.App, w http.ResponseWriter, r *http.Request) {
 	}
 	if len(req.Model.Providers) > 0 || req.Model.ActiveProvider != "" || req.Model.ActiveModel != "" {
 		for i := range req.Model.Providers {
+			if req.Model.Providers[i].ID == "" {
+				req.Model.Providers[i].ID = uuid.New().String()
+			}
 			if strings.HasPrefix(req.Model.Providers[i].APIKey, maskedPrefix) {
 				if existing := app.Config.Model.GetProvider(req.Model.Providers[i].ID); existing != nil {
 					req.Model.Providers[i].APIKey = existing.APIKey
