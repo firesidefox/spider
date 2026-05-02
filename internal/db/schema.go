@@ -136,11 +136,11 @@ func migrate(db *sql.DB) error {
 		return err
 	}
 	alterStmts := []string{
-		"ALTER TABLE hosts ADD COLUMN device_type TEXT",
-		"ALTER TABLE hosts ADD COLUMN vendor TEXT",
-		"ALTER TABLE hosts ADD COLUMN model TEXT",
-		"ALTER TABLE hosts ADD COLUMN cli_type TEXT",
-		"ALTER TABLE hosts ADD COLUMN firmware_version TEXT",
+		"ALTER TABLE hosts ADD COLUMN device_type TEXT DEFAULT ''",
+		"ALTER TABLE hosts ADD COLUMN vendor TEXT DEFAULT ''",
+		"ALTER TABLE hosts ADD COLUMN model TEXT DEFAULT ''",
+		"ALTER TABLE hosts ADD COLUMN cli_type TEXT DEFAULT ''",
+		"ALTER TABLE hosts ADD COLUMN firmware_version TEXT DEFAULT ''",
 	}
 	for _, stmt := range alterStmts {
 		db.Exec(stmt) // ignore "duplicate column" errors

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spiderai/spider/internal/config"
 	mcppkg "github.com/spiderai/spider/internal/mcp"
@@ -83,9 +84,31 @@ func updateSettings(app *mcppkg.App, w http.ResponseWriter, r *http.Request) {
 		app.Config.SSH.MaxPoolSize = req.SSHMaxPool
 	}
 	if req.LLM.Active != "" {
+		// Preserve existing API keys when the incoming value is a masked placeholder.
+		for i := range req.LLM.Models {
+			if strings.HasPrefix(req.LLM.Models[i].APIKey, "****") {
+				for _, existing := range app.Config.LLM.Models {
+					if existing.ID == req.LLM.Models[i].ID {
+						req.LLM.Models[i].APIKey = existing.APIKey
+						break
+					}
+				}
+			}
+		}
 		app.Config.LLM = req.LLM
 	}
 	if req.Embedding.Active != "" {
+		// Preserve existing API keys when the incoming value is a masked placeholder.
+		for i := range req.Embedding.Models {
+			if strings.HasPrefix(req.Embedding.Models[i].APIKey, "****") {
+				for _, existing := range app.Config.Embedding.Models {
+					if existing.ID == req.Embedding.Models[i].ID {
+						req.Embedding.Models[i].APIKey = existing.APIKey
+						break
+					}
+				}
+			}
+		}
 		app.Config.Embedding = req.Embedding
 	}
 

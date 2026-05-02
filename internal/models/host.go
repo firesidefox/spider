@@ -34,32 +34,42 @@ type Host struct {
 
 // SafeHost 是对外展示的安全版本（不含凭据）。
 type SafeHost struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	IP        string    `json:"ip"`
-	Port      int       `json:"port"`
-	Username  string    `json:"username"`
-	AuthType   AuthType  `json:"auth_type"`
-	SSHKeyID   string    `json:"ssh_key_id,omitempty"`
-	SSHKeyName string    `json:"ssh_key_name,omitempty"`
-	Tags       []string  `json:"tags"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID              string    `json:"id"`
+	Name            string    `json:"name"`
+	IP              string    `json:"ip"`
+	Port            int       `json:"port"`
+	Username        string    `json:"username"`
+	AuthType        AuthType  `json:"auth_type"`
+	SSHKeyID        string    `json:"ssh_key_id,omitempty"`
+	SSHKeyName      string    `json:"ssh_key_name,omitempty"`
+	Tags            []string  `json:"tags"`
+	DeviceType      string    `json:"device_type,omitempty"`
+	Vendor          string    `json:"vendor,omitempty"`
+	Model           string    `json:"model,omitempty"`
+	CLIType         string    `json:"cli_type,omitempty"`
+	FirmwareVersion string    `json:"firmware_version,omitempty"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
 }
 
 // Safe 返回不含敏感字段的版本。
 func (h *Host) Safe() *SafeHost {
 	return &SafeHost{
-		ID:        h.ID,
-		Name:      h.Name,
-		IP:        h.IP,
-		Port:      h.Port,
-		Username:  h.Username,
-		AuthType:  h.AuthType,
-		SSHKeyID:  h.SSHKeyID,
-		Tags:      h.Tags,
-		CreatedAt: h.CreatedAt,
-		UpdatedAt: h.UpdatedAt,
+		ID:              h.ID,
+		Name:            h.Name,
+		IP:              h.IP,
+		Port:            h.Port,
+		Username:        h.Username,
+		AuthType:        h.AuthType,
+		SSHKeyID:        h.SSHKeyID,
+		Tags:            h.Tags,
+		DeviceType:      h.DeviceType,
+		Vendor:          h.Vendor,
+		Model:           h.Model,
+		CLIType:         h.CLIType,
+		FirmwareVersion: h.FirmwareVersion,
+		CreatedAt:       h.CreatedAt,
+		UpdatedAt:       h.UpdatedAt,
 	}
 }
 
