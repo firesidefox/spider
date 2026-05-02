@@ -65,26 +65,36 @@ func (h *Host) Safe() *SafeHost {
 
 // AddHostRequest 是添加主机的请求参数。
 type AddHostRequest struct {
-	Name       string   `json:"name"`
-	IP         string   `json:"ip"`
-	Port       int      `json:"port"`
-	Username   string   `json:"username"`
-	AuthType   AuthType `json:"auth_type"`
-	Credential string   `json:"credential"`
-	Passphrase string   `json:"passphrase"`
-	Tags       []string `json:"tags"`
-	SSHKeyID   string   `json:"ssh_key_id"`
+	Name            string   `json:"name"`
+	IP              string   `json:"ip"`
+	Port            int      `json:"port"`
+	Username        string   `json:"username"`
+	AuthType        AuthType `json:"auth_type"`
+	Credential      string   `json:"credential"`
+	Passphrase      string   `json:"passphrase"`
+	Tags            []string `json:"tags"`
+	SSHKeyID        string   `json:"ssh_key_id"`
+	DeviceType      string   `json:"device_type"`
+	Vendor          string   `json:"vendor"`
+	Model           string   `json:"model"`
+	CLIType         string   `json:"cli_type"`
+	FirmwareVersion string   `json:"firmware_version"`
 }
 
 // UpdateHostRequest 是更新主机的请求参数（所有字段可选）。
 type UpdateHostRequest struct {
-	Name       *string   `json:"name"`
-	IP         *string   `json:"ip"`
-	Port       *int      `json:"port"`
-	Username   *string   `json:"username"`
-	AuthType   *AuthType `json:"auth_type"`
-	Credential *string   `json:"credential"`
-	Passphrase *string   `json:"passphrase"`
-	Tags       []string  `json:"tags"`
-	SSHKeyID   *string   `json:"ssh_key_id"`
+	Name            *string   `json:"name"`
+	IP              *string   `json:"ip"`
+	Port            *int      `json:"port"`
+	Username        *string   `json:"username"`
+	AuthType        *AuthType `json:"auth_type"`
+	Credential      *string   `json:"credential"`
+	Passphrase      *string   `json:"passphrase"`
+	Tags            []string  `json:"tags"`
+	SSHKeyID        *string   `json:"ssh_key_id"`
+	DeviceType      *string   `json:"device_type"`
+	Vendor          *string   `json:"vendor"`
+	Model           *string   `json:"model"`
+	CLIType         *string   `json:"cli_type"`
+	FirmwareVersion *string   `json:"firmware_version"`
 }
