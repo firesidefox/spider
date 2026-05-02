@@ -118,13 +118,18 @@ func (s *ProviderStore) Delete(id string) error {
 
 // Activate 激活指定 provider，同时停用其他所有 provider。
 func (s *ProviderStore) Activate(id string) error {
-	if _, err := s.db.Exec(`UPDATE providers SET is_active = 0 WHERE is_active = 1`); err != nil {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec(`UPDATE providers SET is_active = 0 WHERE is_active = 1`); err != nil {
 		return fmt.Errorf("停用 provider 失败: %w", err)
 	}
-	if _, err := s.db.Exec(`UPDATE providers SET is_active = 1 WHERE id = ?`, id); err != nil {
+	if _, err := tx.Exec(`UPDATE providers SET is_active = 1 WHERE id = ?`, id); err != nil {
 		return fmt.Errorf("激活 provider 失败: %w", err)
 	}
-	return nil
+	return tx.Commit()
 }
 
 // SetSelectedModel 设置 provider 的选中模型。
@@ -173,20 +178,24 @@ func (s *ProviderStore) CountAll() (int, error) {
 
 // SaveModels 替换 provider 的模型列表。
 func (s *ProviderStore) SaveModels(providerID string, modelList []llm.ModelInfo) error {
-	if _, err := s.db.Exec(`DELETE FROM provider_models WHERE provider_id = ?`, providerID); err != nil {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec(`DELETE FROM provider_models WHERE provider_id = ?`, providerID); err != nil {
 		return fmt.Errorf("删除旧模型失败: %w", err)
 	}
 	now := time.Now().UTC()
 	for _, m := range modelList {
-		_, err := s.db.Exec(
+		if _, err := tx.Exec(
 			`INSERT INTO provider_models (provider_id, model_id, display_name, created_at) VALUES (?, ?, ?, ?)`,
 			providerID, m.ID, m.DisplayName, now,
-		)
-		if err != nil {
+		); err != nil {
 			return fmt.Errorf("插入模型 %s 失败: %w", m.ID, err)
 		}
 	}
-	return nil
+	return tx.Commit()
 }
 
 // ListModels 列出 provider 的所有模型，按 model_id 排序。

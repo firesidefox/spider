@@ -19,7 +19,7 @@ type ModelInfo struct {
 // ListModels returns the available models for the given provider type and API key.
 func ListModels(providerType, apiKey, baseURL string) ([]ModelInfo, error) {
 	switch providerType {
-	case "claude":
+	case "claude", "anthropic":
 		return listClaudeModels(apiKey, baseURL)
 	case "openai":
 		return listOpenAIModels(apiKey, baseURL)

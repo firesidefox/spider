@@ -15,7 +15,7 @@ type providerResponse struct {
 }
 
 func validProviderType(t string) bool {
-	return t == "claude" || t == "openai"
+	return t == "anthropic" || t == "openai"
 }
 
 func buildProviderResponse(app *mcppkg.App, p *models.Provider) (*providerResponse, error) {
@@ -41,7 +41,7 @@ func createProvider(app *mcppkg.App, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !validProviderType(req.Type) {
-		writeError(w, http.StatusBadRequest, "type 必须为 claude 或 openai")
+		writeError(w, http.StatusBadRequest, "type 必须为 anthropic 或 openai")
 		return
 	}
 	p, err := app.ProviderStore.Create(req.Name, req.Type, req.APIKey, req.BaseURL)
@@ -104,7 +104,7 @@ func updateProvider(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id 
 		return
 	}
 	if req.Type != nil && !validProviderType(*req.Type) {
-		writeError(w, http.StatusBadRequest, "type 必须为 claude 或 openai")
+		writeError(w, http.StatusBadRequest, "type 必须为 anthropic 或 openai")
 		return
 	}
 	p, err := app.ProviderStore.Update(id, req.Name, req.Type, req.APIKey, req.BaseURL)
@@ -212,41 +212,4 @@ func listProviderModels(app *mcppkg.App, w http.ResponseWriter, _ *http.Request,
 		ms = []*models.ProviderModel{}
 	}
 	writeJSON(w, http.StatusOK, ms)
-}
-
-// setActiveModel handles PUT /api/v1/providers/active — activates a provider and sets its model.
-func setActiveModel(app *mcppkg.App, w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		ProviderID string `json:"provider_id"`
-		Model      string `json:"model"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "请求体解析失败: "+err.Error())
-		return
-	}
-	if req.ProviderID == "" {
-		writeError(w, http.StatusBadRequest, "provider_id 不能为空")
-		return
-	}
-	if err := app.ProviderStore.Activate(req.ProviderID); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	if req.Model != "" {
-		if err := app.ProviderStore.SetSelectedModel(req.ProviderID, req.Model); err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-	}
-	p, err := app.ProviderStore.GetByID(req.ProviderID)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	pr, err := buildProviderResponse(app, p)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	writeJSON(w, http.StatusOK, pr)
 }
