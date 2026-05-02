@@ -220,14 +220,17 @@
               </tbody>
             </table>
           </div>
-          <div v-if="activeProvider && providerModels[activeProvider]?.length" class="edit-card">
+          <div v-if="fetchedProviderId && providerModels[fetchedProviderId]?.length" class="edit-card">
             <div class="edit-card-title">选择模型</div>
-            <div v-for="m in providerModels[activeProvider]" :key="m.id" class="model-option"
+            <div v-for="m in providerModels[fetchedProviderId]" :key="m.id" class="model-option"
                  :class="{ active: activeModel === m.id }"
                  @click="selectModel(m.id)">
               <span>{{ m.display_name || m.id }}</span>
               <span v-if="activeModel === m.id" class="check">✓</span>
             </div>
+          </div>
+          <div v-else-if="fetchedProviderId && providerModels[fetchedProviderId]?.length === 0" class="edit-card">
+            <p class="dim" style="padding:16px;text-align:center">该供应商未返回可用模型</p>
           </div>
         </template>
 
@@ -633,11 +636,15 @@ async function selectModel(modelId: string) {
 }
 
 const providerModels = ref<Record<string, {id: string, display_name: string}[]>>({})
+const fetchedProviderId = ref('')
 
 async function fetchModels(providerId: string) {
   const res = await fetch(`/api/v1/providers/${providerId}/models`, { headers: authHeaders() })
   if (!res.ok) return
-  providerModels.value = { ...providerModels.value, [providerId]: await res.json() }
+  const models = await res.json()
+  providerModels.value = { ...providerModels.value, [providerId]: models }
+  fetchedProviderId.value = providerId
+  if (!activeProvider.value) setActiveProvider(providerId)
 }
 
 function cancelSettings() {
