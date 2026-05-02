@@ -73,7 +73,7 @@ CREATE TABLE IF NOT EXISTS ssh_keys (
 
 CREATE INDEX IF NOT EXISTS idx_ssh_keys_user_id ON ssh_keys(user_id);
 
--- Phase 3: Gateway chat tables
+-- Gateway chat tables
 CREATE TABLE IF NOT EXISTS conversations (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,

@@ -18,12 +18,13 @@ func NewConversationStore(db *sql.DB) *ConversationStore {
 }
 
 func (s *ConversationStore) Create(userID, title string) (*models.Conversation, error) {
+	now := time.Now().UTC()
 	conv := &models.Conversation{
 		ID:        uuid.New().String(),
 		UserID:    userID,
 		Title:     title,
-		CreatedAt: time.Now().UTC(),
-		UpdatedAt: time.Now().UTC(),
+		CreatedAt: now,
+		UpdatedAt: now,
 	}
 	_, err := s.db.Exec(
 		"INSERT INTO conversations (id, user_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/spiderai/spider/internal/config"
 )
@@ -22,7 +23,11 @@ func NewClaudeClient(cfg *config.LLMModelConfig) *ClaudeClient {
 	return &ClaudeClient{
 		apiKey: cfg.ResolveAPIKey(),
 		model:  cfg.Model,
-		http:   &http.Client{},
+		http: &http.Client{
+			Transport: &http.Transport{
+				ResponseHeaderTimeout: 30 * time.Second,
+			},
+		},
 	}
 }
 
@@ -77,9 +82,6 @@ func (c *ClaudeClient) readSSE(body io.ReadCloser, ch chan<- StreamEvent) {
 			continue
 		}
 		data := line[6:]
-		if data == "[DONE]" {
-			return
-		}
 
 		var raw map[string]any
 		if err := json.Unmarshal([]byte(data), &raw); err != nil {

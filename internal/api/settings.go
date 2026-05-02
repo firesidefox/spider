@@ -22,13 +22,13 @@ type settingsResponse struct {
 	Embedding  config.EmbeddingConfig `json:"embedding"`
 }
 
-// maskKey returns the last 4 characters of key prefixed with "****",
-// or the key itself if it is 4 characters or shorter.
+const maskedPrefix = "****"
+
 func maskKey(key string) string {
 	if len(key) <= 4 {
 		return key
 	}
-	return "****" + key[len(key)-4:]
+	return maskedPrefix + key[len(key)-4:]
 }
 
 func maskedLLMConfig(c config.LLMConfig) config.LLMConfig {
@@ -49,8 +49,8 @@ func maskedEmbeddingConfig(c config.EmbeddingConfig) config.EmbeddingConfig {
 	return masked
 }
 
-func getSettings(app *mcppkg.App, w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, settingsResponse{
+func buildSettingsResponse(app *mcppkg.App) settingsResponse {
+	return settingsResponse{
 		SSEAddr:    app.Config.SSE.Addr,
 		SSEBaseURL: app.Config.SSE.BaseURL,
 		SSHTimeout: app.Config.SSH.DefaultTimeout,
@@ -58,7 +58,11 @@ func getSettings(app *mcppkg.App, w http.ResponseWriter, r *http.Request) {
 		SSHMaxPool: app.Config.SSH.MaxPoolSize,
 		LLM:        maskedLLMConfig(app.Config.LLM),
 		Embedding:  maskedEmbeddingConfig(app.Config.Embedding),
-	})
+	}
+}
+
+func getSettings(app *mcppkg.App, w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, buildSettingsResponse(app))
 }
 
 func updateSettings(app *mcppkg.App, w http.ResponseWriter, r *http.Request) {
@@ -86,7 +90,7 @@ func updateSettings(app *mcppkg.App, w http.ResponseWriter, r *http.Request) {
 	if req.LLM.Active != "" {
 		// Preserve existing API keys when the incoming value is a masked placeholder.
 		for i := range req.LLM.Models {
-			if strings.HasPrefix(req.LLM.Models[i].APIKey, "****") {
+			if strings.HasPrefix(req.LLM.Models[i].APIKey, maskedPrefix) {
 				for _, existing := range app.Config.LLM.Models {
 					if existing.ID == req.LLM.Models[i].ID {
 						req.LLM.Models[i].APIKey = existing.APIKey
@@ -100,7 +104,7 @@ func updateSettings(app *mcppkg.App, w http.ResponseWriter, r *http.Request) {
 	if req.Embedding.Active != "" {
 		// Preserve existing API keys when the incoming value is a masked placeholder.
 		for i := range req.Embedding.Models {
-			if strings.HasPrefix(req.Embedding.Models[i].APIKey, "****") {
+			if strings.HasPrefix(req.Embedding.Models[i].APIKey, maskedPrefix) {
 				for _, existing := range app.Config.Embedding.Models {
 					if existing.ID == req.Embedding.Models[i].ID {
 						req.Embedding.Models[i].APIKey = existing.APIKey
@@ -123,13 +127,5 @@ func updateSettings(app *mcppkg.App, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, settingsResponse{
-		SSEAddr:    app.Config.SSE.Addr,
-		SSEBaseURL: app.Config.SSE.BaseURL,
-		SSHTimeout: app.Config.SSH.DefaultTimeout,
-		SSHPoolTTL: app.Config.SSH.PoolTTL,
-		SSHMaxPool: app.Config.SSH.MaxPoolSize,
-		LLM:        maskedLLMConfig(app.Config.LLM),
-		Embedding:  maskedEmbeddingConfig(app.Config.Embedding),
-	})
+	writeJSON(w, http.StatusOK, buildSettingsResponse(app))
 }
