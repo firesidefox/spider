@@ -26,7 +26,9 @@ type Factory struct {
 	docStore  *store.DocumentStore
 }
 
-// NewFactory creates a Factory. Returns an error if no active LLM model is configured.
+// NewFactory creates a Factory.
+// NOTE: This is a stub — Task 6 will rewrite it to read providers from the DB.
+// Returns an error until the ProviderStore is wired in.
 func NewFactory(
 	cfg *config.Config,
 	database *sql.DB,
@@ -37,40 +39,7 @@ func NewFactory(
 	msgs MessageStorer,
 	docs *store.DocumentStore,
 ) (*Factory, error) {
-	provider := cfg.Model.GetActiveProvider()
-	if provider == nil {
-		return nil, fmt.Errorf("no active provider configured")
-	}
-	if cfg.Model.ActiveModel == "" {
-		return nil, fmt.Errorf("no active model configured")
-	}
-
-	llmClient, err := llm.NewClient(provider.Type, provider.ResolveAPIKey(), cfg.Model.ActiveModel, provider.BaseURL)
-	if err != nil {
-		return nil, fmt.Errorf("create LLM client: %w", err)
-	}
-
-	f := &Factory{
-		LLMClient: llmClient,
-		Hosts:     hosts,
-		SSHPool:   pool,
-		SSHKeys:   keys,
-		Logs:      logs,
-		MsgStore:  msgs,
-		cfg:       cfg,
-		db:        database,
-		docStore:  docs,
-	}
-
-	// Optionally set up RAG store if an embedding model is configured.
-	if embModel := cfg.Embedding.ActiveModel(); embModel != nil {
-		embedder, err := rag.NewEmbedder(embModel)
-		if err == nil {
-			f.RAGStore = rag.NewStore(database, docs, embedder)
-		}
-	}
-
-	return f, nil
+	return nil, fmt.Errorf("factory requires ProviderStore (not yet wired)")
 }
 
 // NewAgent creates a new Agent with all tools registered.

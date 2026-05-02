@@ -8,8 +8,6 @@ import (
 	"io"
 	"net/http"
 	"time"
-
-	"github.com/spiderai/spider/internal/config"
 )
 
 type Embedder interface {
@@ -18,12 +16,14 @@ type Embedder interface {
 	Dimensions() int
 }
 
-func NewEmbedder(cfg *config.EmbeddingModelConfig) (Embedder, error) {
-	switch cfg.Provider {
+// NewEmbedder creates an Embedder from raw parameters.
+// provider must be "openai". apiKey, model, and dimensions are passed directly.
+func NewEmbedder(provider, apiKey, model string, dimensions int) (Embedder, error) {
+	switch provider {
 	case "openai":
-		return NewOpenAIEmbedder(cfg), nil
+		return NewOpenAIEmbedder(apiKey, model, dimensions), nil
 	default:
-		return nil, fmt.Errorf("unsupported embedding provider: %s", cfg.Provider)
+		return nil, fmt.Errorf("unsupported embedding provider: %s", provider)
 	}
 }
 
@@ -34,11 +34,11 @@ type OpenAIEmbedder struct {
 	http       *http.Client
 }
 
-func NewOpenAIEmbedder(cfg *config.EmbeddingModelConfig) *OpenAIEmbedder {
+func NewOpenAIEmbedder(apiKey, model string, dimensions int) *OpenAIEmbedder {
 	return &OpenAIEmbedder{
-		apiKey:     cfg.ResolveAPIKey(),
-		model:      cfg.Model,
-		dimensions: cfg.Dimensions,
+		apiKey:     apiKey,
+		model:      model,
+		dimensions: dimensions,
 		http:       &http.Client{Timeout: 30 * time.Second},
 	}
 }
