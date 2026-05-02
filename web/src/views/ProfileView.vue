@@ -57,7 +57,14 @@
           <button v-if="activeTab === 'info'" class="btn btn-sm" @click="showPwModal = true">修改密码</button>
           <button v-if="activeTab === 'tokens'" class="btn btn-primary btn-sm" @click="showCreate = true">+ 新建 Token</button>
           <button v-if="activeTab === 'ssh-keys'" class="btn btn-primary btn-sm" @click="showAddKey = true">+ 添加 Key</button>
-          <template v-if="activeTab === 'settings' || activeTab === 'llm'">
+          <template v-if="activeTab === 'llm'">
+            <div v-if="settingsEditing" style="display:flex;gap:8px">
+              <button class="btn btn-primary btn-sm" @click="saveSettings">保存</button>
+              <button class="btn btn-sm" @click="cancelSettings">取消</button>
+            </div>
+            <button v-else class="btn btn-primary btn-sm" @click="addProvider">+ 添加供应商</button>
+          </template>
+          <template v-if="activeTab === 'settings'">
             <div v-if="settingsEditing" style="display:flex;gap:8px">
               <button class="btn btn-primary btn-sm" @click="saveSettings">保存</button>
               <button class="btn btn-sm" @click="cancelSettings">取消</button>
@@ -207,7 +214,6 @@
                 </tr>
               </tbody>
             </table>
-            <button class="btn btn-sm" style="margin-top:8px" @click="addProvider">+ 添加供应商</button>
           </div>
           <div v-if="settings.model.active_provider && providerModels[settings.model.active_provider]?.length" class="edit-card">
             <div class="edit-card-title">选择模型</div>
