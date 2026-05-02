@@ -115,11 +115,13 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 			history = append(history, llm.Message{Role: llm.Role(m.Role), Content: m.Content})
 		}
 
+		toolDefs := a.registry.Definitions()
+
 		for turn := 0; turn < a.maxTurns; turn++ {
 			stream, err := a.llmClient.ChatStream(ctx, &llm.ChatRequest{
 				System:    a.systemPrompt,
 				Messages:  history,
-				Tools:     a.registry.Definitions(),
+				Tools:     toolDefs,
 				MaxTokens: 4096,
 			})
 			if err != nil {
@@ -131,23 +133,28 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 			var toolCalls []llm.ToolCall
 			var currentToolInput string
 
+			finishToolInput := func() {
+				if len(toolCalls) > 0 && currentToolInput != "" {
+					var input map[string]any
+					json.Unmarshal([]byte(currentToolInput), &input) //nolint:errcheck
+					toolCalls[len(toolCalls)-1].Input = input
+					currentToolInput = ""
+				}
+			}
+
 			for ev := range stream {
 				switch ev.Type {
 				case "text_delta":
 					assistantText += ev.Text
 					events <- Event{Type: EventTextDelta, Content: map[string]any{"text": ev.Text}}
 				case "tool_start":
-					currentToolInput = ""
+					finishToolInput()
 					toolCalls = append(toolCalls, *ev.ToolCall)
 					events <- Event{Type: EventToolStart, Content: map[string]any{"id": ev.ToolCall.ID, "name": ev.ToolCall.Name}}
 				case "tool_input_delta":
 					currentToolInput += ev.Text
 				case "message_stop":
-					if len(toolCalls) > 0 && currentToolInput != "" {
-						var input map[string]any
-						json.Unmarshal([]byte(currentToolInput), &input) //nolint:errcheck
-						toolCalls[len(toolCalls)-1].Input = input
-					}
+					finishToolInput()
 				}
 			}
 
@@ -160,12 +167,12 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 			}
 
 			a.msgStore.Save(conversationID, "assistant", assistantText)
+			history = append(history, llm.Message{Role: llm.RoleAssistant, Content: assistantText})
 
 			for _, tc := range toolCalls {
 				tool, ok := a.registry.Get(tc.Name)
 				if !ok {
 					events <- Event{Type: EventToolResult, Content: map[string]any{"tool": tc.Name, "error": "tool not found"}}
-					history = append(history, llm.Message{Role: llm.RoleAssistant, Content: assistantText})
 					history = append(history, llm.Message{Role: llm.RoleUser, Content: "Tool " + tc.Name + " not found"})
 					continue
 				}
@@ -186,13 +193,11 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 					approved, err := waiter.Wait(requestID, 5*time.Minute)
 					if err != nil || !approved {
 						events <- Event{Type: EventToolResult, Content: map[string]any{"tool": tc.Name, "denied": true}}
-						history = append(history, llm.Message{Role: llm.RoleAssistant, Content: assistantText})
 						history = append(history, llm.Message{Role: llm.RoleUser, Content: "operation denied by user"})
 						continue
 					}
 				} else if hookResult.Action == HookDeny {
 					events <- Event{Type: EventToolResult, Content: map[string]any{"tool": tc.Name, "denied": true, "reason": hookResult.Reason}}
-					history = append(history, llm.Message{Role: llm.RoleAssistant, Content: assistantText})
 					history = append(history, llm.Message{Role: llm.RoleUser, Content: "Tool denied: " + hookResult.Reason})
 					continue
 				}
@@ -206,7 +211,6 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 				events <- Event{Type: EventToolResult, Content: map[string]any{
 					"tool": tc.Name, "content": result.Content, "error": result.IsError,
 				}}
-				history = append(history, llm.Message{Role: llm.RoleAssistant, Content: assistantText})
 				history = append(history, llm.Message{Role: llm.RoleUser, Content: result.Content})
 			}
 		}

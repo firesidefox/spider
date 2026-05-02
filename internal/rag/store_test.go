@@ -5,8 +5,7 @@ import (
 	"database/sql"
 	"testing"
 
-	_ "modernc.org/sqlite"
-
+	"github.com/spiderai/spider/internal/db"
 	"github.com/spiderai/spider/internal/store"
 )
 
@@ -37,31 +36,14 @@ func (m *mockEmbedder) EmbedBatch(ctx context.Context, texts []string) ([][]floa
 
 func (m *mockEmbedder) Dimensions() int { return m.dim }
 
-const createDocumentsSQL = `
-CREATE TABLE IF NOT EXISTS documents (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    vendor TEXT NOT NULL DEFAULT '',
-    cli_type TEXT NOT NULL DEFAULT '',
-    doc_type TEXT NOT NULL DEFAULT '',
-    title TEXT NOT NULL DEFAULT '',
-    content TEXT NOT NULL,
-    embedding BLOB,
-    source_file TEXT NOT NULL DEFAULT '',
-    chunk_index INTEGER NOT NULL DEFAULT 0,
-    created_at DATETIME NOT NULL
-);`
-
 func setupTestDB(t *testing.T) *sql.DB {
 	t.Helper()
-	db, err := sql.Open("sqlite", ":memory:?_foreign_keys=on")
+	database, err := db.Open(t.TempDir())
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
-	if _, err := db.Exec(createDocumentsSQL); err != nil {
-		t.Fatalf("create table: %v", err)
-	}
-	t.Cleanup(func() { db.Close() })
-	return db
+	t.Cleanup(func() { database.Close() })
+	return database
 }
 
 func TestSerializeDeserializeVec(t *testing.T) {

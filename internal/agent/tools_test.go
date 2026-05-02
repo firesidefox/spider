@@ -5,22 +5,22 @@ import (
 	"testing"
 )
 
-type mockTool struct {
+type registryMockTool struct {
 	name        string
 	description string
 	schema      map[string]any
 }
 
-func (m *mockTool) Name() string                { return m.name }
-func (m *mockTool) Description() string         { return m.description }
-func (m *mockTool) InputSchema() map[string]any { return m.schema }
-func (m *mockTool) Execute(_ context.Context, _ map[string]any) (*ToolResult, error) {
+func (m *registryMockTool) Name() string                { return m.name }
+func (m *registryMockTool) Description() string         { return m.description }
+func (m *registryMockTool) InputSchema() map[string]any { return m.schema }
+func (m *registryMockTool) Execute(_ context.Context, _ map[string]any) (*ToolResult, error) {
 	return &ToolResult{Content: "ok", RiskLevel: RiskSafe}, nil
 }
 
 func TestRegistry_RegisterAndGet(t *testing.T) {
 	r := NewToolRegistry()
-	tool := &mockTool{name: "ping", description: "ping tool", schema: map[string]any{}}
+	tool := &registryMockTool{name: "ping", description: "ping tool", schema: map[string]any{}}
 	r.Register(tool)
 
 	got, ok := r.Get("ping")
@@ -40,7 +40,7 @@ func TestRegistry_RegisterAndGet(t *testing.T) {
 func TestRegistry_Definitions(t *testing.T) {
 	r := NewToolRegistry()
 	schema := map[string]any{"type": "object"}
-	r.Register(&mockTool{name: "tool1", description: "first", schema: schema})
+	r.Register(&registryMockTool{name: "tool1", description: "first", schema: schema})
 
 	defs := r.Definitions()
 	if len(defs) != 1 {
@@ -57,9 +57,9 @@ func TestRegistry_Definitions(t *testing.T) {
 
 func TestRegistry_MultipleTools(t *testing.T) {
 	r := NewToolRegistry()
-	r.Register(&mockTool{name: "a", description: "tool a", schema: nil})
-	r.Register(&mockTool{name: "b", description: "tool b", schema: nil})
-	r.Register(&mockTool{name: "c", description: "tool c", schema: nil})
+	r.Register(&registryMockTool{name: "a", description: "tool a", schema: nil})
+	r.Register(&registryMockTool{name: "b", description: "tool b", schema: nil})
+	r.Register(&registryMockTool{name: "c", description: "tool c", schema: nil})
 
 	defs := r.Definitions()
 	if len(defs) != 3 {

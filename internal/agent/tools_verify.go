@@ -125,6 +125,7 @@ func (t *VerifyTool) Execute(ctx context.Context, input map[string]any) (*ToolRe
 	interval := time.Duration(intervalSec) * time.Second
 
 	var lastResults []checkResult
+loop:
 	for time.Now().Before(deadline) {
 		lastResults = make([]checkResult, len(checks))
 		allPassed := true
@@ -140,7 +141,7 @@ func (t *VerifyTool) Execute(ctx context.Context, input map[string]any) (*ToolRe
 		}
 		select {
 		case <-ctx.Done():
-			break
+			break loop
 		case <-time.After(interval):
 		}
 	}

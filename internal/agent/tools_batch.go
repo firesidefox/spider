@@ -77,8 +77,6 @@ func (t *BatchExecuteTool) Execute(ctx context.Context, input map[string]any) (*
 
 	results := make([]batchHostResult, len(hostList))
 	var wg sync.WaitGroup
-	var mu sync.Mutex
-	_ = mu
 
 	for i, host := range hostList {
 		wg.Add(1)
