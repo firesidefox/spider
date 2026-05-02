@@ -39,6 +39,7 @@ type App struct {
 
 	chatWaiters   map[string]*agent.ConfirmationWaiter
 	chatWaitersMu sync.Mutex
+	ConfigMu      sync.RWMutex
 }
 
 func (a *App) StoreChatWaiter(convID string, w *agent.ConfirmationWaiter) {

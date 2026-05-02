@@ -14,6 +14,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+var validProviderTypes = map[string]bool{"claude": true, "openai": true}
+
 func saveConfig(app *mcppkg.App) error {
 	cfgPath := filepath.Join(app.Config.DataDir, "config.yaml")
 	data, err := yaml.Marshal(app.Config)
@@ -29,17 +31,16 @@ func maskedProvider(p config.ProviderConfig) config.ProviderConfig {
 }
 
 func listProviders(app *mcppkg.App, w http.ResponseWriter, _ *http.Request) {
+	app.ConfigMu.RLock()
+	defer app.ConfigMu.RUnlock()
 	type response struct {
 		Providers      []config.ProviderConfig `json:"providers"`
 		ActiveProvider string                  `json:"active_provider"`
 		ActiveModel    string                  `json:"active_model"`
 	}
-	var masked []config.ProviderConfig
+	masked := make([]config.ProviderConfig, 0, len(app.Config.Model.Providers))
 	for _, p := range app.Config.Model.Providers {
 		masked = append(masked, maskedProvider(p))
-	}
-	if masked == nil {
-		masked = []config.ProviderConfig{}
 	}
 	writeJSON(w, 200, response{
 		Providers:      masked,
@@ -59,10 +60,12 @@ func createProvider(app *mcppkg.App, w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "invalid request")
 		return
 	}
-	if req.Type == "" {
-		writeError(w, 400, "type is required")
+	if !validProviderTypes[req.Type] {
+		writeError(w, 400, "unsupported provider type: "+req.Type)
 		return
 	}
+	app.ConfigMu.Lock()
+	defer app.ConfigMu.Unlock()
 	p := config.ProviderConfig{
 		ID: uuid.New().String(), Name: req.Name,
 		Type: req.Type, APIKey: req.APIKey, BaseURL: req.BaseURL,
@@ -76,11 +79,6 @@ func createProvider(app *mcppkg.App, w http.ResponseWriter, r *http.Request) {
 }
 
 func updateProvider(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id string) {
-	p := app.Config.Model.GetProvider(id)
-	if p == nil {
-		writeError(w, 404, "provider not found")
-		return
-	}
 	var req struct {
 		Name    *string `json:"name"`
 		Type    *string `json:"type"`
@@ -89,6 +87,17 @@ func updateProvider(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id 
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, 400, "invalid request")
+		return
+	}
+	if req.Type != nil && !validProviderTypes[*req.Type] {
+		writeError(w, 400, "unsupported provider type: "+*req.Type)
+		return
+	}
+	app.ConfigMu.Lock()
+	defer app.ConfigMu.Unlock()
+	p := app.Config.Model.GetProvider(id)
+	if p == nil {
+		writeError(w, 404, "provider not found")
 		return
 	}
 	if req.Name != nil {
@@ -111,6 +120,8 @@ func updateProvider(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id 
 }
 
 func deleteProvider(app *mcppkg.App, w http.ResponseWriter, _ *http.Request, id string) {
+	app.ConfigMu.Lock()
+	defer app.ConfigMu.Unlock()
 	providers := app.Config.Model.Providers
 	found := false
 	for i, p := range providers {
@@ -144,6 +155,12 @@ func setActiveModel(app *mcppkg.App, w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "invalid request")
 		return
 	}
+	if req.Model == "" {
+		writeError(w, 400, "model is required")
+		return
+	}
+	app.ConfigMu.Lock()
+	defer app.ConfigMu.Unlock()
 	if app.Config.Model.GetProvider(req.ProviderID) == nil {
 		writeError(w, 404, "provider not found")
 		return
@@ -161,12 +178,16 @@ func setActiveModel(app *mcppkg.App, w http.ResponseWriter, r *http.Request) {
 }
 
 func listProviderModels(app *mcppkg.App, w http.ResponseWriter, _ *http.Request, providerID string) {
+	app.ConfigMu.RLock()
 	provider := app.Config.Model.GetProvider(providerID)
 	if provider == nil {
+		app.ConfigMu.RUnlock()
 		writeError(w, 404, "provider not found")
 		return
 	}
-	models, err := llm.ListModels(provider.Type, provider.ResolveAPIKey(), provider.BaseURL)
+	pType, apiKey, baseURL := provider.Type, provider.ResolveAPIKey(), provider.BaseURL
+	app.ConfigMu.RUnlock()
+	models, err := llm.ListModels(pType, apiKey, baseURL)
 	if err != nil {
 		writeError(w, 502, err.Error())
 		return

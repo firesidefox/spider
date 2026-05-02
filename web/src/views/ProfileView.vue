@@ -570,14 +570,18 @@ async function saveSettings() {
 }
 
 async function saveProviders() {
-  for (const p of providers.value) {
-    await fetch(`/api/v1/providers/${p.id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', ...authHeaders() },
-      body: JSON.stringify({ name: p.name, type: p.type, api_key: p.api_key, base_url: p.base_url }),
-    })
+  try {
+    await Promise.all(providers.value.map(p =>
+      fetch(`/api/v1/providers/${p.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ name: p.name, type: p.type, api_key: p.api_key, base_url: p.base_url }),
+      }).then(r => { if (!r.ok) throw new Error(`保存 ${p.name || p.id} 失败`) })
+    ))
+    settingsEditing.value = false
+  } catch (e: any) {
+    alert(e.message)
   }
-  settingsEditing.value = false
 }
 
 async function addProvider() {

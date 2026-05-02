@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
 	"time"
 )
+
+var modelHTTPClient = &http.Client{Timeout: 15 * time.Second}
 
 // ModelInfo describes a single model available from a provider.
 type ModelInfo struct {
@@ -33,7 +34,7 @@ func listClaudeModels(apiKey, baseURL string) ([]ModelInfo, error) {
 	if baseURL == "" {
 		baseURL = defaultClaudeBaseURL
 	}
-	client := &http.Client{Timeout: 15 * time.Second}
+	client := modelHTTPClient
 	req, err := http.NewRequest(http.MethodGet, baseURL+"/v1/models", nil)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
@@ -71,7 +72,7 @@ func listOpenAIModels(apiKey, baseURL string) ([]ModelInfo, error) {
 	if baseURL == "" {
 		baseURL = defaultOpenAIBaseURL
 	}
-	client := &http.Client{Timeout: 15 * time.Second}
+	client := modelHTTPClient
 	req, err := http.NewRequest(http.MethodGet, baseURL+"/v1/models", nil)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
@@ -96,11 +97,9 @@ func listOpenAIModels(apiKey, baseURL string) ([]ModelInfo, error) {
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, fmt.Errorf("decode response: %w", err)
 	}
-	models := make([]ModelInfo, 0)
+	models := make([]ModelInfo, 0, len(result.Data))
 	for _, m := range result.Data {
-		if strings.HasPrefix(m.ID, "gpt-") {
-			models = append(models, ModelInfo{ID: m.ID, DisplayName: m.ID})
-		}
+		models = append(models, ModelInfo{ID: m.ID, DisplayName: m.ID})
 	}
 	return models, nil
 }
