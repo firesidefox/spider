@@ -45,7 +45,7 @@ func NewFactory(
 		return nil, fmt.Errorf("no active model configured")
 	}
 
-	llmClient, err := llm.NewClient(provider.Type, provider.ResolveAPIKey(), cfg.Model.ActiveModel)
+	llmClient, err := llm.NewClient(provider.Type, provider.ResolveAPIKey(), cfg.Model.ActiveModel, provider.BaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("create LLM client: %w", err)
 	}

@@ -16,20 +16,25 @@ type ModelInfo struct {
 }
 
 // ListModels returns the available models for the given provider type and API key.
-func ListModels(providerType, apiKey string) ([]ModelInfo, error) {
+func ListModels(providerType, apiKey, baseURL string) ([]ModelInfo, error) {
 	switch providerType {
 	case "claude":
-		return listClaudeModels(apiKey)
+		return listClaudeModels(apiKey, baseURL)
 	case "openai":
-		return listOpenAIModels(apiKey)
+		return listOpenAIModels(apiKey, baseURL)
 	default:
 		return nil, fmt.Errorf("unsupported provider: %s", providerType)
 	}
 }
 
-func listClaudeModels(apiKey string) ([]ModelInfo, error) {
+const defaultOpenAIBaseURL = "https://api.openai.com"
+
+func listClaudeModels(apiKey, baseURL string) ([]ModelInfo, error) {
+	if baseURL == "" {
+		baseURL = defaultClaudeBaseURL
+	}
 	client := &http.Client{Timeout: 15 * time.Second}
-	req, err := http.NewRequest(http.MethodGet, "https://api.anthropic.com/v1/models", nil)
+	req, err := http.NewRequest(http.MethodGet, baseURL+"/v1/models", nil)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
@@ -62,9 +67,12 @@ func listClaudeModels(apiKey string) ([]ModelInfo, error) {
 	return models, nil
 }
 
-func listOpenAIModels(apiKey string) ([]ModelInfo, error) {
+func listOpenAIModels(apiKey, baseURL string) ([]ModelInfo, error) {
+	if baseURL == "" {
+		baseURL = defaultOpenAIBaseURL
+	}
 	client := &http.Client{Timeout: 15 * time.Second}
-	req, err := http.NewRequest(http.MethodGet, "https://api.openai.com/v1/models", nil)
+	req, err := http.NewRequest(http.MethodGet, baseURL+"/v1/models", nil)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}

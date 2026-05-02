@@ -183,25 +183,27 @@
           <div class="edit-card">
             <p class="dim" style="margin-bottom:16px;font-size:13px">配置 AI 模型供应商，用于智能运维对话和工具调用。</p>
             <table class="table">
-              <thead><tr><th style="width:30px"></th><th>ID</th><th>类型</th><th>API Key</th><th>操作</th></tr></thead>
+              <thead><tr><th style="width:30px"></th><th>ID</th><th>名称</th><th>类型</th><th>API Key</th><th>请求地址</th><th>操作</th></tr></thead>
               <tbody>
                 <tr v-for="(p, i) in settings.model.providers" :key="i">
                   <td><input type="radio" :value="p.id" v-model="settings.model.active_provider" @change="settingsEditing = true" style="accent-color:var(--primary)" /></td>
                   <td><input v-model="p.id" class="input input-inline" placeholder="my-claude" @input="settingsEditing = true" /></td>
+                  <td><input v-model="p.name" class="input input-inline" placeholder="供应商名称" @input="settingsEditing = true" /></td>
                   <td>
                     <select v-model="p.type" class="input input-inline" @change="settingsEditing = true">
-                      <option value="claude">claude</option>
-                      <option value="openai">openai</option>
+                      <option value="claude">Claude</option>
+                      <option value="openai">OpenAI</option>
                     </select>
                   </td>
                   <td><input v-model="p.api_key" class="input input-inline" placeholder="API Key" @input="settingsEditing = true" /></td>
+                  <td><input v-model="p.base_url" class="input input-inline" placeholder="留空使用默认地址" @input="settingsEditing = true" /></td>
                   <td style="white-space:nowrap">
                     <button class="btn btn-sm" @click="fetchModels(p.id)" style="margin-right:4px">获取模型</button>
                     <button class="btn btn-sm btn-danger" @click="removeProvider(i); settingsEditing = true">删除</button>
                   </td>
                 </tr>
                 <tr v-if="settings.model.providers.length === 0">
-                  <td colspan="5" class="dim" style="text-align:center;padding:24px">暂无供应商配置</td>
+                  <td colspan="7" class="dim" style="text-align:center;padding:24px">暂无供应商配置</td>
                 </tr>
               </tbody>
             </table>
@@ -506,7 +508,7 @@ function toggleLog(id: string) {
 }
 
 interface Provider {
-  id: string; type: string; api_key: string
+  id: string; name: string; type: string; api_key: string; base_url: string
 }
 interface Settings {
   sse_addr: string; sse_base_url: string
@@ -549,7 +551,7 @@ async function saveSettings() {
 }
 
 function addProvider() {
-  settings.value.model.providers.push({ id: '', type: 'claude', api_key: '' })
+  settings.value.model.providers.push({ id: '', name: '', type: 'claude', api_key: '', base_url: '' })
   settingsEditing.value = true
 }
 function removeProvider(idx: number) {

@@ -14,7 +14,7 @@ func listProviderModels(app *mcppkg.App, w http.ResponseWriter, r *http.Request,
 		writeError(w, http.StatusNotFound, "provider not found")
 		return
 	}
-	models, err := llm.ListModels(provider.Type, provider.ResolveAPIKey())
+	models, err := llm.ListModels(provider.Type, provider.ResolveAPIKey(), provider.BaseURL)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return

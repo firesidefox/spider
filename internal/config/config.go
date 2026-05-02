@@ -25,9 +25,11 @@ type AuthConfig struct {
 }
 
 type ProviderConfig struct {
-	ID     string `yaml:"id" json:"id"`
-	Type   string `yaml:"type" json:"type"`
-	APIKey string `yaml:"api_key" json:"api_key"`
+	ID      string `yaml:"id" json:"id"`
+	Name    string `yaml:"name" json:"name"`
+	Type    string `yaml:"type" json:"type"`
+	APIKey  string `yaml:"api_key" json:"api_key"`
+	BaseURL string `yaml:"base_url" json:"base_url"`
 }
 
 type ModelConfig struct {

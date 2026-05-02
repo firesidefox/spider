@@ -46,10 +46,10 @@ type Client interface {
 	ChatStream(ctx context.Context, req *ChatRequest) (<-chan StreamEvent, error)
 }
 
-func NewClient(providerType, apiKey, model string) (Client, error) {
+func NewClient(providerType, apiKey, model, baseURL string) (Client, error) {
 	switch providerType {
 	case "claude":
-		return NewClaudeClient(apiKey, model), nil
+		return NewClaudeClient(apiKey, model, baseURL), nil
 	default:
 		return nil, fmt.Errorf("unsupported LLM provider: %s", providerType)
 	}

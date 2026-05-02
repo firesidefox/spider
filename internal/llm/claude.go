@@ -11,16 +11,23 @@ import (
 	"time"
 )
 
+const defaultClaudeBaseURL = "https://api.anthropic.com"
+
 type ClaudeClient struct {
-	apiKey string
-	model  string
-	http   *http.Client
+	apiKey  string
+	model   string
+	baseURL string
+	http    *http.Client
 }
 
-func NewClaudeClient(apiKey, model string) *ClaudeClient {
+func NewClaudeClient(apiKey, model, baseURL string) *ClaudeClient {
+	if baseURL == "" {
+		baseURL = defaultClaudeBaseURL
+	}
 	return &ClaudeClient{
-		apiKey: apiKey,
-		model:  model,
+		apiKey:  apiKey,
+		model:   model,
+		baseURL: baseURL,
 		http: &http.Client{
 			Transport: &http.Transport{
 				ResponseHeaderTimeout: 30 * time.Second,
@@ -46,7 +53,7 @@ func (c *ClaudeClient) ChatStream(ctx context.Context, req *ChatRequest) (<-chan
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", "https://api.anthropic.com/v1/messages", bytes.NewReader(jsonBody))
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/v1/messages", bytes.NewReader(jsonBody))
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
