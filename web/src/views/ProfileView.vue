@@ -33,7 +33,7 @@
             <span class="nav-icon">🧩</span><span class="nav-label">Skills</span>
           </div>
           <div class="nav-row" :class="{ selected: activeTab === 'llm' }" @click="activeTab = 'llm'; loadSettings()">
-            <span class="nav-icon">🤖</span><span class="nav-label">模型配置</span>
+            <span class="nav-icon">🤖</span><span class="nav-label">模型供应商</span>
           </div>
           <div class="nav-row" :class="{ selected: activeTab === 'settings' }" @click="activeTab = 'settings'; loadSettings()">
             <span class="nav-icon">⚙️</span><span class="nav-label">系统设置</span>
@@ -178,33 +178,43 @@
           </div>
         </template>
 
-        <!-- Tab: LLM 模型 -->
+        <!-- Tab: 模型供应商 -->
         <template v-if="activeTab === 'llm'">
           <div class="edit-card">
-            <p class="dim" style="margin-bottom:16px;font-size:13px">配置 AI 模型，用于智能运维对话和工具调用。选中的模型为当前激活模型。</p>
+            <p class="dim" style="margin-bottom:16px;font-size:13px">配置 AI 模型供应商，用于智能运维对话和工具调用。</p>
             <table class="table">
-              <thead><tr><th style="width:30px"></th><th>ID</th><th>Provider</th><th>模型</th><th>API Key</th><th>Max Tokens</th><th>操作</th></tr></thead>
+              <thead><tr><th style="width:30px"></th><th>ID</th><th>类型</th><th>API Key</th><th>操作</th></tr></thead>
               <tbody>
-                <tr v-for="(m, i) in settings.llm.models" :key="i">
-                  <td><input type="radio" :value="m.id" v-model="settings.llm.active" @change="settingsEditing = true" style="accent-color:var(--primary)" /></td>
-                  <td><input v-model="m.id" class="input input-inline" placeholder="ID" @input="settingsEditing = true" /></td>
+                <tr v-for="(p, i) in settings.model.providers" :key="i">
+                  <td><input type="radio" :value="p.id" v-model="settings.model.active_provider" @change="settingsEditing = true" style="accent-color:var(--primary)" /></td>
+                  <td><input v-model="p.id" class="input input-inline" placeholder="my-claude" @input="settingsEditing = true" /></td>
                   <td>
-                    <select v-model="m.provider" class="input input-inline" @change="settingsEditing = true">
-                      <option value="claude">Claude</option>
-                      <option value="openai">OpenAI</option>
+                    <select v-model="p.type" class="input input-inline" @change="settingsEditing = true">
+                      <option value="claude">claude</option>
+                      <option value="openai">openai</option>
                     </select>
                   </td>
-                  <td><input v-model="m.model" class="input input-inline" placeholder="模型名称" @input="settingsEditing = true" /></td>
-                  <td><input v-model="m.api_key" class="input input-inline" placeholder="API Key" @input="settingsEditing = true" /></td>
-                  <td><input v-model.number="m.max_tokens" class="input input-inline" type="number" style="width:80px" @input="settingsEditing = true" /></td>
-                  <td><button class="btn btn-sm btn-danger" @click="removeLLMModel(i); settingsEditing = true">删除</button></td>
+                  <td><input v-model="p.api_key" class="input input-inline" placeholder="API Key" @input="settingsEditing = true" /></td>
+                  <td style="white-space:nowrap">
+                    <button class="btn btn-sm" @click="fetchModels(p.id)" style="margin-right:4px">获取模型</button>
+                    <button class="btn btn-sm btn-danger" @click="removeProvider(i); settingsEditing = true">删除</button>
+                  </td>
                 </tr>
-                <tr v-if="settings.llm.models.length === 0">
-                  <td colspan="7" class="dim" style="text-align:center;padding:24px">暂无模型配置</td>
+                <tr v-if="settings.model.providers.length === 0">
+                  <td colspan="5" class="dim" style="text-align:center;padding:24px">暂无供应商配置</td>
                 </tr>
               </tbody>
             </table>
-            <button class="btn btn-sm" style="margin-top:8px" @click="addLLMModel">+ 添加模型</button>
+            <button class="btn btn-sm" style="margin-top:8px" @click="addProvider">+ 添加供应商</button>
+          </div>
+          <div v-if="settings.model.active_provider && providerModels[settings.model.active_provider]?.length" class="edit-card">
+            <div class="edit-card-title">选择模型</div>
+            <div v-for="m in providerModels[settings.model.active_provider]" :key="m.id" class="model-option"
+                 :class="{ active: settings.model.active_model === m.id }"
+                 @click="settings.model.active_model = m.id; settingsEditing = true">
+              <span>{{ m.display_name || m.id }}</span>
+              <span v-if="settings.model.active_model === m.id" class="check">✓</span>
+            </div>
           </div>
         </template>
 
@@ -350,7 +360,7 @@ const roleLabel = computed(() => {
 const activeTab = ref<'info' | 'tokens' | 'ssh-keys' | 'logs' | 'users' | 'install' | 'skills' | 'llm' | 'settings'>('info')
 const tabTitle = computed(() => ({
   info: '基本信息', tokens: '访问令牌', 'ssh-keys': 'SSH Keys', logs: '操作日志',
-  users: '用户管理', install: '安装', llm: '模型配置', settings: '系统设置',
+  users: '用户管理', install: '安装', llm: '模型供应商', settings: '系统设置',
 }[activeTab.value]))
 
 const pw = ref({ old: '', new1: '', new2: '' })
@@ -495,20 +505,22 @@ function toggleLog(id: string) {
   expandedLog.value = expandedLog.value === id ? null : id
 }
 
-interface LLMModel {
-  id: string; provider: string; api_key: string; model: string; max_tokens: number
+interface Provider {
+  id: string; type: string; api_key: string
 }
 interface Settings {
   sse_addr: string; sse_base_url: string
   ssh_default_timeout_seconds: number; ssh_pool_ttl_seconds: number; ssh_max_pool_size: number
-  llm: { active: string; models: LLMModel[] }
-  embedding: { active: string; models: EmbeddingModel[] }
+  model: {
+    providers: Provider[]
+    active_provider: string
+    active_model: string
+  }
 }
 const settings = ref<Settings>({
   sse_addr: '', sse_base_url: '',
   ssh_default_timeout_seconds: 30, ssh_pool_ttl_seconds: 300, ssh_max_pool_size: 50,
-  llm: { active: '', models: [] },
-  embedding: { active: '', models: [] },
+  model: { providers: [], active_provider: '', active_model: '' },
 })
 const settingsEditing = ref(false)
 const settingsError = ref('')
@@ -520,10 +532,8 @@ async function loadSettings() {
   const res = await fetch('/api/v1/settings', { headers: authHeaders() })
   if (!res.ok) return
   const data = await res.json()
-  if (!data.llm) data.llm = { active: '', models: [] }
-  if (!data.llm.models) data.llm.models = []
-  if (!data.embedding) data.embedding = { active: '', models: [] }
-  if (!data.embedding.models) data.embedding.models = []
+  if (!data.model) data.model = { providers: [], active_provider: '', active_model: '' }
+  if (!data.model.providers) data.model.providers = []
   settings.value = data
 }
 
@@ -538,14 +548,25 @@ async function saveSettings() {
   else settingsError.value = (await res.json()).error
 }
 
-function addLLMModel() {
-  settings.value.llm.models.push({ id: '', provider: 'claude', api_key: '', model: '', max_tokens: 4096 })
+function addProvider() {
+  settings.value.model.providers.push({ id: '', type: 'claude', api_key: '' })
   settingsEditing.value = true
 }
-function removeLLMModel(idx: number) {
-  const m = settings.value.llm.models[idx]
-  if (m.id === settings.value.llm.active) settings.value.llm.active = ''
-  settings.value.llm.models.splice(idx, 1)
+function removeProvider(idx: number) {
+  const p = settings.value.model.providers[idx]
+  if (p.id === settings.value.model.active_provider) {
+    settings.value.model.active_provider = ''
+    settings.value.model.active_model = ''
+  }
+  settings.value.model.providers.splice(idx, 1)
+}
+
+const providerModels = ref<Record<string, {id: string, display_name: string}[]>>({})
+
+async function fetchModels(providerId: string) {
+  const res = await fetch(`/api/v1/providers/${providerId}/models`, { headers: authHeaders() })
+  if (!res.ok) return
+  providerModels.value[providerId] = await res.json()
 }
 
 function cancelSettings() {
@@ -737,4 +758,9 @@ function cancelSettings() {
 .token-code { flex: 1; word-break: break-all; font-size: 12px; color: var(--green); }
 .btn-copied { background: rgba(74,222,128,0.15) !important; color: var(--green) !important; border-color: rgba(74,222,128,0.4) !important; }
 .input-inline { padding: 4px 8px !important; font-size: 12px !important; width: 100%; }
+
+.model-option { padding: 8px 12px; cursor: pointer; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; color: var(--text-sub); font-size: 13px; }
+.model-option:hover { background: var(--row-hover); }
+.model-option.active { background: var(--row-hover); color: var(--primary); font-weight: 500; }
+.check { color: var(--green); }
 </style>
