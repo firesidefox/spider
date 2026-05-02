@@ -3,23 +3,16 @@ package api
 import (
 	"encoding/json"
 	"net/http"
-	"os"
-	"path/filepath"
-	"strings"
 
-	"github.com/google/uuid"
-	"github.com/spiderai/spider/internal/config"
 	mcppkg "github.com/spiderai/spider/internal/mcp"
-	"gopkg.in/yaml.v3"
 )
 
 type settingsResponse struct {
-	SSEAddr    string             `json:"sse_addr"`
-	SSEBaseURL string             `json:"sse_base_url"`
-	SSHTimeout int                `json:"ssh_default_timeout_seconds"`
-	SSHPoolTTL int                `json:"ssh_pool_ttl_seconds"`
-	SSHMaxPool int                `json:"ssh_max_pool_size"`
-	Model      config.ModelConfig `json:"model"`
+	SSEAddr    string `json:"sse_addr"`
+	SSEBaseURL string `json:"sse_base_url"`
+	SSHTimeout int    `json:"ssh_default_timeout_seconds"`
+	SSHPoolTTL int    `json:"ssh_pool_ttl_seconds"`
+	SSHMaxPool int    `json:"ssh_max_pool_size"`
 }
 
 const maskedPrefix = "****"
@@ -31,18 +24,6 @@ func maskKey(key string) string {
 	return maskedPrefix + key[len(key)-4:]
 }
 
-func maskedModelConfig(c config.ModelConfig) config.ModelConfig {
-	masked := config.ModelConfig{
-		ActiveProvider: c.ActiveProvider,
-		ActiveModel:    c.ActiveModel,
-	}
-	for _, p := range c.Providers {
-		p.APIKey = maskKey(p.APIKey)
-		masked.Providers = append(masked.Providers, p)
-	}
-	return masked
-}
-
 func buildSettingsResponse(app *mcppkg.App) settingsResponse {
 	return settingsResponse{
 		SSEAddr:    app.Config.SSE.Addr,
@@ -50,7 +31,6 @@ func buildSettingsResponse(app *mcppkg.App) settingsResponse {
 		SSHTimeout: app.Config.SSH.DefaultTimeout,
 		SSHPoolTTL: app.Config.SSH.PoolTTL,
 		SSHMaxPool: app.Config.SSH.MaxPoolSize,
-		Model:      maskedModelConfig(app.Config.Model),
 	}
 }
 
@@ -80,28 +60,9 @@ func updateSettings(app *mcppkg.App, w http.ResponseWriter, r *http.Request) {
 	if req.SSHMaxPool > 0 {
 		app.Config.SSH.MaxPoolSize = req.SSHMaxPool
 	}
-	if len(req.Model.Providers) > 0 || req.Model.ActiveProvider != "" || req.Model.ActiveModel != "" {
-		for i := range req.Model.Providers {
-			if req.Model.Providers[i].ID == "" {
-				req.Model.Providers[i].ID = uuid.New().String()
-			}
-			if strings.HasPrefix(req.Model.Providers[i].APIKey, maskedPrefix) {
-				if existing := app.Config.Model.GetProvider(req.Model.Providers[i].ID); existing != nil {
-					req.Model.Providers[i].APIKey = existing.APIKey
-				}
-			}
-		}
-		app.Config.Model = req.Model
-	}
 
-	cfgPath := filepath.Join(app.Config.DataDir, "config.yaml")
-	data, err := yaml.Marshal(app.Config)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "序列化配置失败: "+err.Error())
-		return
-	}
-	if err := os.WriteFile(cfgPath, data, 0600); err != nil {
-		writeError(w, http.StatusInternalServerError, "写入配置失败: "+err.Error())
+	if err := saveConfig(app); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 

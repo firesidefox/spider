@@ -235,9 +235,31 @@ func NewRouter(app *mcppkg.App) http.Handler {
 		}
 	})
 
+	mux.HandleFunc("/api/v1/providers", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			listProviders(app, w, r)
+		case http.MethodPost:
+			operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				createProvider(app, w, r)
+			})).ServeHTTP(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	mux.HandleFunc("/api/v1/providers/active", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPut {
+			operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				setActiveModel(app, w, r)
+			})).ServeHTTP(w, r)
+			return
+		}
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	})
+
 	mux.HandleFunc("/api/v1/providers/", func(w http.ResponseWriter, r *http.Request) {
 		rest := r.URL.Path[len("/api/v1/providers/"):]
-		// expect: {id}/models
 		if idx := indexOf(rest, '/'); idx >= 0 {
 			id := rest[:idx]
 			action := rest[idx+1:]
@@ -245,8 +267,22 @@ func NewRouter(app *mcppkg.App) http.Handler {
 				listProviderModels(app, w, r, id)
 				return
 			}
+			http.NotFound(w, r)
+			return
 		}
-		http.NotFound(w, r)
+		id := rest
+		switch r.Method {
+		case http.MethodPut:
+			operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				updateProvider(app, w, r, id)
+			})).ServeHTTP(w, r)
+		case http.MethodDelete:
+			operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				deleteProvider(app, w, r, id)
+			})).ServeHTTP(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
 	})
 
 	// Auth middleware wraps the inner mux; login/logout are exposed without auth.
