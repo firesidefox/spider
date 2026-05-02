@@ -248,26 +248,29 @@ func NewRouter(app *mcppkg.App) http.Handler {
 		}
 	})
 
-	mux.HandleFunc("/api/v1/providers/active", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPut {
-			operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				setActiveModel(app, w, r)
-			})).ServeHTTP(w, r)
-			return
-		}
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-	})
-
 	mux.HandleFunc("/api/v1/providers/", func(w http.ResponseWriter, r *http.Request) {
 		rest := r.URL.Path[len("/api/v1/providers/"):]
 		if idx := indexOf(rest, '/'); idx >= 0 {
 			id := rest[:idx]
 			action := rest[idx+1:]
-			if action == "models" && r.Method == http.MethodGet {
+			switch {
+			case action == "refresh" && r.Method == http.MethodPost:
+				operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					refreshModels(app, w, r, id)
+				})).ServeHTTP(w, r)
+			case action == "activate" && r.Method == http.MethodPut:
+				operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					activateProvider(app, w, r, id)
+				})).ServeHTTP(w, r)
+			case action == "model" && r.Method == http.MethodPut:
+				operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					setProviderModel(app, w, r, id)
+				})).ServeHTTP(w, r)
+			case action == "models" && r.Method == http.MethodGet:
 				listProviderModels(app, w, r, id)
-				return
+			default:
+				http.NotFound(w, r)
 			}
-			http.NotFound(w, r)
 			return
 		}
 		id := rest

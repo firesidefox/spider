@@ -186,39 +186,43 @@
           <div class="edit-card">
             <p class="dim" style="margin-bottom:16px;font-size:13px">配置 AI 模型供应商，用于智能运维对话和工具调用。</p>
             <table class="table">
-              <thead><tr><th>名称</th><th>类型</th><th>API Key</th><th>请求地址</th><th>状态</th><th>操作</th></tr></thead>
+              <thead><tr><th>名称</th><th>类型</th><th>请求地址</th><th>模型</th><th>状态</th><th>操作</th></tr></thead>
               <tbody>
-                <tr v-for="(p, i) in providers" :key="p.id">
+                <tr v-for="p in providers" :key="p.id">
                   <template v-if="editingProviderId === p.id">
-                    <td><input v-model="p.name" class="input input-inline" placeholder="供应商名称" /></td>
+                    <td><input v-model="editForm.name" class="input input-inline" placeholder="供应商名称" /></td>
                     <td>
-                      <select v-model="p.type" class="input input-inline">
-                        <option value="claude">Claude</option>
-                        <option value="openai">OpenAI</option>
+                      <select v-model="editForm.type" class="input input-inline">
+                        <option value="anthropic">Anthropic 兼容</option>
+                        <option value="openai">OpenAI 兼容</option>
                       </select>
                     </td>
-                    <td><input v-model="p.api_key" class="input input-inline" placeholder="API Key" /></td>
-                    <td><input v-model="p.base_url" class="input input-inline" placeholder="留空使用默认地址" /></td>
+                    <td><input v-model="editForm.base_url" class="input input-inline" placeholder="留空使用默认" /></td>
+                    <td><input v-model="editForm.api_key" class="input input-inline" placeholder="API Key" type="password" /></td>
                     <td></td>
                     <td style="white-space:nowrap">
-                      <button class="btn btn-primary btn-sm" @click="saveProvider(p)" style="margin-right:4px">保存</button>
-                      <button class="btn btn-sm" @click="cancelEditProvider" style="margin-right:4px">取消</button>
-                      <button class="btn btn-sm btn-danger" @click="removeProvider(i)">删除</button>
+                      <button class="btn btn-primary btn-sm" @click="saveProvider" style="margin-right:4px">保存</button>
+                      <button class="btn btn-sm" @click="cancelEdit" style="margin-right:4px">取消</button>
+                      <button class="btn btn-sm btn-danger" @click="removeProvider(p.id)">删除</button>
                     </td>
                   </template>
                   <template v-else>
-                    <td style="font-weight:500;color:var(--text)">{{ p.name || '未命名' }}</td>
-                    <td>{{ p.type }}</td>
-                    <td class="dim">{{ p.api_key || '—' }}</td>
-                    <td class="dim">{{ p.base_url || '默认' }}</td>
+                    <td>{{ p.name || '未命名' }}</td>
+                    <td>{{ p.type === 'anthropic' ? 'Anthropic 兼容' : 'OpenAI 兼容' }}</td>
+                    <td>{{ p.base_url || '默认' }}</td>
                     <td>
-                      <span v-if="activeProvider === p.id" class="status-badge ok">已启用</span>
-                      <span v-else class="dim">未启用</span>
+                      <select @change="changeModel(p.id, ($event.target as HTMLSelectElement).value)" class="input input-inline">
+                        <option v-for="m in p.models" :key="m.model_id" :value="m.model_id" :selected="m.model_id === p.selected_model">
+                          {{ m.display_name || m.model_id }}
+                        </option>
+                        <option v-if="!p.models?.length" value="" disabled>无模型</option>
+                      </select>
                     </td>
+                    <td><span v-if="p.is_active" class="status-badge ok">已启用</span><span v-else class="dim">未启用</span></td>
                     <td style="white-space:nowrap">
-                      <button v-if="activeProvider !== p.id" class="btn btn-sm" @click="enableProvider(p.id)" style="margin-right:4px">启用</button>
+                      <button v-if="!p.is_active" class="btn btn-sm" @click="enableProvider(p.id)" style="margin-right:4px">启用</button>
                       <button class="btn btn-sm" @click="startEditProvider(p.id)" style="margin-right:4px">编辑</button>
-                      <button class="btn btn-sm" @click="fetchModels(p.id)">获取模型</button>
+                      <button class="btn btn-sm" @click="refreshModels(p.id)">获取模型</button>
                     </td>
                   </template>
                 </tr>
@@ -230,18 +234,6 @@
           </div>
           <div v-if="fetchError" class="edit-card">
             <p class="err" style="padding:12px;text-align:center">{{ fetchError }}</p>
-          </div>
-          <div v-if="fetchedProviderId && providerModels[fetchedProviderId]?.length" class="edit-card">
-            <div class="edit-card-title">选择模型</div>
-            <div v-for="m in providerModels[fetchedProviderId]" :key="m.id" class="model-option"
-                 :class="{ active: activeModel === m.id }"
-                 @click="selectModel(m.id)">
-              <span>{{ m.display_name || m.id }}</span>
-              <span v-if="activeModel === m.id" class="check">✓</span>
-            </div>
-          </div>
-          <div v-else-if="fetchedProviderId && providerModels[fetchedProviderId]?.length === 0" class="edit-card">
-            <p class="dim" style="padding:16px;text-align:center">该供应商未返回可用模型</p>
           </div>
         </template>
 
@@ -532,16 +524,21 @@ function toggleLog(id: string) {
   expandedLog.value = expandedLog.value === id ? null : id
 }
 
+interface ProviderModel { model_id: string; display_name: string }
 interface Provider {
-  id: string; name: string; type: string; api_key: string; base_url: string
+  id: string; name: string; type: string; base_url: string
+  selected_model: string; is_active: boolean
+  models: ProviderModel[]
+  created_at: string; updated_at: string
 }
 interface Settings {
   sse_addr: string; sse_base_url: string
   ssh_default_timeout_seconds: number; ssh_pool_ttl_seconds: number; ssh_max_pool_size: number
 }
 const providers = ref<Provider[]>([])
-const activeProvider = ref('')
-const activeModel = ref('')
+const editingProviderId = ref('')
+const editForm = ref({ name: '', type: 'anthropic', api_key: '', base_url: '' })
+const fetchError = ref('')
 let providersLoaded = false
 
 const settings = ref<Settings>({
@@ -557,10 +554,7 @@ async function loadProviders() {
   providersLoaded = true
   const res = await fetch('/api/v1/providers', { headers: authHeaders() })
   if (!res.ok) return
-  const data = await res.json()
-  providers.value = data.providers || []
-  activeProvider.value = data.active_provider || ''
-  activeModel.value = data.active_model || ''
+  providers.value = await res.json()
 }
 
 async function loadSettings() {
@@ -589,11 +583,14 @@ async function saveSettings() {
   else settingsError.value = (await res.json()).error
 }
 
-async function saveProvider(p: Provider) {
-  const res = await fetch(`/api/v1/providers/${p.id}`, {
+async function saveProvider() {
+  const id = editingProviderId.value
+  const body: any = { name: editForm.value.name, type: editForm.value.type, base_url: editForm.value.base_url }
+  if (editForm.value.api_key) body.api_key = editForm.value.api_key
+  const res = await fetch(`/api/v1/providers/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify({ name: p.name, type: p.type, api_key: p.api_key, base_url: p.base_url }),
+    body: JSON.stringify(body),
   })
   if (!res.ok) { alert('保存失败'); return }
   editingProviderId.value = ''
@@ -605,67 +602,56 @@ async function addProvider() {
   const res = await fetch('/api/v1/providers', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify({ name: '', type: 'claude', api_key: '', base_url: '' }),
+    body: JSON.stringify({ name: '', type: 'anthropic', api_key: '', base_url: '' }),
   })
   if (!res.ok) return
   const p = await res.json()
   providers.value.push(p)
   editingProviderId.value = p.id
+  editForm.value = { name: p.name, type: p.type, api_key: '', base_url: p.base_url }
 }
 
-async function removeProvider(idx: number) {
-  const p = providers.value[idx]
-  const res = await fetch(`/api/v1/providers/${p.id}`, { method: 'DELETE', headers: authHeaders() })
-  if (!res.ok) return
-  providers.value.splice(idx, 1)
-  if (activeProvider.value === p.id) {
-    activeProvider.value = ''
-    activeModel.value = ''
-  }
+async function removeProvider(id: string) {
+  await fetch(`/api/v1/providers/${id}`, { method: 'DELETE', headers: authHeaders() })
+  providers.value = providers.value.filter(p => p.id !== id)
 }
 
-async function enableProvider(providerId: string) {
-  const res = await fetch('/api/v1/providers/active', {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify({ provider_id: providerId, model: activeModel.value }),
-  })
-  if (res.ok) activeProvider.value = providerId
-}
-
-const editingProviderId = ref('')
-const fetchError = ref('')
-
-function startEditProvider(id: string) { editingProviderId.value = id }
-function cancelEditProvider() {
-  editingProviderId.value = ''
+async function enableProvider(id: string) {
+  await fetch(`/api/v1/providers/${id}/activate`, { method: 'PUT', headers: authHeaders() })
   providersLoaded = false
   loadProviders()
 }
 
-async function selectModel(modelId: string) {
-  const res = await fetch('/api/v1/providers/active', {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify({ provider_id: activeProvider.value, model: modelId }),
-  })
-  if (res.ok) activeModel.value = modelId
+function startEditProvider(id: string) {
+  const p = providers.value.find(x => x.id === id)
+  if (!p) return
+  editingProviderId.value = id
+  editForm.value = { name: p.name, type: p.type, api_key: '', base_url: p.base_url }
 }
 
-const providerModels = ref<Record<string, {id: string, display_name: string}[]>>({})
-const fetchedProviderId = ref('')
+function cancelEdit() { editingProviderId.value = '' }
 
-async function fetchModels(providerId: string) {
+async function changeModel(providerId: string, model: string) {
+  await fetch(`/api/v1/providers/${providerId}/model`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ model }),
+  })
+  const p = providers.value.find(x => x.id === providerId)
+  if (p) p.selected_model = model
+}
+
+async function refreshModels(id: string) {
   fetchError.value = ''
-  const res = await fetch(`/api/v1/providers/${providerId}/models`, { headers: authHeaders() })
+  const res = await fetch(`/api/v1/providers/${id}/refresh`, { method: 'POST', headers: authHeaders() })
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: '请求失败' }))
     fetchError.value = `获取模型失败: ${err.error || res.statusText}`
     return
   }
   const models = await res.json()
-  providerModels.value = { ...providerModels.value, [providerId]: models }
-  fetchedProviderId.value = providerId
+  const p = providers.value.find(x => x.id === id)
+  if (p) p.models = models
   fetchError.value = ''
 }
 

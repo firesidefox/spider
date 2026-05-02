@@ -102,26 +102,24 @@ export function sendMessage(
   return ctrl
 }
 
-export async function getActiveModel(): Promise<{active_provider: string, active_model: string}> {
+export async function getActiveModel(): Promise<{provider_id: string, model: string, provider_name: string}> {
   const res = await fetch('/api/v1/providers', { headers: authHeaders() })
-  if (!res.ok) throw new Error((await res.json()).error)
-  const data = await res.json()
-  return { active_provider: data.active_provider || '', active_model: data.active_model || '' }
+  if (!res.ok) return { provider_id: '', model: '', provider_name: '' }
+  const providers = await res.json()
+  const active = providers.find((p: any) => p.is_active)
+  return {
+    provider_id: active?.id || '',
+    model: active?.selected_model || '',
+    provider_name: active?.name || '',
+  }
 }
 
 export async function setActiveModel(providerId: string, model: string): Promise<void> {
-  const res = await fetch('/api/v1/providers/active', {
+  await fetch(`/api/v1/providers/${providerId}/model`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify({ provider_id: providerId, model }),
+    body: JSON.stringify({ model }),
   })
-  if (!res.ok) throw new Error((await res.json()).error)
-}
-
-export async function getProviderModels(providerId: string): Promise<{id: string, display_name: string}[]> {
-  const res = await fetch(`/api/v1/providers/${providerId}/models`, { headers: authHeaders() })
-  if (!res.ok) throw new Error((await res.json()).error)
-  return res.json()
 }
 
 export async function confirmAction(

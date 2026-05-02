@@ -162,9 +162,11 @@ func serve(cfgFile, addrOverride, dataDirOverride string) error {
 	app.ConvStore = store.NewConversationStore(database)
 	app.MsgStore = store.NewMessageStore(database)
 	app.DocStore = store.NewDocumentStore(database)
+	ps := store.NewProviderStore(database, cm)
+	app.ProviderStore = ps
 
 	agentFactory, err := agent.NewFactory(
-		cfg, database, hs, pool, ks, ls, app.MsgStore, app.DocStore,
+		ps, hs, pool, ks, ls, app.MsgStore,
 	)
 	if err != nil {
 		log.Printf("WARNING: agent factory not available: %v", err)

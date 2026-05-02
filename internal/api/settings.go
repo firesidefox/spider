@@ -3,8 +3,11 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"os"
+	"path/filepath"
 
 	mcppkg "github.com/spiderai/spider/internal/mcp"
+	"gopkg.in/yaml.v3"
 )
 
 type settingsResponse struct {
@@ -22,6 +25,15 @@ func maskKey(key string) string {
 		return key
 	}
 	return maskedPrefix + key[len(key)-4:]
+}
+
+func saveConfig(app *mcppkg.App) error {
+	cfgPath := filepath.Join(app.Config.DataDir, "config.yaml")
+	data, err := yaml.Marshal(app.Config)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(cfgPath, data, 0600)
 }
 
 func buildSettingsResponse(app *mcppkg.App) settingsResponse {

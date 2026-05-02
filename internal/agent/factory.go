@@ -1,13 +1,10 @@
 package agent
 
 import (
-	"database/sql"
 	"fmt"
 	"strings"
 
-	"github.com/spiderai/spider/internal/config"
 	"github.com/spiderai/spider/internal/llm"
-	"github.com/spiderai/spider/internal/rag"
 	"github.com/spiderai/spider/internal/ssh"
 	"github.com/spiderai/spider/internal/store"
 )
@@ -15,62 +12,51 @@ import (
 // Factory holds shared dependencies for creating Agent instances.
 type Factory struct {
 	LLMClient llm.Client
-	RAGStore  *rag.Store
 	Hosts     *store.HostStore
 	SSHPool   *ssh.Pool
 	SSHKeys   *store.SSHKeyStore
 	Logs      *store.LogStore
 	MsgStore  MessageStorer
-	cfg       *config.Config
-	db        *sql.DB
-	docStore  *store.DocumentStore
 }
 
-// NewFactory creates a Factory. Returns an error if no active LLM model is configured.
+// NewFactory creates a Factory by reading the active provider from the DB.
 func NewFactory(
-	cfg *config.Config,
-	database *sql.DB,
+	providerStore *store.ProviderStore,
 	hosts *store.HostStore,
 	pool *ssh.Pool,
 	keys *store.SSHKeyStore,
 	logs *store.LogStore,
 	msgs MessageStorer,
-	docs *store.DocumentStore,
 ) (*Factory, error) {
-	provider := cfg.Model.GetActiveProvider()
+	provider, err := providerStore.GetActive()
+	if err != nil {
+		return nil, fmt.Errorf("get active provider: %w", err)
+	}
 	if provider == nil {
 		return nil, fmt.Errorf("no active provider configured")
 	}
-	if cfg.Model.ActiveModel == "" {
-		return nil, fmt.Errorf("no active model configured")
+	if provider.SelectedModel == "" {
+		return nil, fmt.Errorf("no model selected for provider %s", provider.Name)
 	}
 
-	llmClient, err := llm.NewClient(provider.Type, provider.ResolveAPIKey(), cfg.Model.ActiveModel, provider.BaseURL)
+	apiKey, err := providerStore.DecryptAPIKey(provider)
+	if err != nil {
+		return nil, fmt.Errorf("decrypt API key: %w", err)
+	}
+
+	llmClient, err := llm.NewClient(provider.Type, apiKey, provider.SelectedModel, provider.BaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("create LLM client: %w", err)
 	}
 
-	f := &Factory{
+	return &Factory{
 		LLMClient: llmClient,
 		Hosts:     hosts,
 		SSHPool:   pool,
 		SSHKeys:   keys,
 		Logs:      logs,
 		MsgStore:  msgs,
-		cfg:       cfg,
-		db:        database,
-		docStore:  docs,
-	}
-
-	// Optionally set up RAG store if an embedding model is configured.
-	if embModel := cfg.Embedding.ActiveModel(); embModel != nil {
-		embedder, err := rag.NewEmbedder(embModel)
-		if err == nil {
-			f.RAGStore = rag.NewStore(database, docs, embedder)
-		}
-	}
-
-	return f, nil
+	}, nil
 }
 
 // NewAgent creates a new Agent with all tools registered.
@@ -81,9 +67,6 @@ func (f *Factory) NewAgent(systemPrompt string) *Agent {
 	registry.Register(NewBatchExecuteTool(f.Hosts, f.SSHPool, f.Logs, f.SSHKeys))
 	registry.Register(NewVerifyTool(f.Hosts, f.SSHPool, f.SSHKeys))
 	registry.Register(NewCallRESTAPITool())
-	if f.RAGStore != nil {
-		registry.Register(NewSearchDocsTool(f.RAGStore))
-	}
 
 	hooks := NewHookChain()
 	hooks.AddBefore(DefaultRiskHook())
