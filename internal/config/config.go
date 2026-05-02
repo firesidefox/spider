@@ -10,16 +10,48 @@ import (
 
 // Config 是 Spider 的全局配置。
 type Config struct {
-	DataDir  string     `yaml:"data_dir"` // SQLite 文件、master.key 等存放目录
-	LogLevel string     `yaml:"log_level"`
-	SSH      SSHConfig  `yaml:"ssh"`
-	SSE      SSEConfig  `yaml:"sse"`
-	Auth     AuthConfig `yaml:"auth"`
+	DataDir   string          `yaml:"data_dir"` // SQLite 文件、master.key 等存放目录
+	LogLevel  string          `yaml:"log_level"`
+	SSH       SSHConfig       `yaml:"ssh"`
+	SSE       SSEConfig       `yaml:"sse"`
+	Auth      AuthConfig      `yaml:"auth"`
+	LLM       LLMConfig       `yaml:"llm"`
+	Embedding EmbeddingConfig `yaml:"embedding"`
 }
 
 // AuthConfig 是认证相关配置。
 type AuthConfig struct {
 	Enabled bool `yaml:"enabled"` // 默认 false
+}
+
+// LLMModelConfig 是单个 LLM 模型的配置。
+type LLMModelConfig struct {
+	ID        string `yaml:"id"`
+	Provider  string `yaml:"provider"`
+	APIKey    string `yaml:"api_key"`
+	Model     string `yaml:"model"`
+	MaxTokens int    `yaml:"max_tokens"`
+}
+
+// LLMConfig 是 LLM 多模型配置。
+type LLMConfig struct {
+	Active string           `yaml:"active"`
+	Models []LLMModelConfig `yaml:"models"`
+}
+
+// EmbeddingModelConfig 是单个 Embedding 模型的配置。
+type EmbeddingModelConfig struct {
+	ID         string `yaml:"id"`
+	Provider   string `yaml:"provider"`
+	APIKey     string `yaml:"api_key"`
+	Model      string `yaml:"model"`
+	Dimensions int    `yaml:"dimensions"`
+}
+
+// EmbeddingConfig 是 Embedding 多模型配置。
+type EmbeddingConfig struct {
+	Active string                 `yaml:"active"`
+	Models []EmbeddingModelConfig `yaml:"models"`
 }
 
 // SSEConfig 是 MCP SSE server 相关配置。
@@ -80,4 +112,42 @@ func Load(path string) (*Config, error) {
 // EnsureDataDir 确保数据目录存在。
 func (c *Config) EnsureDataDir() error {
 	return os.MkdirAll(c.DataDir, 0700)
+}
+
+// ActiveModel 返回当前激活的 LLM 模型配置，未找到时返回 nil。
+func (c *LLMConfig) ActiveModel() *LLMModelConfig {
+	for i := range c.Models {
+		if c.Models[i].ID == c.Active {
+			return &c.Models[i]
+		}
+	}
+	return nil
+}
+
+// ActiveModel 返回当前激活的 Embedding 模型配置，未找到时返回 nil。
+func (c *EmbeddingConfig) ActiveModel() *EmbeddingModelConfig {
+	for i := range c.Models {
+		if c.Models[i].ID == c.Active {
+			return &c.Models[i]
+		}
+	}
+	return nil
+}
+
+// ResolveAPIKey 优先从环境变量 SPIDER_LLM_APIKEY_<ID> 读取 API Key。
+func (m *LLMModelConfig) ResolveAPIKey() string {
+	envKey := os.Getenv("SPIDER_LLM_APIKEY_" + m.ID)
+	if envKey != "" {
+		return envKey
+	}
+	return m.APIKey
+}
+
+// ResolveAPIKey 优先从环境变量 SPIDER_EMBEDDING_APIKEY_<ID> 读取 API Key。
+func (m *EmbeddingModelConfig) ResolveAPIKey() string {
+	envKey := os.Getenv("SPIDER_EMBEDDING_APIKEY_" + m.ID)
+	if envKey != "" {
+		return envKey
+	}
+	return m.APIKey
 }
