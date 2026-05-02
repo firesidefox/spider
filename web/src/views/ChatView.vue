@@ -7,7 +7,7 @@ import type { DeviceStatus } from '../components/TargetPanel.vue'
 import {
   sendMessage, createConversation, listConversations,
   getConversation, deleteConversation, confirmAction,
-  getActiveModel, getProviderModels, setActiveModel,
+  getActiveModel, setActiveModel,
   type Conversation, type ChatMessage as ChatMsg, type ChatEvent,
 } from '../api/chat'
 import { listHosts, type SafeHost } from '../api/hosts'
@@ -38,6 +38,7 @@ const showModelPicker = ref(false)
 const availableModels = ref<{id: string, display_name: string}[]>([])
 const currentModel = ref('')
 const currentProvider = ref('')
+const currentModelName = ref('')
 
 const activeConv = computed(() =>
   conversations.value.find(c => c.id === activeConvId.value) || null
@@ -150,9 +151,10 @@ async function send() {
 
 async function handleModelCommand() {
   try {
-    const { active_provider, active_model } = await getActiveModel()
-    currentProvider.value = active_provider
-    currentModel.value = active_model
+    const { provider_id, model, provider_name } = await getActiveModel()
+    currentProvider.value = provider_id
+    currentModel.value = model
+    currentModelName.value = model
 
     if (!currentProvider.value) {
       messages.value.push({
@@ -163,8 +165,10 @@ async function handleModelCommand() {
       return
     }
 
-    const models = await getProviderModels(currentProvider.value)
-    availableModels.value = models
+    const res = await fetch(`/api/v1/providers/${provider_id}/models`, { headers: (await import('../api/auth')).authHeaders() })
+    if (!res.ok) throw new Error('获取模型列表失败')
+    const models = await res.json()
+    availableModels.value = models.map((m: any) => ({ id: m.model_id, display_name: m.display_name }))
     showModelPicker.value = true
   } catch (e: any) {
     messages.value.push({
@@ -179,6 +183,7 @@ async function selectModel(modelId: string) {
   try {
     await setActiveModel(currentProvider.value, modelId)
     currentModel.value = modelId
+    currentModelName.value = modelId
     showModelPicker.value = false
     messages.value.push({
       id: Date.now().toString(),
@@ -225,6 +230,7 @@ watch(() => messages.value.length, () => {
 
 onMounted(async () => {
   await Promise.all([loadConversations(), loadDevices()])
+  getActiveModel().then(m => { currentModelName.value = m.model })
   const paramId = route.params.id as string | undefined
   if (paramId) {
     await selectConversation(paramId)
@@ -238,6 +244,7 @@ onMounted(async () => {
       <div class="chat-header">
         <button class="conv-toggle" @click="showConvList = !showConvList">≡</button>
         <span class="conv-title">{{ activeConv?.title || '新对话' }}</span>
+        <span class="current-model" v-if="currentModelName">{{ currentModelName }}</span>
         <button class="new-conv-btn" @click="createNewConversation">+</button>
       </div>
 
@@ -308,6 +315,7 @@ onMounted(async () => {
 .conv-title { flex: 1; color: var(--text); font-family: 'SF Mono', monospace; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .new-conv-btn { background: var(--primary); color: #fff; border: none; width: 28px; height: 28px; border-radius: 4px; cursor: pointer; font-size: 16px; }
 .new-conv-btn:hover { background: var(--primary-hover); }
+.current-model { color: var(--muted); font-size: 11px; font-family: 'SF Mono', monospace; }
 
 .conv-dropdown { position: absolute; top: 48px; left: 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; z-index: 10; max-height: 300px; overflow-y: auto; min-width: 250px; }
 .conv-item { padding: 8px 14px; cursor: pointer; color: var(--text-sub); font-size: 13px; font-family: 'SF Mono', monospace; display: flex; align-items: center; }
