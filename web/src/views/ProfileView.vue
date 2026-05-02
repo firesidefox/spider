@@ -33,7 +33,7 @@
             <span class="nav-icon">🧩</span><span class="nav-label">Skills</span>
           </div>
           <div class="nav-row" :class="{ selected: activeTab === 'llm' }" @click="activeTab = 'llm'; loadSettings()">
-            <span class="nav-icon">🤖</span><span class="nav-label">LLM 模型</span>
+            <span class="nav-icon">🤖</span><span class="nav-label">模型配置</span>
           </div>
           <div class="nav-row" :class="{ selected: activeTab === 'settings' }" @click="activeTab = 'settings'; loadSettings()">
             <span class="nav-icon">⚙️</span><span class="nav-label">系统设置</span>
@@ -181,7 +181,7 @@
         <!-- Tab: LLM 模型 -->
         <template v-if="activeTab === 'llm'">
           <div class="edit-card">
-            <div class="edit-card-title">LLM 模型</div>
+            <p class="dim" style="margin-bottom:16px;font-size:13px">配置 AI 模型，用于智能运维对话和工具调用。选中的模型为当前激活模型。</p>
             <table class="table">
               <thead><tr><th style="width:30px"></th><th>ID</th><th>Provider</th><th>模型</th><th>API Key</th><th>Max Tokens</th><th>操作</th></tr></thead>
               <tbody>
@@ -200,38 +200,11 @@
                   <td><button class="btn btn-sm btn-danger" @click="removeLLMModel(i); settingsEditing = true">删除</button></td>
                 </tr>
                 <tr v-if="settings.llm.models.length === 0">
-                  <td colspan="7" class="dim" style="text-align:center;padding:24px">暂无 LLM 模型</td>
+                  <td colspan="7" class="dim" style="text-align:center;padding:24px">暂无模型配置</td>
                 </tr>
               </tbody>
             </table>
             <button class="btn btn-sm" style="margin-top:8px" @click="addLLMModel">+ 添加模型</button>
-          </div>
-
-          <div class="edit-card" style="margin-top:16px">
-            <div class="edit-card-title">Embedding 模型</div>
-            <table class="table">
-              <thead><tr><th style="width:30px"></th><th>ID</th><th>Provider</th><th>模型</th><th>API Key</th><th>维度</th><th>操作</th></tr></thead>
-              <tbody>
-                <tr v-for="(m, i) in settings.embedding.models" :key="i">
-                  <td><input type="radio" :value="m.id" v-model="settings.embedding.active" @change="settingsEditing = true" style="accent-color:var(--primary)" /></td>
-                  <td><input v-model="m.id" class="input input-inline" placeholder="ID" @input="settingsEditing = true" /></td>
-                  <td>
-                    <select v-model="m.provider" class="input input-inline" @change="settingsEditing = true">
-                      <option value="openai">OpenAI</option>
-                      <option value="voyage">Voyage</option>
-                    </select>
-                  </td>
-                  <td><input v-model="m.model" class="input input-inline" placeholder="模型名称" @input="settingsEditing = true" /></td>
-                  <td><input v-model="m.api_key" class="input input-inline" placeholder="API Key" @input="settingsEditing = true" /></td>
-                  <td><input v-model.number="m.dimensions" class="input input-inline" type="number" style="width:80px" @input="settingsEditing = true" /></td>
-                  <td><button class="btn btn-sm btn-danger" @click="removeEmbeddingModel(i); settingsEditing = true">删除</button></td>
-                </tr>
-                <tr v-if="settings.embedding.models.length === 0">
-                  <td colspan="7" class="dim" style="text-align:center;padding:24px">暂无 Embedding 模型</td>
-                </tr>
-              </tbody>
-            </table>
-            <button class="btn btn-sm" style="margin-top:8px" @click="addEmbeddingModel">+ 添加模型</button>
           </div>
         </template>
 
@@ -377,7 +350,7 @@ const roleLabel = computed(() => {
 const activeTab = ref<'info' | 'tokens' | 'ssh-keys' | 'logs' | 'users' | 'install' | 'skills' | 'llm' | 'settings'>('info')
 const tabTitle = computed(() => ({
   info: '基本信息', tokens: '访问令牌', 'ssh-keys': 'SSH Keys', logs: '操作日志',
-  users: '用户管理', install: '安装', llm: 'LLM 模型', settings: '系统设置',
+  users: '用户管理', install: '安装', llm: '模型配置', settings: '系统设置',
 }[activeTab.value]))
 
 const pw = ref({ old: '', new1: '', new2: '' })
@@ -525,9 +498,6 @@ function toggleLog(id: string) {
 interface LLMModel {
   id: string; provider: string; api_key: string; model: string; max_tokens: number
 }
-interface EmbeddingModel {
-  id: string; provider: string; api_key: string; model: string; dimensions: number
-}
 interface Settings {
   sse_addr: string; sse_base_url: string
   ssh_default_timeout_seconds: number; ssh_pool_ttl_seconds: number; ssh_max_pool_size: number
@@ -576,15 +546,6 @@ function removeLLMModel(idx: number) {
   const m = settings.value.llm.models[idx]
   if (m.id === settings.value.llm.active) settings.value.llm.active = ''
   settings.value.llm.models.splice(idx, 1)
-}
-function addEmbeddingModel() {
-  settings.value.embedding.models.push({ id: '', provider: 'openai', api_key: '', model: '', dimensions: 1536 })
-  settingsEditing.value = true
-}
-function removeEmbeddingModel(idx: number) {
-  const m = settings.value.embedding.models[idx]
-  if (m.id === settings.value.embedding.active) settings.value.embedding.active = ''
-  settings.value.embedding.models.splice(idx, 1)
 }
 
 function cancelSettings() {
