@@ -3,8 +3,6 @@ package llm
 import (
 	"context"
 	"fmt"
-
-	"github.com/spiderai/spider/internal/config"
 )
 
 type Role string
@@ -48,11 +46,11 @@ type Client interface {
 	ChatStream(ctx context.Context, req *ChatRequest) (<-chan StreamEvent, error)
 }
 
-func NewClient(cfg *config.LLMModelConfig) (Client, error) {
-	switch cfg.Provider {
+func NewClient(providerType, apiKey, model string) (Client, error) {
+	switch providerType {
 	case "claude":
-		return NewClaudeClient(cfg), nil
+		return NewClaudeClient(apiKey, model), nil
 	default:
-		return nil, fmt.Errorf("unsupported LLM provider: %s", cfg.Provider)
+		return nil, fmt.Errorf("unsupported LLM provider: %s", providerType)
 	}
 }

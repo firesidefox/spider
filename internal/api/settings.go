@@ -13,13 +13,12 @@ import (
 )
 
 type settingsResponse struct {
-	SSEAddr    string               `json:"sse_addr"`
-	SSEBaseURL string               `json:"sse_base_url"`
-	SSHTimeout int                  `json:"ssh_default_timeout_seconds"`
-	SSHPoolTTL int                  `json:"ssh_pool_ttl_seconds"`
-	SSHMaxPool int                  `json:"ssh_max_pool_size"`
-	LLM        config.LLMConfig     `json:"llm"`
-	Embedding  config.EmbeddingConfig `json:"embedding"`
+	SSEAddr    string             `json:"sse_addr"`
+	SSEBaseURL string             `json:"sse_base_url"`
+	SSHTimeout int                `json:"ssh_default_timeout_seconds"`
+	SSHPoolTTL int                `json:"ssh_pool_ttl_seconds"`
+	SSHMaxPool int                `json:"ssh_max_pool_size"`
+	Model      config.ModelConfig `json:"model"`
 }
 
 const maskedPrefix = "****"
@@ -31,20 +30,14 @@ func maskKey(key string) string {
 	return maskedPrefix + key[len(key)-4:]
 }
 
-func maskedLLMConfig(c config.LLMConfig) config.LLMConfig {
-	masked := config.LLMConfig{Active: c.Active}
-	for _, m := range c.Models {
-		m.APIKey = maskKey(m.APIKey)
-		masked.Models = append(masked.Models, m)
+func maskedModelConfig(c config.ModelConfig) config.ModelConfig {
+	masked := config.ModelConfig{
+		ActiveProvider: c.ActiveProvider,
+		ActiveModel:    c.ActiveModel,
 	}
-	return masked
-}
-
-func maskedEmbeddingConfig(c config.EmbeddingConfig) config.EmbeddingConfig {
-	masked := config.EmbeddingConfig{Active: c.Active}
-	for _, m := range c.Models {
-		m.APIKey = maskKey(m.APIKey)
-		masked.Models = append(masked.Models, m)
+	for _, p := range c.Providers {
+		p.APIKey = maskKey(p.APIKey)
+		masked.Providers = append(masked.Providers, p)
 	}
 	return masked
 }
@@ -56,8 +49,7 @@ func buildSettingsResponse(app *mcppkg.App) settingsResponse {
 		SSHTimeout: app.Config.SSH.DefaultTimeout,
 		SSHPoolTTL: app.Config.SSH.PoolTTL,
 		SSHMaxPool: app.Config.SSH.MaxPoolSize,
-		LLM:        maskedLLMConfig(app.Config.LLM),
-		Embedding:  maskedEmbeddingConfig(app.Config.Embedding),
+		Model:      maskedModelConfig(app.Config.Model),
 	}
 }
 
@@ -87,33 +79,15 @@ func updateSettings(app *mcppkg.App, w http.ResponseWriter, r *http.Request) {
 	if req.SSHMaxPool > 0 {
 		app.Config.SSH.MaxPoolSize = req.SSHMaxPool
 	}
-	if req.LLM.Active != "" {
-		// Preserve existing API keys when the incoming value is a masked placeholder.
-		for i := range req.LLM.Models {
-			if strings.HasPrefix(req.LLM.Models[i].APIKey, maskedPrefix) {
-				for _, existing := range app.Config.LLM.Models {
-					if existing.ID == req.LLM.Models[i].ID {
-						req.LLM.Models[i].APIKey = existing.APIKey
-						break
-					}
+	if len(req.Model.Providers) > 0 || req.Model.ActiveProvider != "" || req.Model.ActiveModel != "" {
+		for i := range req.Model.Providers {
+			if strings.HasPrefix(req.Model.Providers[i].APIKey, maskedPrefix) {
+				if existing := app.Config.Model.GetProvider(req.Model.Providers[i].ID); existing != nil {
+					req.Model.Providers[i].APIKey = existing.APIKey
 				}
 			}
 		}
-		app.Config.LLM = req.LLM
-	}
-	if req.Embedding.Active != "" {
-		// Preserve existing API keys when the incoming value is a masked placeholder.
-		for i := range req.Embedding.Models {
-			if strings.HasPrefix(req.Embedding.Models[i].APIKey, maskedPrefix) {
-				for _, existing := range app.Config.Embedding.Models {
-					if existing.ID == req.Embedding.Models[i].ID {
-						req.Embedding.Models[i].APIKey = existing.APIKey
-						break
-					}
-				}
-			}
-		}
-		app.Config.Embedding = req.Embedding
+		app.Config.Model = req.Model
 	}
 
 	cfgPath := filepath.Join(app.Config.DataDir, "config.yaml")

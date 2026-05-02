@@ -7,6 +7,7 @@ import type { DeviceStatus } from '../components/TargetPanel.vue'
 import {
   sendMessage, createConversation, listConversations,
   getConversation, deleteConversation, confirmAction,
+  getSettings, getProviderModels, updateActiveModel,
   type Conversation, type ChatMessage as ChatMsg, type ChatEvent,
 } from '../api/chat'
 import { listHosts, type SafeHost } from '../api/hosts'
@@ -32,6 +33,11 @@ const messagesRef = ref<HTMLElement | null>(null)
 const showConvList = ref(false)
 const devices = ref<DeviceStatus[]>([])
 let abortCtrl: AbortController | null = null
+
+const showModelPicker = ref(false)
+const availableModels = ref<{id: string, display_name: string}[]>([])
+const currentModel = ref('')
+const currentProvider = ref('')
 
 const activeConv = computed(() =>
   conversations.value.find(c => c.id === activeConvId.value) || null
@@ -69,6 +75,14 @@ function scrollToBottom() {
 async function send() {
   const text = inputText.value.trim()
   if (!text || isStreaming.value) return
+
+  // Handle /model command
+  if (text === '/model') {
+    inputText.value = ''
+    await handleModelCommand()
+    return
+  }
+
   inputText.value = ''
 
   if (!activeConvId.value) {
@@ -132,6 +146,53 @@ async function send() {
     }
     nextTick(() => scrollToBottom())
   })
+}
+
+async function handleModelCommand() {
+  try {
+    const settings = await getSettings()
+    currentProvider.value = settings.model?.active_provider || ''
+    currentModel.value = settings.model?.active_model || ''
+
+    if (!currentProvider.value) {
+      messages.value.push({
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: '未配置模型供应商。请在 个人设置 → 模型供应商 中配置。',
+      })
+      return
+    }
+
+    const models = await getProviderModels(currentProvider.value)
+    availableModels.value = models
+    showModelPicker.value = true
+  } catch (e: any) {
+    messages.value.push({
+      id: Date.now().toString(),
+      role: 'assistant',
+      content: `获取模型列表失败: ${e.message}`,
+    })
+  }
+}
+
+async function selectModel(modelId: string) {
+  try {
+    const settings = await getSettings()
+    await updateActiveModel(settings, modelId)
+    currentModel.value = modelId
+    showModelPicker.value = false
+    messages.value.push({
+      id: Date.now().toString(),
+      role: 'assistant',
+      content: `模型已切换为 **${modelId}**`,
+    })
+  } catch (e: any) {
+    messages.value.push({
+      id: Date.now().toString(),
+      role: 'assistant',
+      content: `切换模型失败: ${e.message}`,
+    })
+  }
 }
 
 async function handleConfirm(requestId: string, approved: boolean) {
@@ -203,6 +264,22 @@ onMounted(async () => {
         </div>
       </div>
 
+      <div v-if="showModelPicker" class="model-picker">
+        <div class="model-picker-header">
+          <span>当前模型: <strong>{{ currentModel || '未选择' }}</strong></span>
+          <button class="btn btn-sm" @click="showModelPicker = false">关闭</button>
+        </div>
+        <div class="model-picker-list">
+          <div v-for="m in availableModels" :key="m.id"
+               class="model-picker-item"
+               :class="{ active: m.id === currentModel }"
+               @click="selectModel(m.id)">
+            <span>{{ m.display_name || m.id }}</span>
+            <span v-if="m.id === currentModel" class="model-check">✓ 当前</span>
+          </div>
+        </div>
+      </div>
+
       <div class="chat-input">
         <textarea
           v-model="inputText"
@@ -250,4 +327,12 @@ onMounted(async () => {
 .send-btn { background: var(--primary); color: #fff; border: none; padding: 8px 20px; border-radius: 6px; cursor: pointer; font-size: 13px; font-family: 'SF Mono', monospace; }
 .send-btn:hover:not(:disabled) { background: var(--primary-hover); }
 .send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.model-picker { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; margin: 0 16px 8px; padding: 12px; }
+.model-picker-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; color: var(--text); font-size: 13px; font-family: 'SF Mono', monospace; }
+.model-picker-list { max-height: 300px; overflow-y: auto; }
+.model-picker-item { padding: 8px 12px; cursor: pointer; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; color: var(--text-sub); font-size: 13px; font-family: 'SF Mono', monospace; }
+.model-picker-item:hover { background: var(--row-hover); }
+.model-picker-item.active { color: var(--primary); font-weight: 500; }
+.model-check { color: var(--green); font-size: 12px; }
 </style>

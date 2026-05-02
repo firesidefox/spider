@@ -235,6 +235,20 @@ func NewRouter(app *mcppkg.App) http.Handler {
 		}
 	})
 
+	mux.HandleFunc("/api/v1/providers/", func(w http.ResponseWriter, r *http.Request) {
+		rest := r.URL.Path[len("/api/v1/providers/"):]
+		// expect: {id}/models
+		if idx := indexOf(rest, '/'); idx >= 0 {
+			id := rest[:idx]
+			action := rest[idx+1:]
+			if action == "models" && r.Method == http.MethodGet {
+				listProviderModels(app, w, r, id)
+				return
+			}
+		}
+		http.NotFound(w, r)
+	})
+
 	// Auth middleware wraps the inner mux; login/logout are exposed without auth.
 	authMW := authmw.AuthMiddleware(
 		app.Config.Auth.Enabled,

@@ -1,0 +1,240 @@
+<h2>目标视图 — 百台设备场景</h2>
+<p class="subtitle">选择适合大规模设备列表的展示方式</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>分组折叠 + 统计摘要</h3>
+      <p>按 tag/vendor/状态分组，折叠展示，顶部汇总统计</p>
+      <div class="mockup" style="margin-top:12px;font-size:13px;">
+        <div class="mockup-body" style="width:240px;background:#16162a;padding:12px;height:400px;overflow:auto;">
+          <div style="font-size:11px;color:#888;font-weight:600;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px;">目标视图</div>
+
+          <!-- 汇总统计 -->
+          <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;">
+            <span style="padding:2px 8px;background:rgba(74,222,128,0.1);border-radius:10px;font-size:10px;color:#4ade80;">● 92 在线</span>
+            <span style="padding:2px 8px;background:rgba(239,68,68,0.1);border-radius:10px;font-size:10px;color:#f87171;">● 5 离线</span>
+            <span style="padding:2px 8px;background:rgba(251,191,36,0.1);border-radius:10px;font-size:10px;color:#fbbf24;">⟳ 3 执行中</span>
+          </div>
+
+          <!-- 搜索/过滤 -->
+          <div style="margin-bottom:10px;">
+            <input class="mock-input" style="width:100%;font-size:11px;padding:4px 8px;" placeholder="搜索设备...">
+          </div>
+
+          <!-- 分组: 核心网关 -->
+          <div style="margin-bottom:8px;">
+            <div style="font-size:11px;color:#888;display:flex;align-items:center;gap:4px;margin-bottom:4px;cursor:pointer;">
+              <span>▼</span> 核心网关 <span style="color:#555;">(48)</span>
+              <span style="margin-left:auto;font-size:10px;color:#4ade80;">✓ 46</span>
+              <span style="font-size:10px;color:#fbbf24;">⟳ 2</span>
+            </div>
+            <div style="padding-left:8px;">
+              <div style="font-size:11px;padding:3px 6px;display:flex;align-items:center;gap:4px;border-radius:3px;margin-bottom:1px;">
+                <span style="width:5px;height:5px;border-radius:50%;background:#4ade80;flex-shrink:0;"></span>
+                <span style="color:#e2e8f0;">GW-01</span>
+                <span style="color:#555;font-size:10px;margin-left:auto;">✓</span>
+              </div>
+              <div style="font-size:11px;padding:3px 6px;display:flex;align-items:center;gap:4px;border-radius:3px;margin-bottom:1px;">
+                <span style="width:5px;height:5px;border-radius:50%;background:#fbbf24;flex-shrink:0;"></span>
+                <span style="color:#e2e8f0;">GW-02</span>
+                <span style="color:#fbbf24;font-size:10px;margin-left:auto;">⟳</span>
+              </div>
+              <div style="font-size:11px;padding:3px 6px;display:flex;align-items:center;gap:4px;border-radius:3px;margin-bottom:1px;">
+                <span style="width:5px;height:5px;border-radius:50%;background:#4ade80;flex-shrink:0;"></span>
+                <span style="color:#e2e8f0;">GW-03</span>
+                <span style="color:#555;font-size:10px;margin-left:auto;">✓</span>
+              </div>
+              <div style="font-size:11px;padding:3px 6px;color:#555;">... 还有 45 台</div>
+            </div>
+          </div>
+
+          <!-- 分组: 边缘网关 -->
+          <div style="margin-bottom:8px;">
+            <div style="font-size:11px;color:#888;display:flex;align-items:center;gap:4px;margin-bottom:4px;cursor:pointer;">
+              <span>▶</span> 边缘网关 <span style="color:#555;">(32)</span>
+              <span style="margin-left:auto;font-size:10px;color:#4ade80;">✓ 30</span>
+              <span style="font-size:10px;color:#f87171;">✗ 2</span>
+            </div>
+          </div>
+
+          <!-- 分组: 防火墙 -->
+          <div style="margin-bottom:8px;">
+            <div style="font-size:11px;color:#888;display:flex;align-items:center;gap:4px;margin-bottom:4px;cursor:pointer;">
+              <span>▶</span> 防火墙 <span style="color:#555;">(20)</span>
+              <span style="margin-left:auto;font-size:10px;color:#4ade80;">✓ 17</span>
+              <span style="font-size:10px;color:#f87171;">✗ 3</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>热力矩阵 + 详情弹出</h3>
+      <p>每台设备一个小方块，颜色表状态，hover/点击看详情。一屏看全局</p>
+      <div class="mockup" style="margin-top:12px;font-size:13px;">
+        <div class="mockup-body" style="width:240px;background:#16162a;padding:12px;height:400px;overflow:auto;">
+          <div style="font-size:11px;color:#888;font-weight:600;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px;">目标视图</div>
+
+          <!-- 汇总 -->
+          <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;">
+            <span style="padding:2px 8px;background:rgba(74,222,128,0.1);border-radius:10px;font-size:10px;color:#4ade80;">● 92</span>
+            <span style="padding:2px 8px;background:rgba(239,68,68,0.1);border-radius:10px;font-size:10px;color:#f87171;">● 5</span>
+            <span style="padding:2px 8px;background:rgba(251,191,36,0.1);border-radius:10px;font-size:10px;color:#fbbf24;">⟳ 3</span>
+          </div>
+
+          <!-- 分组标签 -->
+          <div style="font-size:11px;color:#888;margin-bottom:6px;">核心网关 (48)</div>
+
+          <!-- 热力矩阵 -->
+          <div style="display:flex;flex-wrap:wrap;gap:3px;margin-bottom:12px;">
+            <div style="width:18px;height:18px;background:#166534;border-radius:3px;cursor:pointer;" title="GW-01 ✓"></div>
+            <div style="width:18px;height:18px;background:#166534;border-radius:3px;cursor:pointer;" title="GW-02 ✓"></div>
+            <div style="width:18px;height:18px;background:#854d0e;border-radius:3px;cursor:pointer;border:1px solid #fbbf24;" title="GW-03 执行中"></div>
+            <div style="width:18px;height:18px;background:#166534;border-radius:3px;cursor:pointer;"></div>
+            <div style="width:18px;height:18px;background:#166534;border-radius:3px;cursor:pointer;"></div>
+            <div style="width:18px;height:18px;background:#7f1d1d;border-radius:3px;cursor:pointer;" title="GW-06 失败"></div>
+            <div style="width:18px;height:18px;background:#166534;border-radius:3px;cursor:pointer;"></div>
+            <div style="width:18px;height:18px;background:#166534;border-radius:3px;cursor:pointer;"></div>
+            <div style="width:18px;height:18px;background:#854d0e;border-radius:3px;cursor:pointer;border:1px solid #fbbf24;"></div>
+            <div style="width:18px;height:18px;background:#166534;border-radius:3px;cursor:pointer;"></div>
+            <div style="width:18px;height:18px;background:#166534;border-radius:3px;cursor:pointer;"></div>
+            <div style="width:18px;height:18px;background:#166534;border-radius:3px;cursor:pointer;"></div>
+            <div style="width:18px;height:18px;background:#166534;border-radius:3px;cursor:pointer;"></div>
+            <div style="width:18px;height:18px;background:#166534;border-radius:3px;cursor:pointer;"></div>
+            <div style="width:18px;height:18px;background:#166534;border-radius:3px;cursor:pointer;"></div>
+            <div style="width:18px;height:18px;background:#166534;border-radius:3px;cursor:pointer;"></div>
+            <div style="width:18px;height:18px;background:#166534;border-radius:3px;cursor:pointer;"></div>
+            <div style="width:18px;height:18px;background:#166534;border-radius:3px;cursor:pointer;"></div>
+            <div style="width:18px;height:18px;background:#7f1d1d;border-radius:3px;cursor:pointer;"></div>
+            <div style="width:18px;height:18px;background:#166534;border-radius:3px;cursor:pointer;"></div>
+            <div style="width:18px;height:18px;background:#166534;border-radius:3px;cursor:pointer;"></div>
+            <div style="width:18px;height:18px;background:#166534;border-radius:3px;cursor:pointer;"></div>
+            <div style="width:18px;height:18px;background:#166534;border-radius:3px;cursor:pointer;"></div>
+            <div style="width:18px;height:18px;background:#166534;border-radius:3px;cursor:pointer;"></div>
+          </div>
+
+          <!-- 点击后弹出详情 -->
+          <div style="padding:8px;background:rgba(255,255,255,0.04);border:1px solid rgba(251,191,36,0.3);border-radius:6px;margin-bottom:12px;">
+            <div style="font-size:12px;font-weight:600;color:#e2e8f0;margin-bottom:4px;">GW-03</div>
+            <div style="font-size:11px;color:#888;">华为 NE40E · 10.0.0.3</div>
+            <div style="font-size:11px;color:#fbbf24;margin-top:4px;">⟳ 执行中: ip address 10.0.1.3/24</div>
+            <div style="font-size:11px;color:#888;margin-top:2px;">耗时: 2.3s</div>
+          </div>
+
+          <div style="font-size:11px;color:#888;margin-bottom:6px;">边缘网关 (32)</div>
+          <div style="display:flex;flex-wrap:wrap;gap:3px;margin-bottom:12px;">
+            <div style="width:18px;height:18px;background:#166534;border-radius:3px;cursor:pointer;"></div>
+            <div style="width:18px;height:18px;background:#166534;border-radius:3px;cursor:pointer;"></div>
+            <div style="width:18px;height:18px;background:#166534;border-radius:3px;cursor:pointer;"></div>
+            <div style="width:18px;height:18px;background:#7f1d1d;border-radius:3px;cursor:pointer;"></div>
+            <div style="width:18px;height:18px;background:#166534;border-radius:3px;cursor:pointer;"></div>
+            <div style="width:18px;height:18px;background:#166534;border-radius:3px;cursor:pointer;"></div>
+            <div style="width:18px;height:18px;background:#166534;border-radius:3px;cursor:pointer;"></div>
+            <div style="width:18px;height:18px;background:#166534;border-radius:3px;cursor:pointer;"></div>
+            <div style="width:18px;height:18px;background:#166534;border-radius:3px;cursor:pointer;"></div>
+            <div style="width:18px;height:18px;background:#166534;border-radius:3px;cursor:pointer;"></div>
+          </div>
+
+          <!-- 图例 -->
+          <div style="border-top:1px solid rgba(255,255,255,0.06);padding-top:8px;display:flex;gap:10px;flex-wrap:wrap;">
+            <span style="font-size:10px;color:#888;display:flex;align-items:center;gap:3px;"><span style="width:8px;height:8px;background:#166534;border-radius:2px;display:inline-block;"></span>成功</span>
+            <span style="font-size:10px;color:#888;display:flex;align-items:center;gap:3px;"><span style="width:8px;height:8px;background:#854d0e;border-radius:2px;display:inline-block;"></span>执行中</span>
+            <span style="font-size:10px;color:#888;display:flex;align-items:center;gap:3px;"><span style="width:8px;height:8px;background:#7f1d1d;border-radius:2px;display:inline-block;"></span>失败</span>
+            <span style="font-size:10px;color:#888;display:flex;align-items:center;gap:3px;"><span style="width:8px;height:8px;background:#333;border-radius:2px;display:inline-block;"></span>离线</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>混合：摘要 + 矩阵 + 列表</h3>
+      <p>顶部统计摘要，批量操作时切矩阵视图，单台操作时切详情列表</p>
+      <div class="mockup" style="margin-top:12px;font-size:13px;">
+        <div class="mockup-body" style="width:240px;background:#16162a;padding:12px;height:400px;overflow:auto;">
+          <div style="font-size:11px;color:#888;font-weight:600;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px;">目标视图</div>
+
+          <!-- 视图切换 tab -->
+          <div style="display:flex;gap:0;margin-bottom:10px;border:1px solid rgba(255,255,255,0.1);border-radius:4px;overflow:hidden;">
+            <div style="flex:1;padding:4px;text-align:center;font-size:10px;color:#888;background:rgba(255,255,255,0.05);cursor:pointer;">列表</div>
+            <div style="flex:1;padding:4px;text-align:center;font-size:10px;color:#e2e8f0;background:rgba(99,102,241,0.2);cursor:pointer;">矩阵</div>
+          </div>
+
+          <!-- 汇总 -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px;">
+            <div style="padding:6px;background:rgba(255,255,255,0.04);border-radius:4px;text-align:center;">
+              <div style="font-size:16px;font-weight:700;color:#4ade80;">92</div>
+              <div style="font-size:10px;color:#888;">成功</div>
+            </div>
+            <div style="padding:6px;background:rgba(255,255,255,0.04);border-radius:4px;text-align:center;">
+              <div style="font-size:16px;font-weight:700;color:#f87171;">5</div>
+              <div style="font-size:10px;color:#888;">失败</div>
+            </div>
+          </div>
+
+          <!-- 进度条 -->
+          <div style="margin-bottom:10px;">
+            <div style="display:flex;justify-content:space-between;font-size:10px;color:#888;margin-bottom:3px;">
+              <span>批量进度</span><span>95/100</span>
+            </div>
+            <div style="height:4px;background:#333;border-radius:2px;overflow:hidden;">
+              <div style="width:92%;height:100%;background:linear-gradient(90deg,#4ade80 0%,#4ade80 94%,#fbbf24 94%,#fbbf24 97%,#f87171 97%);border-radius:2px;"></div>
+            </div>
+          </div>
+
+          <!-- 矩阵 (当前激活) -->
+          <div style="display:flex;flex-wrap:wrap;gap:2px;margin-bottom:10px;">
+            <div style="width:16px;height:16px;background:#166534;border-radius:2px;"></div>
+            <div style="width:16px;height:16px;background:#166534;border-radius:2px;"></div>
+            <div style="width:16px;height:16px;background:#166534;border-radius:2px;"></div>
+            <div style="width:16px;height:16px;background:#166534;border-radius:2px;"></div>
+            <div style="width:16px;height:16px;background:#854d0e;border-radius:2px;"></div>
+            <div style="width:16px;height:16px;background:#166534;border-radius:2px;"></div>
+            <div style="width:16px;height:16px;background:#7f1d1d;border-radius:2px;"></div>
+            <div style="width:16px;height:16px;background:#166534;border-radius:2px;"></div>
+            <div style="width:16px;height:16px;background:#166534;border-radius:2px;"></div>
+            <div style="width:16px;height:16px;background:#166534;border-radius:2px;"></div>
+            <div style="width:16px;height:16px;background:#166534;border-radius:2px;"></div>
+            <div style="width:16px;height:16px;background:#166534;border-radius:2px;"></div>
+            <div style="width:16px;height:16px;background:#166534;border-radius:2px;"></div>
+            <div style="width:16px;height:16px;background:#166534;border-radius:2px;"></div>
+            <div style="width:16px;height:16px;background:#166534;border-radius:2px;"></div>
+            <div style="width:16px;height:16px;background:#854d0e;border-radius:2px;"></div>
+            <div style="width:16px;height:16px;background:#166534;border-radius:2px;"></div>
+            <div style="width:16px;height:16px;background:#166534;border-radius:2px;"></div>
+            <div style="width:16px;height:16px;background:#7f1d1d;border-radius:2px;"></div>
+            <div style="width:16px;height:16px;background:#166534;border-radius:2px;"></div>
+            <div style="width:16px;height:16px;background:#166534;border-radius:2px;"></div>
+            <div style="width:16px;height:16px;background:#166534;border-radius:2px;"></div>
+            <div style="width:16px;height:16px;background:#166534;border-radius:2px;"></div>
+            <div style="width:16px;height:16px;background:#166534;border-radius:2px;"></div>
+            <div style="width:16px;height:16px;background:#333;border-radius:2px;"></div>
+            <div style="width:16px;height:16px;background:#333;border-radius:2px;"></div>
+            <div style="width:16px;height:16px;background:#333;border-radius:2px;"></div>
+          </div>
+
+          <!-- 失败设备自动置顶 -->
+          <div style="font-size:11px;color:#f87171;font-weight:600;margin-bottom:6px;">⚠ 需关注 (5)</div>
+          <div style="font-size:11px;padding:4px 6px;display:flex;align-items:center;gap:4px;background:rgba(239,68,68,0.08);border-radius:3px;margin-bottom:2px;">
+            <span style="color:#f87171;">✗</span>
+            <span style="color:#e2e8f0;">GW-07</span>
+            <span style="color:#888;font-size:10px;margin-left:auto;">timeout</span>
+          </div>
+          <div style="font-size:11px;padding:4px 6px;display:flex;align-items:center;gap:4px;background:rgba(239,68,68,0.08);border-radius:3px;margin-bottom:2px;">
+            <span style="color:#f87171;">✗</span>
+            <span style="color:#e2e8f0;">GW-19</span>
+            <span style="color:#888;font-size:10px;margin-left:auto;">auth failed</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

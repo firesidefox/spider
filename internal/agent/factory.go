@@ -37,12 +37,15 @@ func NewFactory(
 	msgs MessageStorer,
 	docs *store.DocumentStore,
 ) (*Factory, error) {
-	llmModel := cfg.LLM.ActiveModel()
-	if llmModel == nil {
-		return nil, fmt.Errorf("no active LLM model configured")
+	provider := cfg.Model.GetActiveProvider()
+	if provider == nil {
+		return nil, fmt.Errorf("no active provider configured")
+	}
+	if cfg.Model.ActiveModel == "" {
+		return nil, fmt.Errorf("no active model configured")
 	}
 
-	llmClient, err := llm.NewClient(llmModel)
+	llmClient, err := llm.NewClient(provider.Type, provider.ResolveAPIKey(), cfg.Model.ActiveModel)
 	if err != nil {
 		return nil, fmt.Errorf("create LLM client: %w", err)
 	}
