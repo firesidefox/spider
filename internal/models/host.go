@@ -23,6 +23,11 @@ type Host struct {
 	EncryptedPassphrase string    `json:"-"`
 	SSHKeyID            string    `json:"-"`
 	Tags                []string  `json:"tags"`
+	DeviceType          string    `json:"device_type,omitempty"`
+	Vendor              string    `json:"vendor,omitempty"`
+	Model               string    `json:"model,omitempty"`
+	CLIType             string    `json:"cli_type,omitempty"`
+	FirmwareVersion     string    `json:"firmware_version,omitempty"`
 	CreatedAt           time.Time `json:"created_at"`
 	UpdatedAt           time.Time `json:"updated_at"`
 }

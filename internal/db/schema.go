@@ -72,6 +72,53 @@ CREATE TABLE IF NOT EXISTS ssh_keys (
 );
 
 CREATE INDEX IF NOT EXISTS idx_ssh_keys_user_id ON ssh_keys(user_id);
+
+-- Phase 3: Gateway chat tables
+CREATE TABLE IF NOT EXISTS conversations (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    title TEXT NOT NULL DEFAULT '',
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+CREATE INDEX IF NOT EXISTS idx_conversations_user_id ON conversations(user_id);
+
+CREATE TABLE IF NOT EXISTS messages (
+    id TEXT PRIMARY KEY,
+    conversation_id TEXT NOT NULL,
+    role TEXT NOT NULL,
+    content TEXT NOT NULL,
+    created_at DATETIME NOT NULL,
+    FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages(conversation_id);
+
+CREATE TABLE IF NOT EXISTS documents (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    vendor TEXT NOT NULL DEFAULT '',
+    cli_type TEXT NOT NULL DEFAULT '',
+    doc_type TEXT NOT NULL DEFAULT '',
+    title TEXT NOT NULL DEFAULT '',
+    content TEXT NOT NULL,
+    embedding BLOB,
+    source_file TEXT NOT NULL DEFAULT '',
+    chunk_index INTEGER NOT NULL DEFAULT 0,
+    created_at DATETIME NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_documents_vendor_cli ON documents(vendor, cli_type);
+
+CREATE TABLE IF NOT EXISTS pending_confirmations (
+    id TEXT PRIMARY KEY,
+    conversation_id TEXT NOT NULL,
+    tool_name TEXT NOT NULL,
+    tool_input TEXT NOT NULL,
+    risk_level TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    created_at DATETIME NOT NULL,
+    resolved_at DATETIME,
+    FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+);
 `
 
 // migrate 创建所有表（幂等）。
@@ -87,6 +134,16 @@ func migrate(db *sql.DB) error {
 	_, err = db.Exec(`ALTER TABLE hosts ADD COLUMN ssh_key_id TEXT NOT NULL DEFAULT ''`)
 	if err != nil && !strings.Contains(err.Error(), "duplicate column name") {
 		return err
+	}
+	alterStmts := []string{
+		"ALTER TABLE hosts ADD COLUMN device_type TEXT",
+		"ALTER TABLE hosts ADD COLUMN vendor TEXT",
+		"ALTER TABLE hosts ADD COLUMN model TEXT",
+		"ALTER TABLE hosts ADD COLUMN cli_type TEXT",
+		"ALTER TABLE hosts ADD COLUMN firmware_version TEXT",
+	}
+	for _, stmt := range alterStmts {
+		db.Exec(stmt) // ignore "duplicate column" errors
 	}
 	return nil
 }
