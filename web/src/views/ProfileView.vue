@@ -32,7 +32,7 @@
           <div class="nav-row" :class="{ selected: activeTab === 'skills' }" @click="activeTab = 'skills'">
             <span class="nav-icon">🧩</span><span class="nav-label">Skills</span>
           </div>
-          <div class="nav-row" :class="{ selected: activeTab === 'llm' }" @click="activeTab = 'llm'; loadSettings()">
+          <div class="nav-row" :class="{ selected: activeTab === 'llm' }" @click="activeTab = 'llm'; loadProviders()">
             <span class="nav-icon">🤖</span><span class="nav-label">模型供应商</span>
           </div>
           <div class="nav-row" :class="{ selected: activeTab === 'settings' }" @click="activeTab = 'settings'; loadSettings()">
@@ -59,8 +59,8 @@
           <button v-if="activeTab === 'ssh-keys'" class="btn btn-primary btn-sm" @click="showAddKey = true">+ 添加 Key</button>
           <template v-if="activeTab === 'llm'">
             <div v-if="settingsEditing" style="display:flex;gap:8px">
-              <button class="btn btn-primary btn-sm" @click="saveSettings">保存</button>
-              <button class="btn btn-sm" @click="cancelSettings">取消</button>
+              <button class="btn btn-primary btn-sm" @click="saveProviders">保存</button>
+              <button class="btn btn-sm" @click="cancelProviders">取消</button>
             </div>
             <button v-else class="btn btn-primary btn-sm" @click="addProvider">+ 添加供应商</button>
           </template>
@@ -192,8 +192,8 @@
             <table class="table">
               <thead><tr><th style="width:30px"></th><th>名称</th><th>类型</th><th>API Key</th><th>请求地址</th><th>操作</th></tr></thead>
               <tbody>
-                <tr v-for="(p, i) in settings.model.providers" :key="p.id">
-                  <td><input type="radio" :value="p.id" v-model="settings.model.active_provider" @change="settingsEditing = true" style="accent-color:var(--primary)" /></td>
+                <tr v-for="(p, i) in providers" :key="p.id">
+                  <td><input type="radio" :value="p.id" :checked="activeProvider === p.id" @change="setActiveProvider(p.id)" style="accent-color:var(--primary)" /></td>
                   <td><input v-model="p.name" class="input input-inline" placeholder="供应商名称" @input="settingsEditing = true" /></td>
                   <td>
                     <select v-model="p.type" class="input input-inline" @change="settingsEditing = true">
@@ -205,22 +205,22 @@
                   <td><input v-model="p.base_url" class="input input-inline" placeholder="留空使用默认地址" @input="settingsEditing = true" /></td>
                   <td style="white-space:nowrap">
                     <button class="btn btn-sm" @click="fetchModels(p.id)" style="margin-right:4px">获取模型</button>
-                    <button class="btn btn-sm btn-danger" @click="removeProvider(i); settingsEditing = true">删除</button>
+                    <button class="btn btn-sm btn-danger" @click="removeProvider(i)">删除</button>
                   </td>
                 </tr>
-                <tr v-if="settings.model.providers.length === 0">
+                <tr v-if="providers.length === 0">
                   <td colspan="6" class="dim" style="text-align:center;padding:24px">暂无供应商配置</td>
                 </tr>
               </tbody>
             </table>
           </div>
-          <div v-if="settings.model.active_provider && providerModels[settings.model.active_provider]?.length" class="edit-card">
+          <div v-if="activeProvider && providerModels[activeProvider]?.length" class="edit-card">
             <div class="edit-card-title">选择模型</div>
-            <div v-for="m in providerModels[settings.model.active_provider]" :key="m.id" class="model-option"
-                 :class="{ active: settings.model.active_model === m.id }"
-                 @click="settings.model.active_model = m.id; settingsEditing = true">
+            <div v-for="m in providerModels[activeProvider]" :key="m.id" class="model-option"
+                 :class="{ active: activeModel === m.id }"
+                 @click="selectModel(m.id)">
               <span>{{ m.display_name || m.id }}</span>
-              <span v-if="settings.model.active_model === m.id" class="check">✓</span>
+              <span v-if="activeModel === m.id" class="check">✓</span>
             </div>
           </div>
         </template>
@@ -518,20 +518,30 @@ interface Provider {
 interface Settings {
   sse_addr: string; sse_base_url: string
   ssh_default_timeout_seconds: number; ssh_pool_ttl_seconds: number; ssh_max_pool_size: number
-  model: {
-    providers: Provider[]
-    active_provider: string
-    active_model: string
-  }
 }
+const providers = ref<Provider[]>([])
+const activeProvider = ref('')
+const activeModel = ref('')
+let providersLoaded = false
+
 const settings = ref<Settings>({
   sse_addr: '', sse_base_url: '',
   ssh_default_timeout_seconds: 30, ssh_pool_ttl_seconds: 300, ssh_max_pool_size: 50,
-  model: { providers: [], active_provider: '', active_model: '' },
 })
 const settingsEditing = ref(false)
 const settingsError = ref('')
 let settingsLoaded = false
+
+async function loadProviders() {
+  if (providersLoaded) return
+  providersLoaded = true
+  const res = await fetch('/api/v1/providers', { headers: authHeaders() })
+  if (!res.ok) return
+  const data = await res.json()
+  providers.value = data.providers || []
+  activeProvider.value = data.active_provider || ''
+  activeModel.value = data.active_model || ''
+}
 
 async function loadSettings() {
   if (settingsLoaded) return
@@ -539,9 +549,13 @@ async function loadSettings() {
   const res = await fetch('/api/v1/settings', { headers: authHeaders() })
   if (!res.ok) return
   const data = await res.json()
-  if (!data.model) data.model = { providers: [], active_provider: '', active_model: '' }
-  if (!data.model.providers) data.model.providers = []
-  settings.value = data
+  settings.value = {
+    sse_addr: data.sse_addr || '',
+    sse_base_url: data.sse_base_url || '',
+    ssh_default_timeout_seconds: data.ssh_default_timeout_seconds ?? 30,
+    ssh_pool_ttl_seconds: data.ssh_pool_ttl_seconds ?? 300,
+    ssh_max_pool_size: data.ssh_max_pool_size ?? 50,
+  }
 }
 
 async function saveSettings() {
@@ -555,17 +569,56 @@ async function saveSettings() {
   else settingsError.value = (await res.json()).error
 }
 
-function addProvider() {
-  settings.value.model.providers.push({ id: '', name: '', type: 'claude', api_key: '', base_url: '' })
-  settingsEditing.value = true
-}
-function removeProvider(idx: number) {
-  const p = settings.value.model.providers[idx]
-  if (p.id === settings.value.model.active_provider) {
-    settings.value.model.active_provider = ''
-    settings.value.model.active_model = ''
+async function saveProviders() {
+  for (const p of providers.value) {
+    await fetch(`/api/v1/providers/${p.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ name: p.name, type: p.type, api_key: p.api_key, base_url: p.base_url }),
+    })
   }
-  settings.value.model.providers.splice(idx, 1)
+  settingsEditing.value = false
+}
+
+async function addProvider() {
+  const res = await fetch('/api/v1/providers', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ name: '', type: 'claude', api_key: '', base_url: '' }),
+  })
+  if (!res.ok) return
+  const p = await res.json()
+  providers.value.push(p)
+}
+
+async function removeProvider(idx: number) {
+  const p = providers.value[idx]
+  const res = await fetch(`/api/v1/providers/${p.id}`, { method: 'DELETE', headers: authHeaders() })
+  if (!res.ok) return
+  providers.value.splice(idx, 1)
+  if (activeProvider.value === p.id) {
+    activeProvider.value = ''
+    activeModel.value = ''
+  }
+}
+
+async function setActiveProvider(providerId: string) {
+  activeProvider.value = providerId
+  activeModel.value = ''
+  await fetch('/api/v1/providers/active', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ provider_id: providerId, model: '' }),
+  })
+}
+
+async function selectModel(modelId: string) {
+  const res = await fetch('/api/v1/providers/active', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ provider_id: activeProvider.value, model: modelId }),
+  })
+  if (res.ok) activeModel.value = modelId
 }
 
 const providerModels = ref<Record<string, {id: string, display_name: string}[]>>({})
@@ -580,6 +633,12 @@ function cancelSettings() {
   settingsEditing.value = false
   settingsLoaded = false
   loadSettings()
+}
+
+function cancelProviders() {
+  settingsEditing.value = false
+  providersLoaded = false
+  loadProviders()
 }
 </script>
 

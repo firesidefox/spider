@@ -7,7 +7,7 @@ import type { DeviceStatus } from '../components/TargetPanel.vue'
 import {
   sendMessage, createConversation, listConversations,
   getConversation, deleteConversation, confirmAction,
-  getSettings, getProviderModels, updateActiveModel,
+  getActiveModel, getProviderModels, setActiveModel,
   type Conversation, type ChatMessage as ChatMsg, type ChatEvent,
 } from '../api/chat'
 import { listHosts, type SafeHost } from '../api/hosts'
@@ -150,9 +150,9 @@ async function send() {
 
 async function handleModelCommand() {
   try {
-    const settings = await getSettings()
-    currentProvider.value = settings.model?.active_provider || ''
-    currentModel.value = settings.model?.active_model || ''
+    const { active_provider, active_model } = await getActiveModel()
+    currentProvider.value = active_provider
+    currentModel.value = active_model
 
     if (!currentProvider.value) {
       messages.value.push({
@@ -177,8 +177,7 @@ async function handleModelCommand() {
 
 async function selectModel(modelId: string) {
   try {
-    const settings = await getSettings()
-    await updateActiveModel(settings, modelId)
+    await setActiveModel(currentProvider.value, modelId)
     currentModel.value = modelId
     showModelPicker.value = false
     messages.value.push({
