@@ -6,6 +6,84 @@ import (
 	"testing"
 )
 
+func TestLoadLLMConfig(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	content := `
+data_dir: /tmp/test
+llm:
+  active: claude-sonnet
+  models:
+    - id: claude-sonnet
+      provider: claude
+      api_key: sk-ant-test
+      model: claude-sonnet-4-6
+      max_tokens: 4096
+    - id: gpt4o
+      provider: openai
+      api_key: sk-test
+      model: gpt-4o
+      max_tokens: 4096
+embedding:
+  active: openai-small
+  models:
+    - id: openai-small
+      provider: openai
+      api_key: sk-test
+      model: text-embedding-3-small
+      dimensions: 1536
+`
+	os.WriteFile(cfgPath, []byte(content), 0600)
+	cfg, err := Load(cfgPath)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+	if cfg.LLM.Active != "claude-sonnet" {
+		t.Errorf("LLM.Active = %q, want %q", cfg.LLM.Active, "claude-sonnet")
+	}
+	if len(cfg.LLM.Models) != 2 {
+		t.Fatalf("LLM.Models len = %d, want 2", len(cfg.LLM.Models))
+	}
+	if cfg.LLM.Models[0].Provider != "claude" {
+		t.Errorf("Models[0].Provider = %q, want %q", cfg.LLM.Models[0].Provider, "claude")
+	}
+	if cfg.Embedding.Active != "openai-small" {
+		t.Errorf("Embedding.Active = %q, want %q", cfg.Embedding.Active, "openai-small")
+	}
+	if cfg.Embedding.Models[0].Dimensions != 1536 {
+		t.Errorf("Dimensions = %d, want 1536", cfg.Embedding.Models[0].Dimensions)
+	}
+}
+
+func TestActiveModel(t *testing.T) {
+	cfg := &LLMConfig{
+		Active: "gpt4o",
+		Models: []LLMModelConfig{
+			{ID: "claude-sonnet", Provider: "claude"},
+			{ID: "gpt4o", Provider: "openai"},
+		},
+	}
+	m := cfg.ActiveModel()
+	if m == nil || m.ID != "gpt4o" {
+		t.Errorf("ActiveModel = %v, want gpt4o", m)
+	}
+	cfg.Active = "nonexistent"
+	if cfg.ActiveModel() != nil {
+		t.Error("ActiveModel should return nil for nonexistent")
+	}
+}
+
+func TestResolveAPIKey(t *testing.T) {
+	m := &LLMModelConfig{ID: "test", APIKey: "from-config"}
+	if m.ResolveAPIKey() != "from-config" {
+		t.Errorf("ResolveAPIKey = %q, want from-config", m.ResolveAPIKey())
+	}
+	t.Setenv("SPIDER_LLM_APIKEY_test", "from-env")
+	if m.ResolveAPIKey() != "from-env" {
+		t.Errorf("ResolveAPIKey = %q, want from-env", m.ResolveAPIKey())
+	}
+}
+
 func TestDefaultConfig(t *testing.T) {
 	cfg := DefaultConfig()
 	if cfg.DataDir != "/var/lib/spider" {
