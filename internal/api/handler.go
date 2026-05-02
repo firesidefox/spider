@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	authmw "github.com/spiderai/spider/internal/auth"
 	"github.com/spiderai/spider/internal/models"
@@ -195,6 +196,43 @@ func NewRouter(app *mcppkg.App) http.Handler {
 			return
 		}
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	})
+
+	// Phase 3: Chat API
+	mux.HandleFunc("/api/v1/chat/conversations", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost:
+			chatCreateConversation(app, w, r)
+		case http.MethodGet:
+			chatListConversations(app, w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	mux.HandleFunc("/api/v1/chat/conversations/", func(w http.ResponseWriter, r *http.Request) {
+		rest := r.URL.Path[len("/api/v1/chat/conversations/"):]
+		id := rest
+		action := ""
+		if idx := indexOf(rest, '/'); idx >= 0 {
+			id = rest[:idx]
+			action = rest[idx+1:]
+		}
+		switch {
+		case action == "" && r.Method == http.MethodGet:
+			chatGetConversation(app, w, r, id)
+		case action == "" && r.Method == http.MethodDelete:
+			chatDeleteConversation(app, w, r, id)
+		case action == "" && r.Method == http.MethodPatch:
+			chatUpdateTitle(app, w, r, id)
+		case action == "messages" && r.Method == http.MethodPost:
+			chatSendMessage(app, w, r, id)
+		case strings.HasPrefix(action, "confirm/") && r.Method == http.MethodPost:
+			requestID := action[len("confirm/"):]
+			chatConfirm(app, w, r, id, requestID)
+		default:
+			http.NotFound(w, r)
+		}
 	})
 
 	// Auth middleware wraps the inner mux; login/logout are exposed without auth.

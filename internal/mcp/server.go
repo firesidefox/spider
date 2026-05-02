@@ -7,29 +7,59 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
 	mcpgo "github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 
-	"github.com/spiderai/spider/internal/config"
-	"github.com/spiderai/spider/internal/store"
-	sshpkg "github.com/spiderai/spider/internal/ssh"
+	"github.com/spiderai/spider/internal/agent"
 	"github.com/spiderai/spider/internal/auth"
+	"github.com/spiderai/spider/internal/config"
+	sshpkg "github.com/spiderai/spider/internal/ssh"
+	"github.com/spiderai/spider/internal/store"
 )
 
 // App 聚合所有依赖，供 MCP tool handler 使用。
 type App struct {
-	HostStore   *store.HostStore
-	SSHKeyStore *store.SSHKeyStore
-	LogStore    *store.LogStore
-	Pool        *sshpkg.Pool
-	Config      *config.Config
-	DB          *sql.DB
-	UserStore   *store.UserStore   // Phase 2
-	TokenStore  *store.TokenStore  // Phase 2
-	JWTManager  *auth.JWTManager   // Phase 2
+	HostStore    *store.HostStore
+	SSHKeyStore  *store.SSHKeyStore
+	LogStore     *store.LogStore
+	Pool         *sshpkg.Pool
+	Config       *config.Config
+	DB           *sql.DB
+	UserStore    *store.UserStore   // Phase 2
+	TokenStore   *store.TokenStore  // Phase 2
+	JWTManager   *auth.JWTManager   // Phase 2
+	ConvStore    *store.ConversationStore
+	MsgStore     *store.MessageStore
+	DocStore     *store.DocumentStore
+	AgentFactory *agent.Factory // nil if LLM not configured
+
+	chatWaiters   map[string]*agent.ConfirmationWaiter
+	chatWaitersMu sync.Mutex
+}
+
+func (a *App) StoreChatWaiter(convID string, w *agent.ConfirmationWaiter) {
+	a.chatWaitersMu.Lock()
+	defer a.chatWaitersMu.Unlock()
+	if a.chatWaiters == nil {
+		a.chatWaiters = make(map[string]*agent.ConfirmationWaiter)
+	}
+	a.chatWaiters[convID] = w
+}
+
+func (a *App) GetChatWaiter(convID string) *agent.ConfirmationWaiter {
+	a.chatWaitersMu.Lock()
+	defer a.chatWaitersMu.Unlock()
+	return a.chatWaiters[convID]
+}
+
+func (a *App) RemoveChatWaiter(convID string) {
+	a.chatWaitersMu.Lock()
+	defer a.chatWaitersMu.Unlock()
+	delete(a.chatWaiters, convID)
 }
 
 // newMCPServer 创建并注册工具的 MCP server。

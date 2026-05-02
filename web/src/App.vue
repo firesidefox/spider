@@ -5,6 +5,7 @@
       <nav class="nav-links">
         <RouterLink to="/hosts" class="nav-item">主机管理</RouterLink>
         <RouterLink to="/exec" class="nav-item">命令执行</RouterLink>
+        <RouterLink to="/chat" class="nav-item">智能运维</RouterLink>
         <RouterLink to="/audit" class="nav-item">审计</RouterLink>
         <RouterLink to="/profile" class="nav-item">个人设置</RouterLink>
       </nav>
