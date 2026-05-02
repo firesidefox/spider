@@ -50,6 +50,8 @@ func NewClient(providerType, apiKey, model, baseURL string) (Client, error) {
 	switch providerType {
 	case "claude":
 		return NewClaudeClient(apiKey, model, baseURL), nil
+	case "openai":
+		return NewOpenAIClient(apiKey, model, baseURL), nil
 	default:
 		return nil, fmt.Errorf("unsupported LLM provider: %s", providerType)
 	}
