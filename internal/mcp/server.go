@@ -32,14 +32,14 @@ type App struct {
 	UserStore    *store.UserStore   // Phase 2
 	TokenStore   *store.TokenStore  // Phase 2
 	JWTManager   *auth.JWTManager   // Phase 2
-	ConvStore    *store.ConversationStore
-	MsgStore     *store.MessageStore
-	DocStore     *store.DocumentStore
-	AgentFactory *agent.Factory // nil if LLM not configured
+	ConvStore     *store.ConversationStore
+	MsgStore      *store.MessageStore
+	DocStore      *store.DocumentStore
+	ProviderStore *store.ProviderStore
+	AgentFactory  *agent.Factory // nil if LLM not configured
 
 	chatWaiters   map[string]*agent.ConfirmationWaiter
 	chatWaitersMu sync.Mutex
-	ConfigMu      sync.RWMutex
 }
 
 func (a *App) StoreChatWaiter(convID string, w *agent.ConfirmationWaiter) {
