@@ -35,6 +35,9 @@
           <div class="nav-row" :class="{ selected: activeTab === 'llm' }" @click="activeTab = 'llm'; loadProviders()">
             <span class="nav-icon">🤖</span><span class="nav-label">模型供应商</span>
           </div>
+          <div class="nav-row" :class="{ selected: activeTab === 'agent' }" @click="activeTab = 'agent'; loadAgentSettings()">
+            <span class="nav-icon">🧠</span><span class="nav-label">智能体</span>
+          </div>
           <div class="nav-row" :class="{ selected: activeTab === 'settings' }" @click="activeTab = 'settings'; loadSettings()">
             <span class="nav-icon">⚙️</span><span class="nav-label">系统设置</span>
           </div>
@@ -237,6 +240,104 @@
           </div>
         </template>
 
+        <!-- Tab: 智能体 -->
+        <template v-if="activeTab === 'agent'">
+          <div v-if="agentError" class="err" style="margin-bottom:12px">{{ agentError }}</div>
+
+          <!-- 权限模式 card -->
+          <div class="edit-card">
+            <div class="edit-card-title">权限模式</div>
+            <div class="block-grid">
+              <div class="form-row">
+                <label>模式</label>
+                <select v-model="agentSettings.permission_mode" class="input">
+                  <option value="ask">ask — 每次询问</option>
+                  <option value="auto">auto — 自动执行</option>
+                  <option value="plan">plan — 仅规划</option>
+                  <option value="readonly">readonly — 只读</option>
+                </select>
+              </div>
+              <div class="form-row">
+                <label>审批超时（秒）</label>
+                <input v-model.number="agentSettings.approval_timeout" class="input" type="number" min="0" />
+              </div>
+            </div>
+            <div style="margin-top:16px">
+              <button class="btn btn-primary btn-sm" :disabled="agentSaving" @click="saveAgentSettings">
+                {{ agentSaving ? '保存中…' : '保存' }}
+              </button>
+            </div>
+          </div>
+
+          <!-- 自定义规则 card -->
+          <div class="edit-card">
+            <div class="edit-card-toolbar">
+              <div class="edit-card-title" style="margin-bottom:0;padding-bottom:0;border-bottom:none">自定义规则</div>
+              <button class="btn btn-primary btn-sm" @click="showAddRule = true" v-if="!showAddRule">+ 添加规则</button>
+            </div>
+            <div v-if="showAddRule" style="display:flex;gap:8px;align-items:flex-end;margin-bottom:12px;flex-wrap:wrap">
+              <div class="form-row" style="flex:2;min-width:140px;margin-bottom:0">
+                <label>Pattern</label>
+                <input v-model="newRule.pattern" class="input" placeholder="e.g. rm -rf *" />
+              </div>
+              <div class="form-row" style="flex:1;min-width:80px;margin-bottom:0">
+                <label>Level</label>
+                <select v-model="newRule.level" class="input">
+                  <option value="L1">L1</option>
+                  <option value="L2">L2</option>
+                  <option value="L3">L3</option>
+                  <option value="L4">L4</option>
+                </select>
+              </div>
+              <div class="form-row" style="flex:2;min-width:140px;margin-bottom:0">
+                <label>描述</label>
+                <input v-model="newRule.description" class="input" placeholder="规则说明" />
+              </div>
+              <div style="display:flex;gap:4px">
+                <button class="btn btn-primary btn-sm" @click="addRule">确认</button>
+                <button class="btn btn-sm" @click="showAddRule = false">取消</button>
+              </div>
+            </div>
+            <table class="table">
+              <thead><tr><th>#</th><th>Pattern</th><th>Level</th><th>描述</th><th>操作</th></tr></thead>
+              <tbody>
+                <tr v-for="(r, idx) in customRules" :key="idx">
+                  <td class="dim">{{ idx + 1 }}</td>
+                  <td style="font-family:'SF Mono',Consolas,monospace;font-size:12px">{{ r.pattern }}</td>
+                  <td>{{ r.level }}</td>
+                  <td class="dim">{{ r.description || '—' }}</td>
+                  <td><button class="btn btn-sm btn-danger" @click="deleteRule(idx)">删除</button></td>
+                </tr>
+                <tr v-if="customRules.length === 0">
+                  <td colspan="5" class="dim" style="text-align:center;padding:24px">暂无自定义规则</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- 内置规则 card -->
+          <div class="edit-card">
+            <div class="edit-card-toolbar" style="cursor:pointer" @click="showBuiltinRules = !showBuiltinRules">
+              <div class="edit-card-title" style="margin-bottom:0;padding-bottom:0;border-bottom:none">
+                内置规则 ({{ builtinRules.length }})
+              </div>
+              <span class="dim">{{ showBuiltinRules ? '收起 ▲' : '展开 ▼' }}</span>
+            </div>
+            <table v-if="showBuiltinRules" class="table" style="margin-top:12px">
+              <thead><tr><th>Pattern</th><th>Level</th></tr></thead>
+              <tbody>
+                <tr v-for="(r, idx) in builtinRules" :key="idx">
+                  <td style="font-family:'SF Mono',Consolas,monospace;font-size:12px">{{ r.pattern }}</td>
+                  <td>{{ r.level }}</td>
+                </tr>
+                <tr v-if="builtinRules.length === 0">
+                  <td colspan="2" class="dim" style="text-align:center;padding:24px">暂无内置规则</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </template>
+
         <!-- Tab: 系统设置 -->
         <template v-if="activeTab === 'settings'">
           <!-- 只读视图 -->
@@ -376,10 +477,10 @@ const roleLabel = computed(() => {
   return map[currentUser.value?.role ?? ''] ?? currentUser.value?.role ?? '—'
 })
 
-const activeTab = ref<'info' | 'tokens' | 'ssh-keys' | 'logs' | 'users' | 'install' | 'skills' | 'llm' | 'settings'>('info')
+const activeTab = ref<'info' | 'tokens' | 'ssh-keys' | 'logs' | 'users' | 'install' | 'skills' | 'llm' | 'agent' | 'settings'>('info')
 const tabTitle = computed(() => ({
   info: '基本信息', tokens: '访问令牌', 'ssh-keys': 'SSH Keys', logs: '操作日志',
-  users: '用户管理', install: '安装', llm: '模型供应商', settings: '系统设置',
+  users: '用户管理', install: '安装', llm: '模型供应商', agent: '智能体', settings: '系统设置',
 }[activeTab.value]))
 
 const pw = ref({ old: '', new1: '', new2: '' })
@@ -659,6 +760,83 @@ function cancelSettings() {
   settingsEditing.value = false
   settingsLoaded = false
   loadSettings()
+}
+
+// ── Agent / 智能体 ──
+const agentSettings = ref({ permission_mode: 'ask', approval_timeout: 300 })
+const customRules = ref<{ pattern: string; level: string; description: string }[]>([])
+const builtinRules = ref<{ pattern: string; level: string }[]>([])
+const showBuiltinRules = ref(false)
+const showAddRule = ref(false)
+const newRule = ref({ pattern: '', level: 'L3', description: '' })
+const agentSaving = ref(false)
+const agentError = ref('')
+
+async function loadAgentSettings() {
+  agentError.value = ''
+  try {
+    const res = await fetch('/api/v1/settings', { headers: authHeaders() })
+    const data = await res.json()
+    agentSettings.value = {
+      permission_mode: data.permission_mode || 'ask',
+      approval_timeout: data.approval_timeout || 300,
+    }
+    const rulesRes = await fetch('/api/v1/permission/rules', { headers: authHeaders() })
+    customRules.value = await rulesRes.json()
+    const builtinRes = await fetch('/api/v1/permission/builtin-rules', { headers: authHeaders() })
+    builtinRules.value = await builtinRes.json()
+  } catch (e: any) {
+    agentError.value = e.message
+  }
+}
+
+async function saveAgentSettings() {
+  agentSaving.value = true
+  agentError.value = ''
+  try {
+    await fetch('/api/v1/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify(agentSettings.value),
+    })
+  } catch (e: any) {
+    agentError.value = e.message
+  }
+  agentSaving.value = false
+}
+
+async function addRule() {
+  agentError.value = ''
+  try {
+    const res = await fetch('/api/v1/permission/rules', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify(newRule.value),
+    })
+    if (!res.ok) {
+      const err = await res.json()
+      agentError.value = err.error || 'Failed to add rule'
+      return
+    }
+    newRule.value = { pattern: '', level: 'L3', description: '' }
+    showAddRule.value = false
+    await loadAgentSettings()
+  } catch (e: any) {
+    agentError.value = e.message
+  }
+}
+
+async function deleteRule(idx: number) {
+  agentError.value = ''
+  try {
+    await fetch(`/api/v1/permission/rules/${idx}`, {
+      method: 'DELETE',
+      headers: authHeaders(),
+    })
+    await loadAgentSettings()
+  } catch (e: any) {
+    agentError.value = e.message
+  }
 }
 
 </script>
