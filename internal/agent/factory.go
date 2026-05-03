@@ -5,18 +5,21 @@ import (
 	"strings"
 
 	"github.com/spiderai/spider/internal/llm"
+	"github.com/spiderai/spider/internal/permission"
 	"github.com/spiderai/spider/internal/ssh"
 	"github.com/spiderai/spider/internal/store"
 )
 
 // Factory holds shared dependencies for creating Agent instances.
 type Factory struct {
-	LLMClient llm.Client
-	Hosts     *store.HostStore
-	SSHPool   *ssh.Pool
-	SSHKeys   *store.SSHKeyStore
-	Logs      *store.LogStore
-	MsgStore  MessageStorer
+	LLMClient      llm.Client
+	Hosts          *store.HostStore
+	SSHPool        *ssh.Pool
+	SSHKeys        *store.SSHKeyStore
+	Logs           *store.LogStore
+	MsgStore       MessageStorer
+	Enforcer       *permission.Enforcer
+	PermissionMode permission.Mode
 }
 
 // NewFactory creates a Factory by reading the active provider from the DB.
@@ -70,7 +73,11 @@ func (f *Factory) NewAgent(systemPrompt string) *Agent {
 	registry.Register(NewCallRESTAPITool())
 
 	hooks := NewHookChain()
-	hooks.AddBefore(DefaultRiskHook())
+	if f.Enforcer != nil {
+		hooks.AddBefore(PermissionHook(f.Enforcer, f.PermissionMode))
+	} else {
+		hooks.AddBefore(DefaultRiskHook())
+	}
 
 	return NewAgent(AgentConfig{
 		LLMClient:    f.LLMClient,

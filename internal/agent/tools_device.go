@@ -38,12 +38,12 @@ func (t *GetDeviceInfoTool) InputSchema() map[string]any {
 func (t *GetDeviceInfoTool) Execute(_ context.Context, input map[string]any) (*ToolResult, error) {
 	hostID, _ := input["host"].(string)
 	if hostID == "" {
-		return &ToolResult{Content: "missing required field: host", IsError: true, RiskLevel: RiskSafe}, nil
+		return &ToolResult{Content: "missing required field: host", IsError: true, RiskLevel: RiskL1}, nil
 	}
 
 	h, err := t.hosts.GetByIDOrName(hostID)
 	if err != nil {
-		return &ToolResult{Content: fmt.Sprintf("host not found: %v", err), IsError: true, RiskLevel: RiskSafe}, nil
+		return &ToolResult{Content: fmt.Sprintf("host not found: %v", err), IsError: true, RiskLevel: RiskL1}, nil
 	}
 
 	info := map[string]any{
@@ -61,7 +61,7 @@ func (t *GetDeviceInfoTool) Execute(_ context.Context, input map[string]any) (*T
 
 	out, err := json.Marshal(info)
 	if err != nil {
-		return &ToolResult{Content: fmt.Sprintf("marshal error: %v", err), IsError: true, RiskLevel: RiskSafe}, nil
+		return &ToolResult{Content: fmt.Sprintf("marshal error: %v", err), IsError: true, RiskLevel: RiskL1}, nil
 	}
-	return &ToolResult{Content: string(out), RiskLevel: RiskSafe}, nil
+	return &ToolResult{Content: string(out), RiskLevel: RiskL1}, nil
 }

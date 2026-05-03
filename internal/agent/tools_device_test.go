@@ -45,8 +45,8 @@ func TestGetDeviceInfoTool_MissingHost(t *testing.T) {
 	if !result.IsError {
 		t.Error("expected IsError=true for missing host")
 	}
-	if result.RiskLevel != RiskSafe {
-		t.Errorf("expected RiskSafe, got %q", result.RiskLevel)
+	if result.RiskLevel != RiskL1 {
+		t.Errorf("expected RiskL1, got %v", result.RiskLevel)
 	}
 }
 

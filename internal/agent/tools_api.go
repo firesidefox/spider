@@ -43,13 +43,13 @@ func (t *CallRESTAPITool) Execute(ctx context.Context, input map[string]any) (*T
 	url, _ := input["url"].(string)
 	method, _ := input["method"].(string)
 	if url == "" || method == "" {
-		return &ToolResult{Content: "url and method are required", IsError: true, RiskLevel: RiskModerate}, nil
+		return &ToolResult{Content: "url and method are required", IsError: true, RiskLevel: RiskL2}, nil
 	}
 
 	bodyStr, _ := input["body"].(string)
 	req, err := http.NewRequestWithContext(ctx, method, url, strings.NewReader(bodyStr))
 	if err != nil {
-		return &ToolResult{Content: fmt.Sprintf("build request: %v", err), IsError: true, RiskLevel: RiskModerate}, nil
+		return &ToolResult{Content: fmt.Sprintf("build request: %v", err), IsError: true, RiskLevel: RiskL2}, nil
 	}
 
 	if hdrs, ok := input["headers"].(map[string]any); ok {
@@ -62,13 +62,13 @@ func (t *CallRESTAPITool) Execute(ctx context.Context, input map[string]any) (*T
 
 	resp, err := t.http.Do(req)
 	if err != nil {
-		return &ToolResult{Content: fmt.Sprintf("request error: %v", err), IsError: true, RiskLevel: RiskModerate}, nil
+		return &ToolResult{Content: fmt.Sprintf("request error: %v", err), IsError: true, RiskLevel: RiskL2}, nil
 	}
 	defer resp.Body.Close()
 
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBody))
 	if err != nil {
-		return &ToolResult{Content: fmt.Sprintf("read body: %v", err), IsError: true, RiskLevel: RiskModerate}, nil
+		return &ToolResult{Content: fmt.Sprintf("read body: %v", err), IsError: true, RiskLevel: RiskL2}, nil
 	}
 
 	respHeaders := make(map[string]string, len(resp.Header))
@@ -81,5 +81,5 @@ func (t *CallRESTAPITool) Execute(ctx context.Context, input map[string]any) (*T
 		"headers":     respHeaders,
 		"body":        string(raw),
 	})
-	return &ToolResult{Content: string(out), RiskLevel: RiskModerate}, nil
+	return &ToolResult{Content: string(out), RiskLevel: RiskL2}, nil
 }

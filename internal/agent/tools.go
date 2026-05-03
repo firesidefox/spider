@@ -4,14 +4,18 @@ import (
 	"context"
 
 	"github.com/spiderai/spider/internal/llm"
+	"github.com/spiderai/spider/internal/permission"
 )
 
-type RiskLevel string
+// RiskLevel is an alias for permission.RiskLevel, unifying the agent tool
+// risk system with the L1-L4 permission levels.
+type RiskLevel = permission.RiskLevel
 
 const (
-	RiskSafe      RiskLevel = "safe"
-	RiskModerate  RiskLevel = "moderate"
-	RiskDangerous RiskLevel = "dangerous"
+	RiskL1 = permission.L1Read
+	RiskL2 = permission.L2Write
+	RiskL3 = permission.L3Dangerous
+	RiskL4 = permission.L4Destroy
 )
 
 type ToolResult struct {

@@ -50,14 +50,14 @@ type batchHostResult struct {
 func (t *BatchExecuteTool) Execute(ctx context.Context, input map[string]any) (*ToolResult, error) {
 	command, _ := input["command"].(string)
 	if command == "" {
-		return &ToolResult{Content: "command is required", IsError: true, RiskLevel: RiskDangerous}, nil
+		return &ToolResult{Content: "command is required", IsError: true, RiskLevel: RiskL3}, nil
 	}
 
 	var hostList []*models.Host
 	if tag, ok := input["tag"].(string); ok && tag != "" {
 		hosts, err := t.hosts.List(tag)
 		if err != nil {
-			return &ToolResult{Content: fmt.Sprintf("failed to list hosts by tag: %v", err), IsError: true, RiskLevel: RiskDangerous}, nil
+			return &ToolResult{Content: fmt.Sprintf("failed to list hosts by tag: %v", err), IsError: true, RiskLevel: RiskL3}, nil
 		}
 		hostList = hosts
 	} else if ids, ok := input["host_ids"].([]any); ok {
@@ -65,14 +65,14 @@ func (t *BatchExecuteTool) Execute(ctx context.Context, input map[string]any) (*
 			if sid, ok := id.(string); ok {
 				h, err := t.hosts.GetByID(sid)
 				if err != nil {
-					return &ToolResult{Content: fmt.Sprintf("host %s not found: %v", sid, err), IsError: true, RiskLevel: RiskDangerous}, nil
+					return &ToolResult{Content: fmt.Sprintf("host %s not found: %v", sid, err), IsError: true, RiskLevel: RiskL3}, nil
 				}
 				hostList = append(hostList, h)
 			}
 		}
 	}
 	if len(hostList) == 0 {
-		return &ToolResult{Content: "no hosts selected", IsError: true, RiskLevel: RiskDangerous}, nil
+		return &ToolResult{Content: "no hosts selected", IsError: true, RiskLevel: RiskL3}, nil
 	}
 
 	results := make([]batchHostResult, len(hostList))
@@ -111,5 +111,5 @@ func (t *BatchExecuteTool) Execute(ctx context.Context, input map[string]any) (*
 	wg.Wait()
 
 	out, _ := json.Marshal(results)
-	return &ToolResult{Content: string(out), RiskLevel: RiskDangerous}, nil
+	return &ToolResult{Content: string(out), RiskLevel: RiskL3}, nil
 }

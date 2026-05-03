@@ -37,14 +37,14 @@ func (t *SearchDocsTool) InputSchema() map[string]any {
 func (t *SearchDocsTool) Execute(ctx context.Context, input map[string]any) (*ToolResult, error) {
 	query, _ := input["query"].(string)
 	if query == "" {
-		return &ToolResult{Content: "query is required", IsError: true, RiskLevel: RiskSafe}, nil
+		return &ToolResult{Content: "query is required", IsError: true, RiskLevel: RiskL1}, nil
 	}
 	vendor, _ := input["vendor"].(string)
 	cliType, _ := input["cli_type"].(string)
 
 	docs, err := t.ragStore.Search(ctx, query, vendor, cliType, 5)
 	if err != nil {
-		return &ToolResult{Content: fmt.Sprintf("search error: %v", err), IsError: true, RiskLevel: RiskSafe}, nil
+		return &ToolResult{Content: fmt.Sprintf("search error: %v", err), IsError: true, RiskLevel: RiskL1}, nil
 	}
 
 	type result struct {
@@ -65,7 +65,7 @@ func (t *SearchDocsTool) Execute(ctx context.Context, input map[string]any) (*To
 
 	b, err := json.Marshal(results)
 	if err != nil {
-		return &ToolResult{Content: fmt.Sprintf("marshal error: %v", err), IsError: true, RiskLevel: RiskSafe}, nil
+		return &ToolResult{Content: fmt.Sprintf("marshal error: %v", err), IsError: true, RiskLevel: RiskL1}, nil
 	}
-	return &ToolResult{Content: string(b), RiskLevel: RiskSafe}, nil
+	return &ToolResult{Content: string(b), RiskLevel: RiskL1}, nil
 }

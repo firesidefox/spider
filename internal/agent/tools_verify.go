@@ -109,7 +109,7 @@ func (t *VerifyTool) runCheck(ctx context.Context, c verifyCheck) checkResult {
 func (t *VerifyTool) Execute(ctx context.Context, input map[string]any) (*ToolResult, error) {
 	checks, err := parseChecks(input)
 	if err != nil {
-		return &ToolResult{Content: err.Error(), IsError: true, RiskLevel: RiskSafe}, nil
+		return &ToolResult{Content: err.Error(), IsError: true, RiskLevel: RiskL1}, nil
 	}
 
 	timeoutSec := 60
@@ -137,7 +137,7 @@ loop:
 		}
 		if allPassed {
 			out, _ := json.Marshal(map[string]any{"status": "ok", "checks": lastResults})
-			return &ToolResult{Content: string(out), RiskLevel: RiskSafe}, nil
+			return &ToolResult{Content: string(out), RiskLevel: RiskL1}, nil
 		}
 		select {
 		case <-ctx.Done():
@@ -147,5 +147,5 @@ loop:
 	}
 
 	out, _ := json.Marshal(map[string]any{"status": "timeout", "checks": lastResults})
-	return &ToolResult{Content: string(out), IsError: true, RiskLevel: RiskSafe}, nil
+	return &ToolResult{Content: string(out), IsError: true, RiskLevel: RiskL1}, nil
 }

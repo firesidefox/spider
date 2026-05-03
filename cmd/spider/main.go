@@ -172,6 +172,8 @@ func serve(cfgFile, addrOverride, dataDirOverride string) error {
 	if err != nil {
 		log.Printf("WARNING: agent factory not available: %v", err)
 	} else {
+		agentFactory.Enforcer = app.Enforcer
+		agentFactory.PermissionMode = app.PermissionMode
 		app.AgentFactory = agentFactory
 	}
 

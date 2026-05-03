@@ -34,10 +34,10 @@ func (t *ListDevicesTool) Execute(_ context.Context, input map[string]any) (*Too
 	tag, _ := input["tag"].(string)
 	hosts, err := t.hosts.List(tag)
 	if err != nil {
-		return &ToolResult{Content: "failed to list devices: " + err.Error(), IsError: true, RiskLevel: RiskSafe}, nil
+		return &ToolResult{Content: "failed to list devices: " + err.Error(), IsError: true, RiskLevel: RiskL1}, nil
 	}
 	if len(hosts) == 0 {
-		return &ToolResult{Content: "no devices found", RiskLevel: RiskSafe}, nil
+		return &ToolResult{Content: "no devices found", RiskLevel: RiskL1}, nil
 	}
 
 	type deviceSummary struct {
@@ -60,5 +60,5 @@ func (t *ListDevicesTool) Execute(_ context.Context, input map[string]any) (*Too
 	}
 
 	out, _ := json.Marshal(devices)
-	return &ToolResult{Content: string(out), RiskLevel: RiskSafe}, nil
+	return &ToolResult{Content: string(out), RiskLevel: RiskL1}, nil
 }

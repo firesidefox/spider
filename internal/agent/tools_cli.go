@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/spiderai/spider/internal/models"
+	"github.com/spiderai/spider/internal/permission"
 	"github.com/spiderai/spider/internal/ssh"
 	"github.com/spiderai/spider/internal/store"
 )
@@ -33,7 +34,7 @@ func (t *ExecuteCLITool) InputSchema() map[string]any {
 		"properties": map[string]any{
 			"host_id":    map[string]any{"type": "string", "description": "Host ID"},
 			"command":    map[string]any{"type": "string", "description": "CLI command to execute"},
-			"risk_level": map[string]any{"type": "string", "enum": []string{"safe", "moderate", "dangerous"}},
+			"risk_level": map[string]any{"type": "string", "enum": []string{"L1", "L2", "L3", "L4"}},
 		},
 		"required": []string{"host_id", "command"},
 	}
@@ -45,15 +46,12 @@ func (t *ExecuteCLITool) Execute(ctx context.Context, input map[string]any) (*To
 	riskStr, _ := input["risk_level"].(string)
 
 	if hostID == "" || command == "" {
-		return &ToolResult{Content: "missing required fields: host_id, command", IsError: true, RiskLevel: RiskModerate}, nil
+		return &ToolResult{Content: "missing required fields: host_id, command", IsError: true, RiskLevel: RiskL2}, nil
 	}
 
-	risk := RiskModerate
-	switch RiskLevel(riskStr) {
-	case RiskSafe:
-		risk = RiskSafe
-	case RiskDangerous:
-		risk = RiskDangerous
+	risk := RiskL2
+	if riskStr != "" {
+		risk = permission.ParseRiskLevel(riskStr)
 	}
 
 	h, err := t.hosts.GetByIDOrName(hostID)

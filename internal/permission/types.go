@@ -32,6 +32,22 @@ func (l RiskLevel) IsValid() bool {
 	return l >= L1Read && l <= L4Destroy
 }
 
+// ParseRiskLevel 将字符串解析为 RiskLevel，无法识别时返回 L3Dangerous（安全默认）
+func ParseRiskLevel(s string) RiskLevel {
+	switch s {
+	case "L1":
+		return L1Read
+	case "L2":
+		return L2Write
+	case "L3":
+		return L3Dangerous
+	case "L4":
+		return L4Destroy
+	default:
+		return L3Dangerous
+	}
+}
+
 // Mode 权限模式
 type Mode string
 

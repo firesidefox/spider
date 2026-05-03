@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/spiderai/spider/internal/llm"
 	"github.com/spiderai/spider/internal/models"
+	"github.com/spiderai/spider/internal/permission"
 )
 
 type EventType string
@@ -188,9 +189,9 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 					continue
 				}
 
-				riskLevel := RiskModerate
+				riskLevel := RiskL2
 				if rl, ok2 := tc.Input["risk_level"].(string); ok2 {
-					riskLevel = RiskLevel(rl)
+					riskLevel = permission.ParseRiskLevel(rl)
 				}
 
 				hookResult := a.hooks.RunBefore(tc.Name, tc.Input, riskLevel)
@@ -199,19 +200,19 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 					requestID := uuid.New().String()
 					events <- Event{Type: EventConfirmRequired, Content: map[string]any{
 						"request_id": requestID, "tool": tc.Name,
-						"input": tc.Input, "risk_level": string(hookResult.RiskLevel),
+						"input": tc.Input, "risk_level": hookResult.RiskLevel.String(),
 					}}
 					approved, err := waiter.Wait(requestID, 5*time.Minute)
 					if err != nil || !approved {
 						events <- Event{Type: EventToolResult, Content: map[string]any{"id": tc.ID, "tool": tc.Name, "result": "denied by user", "is_error": true}}
 						history = append(history, llm.Message{Role: llm.RoleUser, Content: "operation denied by user"})
-						tcRecords = append(tcRecords, ToolCallRecord{ID: tc.ID, Name: tc.Name, Input: tc.Input, Result: "denied by user", RiskLevel: string(hookResult.RiskLevel)})
+						tcRecords = append(tcRecords, ToolCallRecord{ID: tc.ID, Name: tc.Name, Input: tc.Input, Result: "denied by user", RiskLevel: hookResult.RiskLevel.String()})
 						continue
 					}
 				} else if hookResult.Action == HookDeny {
 					events <- Event{Type: EventToolResult, Content: map[string]any{"id": tc.ID, "tool": tc.Name, "result": "denied: " + hookResult.Reason, "is_error": true}}
 					history = append(history, llm.Message{Role: llm.RoleUser, Content: "Tool denied: " + hookResult.Reason})
-					tcRecords = append(tcRecords, ToolCallRecord{ID: tc.ID, Name: tc.Name, Input: tc.Input, Result: "denied: " + hookResult.Reason, RiskLevel: string(hookResult.RiskLevel)})
+					tcRecords = append(tcRecords, ToolCallRecord{ID: tc.ID, Name: tc.Name, Input: tc.Input, Result: "denied: " + hookResult.Reason, RiskLevel: hookResult.RiskLevel.String()})
 					continue
 				}
 
@@ -230,7 +231,7 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 				tcRecords = append(tcRecords, ToolCallRecord{
 					ID: tc.ID, Name: tc.Name, Input: tc.Input,
 					Result: result.Content, IsError: result.IsError,
-					RiskLevel: string(result.RiskLevel), DurationMs: durationMs,
+					RiskLevel: result.RiskLevel.String(), DurationMs: durationMs,
 				})
 			}
 

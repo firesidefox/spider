@@ -8,7 +8,7 @@ func TestHookChain_SafeTool(t *testing.T) {
 	chain := NewHookChain()
 	chain.AddBefore(DefaultRiskHook())
 
-	result := chain.RunBefore("ping", nil, RiskSafe)
+	result := chain.RunBefore("ping", nil, RiskL1)
 	if result.Action != HookAllow {
 		t.Errorf("expected HookAllow, got %q", result.Action)
 	}
@@ -18,7 +18,7 @@ func TestHookChain_ModerateTool(t *testing.T) {
 	chain := NewHookChain()
 	chain.AddBefore(DefaultRiskHook())
 
-	result := chain.RunBefore("restart", nil, RiskModerate)
+	result := chain.RunBefore("restart", nil, RiskL2)
 	if result.Action != HookRequireConfirm {
 		t.Errorf("expected HookRequireConfirm, got %q", result.Action)
 	}
@@ -28,7 +28,7 @@ func TestHookChain_DangerousTool(t *testing.T) {
 	chain := NewHookChain()
 	chain.AddBefore(DefaultRiskHook())
 
-	result := chain.RunBefore("delete_all", nil, RiskDangerous)
+	result := chain.RunBefore("delete_all", nil, RiskL3)
 	if result.Action != HookRequireConfirm {
 		t.Errorf("expected HookRequireConfirm, got %q", result.Action)
 	}
@@ -43,7 +43,7 @@ func TestHookChain_FirstDenyWins(t *testing.T) {
 		return &HookResult{Action: HookAllow}
 	})
 
-	result := chain.RunBefore("any_tool", nil, RiskSafe)
+	result := chain.RunBefore("any_tool", nil, RiskL1)
 	if result.Action != HookDeny {
 		t.Errorf("expected HookDeny, got %q", result.Action)
 	}
@@ -59,7 +59,7 @@ func TestHookChain_AfterHooksAllRun(t *testing.T) {
 	chain.AddAfter(func(_ string, _ map[string]any, _ *ToolResult) { count++ })
 	chain.AddAfter(func(_ string, _ map[string]any, _ *ToolResult) { count++ })
 
-	tr := &ToolResult{Content: "ok", RiskLevel: RiskSafe}
+	tr := &ToolResult{Content: "ok", RiskLevel: RiskL1}
 	chain.RunAfter("ping", nil, tr)
 
 	if count != 3 {

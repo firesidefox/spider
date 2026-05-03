@@ -127,7 +127,7 @@ func TestToolCallResponse(t *testing.T) {
 	}
 	store := &mockMsgStore{}
 	reg := NewToolRegistry()
-	reg.Register(&mockResultTool{name: "echo", result: &ToolResult{Content: "hi", RiskLevel: RiskSafe}})
+	reg.Register(&mockResultTool{name: "echo", result: &ToolResult{Content: "hi", RiskLevel: RiskL1}})
 
 	agent := newTestAgent(client, store, reg)
 	ch, err := agent.Run(context.Background(), "conv1", "run echo", nil)
@@ -179,7 +179,7 @@ func TestMaxTurnsExceeded(t *testing.T) {
 	client := &mockLLMClient{responses: responses}
 	store := &mockMsgStore{}
 	reg := NewToolRegistry()
-	reg.Register(&mockResultTool{name: "echo", result: &ToolResult{Content: "ok", RiskLevel: RiskSafe}})
+	reg.Register(&mockResultTool{name: "echo", result: &ToolResult{Content: "ok", RiskLevel: RiskL1}})
 
 	agent := NewAgent(AgentConfig{
 		LLMClient: client,
