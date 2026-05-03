@@ -1,7 +1,7 @@
 # Spider 智能运维平台 — 产品需求规格说明书
 
-**版本：** v0.2  
-**日期：** 2026-05-01  
+**版本：** v0.3  
+**日期：** 2026-05-03  
 **状态：** 迭代中
 
 ---
@@ -173,6 +173,21 @@ Claude：[调用 get_execution_history，过滤 host=db-01，时间范围=昨天
         [列出所有操作记录，包括命令、执行人、时间、结果]
 ```
 
+### 2.9 AI 自然语言运维对话
+
+**场景描述：** 通过 Web Chat 界面用自然语言完成网关设备的查询、配置和批量操作。
+
+**用户故事：**
+> 作为运维工程师，我希望在 Chat 界面输入"检查所有华为网关的接口状态"，AI 自动检索设备文档、生成正确的 CLI 命令、批量执行并汇总结果，配置修改前需要我确认。
+
+**交互示例：**
+```
+用户：检查所有华为网关的接口状态
+AI：[search_docs 检索 VRP CLI 文档]
+    [batch_execute: display interface brief，100 台设备]
+    [汇总：98 台正常，2 台 GE0/0/1 down，给出排查建议]
+```
+
 ---
 
 ## 3. 功能需求规格
@@ -238,6 +253,7 @@ Claude：[调用 get_execution_history，过滤 host=db-01，时间范围=昨天
 | `list_ssh_keys` | 列出当前用户的 SSH 密钥 |
 | `add_ssh_key` | 添加 SSH 私钥（自动解析指纹） |
 | `remove_ssh_key` | 删除 SSH 密钥（被引用时拒绝） |
+| `list_devices` | 列出可用设备（供 LLM 发现主机） |
 
 #### 3.1.6 SSH 密钥管理
 
@@ -355,7 +371,60 @@ Web UI 不提供文件传输入口。文件上传/下载通过 MCP 工具（`upl
 
 ---
 
-### 3.4 Phase 3 — 告警与监控
+### 3.4 Phase 2.5 — AI Chat 智能运维对话
+
+目标：在 Web UI 中提供自然语言对话界面，用户通过对话完成网关设备的查询、配置、批量操作和故障排查，后端内置 Agent Engine 编排完整执行链路。
+
+#### 3.4.1 Agent Engine
+
+| 功能 | 描述 | 优先级 |
+|------|------|--------|
+| Agent Loop | 参考 Claude Code agent loop：消息 → LLM → tool_use/文本 → 循环 | P0 |
+| Tool 注册与分发 | 统一 Tool 接口，支持 execute_cli / batch_execute / search_docs / verify 等 | P0 |
+| 风险分级 | safe（查询自动执行）/ moderate（单台配置需确认）/ dangerous（批量/删除需二次确认） | P0 |
+| 执行后验证 | 命令执行后自动轮询验证是否生效，支持超时重试 | P1 |
+| Hook Chain | BeforeTool（风险拦截）/ AfterTool（审计记录）| P0 |
+
+#### 3.4.2 RAG 文档系统
+
+| 功能 | 描述 | 优先级 |
+|------|------|--------|
+| 文档上传 | 支持 Markdown/PDF/文本，自动解析切片 | P0 |
+| 向量检索 | sqlite-vec 向量库，按 vendor/cli_type 过滤 Top-K 检索 | P0 |
+| Embedding | 抽象接口，支持 OpenAI / Voyage / 本地 ollama | P0 |
+| 智能切片 | CLI 按命令切、API 按 endpoint 切、故障手册按问题切 | P1 |
+
+#### 3.4.3 LLM 多模型配置
+
+| 功能 | 描述 | 优先级 |
+|------|------|--------|
+| 多 Provider | 支持 Claude / OpenAI 等，抽象 LLMClient 接口 | P0 |
+| 模型列表管理 | config.yaml 配置多模型，Web UI 可切换启用 | P0 |
+| API Key 优先级 | 环境变量 > config.yaml，密文显示末 4 位 | P0 |
+| Context 管理 | 滑动窗口 + 摘要压缩，防止 token 溢出 | P1 |
+
+#### 3.4.4 对话管理
+
+| 功能 | 描述 | 优先级 |
+|------|------|--------|
+| 创建/删除对话 | 支持多轮对话，全量持久化 | P0 |
+| 对话标题 | 首轮完成后 LLM 自动生成标题，支持手动重命名 | P0 |
+| 对话列表 | 左侧持久侧边栏，可折叠/展开，拖拽调整宽度 | P0 |
+| 消息历史 | 按对话 ID 加载完整消息历史 | P0 |
+
+#### 3.4.5 Chat 前端界面
+
+| 功能 | 描述 | 优先级 |
+|------|------|--------|
+| 终端风格对话 | 等宽字体 + 深色背景，❯ 用户 prompt / * 助手 prompt | P0 |
+| 流式输出 | SSE 实时推送，文本逐字显示 + 光标动画 | P0 |
+| Tool 调用渲染 | 可折叠工具卡片，显示名称、输入、结果、耗时 | P0 |
+| 确认操作栏 | 内联确认/取消按钮，按 risk level 着色 | P0 |
+| Gutter/Content 布局 | 固定宽度 gutter（prompt 图标）+ flex content 列 | P0 |
+| Markdown 渲染 | 助手消息支持 Markdown + 代码高亮 | P0 |
+| 目标视图面板 | 右侧设备状态面板：统计摘要 + 热力矩阵 + 列表 | P1 |
+
+### 3.5 Phase 3 — 告警与监控
 
 目标：主动监控主机状态，在异常发生时及时通知相关人员。
 
@@ -470,7 +539,7 @@ Web UI 不提供文件传输入口。文件上传/下载通过 MCP 工具（`upl
 │  ┌─────────────────┐   ┌──────────────────────────┐ │
 │  │   MCP Layer     │   │     REST API Layer       │ │
 │  │  /sse endpoint  │   │  /api/* endpoints        │ │
-│  │  10 tools       │   │  Web UI 静态资源          │ │
+│  │  13 tools       │   │  Web UI 静态资源          │ │
 │  └────────┬────────┘   └────────────┬─────────────┘ │
 │           │                         │               │
 │  ┌────────▼─────────────────────────▼─────────────┐ │
@@ -478,16 +547,29 @@ Web UI 不提供文件传输入口。文件上传/下载通过 MCP 工具（`upl
 │  │   HostService   ExecService   AlertService     │ │
 │  └────────┬──────────────────────────┬────────────┘ │
 │           │                          │              │
-│  ┌────────▼────────┐   ┌─────────────▼───────────┐  │
+│  ┌────────▼────────────────────────────────────┐    │
+│  │              Agent Engine (Phase 2.5)       │    │
+│  │  Loop Manager + Tool Registry + Hook Chain  │    │
+│  │  Tools: execute_cli | batch_exec | verify   │    │
+│  │         search_docs | call_api | get_info   │    │
+│  └────────┬──────────────────────────┬─────────┘    │
+│           │                          │              │
+│  ┌────────▼────────┐   ┌────────────▼────────────┐  │
 │  │   Store Layer   │   │      SSH Layer          │  │
 │  │   host_store    │   │   pool + client + scp   │  │
 │  │   log_store     │   └─────────────┬───────────┘  │
-│  │   SQLite DB     │                 │              │
-│  └─────────────────┘                 │ SSH          │
-└─────────────────────────────────────┼──────────────┘
+│  │   conversation  │                 │              │
+│  │   SQLite DB     │                 │ SSH          │
+│  └────────┬────────┘                 │              │
+│           │            ┌─────────────▼───────────┐  │
+│  ┌────────▼────────┐   │      LLM Client        │  │
+│  │   RAG / Vec     │   │  Claude / OpenAI / ...  │  │
+│  │   sqlite-vec    │   └─────────────────────────┘  │
+│  └─────────────────┘                                │
+└─────────────────────────────────────┬───────────────┘
                                       ▼
                               远程主机集群
-                         (web / app / db / ...)
+                         (web / app / db / gateway)
 ```
 
 ### 5.2 组件说明
@@ -497,8 +579,11 @@ Web UI 不提供文件传输入口。文件上传/下载通过 MCP 工具（`upl
 | MCP Layer | 处理 Claude Code 的 SSE 连接和工具调用，参数校验，结果序列化 |
 | REST API Layer | 为 Web UI 提供 HTTP JSON API，处理认证（Phase 2） |
 | Service Layer | 业务逻辑：主机 CRUD、命令执行调度、告警规则评估 |
-| Store Layer | SQLite 持久化，凭据加密/解密，查询封装 |
+| Agent Engine | AI 对话核心：agent loop + tool dispatch + hook chain + 风险分级（Phase 2.5） |
+| Store Layer | SQLite 持久化，凭据加密/解密，对话/消息存储，查询封装 |
 | SSH Layer | 连接池管理、SSH 命令执行、SCP 文件传输 |
+| LLM Client | 多 Provider LLM 调用（Claude / OpenAI），流式输出（Phase 2.5） |
+| RAG / Vec | sqlite-vec 向量检索，文档切片与 Embedding 生成（Phase 2.5） |
 | Web UI | Vue.js SPA，编译后嵌入 spider 二进制（embed.go） |
 
 ### 5.3 关键数据流
@@ -545,6 +630,16 @@ CREATE TABLE hosts (
 // auth_type=password:     {"password": "secret"}
 // auth_type=key_password: {"private_key": "-----BEGIN...", "passphrase": "pass"}
 ```
+
+**Phase 2.5 扩展字段（nullable）：**
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| device_type | TEXT | server / gateway / switch / router |
+| vendor | TEXT | huawei / cisco / juniper 等 |
+| model | TEXT | 设备型号 |
+| cli_type | TEXT | vrp / ios / junos 等 |
+| firmware_version | TEXT | 固件版本 |
 
 ### 6.2 Execution（执行记录）
 
@@ -612,7 +707,62 @@ CREATE TABLE ssh_keys (
 - `ssh_key_id` 非空时优先使用引用的密钥
 - 否则 fallback 到 `encrypted_credential`（内联私钥或密码）
 
-### 6.6 AlertRule（告警规则）— Phase 3
+### 6.6 Conversation（对话）— Phase 2.5
+
+```sql
+CREATE TABLE conversations (
+    id          TEXT PRIMARY KEY,          -- UUID
+    user_id     TEXT NOT NULL,
+    title       TEXT NOT NULL DEFAULT '',  -- LLM 自动生成或用户编辑
+    created_at  DATETIME NOT NULL,
+    updated_at  DATETIME NOT NULL
+);
+```
+
+### 6.7 Message（消息）— Phase 2.5
+
+```sql
+CREATE TABLE messages (
+    id              TEXT PRIMARY KEY,
+    conversation_id TEXT NOT NULL,
+    role            TEXT NOT NULL,         -- user / assistant / tool / system
+    content         TEXT NOT NULL,         -- JSON，支持 text + tool_use 混合
+    created_at      DATETIME NOT NULL
+);
+```
+
+### 6.8 Document（RAG 文档）— Phase 2.5
+
+```sql
+CREATE TABLE documents (
+    id           INTEGER PRIMARY KEY,
+    vendor       TEXT,
+    cli_type     TEXT,
+    doc_type     TEXT,                     -- cli_ref / api_ref / troubleshooting
+    title        TEXT NOT NULL,
+    content      TEXT NOT NULL,
+    embedding    BLOB,                     -- 向量
+    source_file  TEXT,
+    chunk_index  INTEGER
+);
+```
+
+### 6.9 PendingConfirmation（待确认操作）— Phase 2.5
+
+```sql
+CREATE TABLE pending_confirmations (
+    id              TEXT PRIMARY KEY,      -- request_id
+    conversation_id TEXT NOT NULL,
+    tool_name       TEXT NOT NULL,
+    tool_input      TEXT NOT NULL,         -- JSON
+    risk_level      TEXT NOT NULL,         -- moderate / dangerous
+    status          TEXT NOT NULL,         -- pending / approved / denied / expired
+    created_at      DATETIME NOT NULL,
+    resolved_at     DATETIME
+);
+```
+
+### 6.10 AlertRule（告警规则）— Phase 3
 
 ```sql
 CREATE TABLE alert_rules (
@@ -629,7 +779,7 @@ CREATE TABLE alert_rules (
 );
 ```
 
-### 6.7 AlertEvent（告警事件）— Phase 3
+### 6.11 AlertEvent（告警事件）— Phase 3
 
 ```sql
 CREATE TABLE alert_events (
@@ -716,6 +866,40 @@ POST   /api/tokens                 创建 Token
 DELETE /api/tokens/:id             撤销 Token
 GET    /api/audit                  审计日志（Admin）
 ```
+
+**Phase 2.5 新增 — AI Chat**
+```
+POST   /api/chat/conversations                     创建新对话
+GET    /api/chat/conversations                     列出用户对话
+GET    /api/chat/conversations/:id                 获取对话详情 + 消息历史
+DELETE /api/chat/conversations/:id                 删除对话
+PATCH  /api/chat/conversations/:id                 更新标题
+POST   /api/chat/conversations/:id/messages        发送消息（返回 SSE 流）
+POST   /api/chat/conversations/:id/confirm/:rid    确认/拒绝操作
+POST   /api/chat/conversations/:id/abort           中止当前执行
+```
+
+**Phase 2.5 新增 — 文档管理**
+```
+POST   /api/docs/upload            上传文档
+GET    /api/docs                   列出文档
+DELETE /api/docs/:id               删除文档
+POST   /api/docs/reindex           重建索引
+```
+
+**Phase 2.5 新增 — SSE 事件类型**
+
+| 事件 type | 用途 |
+|-----------|------|
+| text_delta | 助手文本流式输出 |
+| tool_start | Tool 调用开始（名称、输入） |
+| tool_result | Tool 执行结果 |
+| confirm_required | 需用户确认（含 request_id、命令、risk_level） |
+| verify_progress | 验证轮询进度 |
+| batch_progress | 批量操作进度 |
+| device_update | 设备状态变更 |
+| error | 错误信息 |
+| done | 本轮对话结束 |
 
 **Phase 3 新增 — 告警**
 ```
@@ -835,6 +1019,7 @@ volumes:
 | **基线** | MCP SSE Server、spdctl CLI、SSH 执行、文件传输、执行历史、AES-256-GCM 凭据加密 | ✅ 已完成 |
 | **Phase 1** | Web UI：主机管理界面、实时命令执行、历史日志查看 | ✅ 已完成 |
 | **Phase 2** | 多用户与权限控制：账号管理、RBAC、API Token、操作审计日志、SSH 密钥管理 | ✅ 已完成 |
+| **Phase 2.5** | AI Chat 智能运维对话：Agent Engine、RAG 文档系统、多模型配置、对话管理、终端风格 Chat UI | 🚧 开发中 |
 | **Phase 3** | 告警与监控：SSH 状态监控、阈值告警规则、钉钉/Slack 通知、监控仪表盘 | 📋 待规划 |
 | **未来** | Docker 镜像发布、多 spider 实例联邦、Webhook 触发器 | 💡 探索中 |
 
@@ -844,10 +1029,11 @@ volumes:
 基线（已完成）
     └── Phase 1（Web UI）
             └── Phase 2（多用户）
+                    ├── Phase 2.5（AI Chat）
                     └── Phase 3（告警）
 ```
 
-Phase 2 依赖 Phase 1 的 Web UI 框架；Phase 3 依赖 Phase 2 的用户系统（告警通知需要关联用户）。
+Phase 2 依赖 Phase 1 的 Web UI 框架；Phase 2.5 依赖 Phase 2 的用户系统（对话关联用户）；Phase 3 依赖 Phase 2 的用户系统（告警通知需要关联用户）。Phase 2.5 与 Phase 3 可并行开发。
 
 ---
 
