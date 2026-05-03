@@ -8,6 +8,7 @@ import (
 	"github.com/spiderai/spider/internal/agent"
 	authmw "github.com/spiderai/spider/internal/auth"
 	mcppkg "github.com/spiderai/spider/internal/mcp"
+	"github.com/spiderai/spider/internal/permission"
 )
 
 func chatCreateConversation(app *mcppkg.App, w http.ResponseWriter, r *http.Request) {
@@ -64,15 +65,32 @@ func chatDeleteConversation(app *mcppkg.App, w http.ResponseWriter, r *http.Requ
 
 func chatUpdateTitle(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id string) {
 	var req struct {
-		Title string `json:"title"`
+		Title          *string `json:"title"`
+		PermissionMode *string `json:"permission_mode"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, 400, "invalid request body")
 		return
 	}
-	if err := app.ConvStore.UpdateTitle(id, req.Title); err != nil {
-		writeError(w, 500, err.Error())
-		return
+	if req.Title != nil {
+		if err := app.ConvStore.UpdateTitle(id, *req.Title); err != nil {
+			writeError(w, 500, err.Error())
+			return
+		}
+	}
+	if req.PermissionMode != nil {
+		mode := *req.PermissionMode
+		if mode != "" {
+			m := permission.Mode(mode)
+			if !m.IsValid() {
+				writeError(w, 400, "无效的权限模式")
+				return
+			}
+		}
+		if err := app.ConvStore.UpdatePermissionMode(id, mode); err != nil {
+			writeError(w, 500, err.Error())
+			return
+		}
 	}
 	w.WriteHeader(204)
 }
