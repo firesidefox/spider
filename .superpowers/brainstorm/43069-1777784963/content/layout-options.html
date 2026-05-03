@@ -1,0 +1,75 @@
+<h2>Which layout structure do you want?</h2>
+<p class="subtitle">Conversation list moves from dropdown to persistent left sidebar. How should the three panels relate?</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Three-Column Fixed</h3>
+      <p>Conv list (left) | Chat (center) | Target panel (right). All three always visible. Classic IDE/Slack layout.</p>
+      <div class="mockup" style="margin-top:12px;">
+        <div class="mockup-body" style="padding:0;min-height:180px;display:flex;">
+          <div style="width:200px;border-right:1px solid rgba(255,255,255,0.08);padding:10px;font-size:11px;background:rgba(0,0,0,0.15);">
+            <div style="font-weight:600;margin-bottom:8px;">Conversations</div>
+            <div style="padding:4px 8px;background:rgba(108,140,255,0.15);border-radius:4px;margin-bottom:4px;font-size:11px;">conv-1 (active)</div>
+            <div style="padding:4px 8px;opacity:0.5;margin-bottom:4px;font-size:11px;">conv-2</div>
+            <div style="padding:4px 8px;opacity:0.5;font-size:11px;">conv-3</div>
+          </div>
+          <div style="flex:1;padding:10px;font-size:11px;display:flex;align-items:center;justify-content:center;opacity:0.4;">
+            Chat messages
+          </div>
+          <div style="width:200px;border-left:1px solid rgba(255,255,255,0.08);padding:10px;font-size:11px;">
+            <div style="font-weight:600;margin-bottom:8px;">Targets</div>
+            <div style="opacity:0.4;">Devices</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Collapsible Left Sidebar</h3>
+      <p>Conv list can toggle open/closed. When closed, only icons or narrow strip. Chat + Target panel fill remaining space.</p>
+      <div class="mockup" style="margin-top:12px;">
+        <div class="mockup-body" style="padding:0;min-height:180px;display:flex;">
+          <div style="width:48px;border-right:1px solid rgba(255,255,255,0.08);padding:10px 4px;font-size:11px;background:rgba(0,0,0,0.15);display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <div style="width:28px;height:28px;border-radius:6px;background:rgba(108,140,255,0.2);display:flex;align-items:center;justify-content:center;font-size:10px;">C1</div>
+            <div style="width:28px;height:28px;border-radius:6px;background:rgba(255,255,255,0.05);display:flex;align-items:center;justify-content:center;font-size:10px;opacity:0.5;">C2</div>
+          </div>
+          <div style="flex:1;padding:10px;font-size:11px;display:flex;align-items:center;justify-content:center;opacity:0.4;">
+            Chat messages (wider when sidebar collapsed)
+          </div>
+          <div style="width:200px;border-left:1px solid rgba(255,255,255,0.08);padding:10px;font-size:11px;">
+            <div style="font-weight:600;margin-bottom:8px;">Targets</div>
+            <div style="opacity:0.4;">Devices</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Left Sidebar + Collapsible Right</h3>
+      <p>Conv list always visible on left. Target panel collapsible on right. Maximizes chat space when targets not needed.</p>
+      <div class="mockup" style="margin-top:12px;">
+        <div class="mockup-body" style="padding:0;min-height:180px;display:flex;">
+          <div style="width:200px;border-right:1px solid rgba(255,255,255,0.08);padding:10px;font-size:11px;background:rgba(0,0,0,0.15);">
+            <div style="font-weight:600;margin-bottom:8px;">Conversations</div>
+            <div style="padding:4px 8px;background:rgba(108,140,255,0.15);border-radius:4px;margin-bottom:4px;font-size:11px;">conv-1 (active)</div>
+            <div style="padding:4px 8px;opacity:0.5;font-size:11px;">conv-2</div>
+          </div>
+          <div style="flex:1;padding:10px;font-size:11px;display:flex;align-items:center;justify-content:center;opacity:0.4;">
+            Chat messages (full width when targets hidden)
+          </div>
+          <div style="width:48px;border-left:1px solid rgba(255,255,255,0.08);padding:10px 4px;font-size:11px;display:flex;flex-direction:column;align-items:center;">
+            <div style="font-size:16px;opacity:0.5;">&#9881;</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

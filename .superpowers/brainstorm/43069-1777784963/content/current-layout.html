@@ -1,0 +1,37 @@
+<h2>Current Layout vs Proposed Direction</h2>
+<p class="subtitle">Current: conversation list is a dropdown. Goal: persistent sidebar on the left.</p>
+
+<div class="section">
+  <div class="label">Current Layout</div>
+  <div class="mockup">
+    <div class="mockup-header">spider.ai — Current</div>
+    <div class="mockup-body" style="padding:0;min-height:320px;display:flex;flex-direction:column;">
+      <!-- Nav -->
+      <div class="mock-nav" style="padding:8px 16px;font-size:13px;">
+        spider.ai &nbsp;|&nbsp; Hosts &nbsp;|&nbsp; Commands &nbsp;|&nbsp; <strong style="border-bottom:2px solid #6c8cff">Chat</strong> &nbsp;|&nbsp; Audit
+      </div>
+      <!-- Chat header with dropdown -->
+      <div style="display:flex;align-items:center;padding:6px 12px;border-bottom:1px solid rgba(255,255,255,0.08);font-size:13px;gap:8px;">
+        <span style="cursor:pointer;font-size:16px;">&#9776;</span>
+        <span style="opacity:0.7;">conv-title</span>
+        <span style="margin-left:auto;opacity:0.4;font-size:11px;">model: gpt-4</span>
+        <span style="cursor:pointer;">+</span>
+      </div>
+      <!-- Body -->
+      <div style="display:flex;flex:1;">
+        <!-- Chat area flex:7 -->
+        <div style="flex:7;display:flex;flex-direction:column;padding:12px;">
+          <div style="flex:1;opacity:0.3;font-size:12px;display:flex;align-items:center;justify-content:center;">
+            Messages area (dropdown conv list hidden)
+          </div>
+          <div class="mock-input" style="margin-top:auto;">Type a message...</div>
+        </div>
+        <!-- Target panel flex:3 -->
+        <div style="flex:3;min-width:160px;border-left:1px solid rgba(255,255,255,0.08);padding:10px;font-size:11px;">
+          <div style="font-weight:600;margin-bottom:8px;">Target Panel</div>
+          <div style="opacity:0.4;">Stats / Devices</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

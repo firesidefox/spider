@@ -30,10 +30,11 @@ func (s *LogStore) Save(log *models.ExecutionLog) error {
 	}
 	_, err := s.db.Exec(
 		`INSERT INTO execution_logs (id, host_id, command, stdout, stderr, exit_code,
-		 duration_ms, triggered_by, user_id, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		 duration_ms, triggered_by, user_id, risk_level, permission_mode, approval_id, approved_by, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		log.ID, log.HostID, log.Command, log.Stdout, log.Stderr,
-		log.ExitCode, log.DurationMs, log.TriggeredBy, log.UserID, log.CreatedAt,
+		log.ExitCode, log.DurationMs, log.TriggeredBy, log.UserID,
+		log.RiskLevel, log.PermissionMode, log.ApprovalID, log.ApprovedBy, log.CreatedAt,
 	)
 	if err != nil {
 		return fmt.Errorf("保存执行日志失败: %w", err)
