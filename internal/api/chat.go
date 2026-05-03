@@ -14,9 +14,8 @@ func chatCreateConversation(app *mcppkg.App, w http.ResponseWriter, r *http.Requ
 	var req struct {
 		Title string `json:"title"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, 400, "invalid request body")
-		return
+	if r.Body != nil {
+		json.NewDecoder(r.Body).Decode(&req)
 	}
 	userID := authmw.GetUser(r.Context()).UserID
 	conv, err := app.ConvStore.Create(userID, req.Title)

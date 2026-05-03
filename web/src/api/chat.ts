@@ -22,11 +22,11 @@ export interface ChatEvent {
   content?: Record<string, any>
 }
 
-export async function createConversation(title: string): Promise<Conversation> {
+export async function createConversation(title?: string): Promise<Conversation> {
   const res = await fetch('/api/v1/chat/conversations', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify({ title }),
+    body: title ? JSON.stringify({ title }) : undefined,
   })
   if (!res.ok) throw new Error((await res.json()).error)
   return res.json()

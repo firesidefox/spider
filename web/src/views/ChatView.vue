@@ -142,22 +142,12 @@ async function selectConversation(id: string) {
   scrollToBottom()
 }
 
-async function createNewConversation(title = '新对话') {
-  const conv = await createConversation(title)
+async function createNewConversation() {
+  const conv = await createConversation()
   conversations.value.unshift(conv)
   activeConvId.value = conv.id
   messages.value = []
   router.replace(`/chat/${conv.id}`)
-}
-
-function generateTitle(text: string): string {
-  const now = new Date()
-  const mm = String(now.getMonth() + 1).padStart(2, '0')
-  const dd = String(now.getDate()).padStart(2, '0')
-  const hh = String(now.getHours()).padStart(2, '0')
-  const mi = String(now.getMinutes()).padStart(2, '0')
-  const summary = text.length > 20 ? text.slice(0, 20) + '...' : text
-  return `${mm}-${dd} ${hh}:${mi} ${summary}`
 }
 
 function scrollToBottom() {
@@ -180,7 +170,7 @@ async function send() {
   inputText.value = ''
 
   if (!activeConvId.value) {
-    await createNewConversation(generateTitle(text))
+    await createNewConversation()
   }
 
   const userMsg: DisplayMessage = {

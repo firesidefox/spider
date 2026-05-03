@@ -21,11 +21,11 @@ func TestConversationStore_CreateAndGet(t *testing.T) {
 	database := setupTestDB(t)
 	s := NewConversationStore(database)
 
-	conv, err := s.Create("user-1", "test title")
+	conv, err := s.Create("user-1", "")
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
-	if conv.ID == "" || conv.Title != "test title" {
+	if conv.ID == "" || conv.Title == "" {
 		t.Errorf("unexpected conv: %+v", conv)
 	}
 
@@ -33,8 +33,8 @@ func TestConversationStore_CreateAndGet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetByID: %v", err)
 	}
-	if got.Title != "test title" {
-		t.Errorf("Title = %q, want %q", got.Title, "test title")
+	if got.Title != conv.Title {
+		t.Errorf("Title = %q, want %q", got.Title, conv.Title)
 	}
 }
 
@@ -42,9 +42,9 @@ func TestConversationStore_ListByUser(t *testing.T) {
 	database := setupTestDB(t)
 	s := NewConversationStore(database)
 
-	s.Create("user-1", "conv A")
-	s.Create("user-1", "conv B")
-	s.Create("user-2", "conv C")
+	s.Create("user-1", "")
+	s.Create("user-1", "")
+	s.Create("user-2", "")
 
 	list, err := s.ListByUser("user-1")
 	if err != nil {
@@ -59,7 +59,7 @@ func TestConversationStore_Delete(t *testing.T) {
 	database := setupTestDB(t)
 	s := NewConversationStore(database)
 
-	conv, _ := s.Create("user-1", "to delete")
+	conv, _ := s.Create("user-1", "")
 	err := s.Delete(conv.ID)
 	if err != nil {
 		t.Fatalf("Delete: %v", err)

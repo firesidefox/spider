@@ -18,7 +18,10 @@ func NewConversationStore(db *sql.DB) *ConversationStore {
 }
 
 func (s *ConversationStore) Create(userID, title string) (*models.Conversation, error) {
-	now := time.Now().UTC()
+	now := time.Now()
+	if title == "" {
+		title = now.Format("2006-01-02-1504")
+	}
 	conv := &models.Conversation{
 		ID:        uuid.New().String(),
 		UserID:    userID,

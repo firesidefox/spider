@@ -7,7 +7,7 @@ func TestMessageStore_SaveAndList(t *testing.T) {
 	cs := NewConversationStore(database)
 	ms := NewMessageStore(database)
 
-	conv, _ := cs.Create("user-1", "test")
+	conv, _ := cs.Create("user-1", "")
 
 	err := ms.Save(conv.ID, "user", `{"type":"text","text":"hello"}`, "")
 	if err != nil {
@@ -38,7 +38,7 @@ func TestMessageStore_DeleteByConversation(t *testing.T) {
 	cs := NewConversationStore(database)
 	ms := NewMessageStore(database)
 
-	conv, _ := cs.Create("user-1", "test")
+	conv, _ := cs.Create("user-1", "")
 	ms.Save(conv.ID, "user", `{"text":"hello"}`, "")
 
 	err := ms.DeleteByConversation(conv.ID)
