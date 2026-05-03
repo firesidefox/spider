@@ -2,7 +2,11 @@ package permission
 
 import (
 	"context"
+	"log"
 	"regexp"
+	"sync"
+
+	"github.com/spiderai/spider/internal/config"
 )
 
 // LLMClassifier optional LLM fallback interface
@@ -17,6 +21,7 @@ type rule struct {
 
 // Classifier classifies command risk level
 type Classifier struct {
+	mu    sync.RWMutex
 	rules []rule
 	llm   LLMClassifier
 }
@@ -103,7 +108,11 @@ func buildStaticRules() []rule {
 
 // Classify returns risk classification for a command
 func (c *Classifier) Classify(ctx context.Context, command string) Classification {
-	for _, r := range c.rules {
+	c.mu.RLock()
+	rules := c.rules
+	c.mu.RUnlock()
+
+	for _, r := range rules {
 		if r.pattern.MatchString(command) {
 			return Classification{Level: r.level, Source: SourceStatic, Reason: "matched: " + r.pattern.String()}
 		}
@@ -112,4 +121,59 @@ func (c *Classifier) Classify(ctx context.Context, command string) Classificatio
 		return c.llm.Classify(ctx, command)
 	}
 	return Classification{Level: L3Dangerous, Source: SourceDefault, Reason: "unknown command, defaulting to L3"}
+}
+
+// parseLevelString converts a string like "L1","L2","L3","L4" to RiskLevel.
+// Returns L3Dangerous as default for unrecognized strings.
+func parseLevelString(s string) RiskLevel {
+	switch s {
+	case "L1":
+		return L1Read
+	case "L2":
+		return L2Write
+	case "L3":
+		return L3Dangerous
+	case "L4":
+		return L4Destroy
+	default:
+		return L3Dangerous
+	}
+}
+
+// Reload replaces the classifier's rules with user rules followed by
+// built-in rules. Invalid regex patterns are logged and skipped.
+func (c *Classifier) Reload(userRules []config.RuleConfig) {
+	var rules []rule
+	for _, ur := range userRules {
+		re, err := regexp.Compile(ur.Pattern)
+		if err != nil {
+			log.Printf("permission: skipping invalid rule pattern %q: %v", ur.Pattern, err)
+			continue
+		}
+		rules = append(rules, rule{pattern: re, level: parseLevelString(ur.Level)})
+	}
+	rules = append(rules, buildStaticRules()...)
+
+	c.mu.Lock()
+	c.rules = rules
+	c.mu.Unlock()
+}
+
+// BuiltinRule is a JSON-friendly representation of a built-in rule.
+type BuiltinRule struct {
+	Pattern string `json:"pattern"`
+	Level   string `json:"level"`
+}
+
+// BuiltinRules returns the built-in rules as JSON-friendly structs.
+func (c *Classifier) BuiltinRules() []BuiltinRule {
+	static := buildStaticRules()
+	out := make([]BuiltinRule, len(static))
+	for i, r := range static {
+		out[i] = BuiltinRule{
+			Pattern: r.pattern.String(),
+			Level:   r.level.String(),
+		}
+	}
+	return out
 }
