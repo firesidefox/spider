@@ -250,33 +250,31 @@
             <div class="block-grid">
               <div class="form-row">
                 <label>模式</label>
-                <div>
-                  <select v-model="agentSettings.permission_mode" class="input">
-                    <option value="ask">询问模式 ask（默认）</option>
-                    <option value="auto">自动模式 auto</option>
-                    <option value="plan">计划模式 plan</option>
-                    <option value="readonly">只读模式 readonly</option>
-                  </select>
-                  <div class="mode-desc">
-                    <template v-if="agentSettings.permission_mode === 'ask'">
-                      <strong>询问模式 ask</strong> — L3 及以上命令暂停执行，等待人工审批后继续。适合日常运维场景。
-                    </template>
-                    <template v-else-if="agentSettings.permission_mode === 'auto'">
-                      <strong>自动模式 auto</strong> — L4 命令等待审批，其余自动执行并记录审计。适合 CI/CD 流水线。
-                    </template>
-                    <template v-else-if="agentSettings.permission_mode === 'plan'">
-                      <strong>计划模式 plan</strong> — 所有命令只生成执行计划，不实际执行。适合变更评审和演练。
-                    </template>
-                    <template v-else-if="agentSettings.permission_mode === 'readonly'">
-                      <strong>只读模式 readonly</strong> — 只允许 L1 只读操作，其余全部拒绝。适合审计巡检。
-                    </template>
-                  </div>
-                </div>
+                <select v-model="agentSettings.permission_mode" class="input">
+                  <option value="ask">询问模式 ask（默认）</option>
+                  <option value="auto">自动模式 auto</option>
+                  <option value="plan">计划模式 plan</option>
+                  <option value="readonly">只读模式 readonly</option>
+                </select>
               </div>
               <div class="form-row">
                 <label>审批超时（秒）</label>
                 <input v-model.number="agentSettings.approval_timeout" class="input" type="number" min="0" />
               </div>
+            </div>
+            <div class="mode-desc">
+              <template v-if="agentSettings.permission_mode === 'ask'">
+                <strong>询问模式 ask</strong> — L3 及以上命令暂停执行，等待人工审批后继续。适合日常运维场景。
+              </template>
+              <template v-else-if="agentSettings.permission_mode === 'auto'">
+                <strong>自动模式 auto</strong> — L4 命令等待审批，其余自动执行并记录审计。适合 CI/CD 流水线。
+              </template>
+              <template v-else-if="agentSettings.permission_mode === 'plan'">
+                <strong>计划模式 plan</strong> — 所有命令只生成执行计划，不实际执行。适合变更评审和演练。
+              </template>
+              <template v-else-if="agentSettings.permission_mode === 'readonly'">
+                <strong>只读模式 readonly</strong> — 只允许 L1 只读操作，其余全部拒绝。适合审计巡检。
+              </template>
             </div>
             <div style="margin-top:16px">
               <button class="btn btn-primary btn-sm" :disabled="agentSaving" @click="saveAgentSettings">
@@ -1072,7 +1070,7 @@ async function deleteRule(idx: number) {
 .model-option:hover { background: var(--row-hover); }
 .model-option.active { background: var(--row-hover); color: var(--primary); font-weight: 500; }
 .check { color: var(--green); }
-.mode-desc { margin-top: 8px; font-size: 12px; color: var(--primary); background: color-mix(in srgb, var(--primary) 8%, transparent); border: 1px solid color-mix(in srgb, var(--primary) 25%, transparent); border-radius: 4px; padding: 7px 10px; line-height: 1.6; max-width: 420px; }
+.mode-desc { margin-top: 12px; font-size: 12px; color: #60a5fa; background: rgba(96, 165, 250, 0.08); border: 1px solid rgba(96, 165, 250, 0.25); border-radius: 4px; padding: 7px 10px; line-height: 1.6; }
 .risk-badge { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 11px; font-weight: 700; }
 .risk-badge.l1 { background: rgba(74, 222, 128, 0.15); color: #4ade80; }
 .risk-badge.l2 { background: rgba(96, 165, 250, 0.15); color: #60a5fa; }
