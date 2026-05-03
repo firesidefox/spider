@@ -252,10 +252,10 @@
                 <label>模式</label>
                 <div>
                   <select v-model="agentSettings.permission_mode" class="input">
-                    <option value="ask">询问模式（默认）</option>
-                    <option value="auto">自动模式</option>
-                    <option value="plan">计划模式</option>
-                    <option value="readonly">只读模式</option>
+                    <option value="ask">询问模式 Ask（默认）</option>
+                    <option value="auto">自动模式 Auto</option>
+                    <option value="plan">计划模式 Plan</option>
+                    <option value="readonly">只读模式 Readonly</option>
                   </select>
                   <div class="mode-desc">
                     <template v-if="agentSettings.permission_mode === 'ask'">
