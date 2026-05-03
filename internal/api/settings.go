@@ -7,15 +7,18 @@ import (
 	"path/filepath"
 
 	mcppkg "github.com/spiderai/spider/internal/mcp"
+	"github.com/spiderai/spider/internal/permission"
 	"gopkg.in/yaml.v3"
 )
 
 type settingsResponse struct {
-	SSEAddr    string `json:"sse_addr"`
-	SSEBaseURL string `json:"sse_base_url"`
-	SSHTimeout int    `json:"ssh_default_timeout_seconds"`
-	SSHPoolTTL int    `json:"ssh_pool_ttl_seconds"`
-	SSHMaxPool int    `json:"ssh_max_pool_size"`
+	SSEAddr         string `json:"sse_addr"`
+	SSEBaseURL      string `json:"sse_base_url"`
+	SSHTimeout      int    `json:"ssh_default_timeout_seconds"`
+	SSHPoolTTL      int    `json:"ssh_pool_ttl_seconds"`
+	SSHMaxPool      int    `json:"ssh_max_pool_size"`
+	PermissionMode  string `json:"permission_mode"`
+	ApprovalTimeout int    `json:"approval_timeout"`
 }
 
 const maskedPrefix = "****"
@@ -38,11 +41,13 @@ func saveConfig(app *mcppkg.App) error {
 
 func buildSettingsResponse(app *mcppkg.App) settingsResponse {
 	return settingsResponse{
-		SSEAddr:    app.Config.SSE.Addr,
-		SSEBaseURL: app.Config.SSE.BaseURL,
-		SSHTimeout: app.Config.SSH.DefaultTimeout,
-		SSHPoolTTL: app.Config.SSH.PoolTTL,
-		SSHMaxPool: app.Config.SSH.MaxPoolSize,
+		SSEAddr:         app.Config.SSE.Addr,
+		SSEBaseURL:      app.Config.SSE.BaseURL,
+		SSHTimeout:      app.Config.SSH.DefaultTimeout,
+		SSHPoolTTL:      app.Config.SSH.PoolTTL,
+		SSHMaxPool:      app.Config.SSH.MaxPoolSize,
+		PermissionMode:  app.Config.Agent.PermissionMode,
+		ApprovalTimeout: app.Config.Agent.ApprovalTimeout,
 	}
 }
 
@@ -71,6 +76,13 @@ func updateSettings(app *mcppkg.App, w http.ResponseWriter, r *http.Request) {
 	}
 	if req.SSHMaxPool > 0 {
 		app.Config.SSH.MaxPoolSize = req.SSHMaxPool
+	}
+	if req.PermissionMode != "" {
+		app.Config.Agent.PermissionMode = req.PermissionMode
+		app.PermissionMode = permission.Mode(req.PermissionMode)
+	}
+	if req.ApprovalTimeout > 0 {
+		app.Config.Agent.ApprovalTimeout = req.ApprovalTimeout
 	}
 
 	if err := saveConfig(app); err != nil {
