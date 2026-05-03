@@ -1074,12 +1074,12 @@ async function deleteRule(idx: number) {
 .check { color: var(--green); }
 .mode-desc { margin-top: 8px; font-size: 12px; color: var(--primary); background: color-mix(in srgb, var(--primary) 8%, transparent); border: 1px solid color-mix(in srgb, var(--primary) 25%, transparent); border-radius: 4px; padding: 7px 10px; line-height: 1.6; max-width: 420px; }
 .risk-badge { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 11px; font-weight: 700; }
-.risk-badge.l1 { background: color-mix(in srgb, var(--green) 15%, transparent); color: var(--green); }
-.risk-badge.l2 { background: color-mix(in srgb, var(--primary) 15%, transparent); color: var(--primary); }
-.risk-badge.l3 { background: color-mix(in srgb, var(--warn, #fb923c) 15%, transparent); color: var(--warn, #fb923c); }
-.risk-badge.l4 { background: color-mix(in srgb, var(--danger) 15%, transparent); color: var(--danger); }
-.ok { color: var(--green); }
-.wait { color: var(--warn, #fb923c); }
-.no { color: var(--danger); }
+.risk-badge.l1 { background: rgba(74, 222, 128, 0.15); color: #4ade80; }
+.risk-badge.l2 { background: rgba(96, 165, 250, 0.15); color: #60a5fa; }
+.risk-badge.l3 { background: rgba(251, 146, 60, 0.15); color: #fb923c; }
+.risk-badge.l4 { background: rgba(248, 113, 113, 0.15); color: #f87171; }
+.ok { color: #4ade80; }
+.wait { color: #fb923c; }
+.no { color: #f87171; }
 .plan-cell { color: #a78bfa; }
 </style>
