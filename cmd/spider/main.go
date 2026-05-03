@@ -166,6 +166,14 @@ func serve(cfgFile, addrOverride, dataDirOverride string) error {
 	ps := store.NewProviderStore(database, cm)
 	app.ProviderStore = ps
 
+	app.Classifier = permission.NewClassifier(nil)
+	if len(cfg.Agent.Rules) > 0 {
+		app.Classifier.Reload(cfg.Agent.Rules)
+	}
+	app.Enforcer = permission.NewEnforcer()
+	app.ApprovalManager = permission.NewApprovalManager()
+	app.PermissionMode = permission.Mode(cfg.Agent.PermissionMode)
+
 	agentFactory, err := agent.NewFactory(
 		ps, hs, pool, ks, ls, app.MsgStore,
 	)
@@ -176,14 +184,6 @@ func serve(cfgFile, addrOverride, dataDirOverride string) error {
 		agentFactory.PermissionMode = app.PermissionMode
 		app.AgentFactory = agentFactory
 	}
-
-	app.Classifier = permission.NewClassifier(nil)
-	if len(cfg.Agent.Rules) > 0 {
-		app.Classifier.Reload(cfg.Agent.Rules)
-	}
-	app.Enforcer = permission.NewEnforcer()
-	app.ApprovalManager = permission.NewApprovalManager()
-	app.PermissionMode = permission.Mode(cfg.Agent.PermissionMode)
 
 	mcpHandler := mcppkg.NewHTTPHandler(app)
 

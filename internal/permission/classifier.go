@@ -123,23 +123,6 @@ func (c *Classifier) Classify(ctx context.Context, command string) Classificatio
 	return Classification{Level: L3Dangerous, Source: SourceDefault, Reason: "unknown command, defaulting to L3"}
 }
 
-// parseLevelString converts a string like "L1","L2","L3","L4" to RiskLevel.
-// Returns L3Dangerous as default for unrecognized strings.
-func parseLevelString(s string) RiskLevel {
-	switch s {
-	case "L1":
-		return L1Read
-	case "L2":
-		return L2Write
-	case "L3":
-		return L3Dangerous
-	case "L4":
-		return L4Destroy
-	default:
-		return L3Dangerous
-	}
-}
-
 // Reload replaces the classifier's rules with user rules followed by
 // built-in rules. Invalid regex patterns are logged and skipped.
 func (c *Classifier) Reload(userRules []config.RuleConfig) {
@@ -150,7 +133,7 @@ func (c *Classifier) Reload(userRules []config.RuleConfig) {
 			log.Printf("permission: skipping invalid rule pattern %q: %v", ur.Pattern, err)
 			continue
 		}
-		rules = append(rules, rule{pattern: re, level: parseLevelString(ur.Level)})
+		rules = append(rules, rule{pattern: re, level: ParseRiskLevel(ur.Level)})
 	}
 	rules = append(rules, buildStaticRules()...)
 
