@@ -42,6 +42,14 @@ type App struct {
 	chatWaitersMu sync.Mutex
 }
 
+// NewAgentFactory creates a fresh AgentFactory from current DB provider state.
+// Returns nil, err if no provider configured or key decryption fails.
+func (a *App) NewAgentFactory() (*agent.Factory, error) {
+	return agent.NewFactory(
+		a.ProviderStore, a.HostStore, a.Pool, a.SSHKeyStore, a.LogStore, a.MsgStore,
+	)
+}
+
 func (a *App) StoreChatWaiter(convID string, w *agent.ConfirmationWaiter) {
 	a.chatWaitersMu.Lock()
 	defer a.chatWaitersMu.Unlock()

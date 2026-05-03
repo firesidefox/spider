@@ -79,8 +79,9 @@ func chatUpdateTitle(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id
 }
 
 func chatSendMessage(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id string) {
-	if app.AgentFactory == nil {
-		writeError(w, 503, "LLM not configured")
+	factory, err := app.NewAgentFactory()
+	if err != nil {
+		writeError(w, 503, "LLM not configured: "+err.Error())
 		return
 	}
 	var req struct {
@@ -92,7 +93,7 @@ func chatSendMessage(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id
 	}
 
 	systemPrompt := agent.BuildSystemPrompt(app.HostStore)
-	a := app.AgentFactory.NewAgent(systemPrompt)
+	a := factory.NewAgent(systemPrompt)
 	waiter := agent.NewConfirmationWaiter()
 	app.StoreChatWaiter(id, waiter)
 	defer app.RemoveChatWaiter(id)
