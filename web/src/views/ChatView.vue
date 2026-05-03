@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, nextTick, watch, computed } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick, watch, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ChatMessage from '../components/ChatMessage.vue'
 import type { MessageBlock, ToolCallBlock } from '../components/ChatMessage.vue'
@@ -12,6 +12,7 @@ import {
   type Conversation, type ChatMessage as ChatMsg, type ChatEvent,
 } from '../api/chat'
 import { listHosts, type SafeHost } from '../api/hosts'
+import { authHeaders } from '../api/auth'
 
 const route = useRoute()
 const router = useRouter()
@@ -47,6 +48,14 @@ const currentModelName = ref('')
 const activeConv = computed(() =>
   conversations.value.find(c => c.id === activeConvId.value) || null
 )
+
+const showModeDropdown = ref(false)
+const globalMode = ref('ask')
+
+const effectiveMode = computed(() => {
+  const convMode = activeConv.value?.permission_mode
+  return convMode || globalMode.value
+})
 
 const editingHeaderTitle = ref(false)
 const editingConvId = ref<string | null>(null)
@@ -321,6 +330,31 @@ async function loadDevices() {
   }))
 }
 
+async function setConversationMode(mode: string) {
+  const convId = activeConv.value?.id
+  if (!convId) return
+  try {
+    await fetch(`/api/v1/chat/conversations/${convId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ permission_mode: mode }),
+    })
+    if (activeConv.value) {
+      activeConv.value.permission_mode = mode
+    }
+  } catch (e) {
+    console.error('Failed to set mode:', e)
+  }
+  showModeDropdown.value = false
+}
+
+function closeModeDropdown(e: MouseEvent) {
+  const target = e.target as HTMLElement
+  if (!target.closest('.mode-badge-wrapper')) {
+    showModeDropdown.value = false
+  }
+}
+
 watch(() => messages.value.length, () => {
   nextTick(() => scrollToBottom())
 })
@@ -332,6 +366,17 @@ onMounted(async () => {
   if (paramId) {
     await selectConversation(paramId)
   }
+  // Load global permission mode
+  try {
+    const res = await fetch('/api/v1/settings', { headers: authHeaders() })
+    const data = await res.json()
+    globalMode.value = data.permission_mode || 'ask'
+  } catch (_) { /* use default */ }
+  document.addEventListener('click', closeModeDropdown)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', closeModeDropdown)
 })
 </script>
 
@@ -373,6 +418,21 @@ onMounted(async () => {
                @vue:mounted="($event: any) => $event.el.focus()" />
         <span v-else class="conv-title" @click="startEditHeaderTitle">{{ activeConv?.title || '新对话' }}</span>
         <span class="current-model" v-if="currentModelName">{{ currentModelName }}</span>
+        <div class="mode-badge-wrapper">
+          <div class="mode-badge" :class="effectiveMode" @click.stop="showModeDropdown = !showModeDropdown">
+            {{ effectiveMode }}
+          </div>
+          <div v-if="showModeDropdown" class="mode-dropdown">
+            <div v-for="m in ['ask','auto','plan','readonly']" :key="m"
+                 class="mode-option" :class="{ active: effectiveMode === m }"
+                 @click.stop="setConversationMode(m)">
+              {{ m }}
+            </div>
+            <div class="mode-option reset" @click.stop="setConversationMode('')">
+              使用全局默认
+            </div>
+          </div>
+        </div>
       </div>
 
       <div class="chat-messages" ref="messagesRef">
@@ -455,6 +515,35 @@ onMounted(async () => {
 .conv-title:hover { color: var(--primary); }
 .conv-title-input { flex: 1; background: var(--input-bg); border: 1px solid var(--primary); color: var(--text); font-family: 'SF Mono', monospace; font-size: 13px; padding: 2px 6px; border-radius: 4px; outline: none; }
 .current-model { color: var(--muted); font-size: 11px; font-family: 'SF Mono', monospace; }
+
+.mode-badge-wrapper { position: relative; flex-shrink: 0; }
+.mode-badge {
+  padding: 2px 8px; border-radius: 4px; font-size: 12px;
+  cursor: pointer; font-weight: 500; text-transform: uppercase;
+  letter-spacing: 0.5px; user-select: none;
+  font-family: 'SF Mono', monospace;
+}
+.mode-badge.ask { background: #dbeafe; color: #1d4ed8; }
+.mode-badge.auto { background: #dcfce7; color: #166534; }
+.mode-badge.plan { background: #fef9c3; color: #854d0e; }
+.mode-badge.readonly { background: #f3f4f6; color: #4b5563; }
+.mode-dropdown {
+  position: absolute; top: 100%; right: 0; margin-top: 4px;
+  background: var(--bg-card, #1e1e1e); border: 1px solid var(--border, #333);
+  border-radius: 6px; padding: 4px; z-index: 100; min-width: 140px;
+}
+.mode-option {
+  padding: 6px 12px; cursor: pointer; border-radius: 4px;
+  font-size: 13px; font-family: 'SF Mono', monospace;
+  color: var(--text); text-transform: uppercase;
+}
+.mode-option:hover { background: var(--row-hover, #2a2a2a); }
+.mode-option.active { font-weight: 600; color: var(--primary); }
+.mode-option.reset {
+  color: var(--muted, #888); font-size: 12px; text-transform: none;
+  border-top: 1px solid var(--border, #333);
+  margin-top: 4px; padding-top: 8px;
+}
 
 .conv-item { padding: 8px 14px; cursor: pointer; color: var(--text-sub); font-size: 13px; font-family: 'SF Mono', monospace; display: flex; align-items: center; border-radius: 6px; }
 .conv-item:hover { background: var(--row-hover); }
