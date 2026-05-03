@@ -21,15 +21,19 @@ CREATE TABLE IF NOT EXISTS hosts (
 );
 
 CREATE TABLE IF NOT EXISTS execution_logs (
-    id           TEXT PRIMARY KEY,
-    host_id      TEXT NOT NULL,
-    command      TEXT NOT NULL,
-    stdout       TEXT NOT NULL DEFAULT '',
-    stderr       TEXT NOT NULL DEFAULT '',
-    exit_code    INTEGER NOT NULL DEFAULT 0,
-    duration_ms  INTEGER NOT NULL DEFAULT 0,
-    triggered_by TEXT NOT NULL DEFAULT 'mcp',
-    created_at   DATETIME NOT NULL
+    id              TEXT PRIMARY KEY,
+    host_id         TEXT NOT NULL,
+    command         TEXT NOT NULL,
+    stdout          TEXT NOT NULL DEFAULT '',
+    stderr          TEXT NOT NULL DEFAULT '',
+    exit_code       INTEGER NOT NULL DEFAULT 0,
+    duration_ms     INTEGER NOT NULL DEFAULT 0,
+    triggered_by    TEXT NOT NULL DEFAULT 'mcp',
+    risk_level      TEXT NOT NULL DEFAULT '',
+    permission_mode TEXT NOT NULL DEFAULT '',
+    approval_id     TEXT NOT NULL DEFAULT '',
+    approved_by     TEXT NOT NULL DEFAULT '',
+    created_at      DATETIME NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_execution_logs_host_id ON execution_logs(host_id);
@@ -120,6 +124,22 @@ CREATE TABLE IF NOT EXISTS pending_confirmations (
     resolved_at DATETIME,
     FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS approvals (
+    id              TEXT PRIMARY KEY,
+    session_id      TEXT NOT NULL,
+    command         TEXT NOT NULL,
+    host            TEXT NOT NULL DEFAULT '',
+    risk_level      TEXT NOT NULL,
+    risk_reason     TEXT NOT NULL DEFAULT '',
+    status          TEXT NOT NULL DEFAULT 'pending',
+    approved_by     TEXT NOT NULL DEFAULT '',
+    requested_at    DATETIME NOT NULL,
+    resolved_at     DATETIME
+);
+
+CREATE INDEX IF NOT EXISTS idx_approvals_session_id ON approvals(session_id);
+CREATE INDEX IF NOT EXISTS idx_approvals_status ON approvals(status);
 
 CREATE TABLE IF NOT EXISTS providers (
     id TEXT PRIMARY KEY,
