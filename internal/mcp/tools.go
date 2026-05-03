@@ -142,9 +142,13 @@ func makeUpdateHost(app *App) func(context.Context, mcpgo.CallToolRequest) (*mcp
 // checkPermission classifies the command, enforces the permission mode, and
 // blocks for approval when needed. Returns the classification and nil on
 // success, or a tool result to return immediately on deny/plan/timeout.
-func checkPermission(ctx context.Context, app *App, command, hostDisplay string) (*permission.Classification, *mcpgo.CallToolResult, error) {
+func checkPermission(ctx context.Context, app *App, command, hostDisplay string, sessionMode permission.Mode) (*permission.Classification, *mcpgo.CallToolResult, error) {
 	c := app.Classifier.Classify(ctx, command)
-	decision := app.Enforcer.Decide(app.PermissionMode, c.Level)
+	mode := app.PermissionMode
+	if sessionMode != "" && sessionMode.IsValid() {
+		mode = sessionMode
+	}
+	decision := app.Enforcer.Decide(mode, c.Level)
 
 	switch decision {
 	case permission.DecisionDeny:
@@ -189,7 +193,7 @@ func makeExecuteCommand(app *App) func(context.Context, mcpgo.CallToolRequest) (
 			return toolError(fmt.Sprintf("主机不存在: %s", hostIDOrName))
 		}
 
-		classification, early, err := checkPermission(ctx, app, command, host.Name)
+		classification, early, err := checkPermission(ctx, app, command, host.Name, "")
 		if early != nil || err != nil {
 			return early, err
 		}
@@ -272,7 +276,7 @@ func makeExecuteCommandBatch(app *App) func(context.Context, mcpgo.CallToolReque
 		for i, h := range hosts {
 			hostNames[i] = h.Name
 		}
-		_, early, err := checkPermission(ctx, app, command, strings.Join(hostNames, ", "))
+		_, early, err := checkPermission(ctx, app, command, strings.Join(hostNames, ", "), "")
 		if early != nil || err != nil {
 			return early, err
 		}

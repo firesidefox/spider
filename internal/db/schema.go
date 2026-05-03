@@ -198,5 +198,6 @@ func migrate(db *sql.DB) error {
 	for _, stmt := range permCols {
 		db.Exec(stmt)
 	}
+	db.Exec("ALTER TABLE conversations ADD COLUMN permission_mode TEXT NOT NULL DEFAULT ''")
 	return nil
 }
