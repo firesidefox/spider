@@ -176,6 +176,9 @@ func serve(cfgFile, addrOverride, dataDirOverride string) error {
 	}
 
 	app.Classifier = permission.NewClassifier(nil)
+	if len(cfg.Agent.Rules) > 0 {
+		app.Classifier.Reload(cfg.Agent.Rules)
+	}
 	app.Enforcer = permission.NewEnforcer()
 	app.ApprovalManager = permission.NewApprovalManager()
 	app.PermissionMode = permission.Mode(cfg.Agent.PermissionMode)
