@@ -59,28 +59,32 @@ function formatDuration(ms: number) {
       <span class="user-text">{{ blocks[0]?.type === 'text' ? blocks[0].content : '' }}</span>
     </div>
 
-    <template v-else>
-      <template v-for="(block, i) in blocks" :key="i">
-        <div v-if="block.type === 'text' && block.content" class="msg-assistant">
-          <div class="assistant-text" v-html="renderMd(block.content)"></div>
-        </div>
-        <div v-else-if="block.type === 'tool'" class="tool-calls">
-          <div class="tool-call">
-            <div class="tool-header" @click="toggleTool(block.call.id)">
-              <span class="tool-arrow">{{ expandedTools.has(block.call.id) ? '▼' : '▶' }}</span>
-              <span class="tool-name">{{ block.call.name }}</span>
-              <span v-if="block.call.durationMs != null" class="tool-duration">{{ formatDuration(block.call.durationMs) }}</span>
-              <span v-if="block.call.isError" class="tool-error-badge">error</span>
-            </div>
-            <div v-if="expandedTools.has(block.call.id)" class="tool-detail">
-              <pre v-if="block.call.input" class="tool-input">{{ JSON.stringify(block.call.input, null, 2) }}</pre>
-              <pre v-if="block.call.result" class="tool-result" :class="{ 'is-error': block.call.isError }">{{ block.call.result }}</pre>
+    <div v-else class="msg-assistant-wrap">
+      <span class="prompt prompt-assistant" :class="{ streaming: isStreaming }">*</span>
+      <div class="assistant-body">
+        <template v-for="(block, i) in blocks" :key="i">
+          <div v-if="block.type === 'text' && block.content" class="msg-assistant">
+            <div class="assistant-text" v-html="renderMd(block.content)"></div>
+          </div>
+          <div v-else-if="block.type === 'tool'" class="tool-calls">
+            <div class="tool-call">
+              <div class="tool-header" @click="toggleTool(block.call.id)">
+                <span class="tool-arrow">{{ expandedTools.has(block.call.id) ? '▼' : '▶' }}</span>
+                <span class="tool-badge">Tool</span>
+                <span class="tool-name">{{ block.call.name }}</span>
+                <span v-if="block.call.durationMs != null" class="tool-duration">{{ formatDuration(block.call.durationMs) }}</span>
+                <span v-if="block.call.isError" class="tool-error-badge">error</span>
+              </div>
+              <div v-if="expandedTools.has(block.call.id)" class="tool-detail">
+                <pre v-if="block.call.input" class="tool-input">{{ JSON.stringify(block.call.input, null, 2) }}</pre>
+                <pre v-if="block.call.result" class="tool-result" :class="{ 'is-error': block.call.isError }">{{ block.call.result }}</pre>
+              </div>
             </div>
           </div>
-        </div>
-      </template>
-      <span v-if="isStreaming" class="cursor">▊</span>
-    </template>
+        </template>
+        <span v-if="isStreaming" class="cursor">▊</span>
+      </div>
+    </div>
 
     <div v-if="confirm" class="confirm-bar" :class="confirm.riskLevel === 'dangerous' ? 'risk-dangerous' : confirm.riskLevel === 'safe' ? 'risk-safe' : 'risk-moderate'">
       <span class="confirm-label">{{ confirm.tool }}</span>
@@ -94,19 +98,29 @@ function formatDuration(ms: number) {
 <style scoped>
 .chat-msg { padding: 8px 0; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 13px; }
 .msg-user { display: flex; gap: 8px; color: var(--text); }
+.msg-assistant-wrap { display: flex; gap: 8px; }
 .prompt { color: var(--primary); font-weight: bold; flex-shrink: 0; }
+.prompt-assistant { align-self: flex-start; margin-top: 2px; }
+.prompt-assistant.streaming { animation: prompt-pulse 1.5s ease-in-out infinite; }
+@keyframes prompt-pulse {
+  0%, 100% { opacity: 0.4; text-shadow: 0 0 0 transparent; }
+  50% { opacity: 1; text-shadow: 0 0 8px var(--primary); }
+}
+.assistant-body { flex: 1; min-width: 0; }
 .msg-assistant { color: var(--text-sub); line-height: 1.6; }
 .assistant-text :deep(code) { background: var(--input-bg); padding: 2px 6px; border-radius: 3px; font-size: 12px; }
 .assistant-text :deep(pre) { background: var(--input-bg); padding: 12px; border-radius: 6px; overflow-x: auto; margin: 8px 0; }
+.assistant-text :deep(ol), .assistant-text :deep(ul) { padding-left: 1.5em; margin: 4px 0; }
 .cursor { color: var(--primary); animation: blink 1s step-end infinite; }
 @keyframes blink { 50% { opacity: 0; } }
 
 .tool-calls { margin: 8px 0; }
-.tool-call { border: 1px solid var(--border); border-radius: 6px; margin: 4px 0; overflow: hidden; }
+.tool-call { border: 1px solid var(--border); border-left: 3px solid var(--primary); border-radius: 6px; margin: 4px 0; overflow: hidden; }
 .tool-header { padding: 6px 10px; cursor: pointer; display: flex; align-items: center; gap: 8px; background: var(--input-bg); }
 .tool-header:hover { background: var(--row-hover); }
 .tool-arrow { font-size: 10px; color: var(--muted); width: 12px; }
 .tool-name { color: var(--primary); font-weight: 500; }
+.tool-badge { font-size: 10px; padding: 1px 6px; border-radius: 3px; background: var(--primary); color: #fff; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
 .tool-duration { color: var(--muted); font-size: 11px; }
 .tool-error-badge { background: var(--red); color: #fff; font-size: 10px; padding: 1px 6px; border-radius: 3px; }
 .tool-detail { padding: 8px 10px; }
