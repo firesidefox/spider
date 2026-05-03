@@ -1,3 +1,5 @@
+// Package permission defines the risk classification and execution decision
+// types for spider.ai's permission control system.
 package permission
 
 // RiskLevel 命令风险级别
@@ -25,6 +27,11 @@ func (l RiskLevel) String() string {
 	}
 }
 
+// IsValid 返回 RiskLevel 是否在有效范围内
+func (l RiskLevel) IsValid() bool {
+	return l >= L1Read && l <= L4Destroy
+}
+
 // Mode 权限模式
 type Mode string
 
@@ -35,19 +42,54 @@ const (
 	ModeReadonly Mode = "readonly" // 只允许 L1
 )
 
+// IsValid 返回 Mode 是否为已知枚举值
+func (m Mode) IsValid() bool {
+	switch m {
+	case ModeAsk, ModeAuto, ModePlan, ModeReadonly:
+		return true
+	default:
+		return false
+	}
+}
+
 // Decision 执行决策
 type Decision int
 
 const (
-	DecisionAllow   Decision = iota // 直接执行
-	DecisionPending                 // 暂停等批准
+	DecisionPending Decision = iota // 零值 = 暂停，安全默认
+	DecisionAllow                   // 直接执行
 	DecisionDeny                    // 拒绝执行
 	DecisionPlan                    // 返回计划，不执行
+)
+
+// String 返回 Decision 的可读字符串
+func (d Decision) String() string {
+	switch d {
+	case DecisionPending:
+		return "pending"
+	case DecisionAllow:
+		return "allow"
+	case DecisionDeny:
+		return "deny"
+	case DecisionPlan:
+		return "plan"
+	default:
+		return "unknown"
+	}
+}
+
+// ClassificationSource 分级来源
+type ClassificationSource string
+
+const (
+	SourceStatic  ClassificationSource = "static"
+	SourceLLM     ClassificationSource = "llm"
+	SourceDefault ClassificationSource = "default"
 )
 
 // Classification 分级结果
 type Classification struct {
 	Level  RiskLevel
-	Reason string // 判定理由
-	Source string // "static" or "llm"
+	Reason string               // 判定理由
+	Source ClassificationSource // 分级来源
 }
