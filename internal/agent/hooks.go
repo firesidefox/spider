@@ -8,6 +8,7 @@ const (
 	HookAllow          HookAction = "allow"
 	HookRequireConfirm HookAction = "require_confirm"
 	HookDeny           HookAction = "deny"
+	HookPlan           HookAction = "plan"
 )
 
 type HookResult struct {
@@ -78,7 +79,7 @@ func PermissionHook(enforcer *permission.Enforcer, mode permission.Mode) BeforeT
 		case permission.DecisionDeny:
 			return &HookResult{Action: HookDeny, RiskLevel: riskLevel, Reason: "denied by permission mode"}
 		case permission.DecisionPlan:
-			return &HookResult{Action: HookDeny, RiskLevel: riskLevel, Reason: "plan mode: execution not allowed"}
+			return &HookResult{Action: HookPlan, RiskLevel: riskLevel}
 		default:
 			return &HookResult{Action: HookRequireConfirm, RiskLevel: riskLevel}
 		}

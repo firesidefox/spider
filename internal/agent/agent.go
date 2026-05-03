@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"sync"
 	"time"
 
@@ -213,6 +214,12 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 					events <- Event{Type: EventToolResult, Content: map[string]any{"id": tc.ID, "tool": tc.Name, "result": "denied: " + hookResult.Reason, "is_error": true}}
 					history = append(history, llm.Message{Role: llm.RoleUser, Content: "Tool denied: " + hookResult.Reason})
 					tcRecords = append(tcRecords, ToolCallRecord{ID: tc.ID, Name: tc.Name, Input: tc.Input, Result: "denied: " + hookResult.Reason, RiskLevel: hookResult.RiskLevel.String()})
+					continue
+				} else if hookResult.Action == HookPlan {
+					planMsg := fmt.Sprintf("[PLAN] Would execute tool %s with input: %v", tc.Name, tc.Input)
+					events <- Event{Type: EventToolResult, Content: map[string]any{"id": tc.ID, "tool": tc.Name, "result": planMsg, "is_error": false}}
+					history = append(history, llm.Message{Role: llm.RoleUser, Content: planMsg})
+					tcRecords = append(tcRecords, ToolCallRecord{ID: tc.ID, Name: tc.Name, Input: tc.Input, Result: planMsg, RiskLevel: hookResult.RiskLevel.String()})
 					continue
 				}
 
