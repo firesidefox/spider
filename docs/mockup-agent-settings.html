@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>智能体设置 Mockup</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f0f0f; color: #e0e0e0; font-size: 14px; }
+.page { display: flex; height: 100vh; }
+.sidebar { width: 200px; background: #161616; border-right: 1px solid #2a2a2a; padding: 16px 0; flex-shrink: 0; }
+.sidebar-user { padding: 0 16px 16px; border-bottom: 1px solid #2a2a2a; margin-bottom: 8px; }
+.sidebar-username { font-weight: 600; font-size: 13px; }
+.role-badge { display: inline-block; font-size: 10px; padding: 1px 6px; border-radius: 3px; background: #1d4ed8; color: #93c5fd; margin-left: 6px; }
+.nav-section { font-size: 10px; color: #555; padding: 8px 16px 4px; text-transform: uppercase; letter-spacing: 0.8px; }
+.nav-row { padding: 7px 16px; cursor: pointer; display: flex; align-items: center; gap: 8px; font-size: 13px; color: #888; }
+.nav-row:hover { background: #1e1e1e; color: #e0e0e0; }
+.nav-row.selected { background: #1e2a3a; color: #60a5fa; }
+.detail { flex: 1; overflow-y: auto; padding: 24px 28px; }
+.detail-title { font-size: 18px; font-weight: 600; margin-bottom: 20px; color: #f0f0f0; }
+.card { background: #1a1a1a; border: 1px solid #252525; border-radius: 8px; margin-bottom: 16px; overflow: hidden; }
+.card-title { font-size: 11px; font-weight: 600; color: #555; text-transform: uppercase; letter-spacing: 0.7px; padding: 10px 16px; border-bottom: 1px solid #222; }
+.card-body { padding: 16px; }
+.form-row { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 14px; }
+.form-row:last-child { margin-bottom: 0; }
+.form-row label { width: 110px; flex-shrink: 0; font-size: 13px; color: #888; padding-top: 7px; }
+select, input[type=number] { background: #111; border: 1px solid #333; color: #e0e0e0; padding: 6px 10px; border-radius: 5px; font-size: 13px; outline: none; }
+.mode-desc { margin-top: 8px; font-size: 12px; color: #60a5fa; background: #0a1929; border: 1px solid #1a3a5c; border-radius: 4px; padding: 7px 10px; line-height: 1.6; max-width: 420px; }
+table { width: 100%; border-collapse: collapse; font-size: 12px; }
+th { font-size: 11px; color: #555; text-align: left; padding: 6px 10px; border-bottom: 1px solid #222; }
+th:not(:first-child) { text-align: center; }
+td { padding: 7px 10px; border-bottom: 1px solid #1c1c1c; color: #bbb; vertical-align: middle; }
+td:not(:first-child) { text-align: center; }
+tr:last-child td { border-bottom: none; }
+.l1 { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 11px; font-weight: 700; background: #1a3a1a; color: #4ade80; }
+.l2 { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 11px; font-weight: 700; background: #1a2a3a; color: #60a5fa; }
+.l3 { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 11px; font-weight: 700; background: #3a2a1a; color: #fb923c; }
+.l4 { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 11px; font-weight: 700; background: #3a1a1a; color: #f87171; }
+.ok { color: #4ade80; }
+.wait { color: #fb923c; }
+.no { color: #f87171; }
+.pl { color: #a78bfa; }
+.dim { color: #555; }
+.save-btn { margin-top: 16px; padding: 6px 16px; background: #1d4ed8; color: #fff; border: none; border-radius: 5px; font-size: 13px; cursor: pointer; }
+</style></head>
+<body>
+<div class="page">
+  <div class="sidebar">
+    <div class="sidebar-user">
+      <span class="sidebar-username">admin</span>
+      <span class="role-badge">admin</span>
+    </div>
+    <div class="nav-section">个人</div>
+    <div class="nav-row">👤 基本信息</div>
+    <div class="nav-row">🔑 访问令牌</div>
+    <div class="nav-row">🔐 SSH Keys</div>
+    <div class="nav-row">📋 操作日志</div>
+    <div class="nav-section">管理</div>
+    <div class="nav-row">👥 用户管理</div>
+    <div class="nav-row">📦 安装</div>
+    <div class="nav-row">🧩 Skills</div>
+    <div class="nav-row">🤖 模型供应商</div>
+    <div class="nav-row selected">🧠 智能体</div>
+    <div class="nav-row">⚙️ 系统设置</div>
+  </div>
+  <div class="detail">
+    <div class="detail-title">智能体设置</div>
+
+    <div class="card">
+      <div class="card-title">权限模式</div>
+      <div class="card-body">
+        <div class="form-row">
+          <label>执行模式</label>
+          <div>
+            <select id="modeSelect" onchange="updateDesc()">
+              <option value="ask">ask（默认）</option>
+              <option value="auto">auto</option>
+              <option value="plan">plan</option>
+              <option value="readonly">readonly</option>
+            </select>
+            <div class="mode-desc" id="modeDesc">
+              <strong>ask</strong> — L3 及以上命令暂停执行，等待人工审批后继续。适合日常运维场景。
+            </div>
+          </div>
+        </div>
+        <div class="form-row">
+          <label>审批超时（秒）</label>
+          <input type="number" value="300" style="width:90px">
+        </div>
+        <button class="save-btn">保存</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">风险级别定义</div>
+      <div class="card-body">
+        <table>
+          <thead>
+            <tr><th>级别</th><th style="text-align:left">名称</th><th style="text-align:left">描述</th><th style="text-align:left">示例</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><span class="l1">L1</span></td><td>读</td><td>只读，无副作用</td><td class="dim">ls, cat, ps, df, ping</td></tr>
+            <tr><td><span class="l2">L2</span></td><td>写</td><td>可逆写操作，系统可自动恢复</td><td class="dim">cp, chmod, systemctl restart</td></tr>
+            <tr><td><span class="l3">L3</span></td><td>危险</td><td>删除或停止资源，恢复需额外操作</td><td class="dim">rm, kill, systemctl stop</td></tr>
+            <tr><td><span class="l4">L4</span></td><td>毁灭</td><td>批量/不可逆，影响超出单个资源</td><td class="dim">rm -rf, dd, mkfs</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">模式 × 级别决策矩阵</div>
+      <div class="card-body">
+        <table>
+          <thead>
+            <tr><th>级别</th><th>readonly</th><th>ask（默认）</th><th>auto</th><th>plan</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><span class="l1">L1</span> 读</td><td class="ok">✓ 执行</td><td class="ok">✓ 执行</td><td class="ok">✓ 执行</td><td class="pl">📋 计划</td></tr>
+            <tr><td><span class="l2">L2</span> 写</td><td class="no">✗ 拒绝</td><td class="ok">✓ 执行</td><td class="ok">✓ 执行</td><td class="pl">📋 计划</td></tr>
+            <tr><td><span class="l3">L3</span> 危险</td><td class="no">✗ 拒绝</td><td class="wait">⏸ 等审批</td><td class="ok">✓ 执行</td><td class="pl">📋 计划</td></tr>
+            <tr><td><span class="l4">L4</span> 毁灭</td><td class="no">✗ 拒绝</td><td class="wait">⏸ 等审批</td><td class="wait">⏸ 等审批</td><td class="pl">📋 计划</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+const descs = {
+  ask: '<strong>ask</strong> — L3 及以上命令暂停执行，等待人工审批后继续。适合日常运维场景。',
+  auto: '<strong>auto</strong> — L4 命令等待审批，其余自动执行并记录审计。适合 CI/CD 流水线。',
+  plan: '<strong>plan</strong> — 所有命令只生成执行计划，不实际执行。适合变更评审和演练。',
+  readonly: '<strong>readonly</strong> — 只允许 L1 只读操作，其余全部拒绝。适合审计巡检。'
+};
+function updateDesc() {
+  const v = document.getElementById('modeSelect').value;
+  document.getElementById('modeDesc').innerHTML = descs[v];
+}
+</script>
+</body></html>
