@@ -2,6 +2,7 @@
 import { ref, onMounted, nextTick, watch, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ChatMessage from '../components/ChatMessage.vue'
+import type { MessageBlock, ToolCallBlock } from '../components/ChatMessage.vue'
 import TargetPanel from '../components/TargetPanel.vue'
 import type { DeviceStatus } from '../components/TargetPanel.vue'
 import {
@@ -18,8 +19,7 @@ const router = useRouter()
 interface DisplayMessage {
   id: string
   role: string
-  content: string
-  toolCalls?: { id: string; name: string; input?: any; result?: string; isError?: boolean; durationMs?: number }[]
+  blocks: MessageBlock[]
   confirm?: { requestId: string; tool: string; input: any; riskLevel: string } | null
   isStreaming?: boolean
 }
@@ -89,16 +89,19 @@ async function selectConversation(id: string) {
   const data = await getConversation(id)
   activeConvId.value = id
   messages.value = data.messages.map(m => {
-    const msg: DisplayMessage = { id: m.id, role: m.role, content: m.content }
+    const blocks: MessageBlock[] = []
+    if (m.content) blocks.push({ type: 'text', content: m.content })
     if (m.tool_calls) {
       try {
-        msg.toolCalls = JSON.parse(m.tool_calls).map((tc: any) => ({
-          id: tc.id, name: tc.name, input: tc.input,
-          result: tc.result, isError: tc.is_error, durationMs: tc.duration_ms,
-        }))
+        for (const tc of JSON.parse(m.tool_calls)) {
+          blocks.push({ type: 'tool', call: {
+            id: tc.id, name: tc.name, input: tc.input,
+            result: tc.result, isError: tc.is_error, durationMs: tc.duration_ms,
+          }})
+        }
       } catch { /* ignore malformed */ }
     }
-    return msg
+    return { id: m.id, role: m.role, blocks } as DisplayMessage
   })
   router.replace(`/chat/${id}`)
   await nextTick()
@@ -147,13 +150,13 @@ async function send() {
   }
 
   const userMsg: DisplayMessage = {
-    id: `u-${Date.now()}`, role: 'user', content: text,
+    id: `u-${Date.now()}`, role: 'user', blocks: [{ type: 'text', content: text }],
   }
   messages.value.push(userMsg)
 
   const assistantMsg: DisplayMessage = {
     id: `a-${Date.now()}`, role: 'assistant',
-    content: '', toolCalls: [], isStreaming: true,
+    blocks: [], isStreaming: true,
   }
   messages.value.push(assistantMsg)
   isStreaming.value = true
@@ -162,24 +165,30 @@ async function send() {
 
   abortCtrl = sendMessage(activeConvId.value!, text, (event: ChatEvent) => {
     const last = messages.value[messages.value.length - 1]
+    const blocks = last.blocks
     switch (event.type) {
-      case 'text_delta':
-        last.content += event.content?.text || ''
+      case 'text_delta': {
+        const lastBlock = blocks[blocks.length - 1]
+        if (lastBlock?.type === 'text') {
+          lastBlock.content += event.content?.text || ''
+        } else {
+          blocks.push({ type: 'text', content: event.content?.text || '' })
+        }
         break
+      }
       case 'tool_start':
-        if (!last.toolCalls) last.toolCalls = []
-        last.toolCalls.push({
+        blocks.push({ type: 'tool', call: {
           id: event.content?.id || `t-${Date.now()}`,
           name: event.content?.name || 'unknown',
           input: event.content?.input,
-        })
+        }})
         break
       case 'tool_result': {
-        const tc = last.toolCalls?.find(t => t.id === event.content?.id)
-        if (tc) {
-          tc.result = event.content?.result
-          tc.isError = event.content?.is_error
-          tc.durationMs = event.content?.duration_ms
+        const tb = blocks.find(b => b.type === 'tool' && b.call.id === event.content?.id) as { type: 'tool'; call: ToolCallBlock } | undefined
+        if (tb) {
+          tb.call.result = event.content?.result
+          tb.call.isError = event.content?.is_error
+          tb.call.durationMs = event.content?.duration_ms
         }
         break
       }
@@ -191,11 +200,18 @@ async function send() {
           riskLevel: event.content?.risk_level || 'moderate',
         }
         break
-      case 'error':
-        last.content += `\n\n**Error:** ${event.content?.error || 'unknown error'}`
+      case 'error': {
+        const errText = `\n\n**Error:** ${event.content?.error || 'unknown error'}`
+        const lastBlk = last.blocks[last.blocks.length - 1]
+        if (lastBlk?.type === 'text') {
+          lastBlk.content += errText
+        } else {
+          last.blocks.push({ type: 'text', content: errText })
+        }
         last.isStreaming = false
         isStreaming.value = false
         break
+      }
       case 'done':
         last.isStreaming = false
         isStreaming.value = false
@@ -217,7 +233,7 @@ async function handleModelCommand() {
       messages.value.push({
         id: Date.now().toString(),
         role: 'assistant',
-        content: '未配置模型供应商。请在 个人设置 → 模型供应商 中配置。',
+        blocks: [{ type: 'text', content: '未配置模型供应商。请在 个人设置 → 模型供应商 中配置。' }],
       })
       return
     }
@@ -231,7 +247,7 @@ async function handleModelCommand() {
     messages.value.push({
       id: Date.now().toString(),
       role: 'assistant',
-      content: `获取模型列表失败: ${e.message}`,
+      blocks: [{ type: 'text', content: `获取模型列表失败: ${e.message}` }],
     })
   }
 }
@@ -245,13 +261,13 @@ async function selectModel(modelId: string) {
     messages.value.push({
       id: Date.now().toString(),
       role: 'assistant',
-      content: `模型已切换为 **${modelId}**`,
+      blocks: [{ type: 'text', content: `模型已切换为 **${modelId}**` }],
     })
   } catch (e: any) {
     messages.value.push({
       id: Date.now().toString(),
       role: 'assistant',
-      content: `切换模型失败: ${e.message}`,
+      blocks: [{ type: 'text', content: `切换模型失败: ${e.message}` }],
     })
   }
 }
@@ -330,8 +346,8 @@ onMounted(async () => {
       <div class="chat-messages" ref="messagesRef">
         <ChatMessage
           v-for="msg in messages" :key="msg.id"
-          :role="msg.role" :content="msg.content"
-          :tool-calls="msg.toolCalls" :confirm="msg.confirm"
+          :role="msg.role" :blocks="msg.blocks"
+          :confirm="msg.confirm"
           :is-streaming="msg.isStreaming"
           @confirm="handleConfirm"
         />

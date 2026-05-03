@@ -2,7 +2,7 @@
 import { ref, computed } from 'vue'
 import { marked } from 'marked'
 
-interface ToolCall {
+export interface ToolCallBlock {
   id: string
   name: string
   input?: Record<string, any>
@@ -10,6 +10,10 @@ interface ToolCall {
   isError?: boolean
   durationMs?: number
 }
+
+export interface TextBlock { type: 'text'; content: string }
+export interface ToolBlock { type: 'tool'; call: ToolCallBlock }
+export type MessageBlock = TextBlock | ToolBlock
 
 interface ConfirmRequest {
   requestId: string
@@ -20,8 +24,7 @@ interface ConfirmRequest {
 
 const props = defineProps<{
   role: string
-  content: string
-  toolCalls?: ToolCall[]
+  blocks: MessageBlock[]
   confirm?: ConfirmRequest | null
   isStreaming?: boolean
 }>()
@@ -40,50 +43,46 @@ function toggleTool(id: string) {
   }
 }
 
-const renderedContent = computed(() => {
-  if (props.role === 'user') return props.content
-  return marked.parse(props.content || '') as string
-})
+function renderMd(text: string) {
+  return marked.parse(text || '') as string
+}
 
-const riskClass = computed(() => {
-  if (!props.confirm) return ''
-  switch (props.confirm.riskLevel) {
-    case 'safe': return 'risk-safe'
-    case 'moderate': return 'risk-moderate'
-    case 'dangerous': return 'risk-dangerous'
-    default: return 'risk-moderate'
-  }
-})
+function formatDuration(ms: number) {
+  return ms >= 1000 ? (ms / 1000).toFixed(1) + 's' : ms + 'ms'
+}
 </script>
 
 <template>
   <div class="chat-msg" :class="[`role-${role}`]">
     <div v-if="role === 'user'" class="msg-user">
       <span class="prompt">❯</span>
-      <span class="user-text">{{ content }}</span>
+      <span class="user-text">{{ blocks[0]?.type === 'text' ? blocks[0].content : '' }}</span>
     </div>
 
-    <div v-else class="msg-assistant">
-      <div class="assistant-text" v-html="renderedContent"></div>
+    <template v-else>
+      <template v-for="(block, i) in blocks" :key="i">
+        <div v-if="block.type === 'text' && block.content" class="msg-assistant">
+          <div class="assistant-text" v-html="renderMd(block.content)"></div>
+        </div>
+        <div v-else-if="block.type === 'tool'" class="tool-calls">
+          <div class="tool-call">
+            <div class="tool-header" @click="toggleTool(block.call.id)">
+              <span class="tool-arrow">{{ expandedTools.has(block.call.id) ? '▼' : '▶' }}</span>
+              <span class="tool-name">{{ block.call.name }}</span>
+              <span v-if="block.call.durationMs != null" class="tool-duration">{{ formatDuration(block.call.durationMs) }}</span>
+              <span v-if="block.call.isError" class="tool-error-badge">error</span>
+            </div>
+            <div v-if="expandedTools.has(block.call.id)" class="tool-detail">
+              <pre v-if="block.call.input" class="tool-input">{{ JSON.stringify(block.call.input, null, 2) }}</pre>
+              <pre v-if="block.call.result" class="tool-result" :class="{ 'is-error': block.call.isError }">{{ block.call.result }}</pre>
+            </div>
+          </div>
+        </div>
+      </template>
       <span v-if="isStreaming" class="cursor">▊</span>
-    </div>
+    </template>
 
-    <div v-if="toolCalls?.length" class="tool-calls">
-      <div v-for="tc in toolCalls" :key="tc.id" class="tool-call">
-        <div class="tool-header" @click="toggleTool(tc.id)">
-          <span class="tool-arrow">{{ expandedTools.has(tc.id) ? '▼' : '▶' }}</span>
-          <span class="tool-name">{{ tc.name }}</span>
-          <span v-if="tc.durationMs != null" class="tool-duration">{{ tc.durationMs >= 1000 ? (tc.durationMs / 1000).toFixed(1) + 's' : tc.durationMs + 'ms' }}</span>
-          <span v-if="tc.isError" class="tool-error-badge">error</span>
-        </div>
-        <div v-if="expandedTools.has(tc.id)" class="tool-detail">
-          <pre v-if="tc.input" class="tool-input">{{ JSON.stringify(tc.input, null, 2) }}</pre>
-          <pre v-if="tc.result" class="tool-result" :class="{ 'is-error': tc.isError }">{{ tc.result }}</pre>
-        </div>
-      </div>
-    </div>
-
-    <div v-if="confirm" class="confirm-bar" :class="riskClass">
+    <div v-if="confirm" class="confirm-bar" :class="confirm.riskLevel === 'dangerous' ? 'risk-dangerous' : confirm.riskLevel === 'safe' ? 'risk-safe' : 'risk-moderate'">
       <span class="confirm-label">{{ confirm.tool }}</span>
       <span class="risk-badge">{{ confirm.riskLevel }}</span>
       <button class="btn-confirm" @click="emit('confirm', confirm.requestId, true)">确认执行</button>
