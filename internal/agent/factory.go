@@ -62,6 +62,7 @@ func NewFactory(
 // NewAgent creates a new Agent with all tools registered.
 func (f *Factory) NewAgent(systemPrompt string) *Agent {
 	registry := NewToolRegistry()
+	registry.Register(NewListDevicesTool(f.Hosts))
 	registry.Register(NewGetDeviceInfoTool(f.Hosts))
 	registry.Register(NewExecuteCLITool(f.Hosts, f.SSHPool, f.Logs, f.SSHKeys))
 	registry.Register(NewBatchExecuteTool(f.Hosts, f.SSHPool, f.Logs, f.SSHKeys))
