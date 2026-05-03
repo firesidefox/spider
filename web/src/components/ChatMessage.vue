@@ -55,13 +55,13 @@ function formatDuration(ms: number) {
 <template>
   <div class="chat-msg" :class="[`role-${role}`]">
     <div v-if="role === 'user'" class="msg-user">
-      <span class="prompt">❯</span>
-      <span class="user-text">{{ blocks[0]?.type === 'text' ? blocks[0].content : '' }}</span>
+      <div class="gutter"><span class="prompt">❯</span></div>
+      <div class="content"><span class="user-text">{{ blocks[0]?.type === 'text' ? blocks[0].content : '' }}</span></div>
     </div>
 
     <div v-else class="msg-assistant-wrap">
-      <span class="prompt prompt-assistant" :class="{ streaming: isStreaming }">*</span>
-      <div class="assistant-body">
+      <div class="gutter"><span class="prompt prompt-assistant" :class="{ streaming: isStreaming }">*</span></div>
+      <div class="content assistant-body">
         <template v-for="(block, i) in blocks" :key="i">
           <div v-if="block.type === 'text' && block.content" class="msg-assistant">
             <div class="assistant-text" v-html="renderMd(block.content)"></div>
@@ -83,7 +83,7 @@ function formatDuration(ms: number) {
           </div>
         </template>
         <span v-if="isStreaming" class="cursor">▊</span>
-      </div>
+      </div><!-- .content -->
     </div>
 
     <div v-if="confirm" class="confirm-bar" :class="confirm.riskLevel === 'dangerous' ? 'risk-dangerous' : confirm.riskLevel === 'safe' ? 'risk-safe' : 'risk-moderate'">
@@ -97,16 +97,18 @@ function formatDuration(ms: number) {
 
 <style scoped>
 .chat-msg { padding: 8px 0; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 13px; }
-.msg-user { display: flex; gap: 8px; color: var(--text); }
-.msg-assistant-wrap { display: flex; gap: 8px; }
-.prompt { color: var(--primary); font-weight: bold; flex-shrink: 0; }
-.prompt-assistant { align-self: flex-start; margin-top: 2px; }
+.msg-user { display: flex; color: var(--text); }
+.msg-assistant-wrap { display: flex; }
+.gutter { flex-shrink: 0; width: 20px; text-align: center; }
+.content { flex: 1; min-width: 0; }
+.prompt { color: var(--primary); font-weight: bold; }
+.prompt-assistant { display: inline-block; margin-top: 2px; }
 .prompt-assistant.streaming { animation: prompt-pulse 1.5s ease-in-out infinite; }
 @keyframes prompt-pulse {
   0%, 100% { opacity: 0.4; text-shadow: 0 0 0 transparent; }
   50% { opacity: 1; text-shadow: 0 0 8px var(--primary); }
 }
-.assistant-body { flex: 1; min-width: 0; }
+.assistant-body { }
 .msg-assistant { color: var(--text-sub); line-height: 1.6; }
 .assistant-text :deep(code) { background: var(--input-bg); padding: 2px 6px; border-radius: 3px; font-size: 12px; }
 .assistant-text :deep(pre) { background: var(--input-bg); padding: 12px; border-radius: 6px; overflow-x: auto; margin: 8px 0; }
