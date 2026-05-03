@@ -250,12 +250,28 @@
             <div class="block-grid">
               <div class="form-row">
                 <label>模式</label>
-                <select v-model="agentSettings.permission_mode" class="input">
-                  <option value="ask">ask — 每次询问</option>
-                  <option value="auto">auto — 自动执行</option>
-                  <option value="plan">plan — 仅规划</option>
-                  <option value="readonly">readonly — 只读</option>
-                </select>
+                <div>
+                  <select v-model="agentSettings.permission_mode" class="input">
+                    <option value="ask">ask（默认）</option>
+                    <option value="auto">auto</option>
+                    <option value="plan">plan</option>
+                    <option value="readonly">readonly</option>
+                  </select>
+                  <div class="mode-desc">
+                    <template v-if="agentSettings.permission_mode === 'ask'">
+                      <strong>ask</strong> — L3 及以上命令暂停执行，等待人工审批后继续。适合日常运维场景。
+                    </template>
+                    <template v-else-if="agentSettings.permission_mode === 'auto'">
+                      <strong>auto</strong> — L4 命令等待审批，其余自动执行并记录审计。适合 CI/CD 流水线。
+                    </template>
+                    <template v-else-if="agentSettings.permission_mode === 'plan'">
+                      <strong>plan</strong> — 所有命令只生成执行计划，不实际执行。适合变更评审和演练。
+                    </template>
+                    <template v-else-if="agentSettings.permission_mode === 'readonly'">
+                      <strong>readonly</strong> — 只允许 L1 只读操作，其余全部拒绝。适合审计巡检。
+                    </template>
+                  </div>
+                </div>
               </div>
               <div class="form-row">
                 <label>审批超时（秒）</label>
@@ -267,6 +283,34 @@
                 {{ agentSaving ? '保存中…' : '保存' }}
               </button>
             </div>
+          </div>
+
+          <!-- 风险级别定义 card -->
+          <div class="edit-card">
+            <div class="edit-card-title">风险级别定义</div>
+            <table class="table">
+              <thead><tr><th>级别</th><th>名称</th><th>描述</th><th>示例</th></tr></thead>
+              <tbody>
+                <tr><td><span class="risk-badge l1">L1</span></td><td>读</td><td>只读，无副作用</td><td class="dim">ls, cat, ps, df, ping</td></tr>
+                <tr><td><span class="risk-badge l2">L2</span></td><td>写</td><td>可逆写操作，系统可自动恢复</td><td class="dim">cp, chmod, systemctl restart</td></tr>
+                <tr><td><span class="risk-badge l3">L3</span></td><td>危险</td><td>删除或停止资源，恢复需额外操作</td><td class="dim">rm, kill, systemctl stop</td></tr>
+                <tr><td><span class="risk-badge l4">L4</span></td><td>毁灭</td><td>批量/不可逆，影响超出单个资源</td><td class="dim">rm -rf, dd, mkfs</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- 模式×级别矩阵 card -->
+          <div class="edit-card">
+            <div class="edit-card-title">模式 × 级别决策矩阵</div>
+            <table class="table" style="text-align:center">
+              <thead><tr><th style="text-align:left">级别</th><th>readonly</th><th>ask（默认）</th><th>auto</th><th>plan</th></tr></thead>
+              <tbody>
+                <tr><td style="text-align:left"><span class="risk-badge l1">L1</span> 读</td><td class="ok">✓ 执行</td><td class="ok">✓ 执行</td><td class="ok">✓ 执行</td><td class="plan-cell">📋 计划</td></tr>
+                <tr><td style="text-align:left"><span class="risk-badge l2">L2</span> 写</td><td class="no">✗ 拒绝</td><td class="ok">✓ 执行</td><td class="ok">✓ 执行</td><td class="plan-cell">📋 计划</td></tr>
+                <tr><td style="text-align:left"><span class="risk-badge l3">L3</span> 危险</td><td class="no">✗ 拒绝</td><td class="wait">⏸ 等审批</td><td class="ok">✓ 执行</td><td class="plan-cell">📋 计划</td></tr>
+                <tr><td style="text-align:left"><span class="risk-badge l4">L4</span> 毁灭</td><td class="no">✗ 拒绝</td><td class="wait">⏸ 等审批</td><td class="wait">⏸ 等审批</td><td class="plan-cell">📋 计划</td></tr>
+              </tbody>
+            </table>
           </div>
 
           <!-- 自定义规则 card -->
@@ -1028,4 +1072,14 @@ async function deleteRule(idx: number) {
 .model-option:hover { background: var(--row-hover); }
 .model-option.active { background: var(--row-hover); color: var(--primary); font-weight: 500; }
 .check { color: var(--green); }
+.mode-desc { margin-top: 8px; font-size: 12px; color: var(--primary); background: color-mix(in srgb, var(--primary) 8%, transparent); border: 1px solid color-mix(in srgb, var(--primary) 25%, transparent); border-radius: 4px; padding: 7px 10px; line-height: 1.6; max-width: 420px; }
+.risk-badge { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 11px; font-weight: 700; }
+.risk-badge.l1 { background: color-mix(in srgb, var(--green) 15%, transparent); color: var(--green); }
+.risk-badge.l2 { background: color-mix(in srgb, var(--primary) 15%, transparent); color: var(--primary); }
+.risk-badge.l3 { background: color-mix(in srgb, var(--warn, #fb923c) 15%, transparent); color: var(--warn, #fb923c); }
+.risk-badge.l4 { background: color-mix(in srgb, var(--danger) 15%, transparent); color: var(--danger); }
+.ok { color: var(--green); }
+.wait { color: var(--warn, #fb923c); }
+.no { color: var(--danger); }
+.plan-cell { color: #a78bfa; }
 </style>
