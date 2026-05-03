@@ -346,25 +346,17 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="chat-page">
-    <div class="chat-area">
-      <div class="chat-header">
-        <button class="conv-toggle" @click="showConvList = !showConvList">≡</button>
-        <input v-if="editingHeaderTitle" class="conv-title-input"
-               v-model="editTitleText"
-               @keydown.enter="saveHeaderTitle"
-               @keydown.escape="cancelEdit"
-               @blur="saveHeaderTitle"
-               @vue:mounted="($event: any) => $event.el.focus()" />
-        <span v-else class="conv-title" @click="startEditHeaderTitle">{{ activeConv?.title || '新对话' }}</span>
-        <span class="current-model" v-if="currentModelName">{{ currentModelName }}</span>
-        <button class="new-conv-btn" @click="createNewConversation()">+</button>
+  <div class="chat-page" ref="chatPageRef" :class="{ dragging: isDragging }">
+    <!-- Sidebar -->
+    <div class="sidebar" :class="{ collapsed: !sidebarOpen }">
+      <div class="sidebar-header">
+        <button class="sidebar-toggle" @click="toggleSidebar">≡</button>
+        <button class="sidebar-new" @click="createNewConversation()">+ New</button>
       </div>
-
-      <div v-if="showConvList" class="conv-dropdown">
+      <div class="sidebar-body">
         <div v-for="c in conversations" :key="c.id" class="conv-item"
              :class="{ active: c.id === activeConvId }"
-             @click="selectConversation(c.id); showConvList = false">
+             @click="selectConversation(c.id)">
           <input v-if="editingConvId === c.id" class="conv-item-input"
                  v-model="editTitleText"
                  @keydown.enter="saveConvTitle(c.id)"
@@ -375,6 +367,22 @@ onMounted(async () => {
           <span v-else class="conv-item-title" @dblclick.stop="startEditConvTitle(c.id, c.title)">{{ c.title || '未命名对话' }}</span>
           <button class="conv-del" @click.stop="handleDeleteConversation(c.id)">×</button>
         </div>
+      </div>
+    </div>
+
+    <!-- Chat main -->
+    <div class="chat-main">
+      <div class="chat-header">
+        <button v-if="!sidebarOpen" class="sidebar-toggle" @click="toggleSidebar">≡</button>
+        <button v-if="!sidebarOpen" class="header-new-btn" @click="createNewConversation()">+</button>
+        <input v-if="editingHeaderTitle" class="conv-title-input"
+               v-model="editTitleText"
+               @keydown.enter="saveHeaderTitle"
+               @keydown.escape="cancelEdit"
+               @blur="saveHeaderTitle"
+               @vue:mounted="($event: any) => $event.el.focus()" />
+        <span v-else class="conv-title" @click="startEditHeaderTitle">{{ activeConv?.title || '新对话' }}</span>
+        <span class="current-model" v-if="currentModelName">{{ currentModelName }}</span>
       </div>
 
       <div class="chat-messages" ref="messagesRef">
@@ -420,7 +428,13 @@ onMounted(async () => {
       </div>
     </div>
 
-    <TargetPanel :devices="devices" class="target-side" />
+    <!-- Drag handle -->
+    <div class="drag-handle" @mousedown="startDrag">
+      <div class="drag-indicator"></div>
+    </div>
+
+    <!-- Target panel -->
+    <TargetPanel :devices="devices" class="target-side" :style="{ flexBasis: targetWidth + 'px' }" />
   </div>
 </template>
 
