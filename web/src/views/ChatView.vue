@@ -440,21 +440,33 @@ onMounted(async () => {
 
 <style scoped>
 .chat-page { display: flex; height: 100%; gap: 0; }
-.chat-area { flex: 7; display: flex; flex-direction: column; min-width: 0; position: relative; }
-.target-side { flex: 3; min-width: 280px; max-width: 400px; }
+.chat-page.dragging { user-select: none; cursor: col-resize; }
+
+/* Sidebar */
+.sidebar { width: 240px; border-right: 1px solid var(--border); display: flex; flex-direction: column; background: var(--panel); transition: width 0.2s ease, opacity 0.2s ease; overflow: hidden; flex-shrink: 0; }
+.sidebar.collapsed { width: 0; border-right: none; opacity: 0; }
+.sidebar-header { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.sidebar-toggle { background: none; border: 1px solid var(--border); color: var(--text); padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 14px; flex-shrink: 0; }
+.sidebar-toggle:hover { background: var(--row-hover); }
+.sidebar-new { flex: 1; background: none; border: 1px solid var(--border); color: var(--text); padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 13px; font-family: 'SF Mono', monospace; }
+.sidebar-new:hover { background: var(--row-hover); }
+.sidebar-body { flex: 1; overflow-y: auto; padding: 8px; }
+
+/* Chat main */
+.chat-main { flex: 1; display: flex; flex-direction: column; min-width: 300px; position: relative; }
+
+/* Target side */
+.target-side { min-width: 200px; max-width: 50vw; flex-shrink: 0; }
 
 .chat-header { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-bottom: 1px solid var(--border); background: var(--panel); }
-.conv-toggle { background: none; border: 1px solid var(--border); color: var(--text); padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 14px; }
-.conv-toggle:hover { background: var(--row-hover); }
+.header-new-btn { background: none; border: 1px solid var(--border); color: var(--text); width: 28px; height: 28px; border-radius: 4px; cursor: pointer; font-size: 16px; flex-shrink: 0; }
+.header-new-btn:hover { background: var(--row-hover); }
 .conv-title { flex: 1; color: var(--text); font-family: 'SF Mono', monospace; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
 .conv-title:hover { color: var(--primary); }
 .conv-title-input { flex: 1; background: var(--input-bg); border: 1px solid var(--primary); color: var(--text); font-family: 'SF Mono', monospace; font-size: 13px; padding: 2px 6px; border-radius: 4px; outline: none; }
-.new-conv-btn { background: var(--primary); color: #fff; border: none; width: 28px; height: 28px; border-radius: 4px; cursor: pointer; font-size: 16px; }
-.new-conv-btn:hover { background: var(--primary-hover); }
 .current-model { color: var(--muted); font-size: 11px; font-family: 'SF Mono', monospace; }
 
-.conv-dropdown { position: absolute; top: 48px; left: 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; z-index: 10; max-height: 300px; overflow-y: auto; min-width: 250px; }
-.conv-item { padding: 8px 14px; cursor: pointer; color: var(--text-sub); font-size: 13px; font-family: 'SF Mono', monospace; display: flex; align-items: center; }
+.conv-item { padding: 8px 14px; cursor: pointer; color: var(--text-sub); font-size: 13px; font-family: 'SF Mono', monospace; display: flex; align-items: center; border-radius: 6px; }
 .conv-item:hover { background: var(--row-hover); }
 .conv-item.active { color: var(--primary); background: var(--row-hover); }
 .conv-item-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -479,4 +491,9 @@ onMounted(async () => {
 .model-picker-item:hover { background: var(--row-hover); }
 .model-picker-item.active { color: var(--primary); font-weight: 500; }
 .model-check { color: var(--green); font-size: 12px; }
+
+/* Drag handle */
+.drag-handle { width: 5px; cursor: col-resize; background: transparent; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: background 0.15s; }
+.drag-handle:hover, .chat-page.dragging .drag-handle { background: var(--primary); opacity: 0.3; }
+.drag-indicator { width: 2px; height: 32px; border-radius: 1px; background: var(--border); }
 </style>
