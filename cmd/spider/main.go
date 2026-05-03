@@ -17,6 +17,7 @@ import (
 	"github.com/spiderai/spider/internal/agent"
 	"github.com/spiderai/spider/internal/auth"
 	mcppkg "github.com/spiderai/spider/internal/mcp"
+	"github.com/spiderai/spider/internal/permission"
 	sshpkg "github.com/spiderai/spider/internal/ssh"
 
 	"github.com/spiderai/spider/internal/config"
@@ -173,6 +174,11 @@ func serve(cfgFile, addrOverride, dataDirOverride string) error {
 	} else {
 		app.AgentFactory = agentFactory
 	}
+
+	app.Classifier = permission.NewClassifier(nil)
+	app.Enforcer = permission.NewEnforcer()
+	app.ApprovalManager = permission.NewApprovalManager()
+	app.PermissionMode = permission.Mode(cfg.Agent.PermissionMode)
 
 	mcpHandler := mcppkg.NewHTTPHandler(app)
 

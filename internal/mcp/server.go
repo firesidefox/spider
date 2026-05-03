@@ -17,6 +17,7 @@ import (
 	"github.com/spiderai/spider/internal/agent"
 	"github.com/spiderai/spider/internal/auth"
 	"github.com/spiderai/spider/internal/config"
+	"github.com/spiderai/spider/internal/permission"
 	sshpkg "github.com/spiderai/spider/internal/ssh"
 	"github.com/spiderai/spider/internal/store"
 )
@@ -37,6 +38,11 @@ type App struct {
 	DocStore      *store.DocumentStore
 	ProviderStore *store.ProviderStore
 	AgentFactory  *agent.Factory // nil if LLM not configured
+
+	Classifier      *permission.Classifier
+	Enforcer        *permission.Enforcer
+	ApprovalManager *permission.ApprovalManager
+	PermissionMode  permission.Mode
 
 	chatWaiters   map[string]*agent.ConfirmationWaiter
 	chatWaitersMu sync.Mutex
