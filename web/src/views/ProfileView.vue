@@ -252,23 +252,23 @@
                 <label>模式</label>
                 <div>
                   <select v-model="agentSettings.permission_mode" class="input">
-                    <option value="ask">ask（默认）</option>
-                    <option value="auto">auto</option>
-                    <option value="plan">plan</option>
-                    <option value="readonly">readonly</option>
+                    <option value="ask">询问模式（默认）</option>
+                    <option value="auto">自动模式</option>
+                    <option value="plan">计划模式</option>
+                    <option value="readonly">只读模式</option>
                   </select>
                   <div class="mode-desc">
                     <template v-if="agentSettings.permission_mode === 'ask'">
-                      <strong>ask</strong> — L3 及以上命令暂停执行，等待人工审批后继续。适合日常运维场景。
+                      <strong>询问模式 ask</strong> — L3 及以上命令暂停执行，等待人工审批后继续。适合日常运维场景。
                     </template>
                     <template v-else-if="agentSettings.permission_mode === 'auto'">
-                      <strong>auto</strong> — L4 命令等待审批，其余自动执行并记录审计。适合 CI/CD 流水线。
+                      <strong>自动模式 auto</strong> — L4 命令等待审批，其余自动执行并记录审计。适合 CI/CD 流水线。
                     </template>
                     <template v-else-if="agentSettings.permission_mode === 'plan'">
-                      <strong>plan</strong> — 所有命令只生成执行计划，不实际执行。适合变更评审和演练。
+                      <strong>计划模式 plan</strong> — 所有命令只生成执行计划，不实际执行。适合变更评审和演练。
                     </template>
                     <template v-else-if="agentSettings.permission_mode === 'readonly'">
-                      <strong>readonly</strong> — 只允许 L1 只读操作，其余全部拒绝。适合审计巡检。
+                      <strong>只读模式 readonly</strong> — 只允许 L1 只读操作，其余全部拒绝。适合审计巡检。
                     </template>
                   </div>
                 </div>
@@ -303,7 +303,7 @@
           <div class="edit-card">
             <div class="edit-card-title">模式 × 级别决策矩阵</div>
             <table class="table" style="text-align:center">
-              <thead><tr><th style="text-align:left">级别</th><th>readonly</th><th>ask（默认）</th><th>auto</th><th>plan</th></tr></thead>
+              <thead><tr><th style="text-align:left">级别</th><th>只读</th><th>询问（默认）</th><th>自动</th><th>计划</th></tr></thead>
               <tbody>
                 <tr><td style="text-align:left"><span class="risk-badge l1">L1</span> 读</td><td class="ok">✓ 执行</td><td class="ok">✓ 执行</td><td class="ok">✓ 执行</td><td class="plan-cell">📋 计划</td></tr>
                 <tr><td style="text-align:left"><span class="risk-badge l2">L2</span> 写</td><td class="no">✗ 拒绝</td><td class="ok">✓ 执行</td><td class="ok">✓ 执行</td><td class="plan-cell">📋 计划</td></tr>
