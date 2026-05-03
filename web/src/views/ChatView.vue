@@ -7,7 +7,7 @@ import type { DeviceStatus } from '../components/TargetPanel.vue'
 import {
   sendMessage, createConversation, listConversations,
   getConversation, deleteConversation, confirmAction,
-  getActiveModel, setActiveModel,
+  getActiveModel, setActiveModel, updateTitle,
   type Conversation, type ChatMessage as ChatMsg, type ChatEvent,
 } from '../api/chat'
 import { listHosts, type SafeHost } from '../api/hosts'
@@ -19,7 +19,7 @@ interface DisplayMessage {
   id: string
   role: string
   content: string
-  toolCalls?: { id: string; name: string; input?: any; result?: string; isError?: boolean }[]
+  toolCalls?: { id: string; name: string; input?: any; result?: string; isError?: boolean; durationMs?: number }[]
   confirm?: { requestId: string; tool: string; input: any; riskLevel: string } | null
   isStreaming?: boolean
 }
@@ -44,6 +44,43 @@ const activeConv = computed(() =>
   conversations.value.find(c => c.id === activeConvId.value) || null
 )
 
+const editingHeaderTitle = ref(false)
+const editingConvId = ref<string | null>(null)
+const editTitleText = ref('')
+
+function startEditHeaderTitle() {
+  if (!activeConv.value) return
+  editingHeaderTitle.value = true
+  editTitleText.value = activeConv.value.title
+}
+
+async function saveHeaderTitle() {
+  editingHeaderTitle.value = false
+  const text = editTitleText.value.trim()
+  if (!activeConv.value || !text || text === activeConv.value.title) return
+  await updateTitle(activeConv.value.id, text)
+  activeConv.value.title = text
+}
+
+function startEditConvTitle(id: string, title: string) {
+  editingConvId.value = id
+  editTitleText.value = title
+}
+
+async function saveConvTitle(id: string) {
+  editingConvId.value = null
+  const text = editTitleText.value.trim()
+  const conv = conversations.value.find(c => c.id === id)
+  if (!conv || !text || text === conv.title) return
+  await updateTitle(id, text)
+  conv.title = text
+}
+
+function cancelEdit() {
+  editingHeaderTitle.value = false
+  editingConvId.value = null
+}
+
 async function loadConversations() {
   conversations.value = await listConversations()
 }
@@ -51,20 +88,39 @@ async function loadConversations() {
 async function selectConversation(id: string) {
   const data = await getConversation(id)
   activeConvId.value = id
-  messages.value = data.messages.map(m => ({
-    id: m.id, role: m.role, content: m.content,
-  }))
+  messages.value = data.messages.map(m => {
+    const msg: DisplayMessage = { id: m.id, role: m.role, content: m.content }
+    if (m.tool_calls) {
+      try {
+        msg.toolCalls = JSON.parse(m.tool_calls).map((tc: any) => ({
+          id: tc.id, name: tc.name, input: tc.input,
+          result: tc.result, isError: tc.is_error, durationMs: tc.duration_ms,
+        }))
+      } catch { /* ignore malformed */ }
+    }
+    return msg
+  })
   router.replace(`/chat/${id}`)
   await nextTick()
   scrollToBottom()
 }
 
-async function createNewConversation() {
-  const conv = await createConversation('新对话')
+async function createNewConversation(title = '新对话') {
+  const conv = await createConversation(title)
   conversations.value.unshift(conv)
   activeConvId.value = conv.id
   messages.value = []
   router.replace(`/chat/${conv.id}`)
+}
+
+function generateTitle(text: string): string {
+  const now = new Date()
+  const mm = String(now.getMonth() + 1).padStart(2, '0')
+  const dd = String(now.getDate()).padStart(2, '0')
+  const hh = String(now.getHours()).padStart(2, '0')
+  const mi = String(now.getMinutes()).padStart(2, '0')
+  const summary = text.length > 20 ? text.slice(0, 20) + '...' : text
+  return `${mm}-${dd} ${hh}:${mi} ${summary}`
 }
 
 function scrollToBottom() {
@@ -87,7 +143,7 @@ async function send() {
   inputText.value = ''
 
   if (!activeConvId.value) {
-    await createNewConversation()
+    await createNewConversation(generateTitle(text))
   }
 
   const userMsg: DisplayMessage = {
@@ -123,6 +179,7 @@ async function send() {
         if (tc) {
           tc.result = event.content?.result
           tc.isError = event.content?.is_error
+          tc.durationMs = event.content?.duration_ms
         }
         break
       }
@@ -243,16 +300,29 @@ onMounted(async () => {
     <div class="chat-area">
       <div class="chat-header">
         <button class="conv-toggle" @click="showConvList = !showConvList">≡</button>
-        <span class="conv-title">{{ activeConv?.title || '新对话' }}</span>
+        <input v-if="editingHeaderTitle" class="conv-title-input"
+               v-model="editTitleText"
+               @keydown.enter="saveHeaderTitle"
+               @keydown.escape="cancelEdit"
+               @blur="saveHeaderTitle"
+               @vue:mounted="($event: any) => $event.el.focus()" />
+        <span v-else class="conv-title" @click="startEditHeaderTitle">{{ activeConv?.title || '新对话' }}</span>
         <span class="current-model" v-if="currentModelName">{{ currentModelName }}</span>
-        <button class="new-conv-btn" @click="createNewConversation">+</button>
+        <button class="new-conv-btn" @click="createNewConversation()">+</button>
       </div>
 
       <div v-if="showConvList" class="conv-dropdown">
         <div v-for="c in conversations" :key="c.id" class="conv-item"
              :class="{ active: c.id === activeConvId }"
              @click="selectConversation(c.id); showConvList = false">
-          <span class="conv-item-title">{{ c.title || '未命名对话' }}</span>
+          <input v-if="editingConvId === c.id" class="conv-item-input"
+                 v-model="editTitleText"
+                 @keydown.enter="saveConvTitle(c.id)"
+                 @keydown.escape="cancelEdit"
+                 @blur="saveConvTitle(c.id)"
+                 @click.stop
+                 @vue:mounted="($event: any) => $event.el.focus()" />
+          <span v-else class="conv-item-title" @dblclick.stop="startEditConvTitle(c.id, c.title)">{{ c.title || '未命名对话' }}</span>
           <button class="conv-del" @click.stop="handleDeleteConversation(c.id)">×</button>
         </div>
       </div>
@@ -312,7 +382,9 @@ onMounted(async () => {
 .chat-header { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-bottom: 1px solid var(--border); background: var(--panel); }
 .conv-toggle { background: none; border: 1px solid var(--border); color: var(--text); padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 14px; }
 .conv-toggle:hover { background: var(--row-hover); }
-.conv-title { flex: 1; color: var(--text); font-family: 'SF Mono', monospace; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.conv-title { flex: 1; color: var(--text); font-family: 'SF Mono', monospace; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.conv-title:hover { color: var(--primary); }
+.conv-title-input { flex: 1; background: var(--input-bg); border: 1px solid var(--primary); color: var(--text); font-family: 'SF Mono', monospace; font-size: 13px; padding: 2px 6px; border-radius: 4px; outline: none; }
 .new-conv-btn { background: var(--primary); color: #fff; border: none; width: 28px; height: 28px; border-radius: 4px; cursor: pointer; font-size: 16px; }
 .new-conv-btn:hover { background: var(--primary-hover); }
 .current-model { color: var(--muted); font-size: 11px; font-family: 'SF Mono', monospace; }
@@ -322,6 +394,7 @@ onMounted(async () => {
 .conv-item:hover { background: var(--row-hover); }
 .conv-item.active { color: var(--primary); background: var(--row-hover); }
 .conv-item-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.conv-item-input { flex: 1; background: var(--input-bg); border: 1px solid var(--primary); color: var(--text); font-family: 'SF Mono', monospace; font-size: 13px; padding: 2px 6px; border-radius: 4px; outline: none; }
 .conv-del { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 16px; padding: 0 4px; flex-shrink: 0; }
 .conv-del:hover { color: var(--red); }
 
