@@ -20,7 +20,8 @@ type Config struct {
 
 // AgentConfig 是 Agent 执行权限相关配置。
 type AgentConfig struct {
-	PermissionMode string `yaml:"permission_mode"` // ask | auto | plan | readonly，默认 ask
+	PermissionMode  string `yaml:"permission_mode"`  // ask | auto | plan | readonly，默认 ask
+	ApprovalTimeout int    `yaml:"approval_timeout"` // 审批超时秒数，默认 300
 }
 
 // AuthConfig 是认证相关配置。
@@ -56,7 +57,8 @@ func DefaultConfig() *Config {
 			BaseURL: "http://localhost:8000",
 		},
 		Agent: AgentConfig{
-			PermissionMode: "ask",
+			PermissionMode:  "ask",
+			ApprovalTimeout: 300,
 		},
 	}
 }

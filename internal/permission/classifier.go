@@ -91,8 +91,8 @@ func buildStaticRules() []rule {
 		{`^systemctl\s+status\s+`, L1Read},
 		{`^netstat(\s+|$)`, L1Read},
 		{`^ss(\s+|$)`, L1Read},
-		{`^curl\s+`, L1Read},
-		{`^wget\s+`, L1Read},
+		{`^curl\s+`, L2Write},
+		{`^wget\s+`, L2Write},
 	}
 	rules := make([]rule, 0, len(patterns))
 	for _, p := range patterns {

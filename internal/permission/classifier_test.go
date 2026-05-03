@@ -28,6 +28,8 @@ func TestClassifier_StaticRules(t *testing.T) {
 		{"rm -rf /tmp/old", permission.L4Destroy},
 		{"dd if=/dev/zero of=/dev/sda", permission.L4Destroy},
 		{"unknown-custom-tool --flag", permission.L3Dangerous},
+		{"curl https://example.com", permission.L2Write},
+		{"wget https://example.com/file", permission.L2Write},
 	}
 
 	for _, tt := range tests {

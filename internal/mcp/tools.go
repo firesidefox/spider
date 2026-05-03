@@ -155,7 +155,11 @@ func checkPermission(ctx context.Context, app *App, command, hostDisplay string)
 		return &c, r, err
 	case permission.DecisionPending:
 		req := app.ApprovalManager.Create("", command, hostDisplay, c.Level, c.Reason)
-		approvalCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+		timeout := time.Duration(app.Config.Agent.ApprovalTimeout) * time.Second
+		if timeout <= 0 {
+			timeout = 5 * time.Minute
+		}
+		approvalCtx, cancel := context.WithTimeout(ctx, timeout)
 		defer cancel()
 		result, err := app.ApprovalManager.Wait(approvalCtx, req.ID)
 		if err != nil {

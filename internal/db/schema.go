@@ -188,5 +188,15 @@ func migrate(db *sql.DB) error {
 		db.Exec(stmt) // ignore "duplicate column" errors
 	}
 	db.Exec("ALTER TABLE messages ADD COLUMN tool_calls TEXT NOT NULL DEFAULT ''")
+
+	permCols := []string{
+		"ALTER TABLE execution_logs ADD COLUMN risk_level TEXT NOT NULL DEFAULT ''",
+		"ALTER TABLE execution_logs ADD COLUMN permission_mode TEXT NOT NULL DEFAULT ''",
+		"ALTER TABLE execution_logs ADD COLUMN approval_id TEXT NOT NULL DEFAULT ''",
+		"ALTER TABLE execution_logs ADD COLUMN approved_by TEXT NOT NULL DEFAULT ''",
+	}
+	for _, stmt := range permCols {
+		db.Exec(stmt)
+	}
 	return nil
 }

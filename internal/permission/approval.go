@@ -2,6 +2,7 @@ package permission
 
 import (
 	"context"
+	"log"
 	"sync"
 	"time"
 
@@ -10,19 +11,18 @@ import (
 
 // ApprovalRequest represents a pending approval request.
 type ApprovalRequest struct {
-	ID          string
-	SessionID   string
-	Command     string
-	Host        string
-	RiskLevel   RiskLevel
-	RiskReason  string
-	RequestedAt time.Time
+	ID          string    `json:"id"`
+	SessionID   string    `json:"session_id"`
+	Command     string    `json:"command"`
+	Host        string    `json:"host"`
+	RiskLevel   RiskLevel `json:"risk_level"`
+	RiskReason  string    `json:"risk_reason"`
+	RequestedAt time.Time `json:"requested_at"`
 }
 
-// ApprovalResult represents the outcome of an approval request.
 type ApprovalResult struct {
-	Approved   bool
-	ApprovedBy string
+	Approved   bool   `json:"approved"`
+	ApprovedBy string `json:"approved_by"`
 }
 
 // ApprovalManager manages approval requests in memory.
@@ -30,16 +30,21 @@ type ApprovalResult struct {
 type ApprovalManager struct {
 	mu          sync.RWMutex
 	pending     map[string]*ApprovalRequest
-	results     map[string]*ApprovalResult
+	results     map[string]*resultEntry
 	waiters     map[string]chan *ApprovalResult
 	subscribers []chan *ApprovalRequest
+}
+
+type resultEntry struct {
+	result    *ApprovalResult
+	resolvedAt time.Time
 }
 
 // NewApprovalManager creates a new ApprovalManager.
 func NewApprovalManager() *ApprovalManager {
 	return &ApprovalManager{
 		pending: make(map[string]*ApprovalRequest),
-		results: make(map[string]*ApprovalResult),
+		results: make(map[string]*resultEntry),
 		waiters: make(map[string]chan *ApprovalResult),
 	}
 }
@@ -67,6 +72,7 @@ func (m *ApprovalManager) Create(sessionID, command, host string, level RiskLeve
 		select {
 		case ch <- req:
 		default:
+			log.Printf("WARNING: approval subscriber channel full, event dropped for request %s", req.ID)
 		}
 	}
 
@@ -76,10 +82,9 @@ func (m *ApprovalManager) Create(sessionID, command, host string, level RiskLeve
 // Wait blocks until the approval request is responded to or context is canceled.
 func (m *ApprovalManager) Wait(ctx context.Context, id string) (*ApprovalResult, error) {
 	m.mu.Lock()
-	// check if already responded
-	if result, ok := m.results[id]; ok {
+	if entry, ok := m.results[id]; ok {
 		m.mu.Unlock()
-		return result, nil
+		return entry.result, nil
 	}
 	// create waiter channel
 	ch := make(chan *ApprovalResult, 1)
@@ -105,7 +110,7 @@ func (m *ApprovalManager) Respond(id string, approved bool, approvedBy string) {
 	}
 
 	m.mu.Lock()
-	m.results[id] = result
+	m.results[id] = &resultEntry{result: result, resolvedAt: time.Now()}
 	delete(m.pending, id)
 	if ch, ok := m.waiters[id]; ok {
 		delete(m.waiters, id)
@@ -148,4 +153,19 @@ func (m *ApprovalManager) Unsubscribe(ch chan *ApprovalRequest) {
 			return
 		}
 	}
+}
+
+// CleanupExpired removes resolved approval results older than maxAge.
+func (m *ApprovalManager) CleanupExpired(maxAge time.Duration) int {
+	cutoff := time.Now().Add(-maxAge)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	count := 0
+	for id, entry := range m.results {
+		if entry.resolvedAt.Before(cutoff) {
+			delete(m.results, id)
+			count++
+		}
+	}
+	return count
 }
