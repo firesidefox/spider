@@ -11,9 +11,10 @@ type registryMockTool struct {
 	schema      map[string]any
 }
 
-func (m *registryMockTool) Name() string                { return m.name }
-func (m *registryMockTool) Description() string         { return m.description }
-func (m *registryMockTool) InputSchema() map[string]any { return m.schema }
+func (m *registryMockTool) Name() string                    { return m.name }
+func (m *registryMockTool) Description() string             { return m.description }
+func (m *registryMockTool) InputSchema() map[string]any     { return m.schema }
+func (m *registryMockTool) DefaultRiskLevel() RiskLevel     { return RiskL1 }
 func (m *registryMockTool) Execute(_ context.Context, _ map[string]any) (*ToolResult, error) {
 	return &ToolResult{Content: "ok", RiskLevel: RiskL1}, nil
 }

@@ -21,7 +21,8 @@ func NewVerifyTool(hosts *store.HostStore, sshPool *ssh.Pool, sshKeys *store.SSH
 	return &VerifyTool{hosts: hosts, sshPool: sshPool, sshKeys: sshKeys}
 }
 
-func (t *VerifyTool) Name() string        { return "verify" }
+func (t *VerifyTool) DefaultRiskLevel() RiskLevel { return RiskL1 }
+func (t *VerifyTool) Name() string                  { return "verify" }
 func (t *VerifyTool) Description() string { return "Verify conditions on remote hosts with retry polling" }
 
 func (t *VerifyTool) InputSchema() map[string]any {

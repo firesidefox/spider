@@ -189,7 +189,7 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 					continue
 				}
 
-				riskLevel := RiskL2
+				riskLevel := tool.DefaultRiskLevel()
 				if rl, ok2 := tc.Input["risk_level"].(string); ok2 {
 					riskLevel = permission.ParseRiskLevel(rl)
 				}

@@ -20,7 +20,8 @@ func NewCallRESTAPITool() *CallRESTAPITool {
 	return &CallRESTAPITool{http: &http.Client{Timeout: 30 * time.Second}}
 }
 
-func (t *CallRESTAPITool) Name() string { return "call_rest_api" }
+func (t *CallRESTAPITool) DefaultRiskLevel() RiskLevel { return RiskL2 }
+func (t *CallRESTAPITool) Name() string                  { return "call_rest_api" }
 
 func (t *CallRESTAPITool) Description() string {
 	return "Call a REST API endpoint on a gateway device"

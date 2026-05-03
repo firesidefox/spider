@@ -15,7 +15,8 @@ func NewListDevicesTool(hosts *store.HostStore) *ListDevicesTool {
 	return &ListDevicesTool{hosts: hosts}
 }
 
-func (t *ListDevicesTool) Name() string        { return "list_devices" }
+func (t *ListDevicesTool) DefaultRiskLevel() RiskLevel { return RiskL1 }
+func (t *ListDevicesTool) Name() string                 { return "list_devices" }
 func (t *ListDevicesTool) Description() string { return "List all managed devices, optionally filtered by tag" }
 
 func (t *ListDevicesTool) InputSchema() map[string]any {

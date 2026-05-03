@@ -16,7 +16,8 @@ func NewSearchDocsTool(ragStore *rag.Store) *SearchDocsTool {
 	return &SearchDocsTool{ragStore: ragStore}
 }
 
-func (t *SearchDocsTool) Name() string { return "search_docs" }
+func (t *SearchDocsTool) DefaultRiskLevel() RiskLevel { return RiskL1 }
+func (t *SearchDocsTool) Name() string                  { return "search_docs" }
 
 func (t *SearchDocsTool) Description() string {
 	return "Search documentation for CLI commands, API references, and troubleshooting guides"

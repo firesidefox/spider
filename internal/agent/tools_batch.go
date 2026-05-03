@@ -22,7 +22,8 @@ func NewBatchExecuteTool(hosts *store.HostStore, sshPool *ssh.Pool, logs *store.
 	return &BatchExecuteTool{hosts: hosts, sshPool: sshPool, logs: logs, sshKeys: sshKeys}
 }
 
-func (t *BatchExecuteTool) Name() string        { return "batch_execute" }
+func (t *BatchExecuteTool) DefaultRiskLevel() RiskLevel { return RiskL3 }
+func (t *BatchExecuteTool) Name() string                  { return "batch_execute" }
 func (t *BatchExecuteTool) Description() string { return "Execute a CLI command on multiple hosts in parallel" }
 
 func (t *BatchExecuteTool) InputSchema() map[string]any {

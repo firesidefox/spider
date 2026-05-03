@@ -22,7 +22,8 @@ func NewExecuteCLITool(hosts *store.HostStore, sshPool *ssh.Pool, logs *store.Lo
 	return &ExecuteCLITool{hosts: hosts, sshPool: sshPool, logs: logs, sshKeys: sshKeys}
 }
 
-func (t *ExecuteCLITool) Name() string { return "execute_cli" }
+func (t *ExecuteCLITool) DefaultRiskLevel() RiskLevel { return RiskL2 }
+func (t *ExecuteCLITool) Name() string                  { return "execute_cli" }
 
 func (t *ExecuteCLITool) Description() string {
 	return "Execute a CLI command on a remote host via SSH"
