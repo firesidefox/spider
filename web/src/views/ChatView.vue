@@ -494,6 +494,6 @@ onMounted(async () => {
 
 /* Drag handle */
 .drag-handle { width: 5px; cursor: col-resize; background: transparent; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: background 0.15s; }
-.drag-handle:hover, .chat-page.dragging .drag-handle { background: var(--primary); opacity: 0.3; }
+.drag-handle:hover, .chat-page.dragging .drag-handle { background: rgba(108, 140, 255, 0.3); }
 .drag-indicator { width: 2px; height: 32px; border-radius: 1px; background: var(--border); }
 </style>
