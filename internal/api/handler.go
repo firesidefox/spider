@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"strings"
 
 	authmw "github.com/spiderai/spider/internal/auth"
@@ -302,6 +303,47 @@ func NewRouter(app *mcppkg.App) http.Handler {
 		operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			approvalRouter(app, w, r)
 		})).ServeHTTP(w, r)
+	})
+
+	// Permission rules API (admin only)
+	mux.HandleFunc("/api/v1/permission/rules", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			listRules(app, w, r)
+		case http.MethodPost:
+			adminOnly(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				addRule(app, w, r)
+			})).ServeHTTP(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+	mux.HandleFunc("/api/v1/permission/rules/", func(w http.ResponseWriter, r *http.Request) {
+		idxStr := r.URL.Path[len("/api/v1/permission/rules/"):]
+		idx, err := strconv.Atoi(idxStr)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		switch r.Method {
+		case http.MethodPut:
+			adminOnly(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				updateRule(app, w, r, idx)
+			})).ServeHTTP(w, r)
+		case http.MethodDelete:
+			adminOnly(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				deleteRule(app, w, r, idx)
+			})).ServeHTTP(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+	mux.HandleFunc("/api/v1/permission/builtin-rules", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			listBuiltinRules(app, w, r)
+			return
+		}
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	})
 
 	// Auth middleware wraps the inner mux; login/logout are exposed without auth.
