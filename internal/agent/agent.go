@@ -27,8 +27,18 @@ type Event struct {
 	Content map[string]any `json:"content,omitempty"`
 }
 
+type ToolCallRecord struct {
+	ID         string         `json:"id"`
+	Name       string         `json:"name"`
+	Input      map[string]any `json:"input,omitempty"`
+	Result     string         `json:"result"`
+	IsError    bool           `json:"is_error"`
+	RiskLevel  string         `json:"risk_level"`
+	DurationMs int64          `json:"duration_ms"`
+}
+
 type MessageStorer interface {
-	Save(conversationID, role, content string) error
+	Save(conversationID, role, content, toolCalls string) error
 	ListByConversation(conversationID string) ([]*models.Message, error)
 }
 
@@ -107,7 +117,7 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 	events := make(chan Event, 64)
 	go func() {
 		defer close(events)
-		a.msgStore.Save(conversationID, "user", userMessage)
+		a.msgStore.Save(conversationID, "user", userMessage, "")
 
 		msgs, _ := a.msgStore.ListByConversation(conversationID)
 		history := make([]llm.Message, 0, len(msgs))
@@ -160,20 +170,21 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 
 			if len(toolCalls) == 0 {
 				if assistantText != "" {
-					a.msgStore.Save(conversationID, "assistant", assistantText)
+					a.msgStore.Save(conversationID, "assistant", assistantText, "")
 				}
 				events <- Event{Type: EventDone}
 				return
 			}
 
-			a.msgStore.Save(conversationID, "assistant", assistantText)
 			history = append(history, llm.Message{Role: llm.RoleAssistant, Content: assistantText})
 
+			var tcRecords []ToolCallRecord
 			for _, tc := range toolCalls {
 				tool, ok := a.registry.Get(tc.Name)
 				if !ok {
-					events <- Event{Type: EventToolResult, Content: map[string]any{"tool": tc.Name, "error": "tool not found"}}
+					events <- Event{Type: EventToolResult, Content: map[string]any{"id": tc.ID, "tool": tc.Name, "result": "tool not found", "is_error": true}}
 					history = append(history, llm.Message{Role: llm.RoleUser, Content: "Tool " + tc.Name + " not found"})
+					tcRecords = append(tcRecords, ToolCallRecord{ID: tc.ID, Name: tc.Name, Input: tc.Input, Result: "tool not found", IsError: true})
 					continue
 				}
 
@@ -192,27 +203,39 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 					}}
 					approved, err := waiter.Wait(requestID, 5*time.Minute)
 					if err != nil || !approved {
-						events <- Event{Type: EventToolResult, Content: map[string]any{"tool": tc.Name, "denied": true}}
+						events <- Event{Type: EventToolResult, Content: map[string]any{"id": tc.ID, "tool": tc.Name, "result": "denied by user", "is_error": true}}
 						history = append(history, llm.Message{Role: llm.RoleUser, Content: "operation denied by user"})
+						tcRecords = append(tcRecords, ToolCallRecord{ID: tc.ID, Name: tc.Name, Input: tc.Input, Result: "denied by user", RiskLevel: string(hookResult.RiskLevel)})
 						continue
 					}
 				} else if hookResult.Action == HookDeny {
-					events <- Event{Type: EventToolResult, Content: map[string]any{"tool": tc.Name, "denied": true, "reason": hookResult.Reason}}
+					events <- Event{Type: EventToolResult, Content: map[string]any{"id": tc.ID, "tool": tc.Name, "result": "denied: " + hookResult.Reason, "is_error": true}}
 					history = append(history, llm.Message{Role: llm.RoleUser, Content: "Tool denied: " + hookResult.Reason})
+					tcRecords = append(tcRecords, ToolCallRecord{ID: tc.ID, Name: tc.Name, Input: tc.Input, Result: "denied: " + hookResult.Reason, RiskLevel: string(hookResult.RiskLevel)})
 					continue
 				}
 
+				start := time.Now()
 				result, err := tool.Execute(ctx, tc.Input)
+				durationMs := time.Since(start).Milliseconds()
 				if err != nil {
 					result = &ToolResult{Content: err.Error(), IsError: true, RiskLevel: riskLevel}
 				}
 				a.hooks.RunAfter(tc.Name, tc.Input, result)
 
 				events <- Event{Type: EventToolResult, Content: map[string]any{
-					"tool": tc.Name, "content": result.Content, "error": result.IsError,
+					"id": tc.ID, "tool": tc.Name, "result": result.Content, "is_error": result.IsError, "duration_ms": durationMs,
 				}}
 				history = append(history, llm.Message{Role: llm.RoleUser, Content: result.Content})
+				tcRecords = append(tcRecords, ToolCallRecord{
+					ID: tc.ID, Name: tc.Name, Input: tc.Input,
+					Result: result.Content, IsError: result.IsError,
+					RiskLevel: string(result.RiskLevel), DurationMs: durationMs,
+				})
 			}
+
+			tcJSON, _ := json.Marshal(tcRecords)
+			a.msgStore.Save(conversationID, "assistant", assistantText, string(tcJSON))
 		}
 
 		events <- Event{Type: EventError, Content: map[string]any{"error": "max turns exceeded"}}

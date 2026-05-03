@@ -17,10 +17,10 @@ func NewMessageStore(db *sql.DB) *MessageStore {
 	return &MessageStore{db: db}
 }
 
-func (s *MessageStore) Save(conversationID, role, content string) error {
+func (s *MessageStore) Save(conversationID, role, content, toolCalls string) error {
 	_, err := s.db.Exec(
-		"INSERT INTO messages (id, conversation_id, role, content, created_at) VALUES (?, ?, ?, ?, ?)",
-		uuid.New().String(), conversationID, role, content, time.Now().UTC(),
+		"INSERT INTO messages (id, conversation_id, role, content, tool_calls, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+		uuid.New().String(), conversationID, role, content, toolCalls, time.Now().UTC(),
 	)
 	if err != nil {
 		return fmt.Errorf("insert message: %w", err)
@@ -30,7 +30,7 @@ func (s *MessageStore) Save(conversationID, role, content string) error {
 
 func (s *MessageStore) ListByConversation(conversationID string) ([]*models.Message, error) {
 	rows, err := s.db.Query(
-		"SELECT id, conversation_id, role, content, created_at FROM messages WHERE conversation_id = ? ORDER BY created_at ASC",
+		"SELECT id, conversation_id, role, content, tool_calls, created_at FROM messages WHERE conversation_id = ? ORDER BY created_at ASC",
 		conversationID,
 	)
 	if err != nil {
@@ -40,7 +40,7 @@ func (s *MessageStore) ListByConversation(conversationID string) ([]*models.Mess
 	var list []*models.Message
 	for rows.Next() {
 		var m models.Message
-		if err := rows.Scan(&m.ID, &m.ConversationID, &m.Role, &m.Content, &m.CreatedAt); err != nil {
+		if err := rows.Scan(&m.ID, &m.ConversationID, &m.Role, &m.Content, &m.ToolCalls, &m.CreatedAt); err != nil {
 			return nil, fmt.Errorf("scan message: %w", err)
 		}
 		list = append(list, &m)

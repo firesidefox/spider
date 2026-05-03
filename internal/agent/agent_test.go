@@ -27,11 +27,11 @@ func (m *mockLLMClient) ChatStream(_ context.Context, _ *llm.ChatRequest) (<-cha
 }
 
 type mockMsgStore struct {
-	messages []struct{ convID, role, content string }
+	messages []struct{ convID, role, content, toolCalls string }
 }
 
-func (m *mockMsgStore) Save(convID, role, content string) error {
-	m.messages = append(m.messages, struct{ convID, role, content string }{convID, role, content})
+func (m *mockMsgStore) Save(convID, role, content, toolCalls string) error {
+	m.messages = append(m.messages, struct{ convID, role, content, toolCalls string }{convID, role, content, toolCalls})
 	return nil
 }
 

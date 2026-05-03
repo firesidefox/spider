@@ -13,6 +13,7 @@ export interface ChatMessage {
   conversation_id: string
   role: string
   content: string
+  tool_calls?: string
   created_at: string
 }
 

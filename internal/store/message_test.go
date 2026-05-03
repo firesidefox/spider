@@ -9,11 +9,11 @@ func TestMessageStore_SaveAndList(t *testing.T) {
 
 	conv, _ := cs.Create("user-1", "test")
 
-	err := ms.Save(conv.ID, "user", `{"type":"text","text":"hello"}`)
+	err := ms.Save(conv.ID, "user", `{"type":"text","text":"hello"}`, "")
 	if err != nil {
 		t.Fatalf("Save: %v", err)
 	}
-	err = ms.Save(conv.ID, "assistant", `{"type":"text","text":"hi"}`)
+	err = ms.Save(conv.ID, "assistant", `{"type":"text","text":"hi"}`, `[{"id":"t1","name":"execute_cli","duration_ms":100}]`)
 	if err != nil {
 		t.Fatalf("Save: %v", err)
 	}
@@ -28,6 +28,9 @@ func TestMessageStore_SaveAndList(t *testing.T) {
 	if msgs[0].Role != "user" {
 		t.Errorf("msgs[0].Role = %q, want user", msgs[0].Role)
 	}
+	if msgs[1].ToolCalls == "" {
+		t.Error("msgs[1].ToolCalls should not be empty")
+	}
 }
 
 func TestMessageStore_DeleteByConversation(t *testing.T) {
@@ -36,7 +39,7 @@ func TestMessageStore_DeleteByConversation(t *testing.T) {
 	ms := NewMessageStore(database)
 
 	conv, _ := cs.Create("user-1", "test")
-	ms.Save(conv.ID, "user", `{"text":"hello"}`)
+	ms.Save(conv.ID, "user", `{"text":"hello"}`, "")
 
 	err := ms.DeleteByConversation(conv.ID)
 	if err != nil {

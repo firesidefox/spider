@@ -89,6 +89,7 @@ CREATE TABLE IF NOT EXISTS messages (
     conversation_id TEXT NOT NULL,
     role TEXT NOT NULL,
     content TEXT NOT NULL,
+    tool_calls TEXT NOT NULL DEFAULT '',
     created_at DATETIME NOT NULL,
     FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
 );
@@ -166,5 +167,6 @@ func migrate(db *sql.DB) error {
 	for _, stmt := range alterStmts {
 		db.Exec(stmt) // ignore "duplicate column" errors
 	}
+	db.Exec("ALTER TABLE messages ADD COLUMN tool_calls TEXT NOT NULL DEFAULT ''")
 	return nil
 }

@@ -8,6 +8,7 @@ interface ToolCall {
   input?: Record<string, any>
   result?: string
   isError?: boolean
+  durationMs?: number
 }
 
 interface ConfirmRequest {
@@ -72,6 +73,7 @@ const riskClass = computed(() => {
         <div class="tool-header" @click="toggleTool(tc.id)">
           <span class="tool-arrow">{{ expandedTools.has(tc.id) ? '▼' : '▶' }}</span>
           <span class="tool-name">{{ tc.name }}</span>
+          <span v-if="tc.durationMs != null" class="tool-duration">{{ tc.durationMs >= 1000 ? (tc.durationMs / 1000).toFixed(1) + 's' : tc.durationMs + 'ms' }}</span>
           <span v-if="tc.isError" class="tool-error-badge">error</span>
         </div>
         <div v-if="expandedTools.has(tc.id)" class="tool-detail">
@@ -106,6 +108,7 @@ const riskClass = computed(() => {
 .tool-header:hover { background: var(--row-hover); }
 .tool-arrow { font-size: 10px; color: var(--muted); width: 12px; }
 .tool-name { color: var(--primary); font-weight: 500; }
+.tool-duration { color: var(--muted); font-size: 11px; }
 .tool-error-badge { background: var(--red); color: #fff; font-size: 10px; padding: 1px 6px; border-radius: 3px; }
 .tool-detail { padding: 8px 10px; }
 .tool-input, .tool-result { font-size: 12px; margin: 4px 0; white-space: pre-wrap; word-break: break-all; color: var(--text-sub); }
