@@ -288,6 +288,22 @@ func NewRouter(app *mcppkg.App) http.Handler {
 		}
 	})
 
+	// Permission approvals API (operator or above)
+	mux.HandleFunc("/api/v1/approvals", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				listApprovals(app, w, r)
+			})).ServeHTTP(w, r)
+			return
+		}
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	})
+	mux.HandleFunc("/api/v1/approvals/", func(w http.ResponseWriter, r *http.Request) {
+		operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			approvalRouter(app, w, r)
+		})).ServeHTTP(w, r)
+	})
+
 	// Auth middleware wraps the inner mux; login/logout are exposed without auth.
 	authMW := authmw.AuthMiddleware(
 		app.Config.Auth.Enabled,
