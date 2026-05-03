@@ -30,9 +30,13 @@ const messages = ref<DisplayMessage[]>([])
 const inputText = ref('')
 const isStreaming = ref(false)
 const messagesRef = ref<HTMLElement | null>(null)
-const showConvList = ref(false)
 const devices = ref<DeviceStatus[]>([])
 let abortCtrl: AbortController | null = null
+
+const sidebarOpen = ref(localStorage.getItem('spider-sidebar') !== 'closed')
+const targetWidth = ref(parseInt(localStorage.getItem('spider-target-width') || '280'))
+const isDragging = ref(false)
+const chatPageRef = ref<HTMLElement | null>(null)
 
 const showModelPicker = ref(false)
 const availableModels = ref<{id: string, display_name: string}[]>([])
@@ -79,6 +83,36 @@ async function saveConvTitle(id: string) {
 function cancelEdit() {
   editingHeaderTitle.value = false
   editingConvId.value = null
+}
+
+function toggleSidebar() {
+  sidebarOpen.value = !sidebarOpen.value
+  localStorage.setItem('spider-sidebar', sidebarOpen.value ? 'open' : 'closed')
+}
+
+function startDrag(e: MouseEvent) {
+  isDragging.value = true
+  const startX = e.clientX
+  const startWidth = targetWidth.value
+
+  function onMove(ev: MouseEvent) {
+    const delta = startX - ev.clientX
+    const newWidth = Math.min(
+      window.innerWidth * 0.5,
+      Math.max(200, startWidth + delta)
+    )
+    targetWidth.value = newWidth
+  }
+
+  function onUp() {
+    isDragging.value = false
+    localStorage.setItem('spider-target-width', String(targetWidth.value))
+    document.removeEventListener('mousemove', onMove)
+    document.removeEventListener('mouseup', onUp)
+  }
+
+  document.addEventListener('mousemove', onMove)
+  document.addEventListener('mouseup', onUp)
 }
 
 async function loadConversations() {
