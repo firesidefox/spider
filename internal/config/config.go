@@ -10,11 +10,17 @@ import (
 
 // Config 是 Spider 的全局配置。
 type Config struct {
-	DataDir  string     `yaml:"data_dir" json:"-"`
-	LogLevel string     `yaml:"log_level" json:"-"`
-	SSH      SSHConfig  `yaml:"ssh"`
-	SSE      SSEConfig  `yaml:"sse"`
-	Auth     AuthConfig `yaml:"auth"`
+	DataDir  string      `yaml:"data_dir" json:"-"`
+	LogLevel string      `yaml:"log_level" json:"-"`
+	SSH      SSHConfig   `yaml:"ssh"`
+	SSE      SSEConfig   `yaml:"sse"`
+	Auth     AuthConfig  `yaml:"auth"`
+	Agent    AgentConfig `yaml:"agent"`
+}
+
+// AgentConfig 是 Agent 执行权限相关配置。
+type AgentConfig struct {
+	PermissionMode string `yaml:"permission_mode"` // ask | auto | plan | readonly，默认 ask
 }
 
 // AuthConfig 是认证相关配置。
@@ -48,6 +54,9 @@ func DefaultConfig() *Config {
 		SSE: SSEConfig{
 			Addr:    ":8000",
 			BaseURL: "http://localhost:8000",
+		},
+		Agent: AgentConfig{
+			PermissionMode: "ask",
 		},
 	}
 }
