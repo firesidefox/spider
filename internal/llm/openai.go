@@ -100,8 +100,8 @@ type openaiDelta struct {
 		ID       string `json:"id"`
 		Type     string `json:"type"`
 		Function struct {
-			Name      string `json:"name"`
-			Arguments string `json:"arguments"`
+			Name      string          `json:"name"`
+			Arguments json.RawMessage `json:"arguments"`
 		} `json:"function"`
 	} `json:"tool_calls"`
 }
@@ -149,9 +149,25 @@ func (c *OpenAIClient) readSSE(body io.ReadCloser, ch chan<- StreamEvent) {
 					Type:     "tool_start",
 					ToolCall: &ToolCall{ID: tc.ID, Name: tc.Function.Name},
 				}
-			} else if tc.Function.Arguments != "" {
-				ch <- StreamEvent{Type: "tool_input_delta", Text: tc.Function.Arguments}
+			}
+			if len(tc.Function.Arguments) > 0 {
+				var argStr string
+				if json.Unmarshal(tc.Function.Arguments, &argStr) == nil {
+					if argStr != "" {
+						ch <- StreamEvent{Type: "tool_input_delta", Text: argStr}
+					}
+				} else {
+					ch <- StreamEvent{Type: "tool_input_delta", Text: string(tc.Function.Arguments)}
+				}
 			}
 		}
+
+		// Some providers omit [DONE] and signal completion via finish_reason.
+		if chunk.Choices[0].FinishReason != "" {
+			ch <- StreamEvent{Type: "message_stop"}
+			return
+		}
 	}
+	// Connection closed without [DONE] or finish_reason.
+	ch <- StreamEvent{Type: "message_stop"}
 }
