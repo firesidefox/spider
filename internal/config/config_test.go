@@ -52,6 +52,46 @@ func TestLoad_EmptyPath_UsesDefaultDataDir(t *testing.T) {
 	}
 }
 
+func TestLoadConfigWithRules(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	content := `
+data_dir: /tmp/test
+agent:
+  permission_mode: auto
+  approval_timeout: 120
+  rules:
+    - pattern: "^docker\\s+rm"
+      level: L3
+      description: "docker remove"
+    - pattern: "^ansible"
+      level: L2
+`
+	os.WriteFile(cfgPath, []byte(content), 0644)
+	cfg, err := Load(cfgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.Agent.Rules) != 2 {
+		t.Fatalf("want 2 rules, got %d", len(cfg.Agent.Rules))
+	}
+	if cfg.Agent.Rules[0].Pattern != `^docker\s+rm` {
+		t.Errorf("rule[0].Pattern = %q", cfg.Agent.Rules[0].Pattern)
+	}
+	if cfg.Agent.Rules[0].Level != "L3" {
+		t.Errorf("rule[0].Level = %q", cfg.Agent.Rules[0].Level)
+	}
+	if cfg.Agent.Rules[0].Description != "docker remove" {
+		t.Errorf("rule[0].Description = %q", cfg.Agent.Rules[0].Description)
+	}
+	if cfg.Agent.Rules[1].Pattern != "^ansible" {
+		t.Errorf("rule[1].Pattern = %q", cfg.Agent.Rules[1].Pattern)
+	}
+	if cfg.Agent.Rules[1].Level != "L2" {
+		t.Errorf("rule[1].Level = %q", cfg.Agent.Rules[1].Level)
+	}
+}
+
 func TestLoad_NoSPIDER_DATA_DIR(t *testing.T) {
 	// 确保环境变量不再影响 DataDir
 	t.Setenv("SPIDER_DATA_DIR", "/should/be/ignored")

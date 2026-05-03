@@ -18,10 +18,18 @@ type Config struct {
 	Agent    AgentConfig `yaml:"agent"`
 }
 
+// RuleConfig 是单条权限规则配置。
+type RuleConfig struct {
+	Pattern     string `yaml:"pattern" json:"pattern"`
+	Level       string `yaml:"level" json:"level"`
+	Description string `yaml:"description,omitempty" json:"description,omitempty"`
+}
+
 // AgentConfig 是 Agent 执行权限相关配置。
 type AgentConfig struct {
-	PermissionMode  string `yaml:"permission_mode"`  // ask | auto | plan | readonly，默认 ask
-	ApprovalTimeout int    `yaml:"approval_timeout"` // 审批超时秒数，默认 300
+	PermissionMode  string       `yaml:"permission_mode"`            // ask | auto | plan | readonly，默认 ask
+	ApprovalTimeout int          `yaml:"approval_timeout"`           // 审批超时秒数，默认 300
+	Rules           []RuleConfig `yaml:"rules,omitempty" json:"rules,omitempty"` // 自定义权限规则
 }
 
 // AuthConfig 是认证相关配置。
