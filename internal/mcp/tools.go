@@ -139,6 +139,37 @@ func makeUpdateHost(app *App) func(context.Context, mcpgo.CallToolRequest) (*mcp
 	}
 }
 
+// checkPermission classifies the command, enforces the permission mode, and
+// blocks for approval when needed. Returns the classification and nil on
+// success, or a tool result to return immediately on deny/plan/timeout.
+func checkPermission(ctx context.Context, app *App, command, hostDisplay string) (*permission.Classification, *mcpgo.CallToolResult, error) {
+	c := app.Classifier.Classify(ctx, command)
+	decision := app.Enforcer.Decide(app.PermissionMode, c.Level)
+
+	switch decision {
+	case permission.DecisionDeny:
+		r, err := toolError(fmt.Sprintf("命令被拒绝 (风险级别: %s, 模式: %s): %s", c.Level, app.PermissionMode, c.Reason))
+		return &c, r, err
+	case permission.DecisionPlan:
+		r, err := toolText(fmt.Sprintf("[PLAN] 命令: %s\n主机: %s\n风险级别: %s\n原因: %s", command, hostDisplay, c.Level, c.Reason))
+		return &c, r, err
+	case permission.DecisionPending:
+		req := app.ApprovalManager.Create("", command, hostDisplay, c.Level, c.Reason)
+		approvalCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+		defer cancel()
+		result, err := app.ApprovalManager.Wait(approvalCtx, req.ID)
+		if err != nil {
+			r, e := toolError(fmt.Sprintf("等待审批超时: %v", err))
+			return &c, r, e
+		}
+		if !result.Approved {
+			r, e := toolError(fmt.Sprintf("命令被拒绝 (审批人: %s)", result.ApprovedBy))
+			return &c, r, e
+		}
+	}
+	return &c, nil, nil
+}
+
 // makeExecuteCommand 返回 execute_command 的 handler。
 func makeExecuteCommand(app *App) func(context.Context, mcpgo.CallToolRequest) (*mcpgo.CallToolResult, error) {
 	return func(ctx context.Context, req mcpgo.CallToolRequest) (*mcpgo.CallToolResult, error) {
@@ -154,28 +185,9 @@ func makeExecuteCommand(app *App) func(context.Context, mcpgo.CallToolRequest) (
 			return toolError(fmt.Sprintf("主机不存在: %s", hostIDOrName))
 		}
 
-		// Permission check
-		classification := app.Classifier.Classify(ctx, command)
-		decision := app.Enforcer.Decide(app.PermissionMode, classification.Level)
-
-		switch decision {
-		case permission.DecisionDeny:
-			return toolError(fmt.Sprintf("命令被拒绝 (风险级别: L%d, 模式: %s): %s", classification.Level, app.PermissionMode, classification.Reason))
-		case permission.DecisionPlan:
-			return toolText(fmt.Sprintf("[PLAN] 命令: %s\n主机: %s\n风险级别: L%d\n原因: %s", command, host.Name, classification.Level, classification.Reason))
-		case permission.DecisionPending:
-			approvalReq := app.ApprovalManager.Create("", command, host.Name, classification.Level, classification.Reason)
-			approvalCtx, approvalCancel := context.WithTimeout(ctx, 5*time.Minute)
-			defer approvalCancel()
-			result, err := app.ApprovalManager.Wait(approvalCtx, approvalReq.ID)
-			if err != nil {
-				return toolError(fmt.Sprintf("等待审批超时: %v", err))
-			}
-			if !result.Approved {
-				return toolError(fmt.Sprintf("命令被拒绝 (审批人: %s)", result.ApprovedBy))
-			}
-		case permission.DecisionAllow:
-			// proceed
+		classification, early, err := checkPermission(ctx, app, command, host.Name)
+		if early != nil || err != nil {
+			return early, err
 		}
 
 		timeout := getTimeout(args, app.Config)
@@ -202,7 +214,7 @@ func makeExecuteCommand(app *App) func(context.Context, mcpgo.CallToolRequest) (
 			ExitCode:       result.ExitCode,
 			DurationMs:     result.Duration.Milliseconds(),
 			TriggeredBy:    "mcp",
-			RiskLevel:      fmt.Sprintf("L%d", classification.Level),
+			RiskLevel:      classification.Level.String(),
 			PermissionMode: string(app.PermissionMode),
 		})
 
@@ -252,36 +264,13 @@ func makeExecuteCommandBatch(app *App) func(context.Context, mcpgo.CallToolReque
 			return toolText("没有匹配的主机")
 		}
 
-		// Permission check
-		classification := app.Classifier.Classify(ctx, command)
-		decision := app.Enforcer.Decide(app.PermissionMode, classification.Level)
-
-		switch decision {
-		case permission.DecisionDeny:
-			return toolError(fmt.Sprintf("命令被拒绝 (风险级别: L%d, 模式: %s): %s", classification.Level, app.PermissionMode, classification.Reason))
-		case permission.DecisionPlan:
-			hostNames := make([]string, len(hosts))
-			for i, h := range hosts {
-				hostNames[i] = h.Name
-			}
-			return toolText(fmt.Sprintf("[PLAN] 命令: %s\n主机: %s\n风险级别: L%d\n原因: %s", command, strings.Join(hostNames, ", "), classification.Level, classification.Reason))
-		case permission.DecisionPending:
-			hostNames := make([]string, len(hosts))
-			for i, h := range hosts {
-				hostNames[i] = h.Name
-			}
-			approvalReq := app.ApprovalManager.Create("", command, strings.Join(hostNames, ", "), classification.Level, classification.Reason)
-			approvalCtx, approvalCancel := context.WithTimeout(ctx, 5*time.Minute)
-			defer approvalCancel()
-			result, err := app.ApprovalManager.Wait(approvalCtx, approvalReq.ID)
-			if err != nil {
-				return toolError(fmt.Sprintf("等待审批超时: %v", err))
-			}
-			if !result.Approved {
-				return toolError(fmt.Sprintf("命令被拒绝 (审批人: %s)", result.ApprovedBy))
-			}
-		case permission.DecisionAllow:
-			// proceed
+		hostNames := make([]string, len(hosts))
+		for i, h := range hosts {
+			hostNames[i] = h.Name
+		}
+		_, early, err := checkPermission(ctx, app, command, strings.Join(hostNames, ", "))
+		if early != nil || err != nil {
+			return early, err
 		}
 
 		timeout := getTimeout(args, app.Config)
