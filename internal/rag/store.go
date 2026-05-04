@@ -53,47 +53,11 @@ func (s *Store) Search(ctx context.Context, query, vendor string, topK int) ([]*
 		return nil, fmt.Errorf("query documents: %w", err)
 	}
 	defer rows.Close()
-
-	type scored struct {
-		doc   *models.Document
-		score float32
-	}
-	var candidates []scored
-
-	for rows.Next() {
-		var d models.Document
-		var tagsJSON string
-		if err := rows.Scan(&d.ID, &d.Vendor, &tagsJSON, &d.Title, &d.Content, &d.Embedding, &d.SourceFile, &d.ChunkIndex, &d.CreatedAt, &d.GroupID); err != nil {
-			return nil, fmt.Errorf("scan: %w", err)
-		}
-		if err := json.Unmarshal([]byte(tagsJSON), &d.Tags); err != nil {
-			d.Tags = []string{}
-		}
-		dvec := deserializeVec(d.Embedding)
-		if len(dvec) == 0 {
-			continue
-		}
-		candidates = append(candidates, scored{doc: &d, score: cosineSimilarity(qvec, dvec)})
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-
-	sort.Slice(candidates, func(i, j int) bool {
-		return candidates[i].score > candidates[j].score
-	})
-
-	if topK > 0 && len(candidates) > topK {
-		candidates = candidates[:topK]
-	}
-
-	out := make([]*models.Document, len(candidates))
-	for i, c := range candidates {
-		out[i] = c.doc
-	}
-	return out, nil
+	return s.rankFromRows(rows, qvec, topK)
 }
 
+// SearchByGroup 按向量相似度检索文档。groupID 非 nil 时只检索该分组，nil 时全局检索。
+// 注意：不按 vendor 过滤，如需 vendor 过滤请使用 Search。
 func (s *Store) SearchByGroup(ctx context.Context, query string, groupID *int, topK int) ([]*models.Document, error) {
 	qvec, err := s.embedder.Embed(ctx, query)
 	if err != nil {
@@ -111,7 +75,11 @@ func (s *Store) SearchByGroup(ctx context.Context, query string, groupID *int, t
 		return nil, fmt.Errorf("query documents: %w", err)
 	}
 	defer rows.Close()
+	return s.rankFromRows(rows, qvec, topK)
+}
 
+// rankFromRows 从 sql.Rows 中读取文档，计算与 qvec 的余弦相似度，排序后返回 topK 条。
+func (s *Store) rankFromRows(rows *sql.Rows, qvec []float32, topK int) ([]*models.Document, error) {
 	type scored struct {
 		doc   *models.Document
 		score float32
@@ -143,7 +111,6 @@ func (s *Store) SearchByGroup(ctx context.Context, query string, groupID *int, t
 	if topK > 0 && len(candidates) > topK {
 		candidates = candidates[:topK]
 	}
-
 	out := make([]*models.Document, len(candidates))
 	for i, c := range candidates {
 		out[i] = c.doc
