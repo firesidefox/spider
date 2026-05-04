@@ -32,6 +32,10 @@ func (s *Store) Ingest(ctx context.Context, vendor string, tags []string, title,
 }
 
 func (s *Store) Search(ctx context.Context, query, vendor string, topK int) ([]*models.Document, error) {
+	return s.SearchWithCLIType(ctx, query, vendor, "", topK)
+}
+
+func (s *Store) SearchWithCLIType(ctx context.Context, query, vendor, cliType string, topK int) ([]*models.Document, error) {
 	qvec, err := s.embedder.Embed(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("embed query: %w", err)
@@ -39,10 +43,20 @@ func (s *Store) Search(ctx context.Context, query, vendor string, topK int) ([]*
 
 	var rows *sql.Rows
 	switch {
+	case vendor != "" && cliType != "":
+		rows, err = s.db.QueryContext(ctx,
+			"SELECT id, vendor, tags, title, content, embedding, source_file, chunk_index, created_at, group_id FROM documents WHERE vendor = ? AND cli_type = ? AND embedding IS NOT NULL",
+			vendor, cliType,
+		)
 	case vendor != "":
 		rows, err = s.db.QueryContext(ctx,
 			"SELECT id, vendor, tags, title, content, embedding, source_file, chunk_index, created_at, group_id FROM documents WHERE vendor = ? AND embedding IS NOT NULL",
 			vendor,
+		)
+	case cliType != "":
+		rows, err = s.db.QueryContext(ctx,
+			"SELECT id, vendor, tags, title, content, embedding, source_file, chunk_index, created_at, group_id FROM documents WHERE cli_type = ? AND embedding IS NOT NULL",
+			cliType,
 		)
 	default:
 		rows, err = s.db.QueryContext(ctx,
@@ -59,6 +73,9 @@ func (s *Store) Search(ctx context.Context, query, vendor string, topK int) ([]*
 // SearchByGroup 按向量相似度检索文档。groupID 非 nil 时只检索该分组，nil 时全局检索。
 // 注意：不按 vendor 过滤，如需 vendor 过滤请使用 Search。
 func (s *Store) SearchByGroup(ctx context.Context, query string, groupID *int, topK int) ([]*models.Document, error) {
+	if s.embedder == nil {
+		return nil, fmt.Errorf("embedder not configured")
+	}
 	qvec, err := s.embedder.Embed(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("embed query: %w", err)
