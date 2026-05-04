@@ -166,7 +166,6 @@ func serve(cfgFile, addrOverride, dataDirOverride string) error {
 	app.DocStore = store.NewDocumentStore(database)
 	app.GroupStore = store.NewGroupStore(database)
 	app.RagStore = rag.NewStore(database, app.DocStore, nil)
-	app.RagStore = rag.NewStore(database, app.DocStore, nil)
 	ps := store.NewProviderStore(database, cm)
 	app.ProviderStore = ps
 
