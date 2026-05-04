@@ -74,14 +74,14 @@ func TestIngestAndSearch(t *testing.T) {
 	s := NewStore(db, docs, emb)
 	ctx := context.Background()
 
-	if err := s.Ingest(ctx, "cisco", "ios", "routing", "Routing Doc", "doc about routing", "routing.md", 0); err != nil {
+	if err := s.Ingest(ctx, "cisco", []string{"routing"}, "Routing Doc", "doc about routing", "routing.md", 0, nil); err != nil {
 		t.Fatalf("ingest routing: %v", err)
 	}
-	if err := s.Ingest(ctx, "cisco", "ios", "firewall", "Firewall Doc", "doc about firewall", "fw.md", 0); err != nil {
+	if err := s.Ingest(ctx, "cisco", []string{"firewall"}, "Firewall Doc", "doc about firewall", "fw.md", 0, nil); err != nil {
 		t.Fatalf("ingest firewall: %v", err)
 	}
 
-	results, err := s.Search(ctx, "query routing", "cisco", "ios", 1)
+	results, err := s.Search(ctx, "query routing", "cisco", 1)
 	if err != nil {
 		t.Fatalf("search: %v", err)
 	}
@@ -100,11 +100,53 @@ func TestSearchNoResults(t *testing.T) {
 	s := NewStore(db, docs, emb)
 	ctx := context.Background()
 
-	results, err := s.Search(ctx, "anything", "cisco", "ios", 5)
+	results, err := s.Search(ctx, "anything", "cisco", 5)
 	if err != nil {
 		t.Fatalf("search: %v", err)
 	}
 	if len(results) != 0 {
 		t.Errorf("expected 0 results, got %d", len(results))
+	}
+}
+
+func TestSearchByGroup(t *testing.T) {
+	db := setupTestDB(t)
+	emb := &mockEmbedder{
+		dim: 3,
+		vecs: map[string][]float32{
+			"nginx restart":   {1, 0, 0},
+			"apache restart":  {0, 1, 0},
+			"restart":         {0.7, 0.7, 0},
+		},
+	}
+	s := NewStore(db, store.NewDocumentStore(db), emb)
+	ctx := context.Background()
+
+	gid1 := 1
+	if err := s.Ingest(ctx, "v", nil, "doc in group1", "nginx restart", "f.txt", 0, &gid1); err != nil {
+		t.Fatal(err)
+	}
+	gid2 := 2
+	if err := s.Ingest(ctx, "v", nil, "doc in group2", "apache restart", "f.txt", 0, &gid2); err != nil {
+		t.Fatal(err)
+	}
+
+	results, err := s.SearchByGroup(ctx, "restart", &gid1, 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+	if results[0].Title != "doc in group1" {
+		t.Errorf("unexpected title: %s", results[0].Title)
+	}
+
+	all, err := s.SearchByGroup(ctx, "restart", nil, 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(all) != 2 {
+		t.Fatalf("expected 2 results, got %d", len(all))
 	}
 }
