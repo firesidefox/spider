@@ -2,6 +2,7 @@ package store
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -16,10 +17,14 @@ func NewDocumentStore(db *sql.DB) *DocumentStore {
 	return &DocumentStore{db: db}
 }
 
-func (s *DocumentStore) Save(vendor, cliType, docType, title, content string, embedding []byte, sourceFile string, chunkIndex int) error {
+func (s *DocumentStore) Save(vendor string, tags []string, title, content string, embedding []byte, sourceFile string, chunkIndex int, groupID *int) error {
+	if tags == nil {
+		tags = []string{}
+	}
+	tagsJSON, _ := json.Marshal(tags)
 	_, err := s.db.Exec(
-		"INSERT INTO documents (vendor, cli_type, doc_type, title, content, embedding, source_file, chunk_index, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-		vendor, cliType, docType, title, content, embedding, sourceFile, chunkIndex, time.Now().UTC(),
+		"INSERT INTO documents (vendor, tags, title, content, embedding, source_file, chunk_index, created_at, group_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		vendor, string(tagsJSON), title, content, embedding, sourceFile, chunkIndex, time.Now().UTC(), groupID,
 	)
 	if err != nil {
 		return fmt.Errorf("insert document: %w", err)
@@ -28,7 +33,7 @@ func (s *DocumentStore) Save(vendor, cliType, docType, title, content string, em
 }
 
 func (s *DocumentStore) List() ([]*models.Document, error) {
-	rows, err := s.db.Query("SELECT id, vendor, cli_type, doc_type, title, content, source_file, chunk_index, created_at FROM documents ORDER BY id")
+	rows, err := s.db.Query("SELECT id, vendor, tags, title, content, source_file, chunk_index, created_at, group_id FROM documents ORDER BY id")
 	if err != nil {
 		return nil, err
 	}
@@ -36,10 +41,22 @@ func (s *DocumentStore) List() ([]*models.Document, error) {
 	return scanDocumentRows(rows)
 }
 
-func (s *DocumentStore) ListByVendor(vendor, cliType string) ([]*models.Document, error) {
+func (s *DocumentStore) ListByVendor(vendor string) ([]*models.Document, error) {
 	rows, err := s.db.Query(
-		"SELECT id, vendor, cli_type, doc_type, title, content, source_file, chunk_index, created_at FROM documents WHERE vendor = ? AND cli_type = ? ORDER BY id",
-		vendor, cliType,
+		"SELECT id, vendor, tags, title, content, source_file, chunk_index, created_at, group_id FROM documents WHERE vendor = ? ORDER BY id",
+		vendor,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanDocumentRows(rows)
+}
+
+func (s *DocumentStore) ListByTag(tag string) ([]*models.Document, error) {
+	rows, err := s.db.Query(
+		"SELECT id, vendor, tags, title, content, source_file, chunk_index, created_at, group_id FROM documents WHERE EXISTS (SELECT 1 FROM json_each(tags) WHERE value = ?) ORDER BY id",
+		tag,
 	)
 	if err != nil {
 		return nil, err
@@ -58,12 +75,37 @@ func (s *DocumentStore) Delete(id int) error {
 	return err
 }
 
+// FindByTitle returns the first document matching groupID and title, or nil if not found.
+func (s *DocumentStore) FindByTitle(groupID int, title string) (*models.Document, error) {
+	row := s.db.QueryRow(
+		"SELECT id, vendor, tags, title, content, source_file, chunk_index, created_at, group_id FROM documents WHERE group_id = ? AND title = ? LIMIT 1",
+		groupID, title,
+	)
+	var d models.Document
+	var tagsJSON string
+	err := row.Scan(&d.ID, &d.Vendor, &tagsJSON, &d.Title, &d.Content, &d.SourceFile, &d.ChunkIndex, &d.CreatedAt, &d.GroupID)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("find document by title: %w", err)
+	}
+	if err := json.Unmarshal([]byte(tagsJSON), &d.Tags); err != nil {
+		d.Tags = []string{}
+	}
+	return &d, nil
+}
+
 func scanDocumentRows(rows *sql.Rows) ([]*models.Document, error) {
-	var list []*models.Document
+	list := make([]*models.Document, 0)
 	for rows.Next() {
 		var d models.Document
-		if err := rows.Scan(&d.ID, &d.Vendor, &d.CLIType, &d.DocType, &d.Title, &d.Content, &d.SourceFile, &d.ChunkIndex, &d.CreatedAt); err != nil {
+		var tagsJSON string
+		if err := rows.Scan(&d.ID, &d.Vendor, &tagsJSON, &d.Title, &d.Content, &d.SourceFile, &d.ChunkIndex, &d.CreatedAt, &d.GroupID); err != nil {
 			return nil, fmt.Errorf("scan document: %w", err)
+		}
+		if err := json.Unmarshal([]byte(tagsJSON), &d.Tags); err != nil {
+			d.Tags = []string{}
 		}
 		list = append(list, &d)
 	}
