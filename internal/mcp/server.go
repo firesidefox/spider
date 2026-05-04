@@ -18,6 +18,7 @@ import (
 	"github.com/spiderai/spider/internal/auth"
 	"github.com/spiderai/spider/internal/config"
 	"github.com/spiderai/spider/internal/permission"
+	"github.com/spiderai/spider/internal/rag"
 	sshpkg "github.com/spiderai/spider/internal/ssh"
 	"github.com/spiderai/spider/internal/store"
 )
@@ -36,6 +37,8 @@ type App struct {
 	ConvStore     *store.ConversationStore
 	MsgStore      *store.MessageStore
 	DocStore      *store.DocumentStore
+	GroupStore    *store.GroupStore
+	RagStore      *rag.Store
 	ProviderStore *store.ProviderStore
 	AgentFactory  *agent.Factory // nil if LLM not configured
 

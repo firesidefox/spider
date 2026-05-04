@@ -18,6 +18,7 @@ import (
 	"github.com/spiderai/spider/internal/auth"
 	mcppkg "github.com/spiderai/spider/internal/mcp"
 	"github.com/spiderai/spider/internal/permission"
+	"github.com/spiderai/spider/internal/rag"
 	sshpkg "github.com/spiderai/spider/internal/ssh"
 
 	"github.com/spiderai/spider/internal/config"
@@ -163,6 +164,9 @@ func serve(cfgFile, addrOverride, dataDirOverride string) error {
 	app.ConvStore = store.NewConversationStore(database)
 	app.MsgStore = store.NewMessageStore(database)
 	app.DocStore = store.NewDocumentStore(database)
+	app.GroupStore = store.NewGroupStore(database)
+	app.RagStore = rag.NewStore(database, app.DocStore, nil)
+	app.RagStore = rag.NewStore(database, app.DocStore, nil)
 	ps := store.NewProviderStore(database, cm)
 	app.ProviderStore = ps
 

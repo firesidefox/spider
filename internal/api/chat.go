@@ -145,7 +145,33 @@ func chatSendMessage(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id
 	app.StoreChatWaiter(id, waiter)
 	defer app.RemoveChatWaiter(id)
 
-	events, err := a.Run(r.Context(), id, req.Content, waiter)
+	content := req.Content
+	if app.RagStore != nil {
+		groupLookup := func(name string) *int {
+			if name == "" {
+				return nil
+			}
+			groups, _ := app.GroupStore.List()
+			for _, g := range groups {
+				if g.Name == name {
+					gid := g.ID
+					return &gid
+				}
+			}
+			return nil
+		}
+		docLookup := func(groupID int, title string) *models.Document {
+			doc, _ := app.DocStore.FindByTitle(groupID, title)
+			return doc
+		}
+		search := func(query string, groupID *int) []*models.Document {
+			docs, _ := app.RagStore.SearchByGroup(r.Context(), query, groupID, 3)
+			return docs
+		}
+		content = expandKBRefs(content, groupLookup, docLookup, search)
+	}
+
+	events, err := a.Run(r.Context(), id, content, waiter)
 	if err != nil {
 		writeError(w, 500, err.Error())
 		return
