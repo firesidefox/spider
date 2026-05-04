@@ -8,8 +8,21 @@ import (
 	"github.com/spiderai/spider/internal/agent"
 	authmw "github.com/spiderai/spider/internal/auth"
 	mcppkg "github.com/spiderai/spider/internal/mcp"
+	"github.com/spiderai/spider/internal/models"
 	"github.com/spiderai/spider/internal/permission"
 )
+
+func verifyConvOwner(app *mcppkg.App, r *http.Request, id string) (*models.Conversation, error) {
+	conv, err := app.ConvStore.GetByID(id)
+	if err != nil {
+		return nil, fmt.Errorf("not found")
+	}
+	uc := authmw.GetUser(r.Context())
+	if uc != nil && uc.UserID != conv.UserID {
+		return nil, fmt.Errorf("forbidden")
+	}
+	return conv, nil
+}
 
 func chatCreateConversation(app *mcppkg.App, w http.ResponseWriter, r *http.Request) {
 	var req struct {
@@ -38,7 +51,7 @@ func chatListConversations(app *mcppkg.App, w http.ResponseWriter, r *http.Reque
 }
 
 func chatGetConversation(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id string) {
-	conv, err := app.ConvStore.GetByID(id)
+	conv, err := verifyConvOwner(app, r, id)
 	if err != nil {
 		writeError(w, 404, "conversation not found")
 		return
@@ -52,6 +65,10 @@ func chatGetConversation(app *mcppkg.App, w http.ResponseWriter, r *http.Request
 }
 
 func chatDeleteConversation(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id string) {
+	if _, err := verifyConvOwner(app, r, id); err != nil {
+		writeError(w, 404, "conversation not found")
+		return
+	}
 	if err := app.MsgStore.DeleteByConversation(id); err != nil {
 		writeError(w, 500, err.Error())
 		return
@@ -64,6 +81,10 @@ func chatDeleteConversation(app *mcppkg.App, w http.ResponseWriter, r *http.Requ
 }
 
 func chatUpdateTitle(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id string) {
+	if _, err := verifyConvOwner(app, r, id); err != nil {
+		writeError(w, 404, "conversation not found")
+		return
+	}
 	var req struct {
 		Title          *string `json:"title"`
 		PermissionMode *string `json:"permission_mode"`
@@ -109,6 +130,15 @@ func chatSendMessage(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id
 		return
 	}
 
+	conv, err := verifyConvOwner(app, r, id)
+	if err != nil {
+		writeError(w, 404, "conversation not found")
+		return
+	}
+	if conv.PermissionMode != "" {
+		factory.PermissionMode = permission.Mode(conv.PermissionMode)
+	}
+
 	systemPrompt := agent.BuildSystemPrompt(app.HostStore)
 	a := factory.NewAgent(systemPrompt)
 	waiter := agent.NewConfirmationWaiter()
@@ -136,6 +166,10 @@ func chatSendMessage(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id
 }
 
 func chatConfirm(app *mcppkg.App, w http.ResponseWriter, r *http.Request, convID, requestID string) {
+	if _, err := verifyConvOwner(app, r, convID); err != nil {
+		writeError(w, 404, "conversation not found")
+		return
+	}
 	var req struct {
 		Approved bool `json:"approved"`
 	}

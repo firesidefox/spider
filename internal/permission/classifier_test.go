@@ -30,6 +30,14 @@ func TestClassifier_StaticRules(t *testing.T) {
 		{"unknown-custom-tool --flag", permission.L3Dangerous},
 		{"curl https://example.com", permission.L2Write},
 		{"wget https://example.com/file", permission.L2Write},
+		// shell wrappers
+		{"sudo rm -rf /tmp/old", permission.L4Destroy},
+		{"sh -c 'rm -rf /tmp/x'", permission.L4Destroy},
+		{"bash -c \"kill 1234\"", permission.L3Dangerous},
+		// command separators
+		{"cd /tmp && rm -rf x", permission.L4Destroy},
+		{"ls -la; rm /tmp/test", permission.L3Dangerous},
+		{"cat file | grep foo", permission.L1Read},
 	}
 
 	for _, tt := range tests {

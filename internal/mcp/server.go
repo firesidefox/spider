@@ -51,9 +51,15 @@ type App struct {
 // NewAgentFactory creates a fresh AgentFactory from current DB provider state.
 // Returns nil, err if no provider configured or key decryption fails.
 func (a *App) NewAgentFactory() (*agent.Factory, error) {
-	return agent.NewFactory(
+	f, err := agent.NewFactory(
 		a.ProviderStore, a.HostStore, a.Pool, a.SSHKeyStore, a.LogStore, a.MsgStore,
 	)
+	if err != nil {
+		return nil, err
+	}
+	f.Enforcer = a.Enforcer
+	f.PermissionMode = a.PermissionMode
+	return f, nil
 }
 
 func (a *App) StoreChatWaiter(convID string, w *agent.ConfirmationWaiter) {

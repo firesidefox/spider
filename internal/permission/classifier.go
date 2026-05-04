@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"regexp"
+	"strings"
 	"sync"
 
 	"github.com/spiderai/spider/internal/config"
@@ -106,8 +107,25 @@ func buildStaticRules() []rule {
 	return rules
 }
 
-// Classify returns risk classification for a command
+// Classify returns risk classification for a command.
+// Handles shell wrappers (sudo, sh -c) and command separators (&&, ;, |).
 func (c *Classifier) Classify(ctx context.Context, command string) Classification {
+	segments := splitShellSegments(command)
+	var highest Classification
+	for _, seg := range segments {
+		seg = unwrapShellPrefix(seg)
+		cl := c.classifyOne(ctx, seg)
+		if cl.Level > highest.Level {
+			highest = cl
+		}
+	}
+	if highest.Level == 0 {
+		return c.classifyOne(ctx, command)
+	}
+	return highest
+}
+
+func (c *Classifier) classifyOne(ctx context.Context, command string) Classification {
 	c.mu.RLock()
 	rules := c.rules
 	c.mu.RUnlock()
@@ -121,6 +139,35 @@ func (c *Classifier) Classify(ctx context.Context, command string) Classificatio
 		return c.llm.Classify(ctx, command)
 	}
 	return Classification{Level: L3Dangerous, Source: SourceDefault, Reason: "unknown command, defaulting to L3"}
+}
+
+var shellSeparators = regexp.MustCompile(`\s*(?:&&|\|\||;|\|)\s*`)
+
+func splitShellSegments(cmd string) []string {
+	parts := shellSeparators.Split(cmd, -1)
+	result := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			result = append(result, p)
+		}
+	}
+	return result
+}
+
+var shellWrapperRe = regexp.MustCompile(`^(?:sudo|sh|bash|zsh|dash)\s+`)
+var shellExecRe = regexp.MustCompile(`^(?:sh|bash|zsh|dash)\s+-c\s+['"]?(.+?)['"]?\s*$`)
+
+func unwrapShellPrefix(cmd string) string {
+	cmd = strings.TrimSpace(cmd)
+	if m := shellExecRe.FindStringSubmatch(cmd); len(m) > 1 {
+		return strings.TrimSpace(m[1])
+	}
+	for shellWrapperRe.MatchString(cmd) {
+		cmd = shellWrapperRe.ReplaceAllString(cmd, "")
+		cmd = strings.TrimSpace(cmd)
+	}
+	return cmd
 }
 
 // Reload replaces the classifier's rules with user rules followed by
