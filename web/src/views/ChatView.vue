@@ -13,6 +13,7 @@ import {
 } from '../api/chat'
 import { listHosts, type SafeHost } from '../api/hosts'
 import { authHeaders } from '../api/auth'
+import { listGroups, listDocumentsByGroup, type DocumentGroup, type Document as KbDocument } from '../api/documents'
 
 const route = useRoute()
 const router = useRouter()
@@ -355,6 +356,130 @@ function closeModeDropdown(e: MouseEvent) {
   }
 }
 
+// @kb two-step dropdown
+const textareaRef = ref<HTMLTextAreaElement | null>(null)
+const kbDropdownMode = ref<'groups' | 'docs' | null>(null)
+const kbGroups = ref<DocumentGroup[]>([])
+const kbDocs = ref<KbDocument[]>([])
+const kbSelectedGroup = ref<DocumentGroup | null>(null)
+const kbActiveIndex = ref(0)
+const kbTriggerStart = ref(0)
+
+const kbItems = computed(() =>
+  kbDropdownMode.value === 'groups' ? kbGroups.value : kbDocs.value
+)
+
+function getKbItemLabel(item: DocumentGroup | KbDocument): string {
+  return (item as any).name ?? (item as KbDocument).title
+}
+
+async function onTextareaInput() {
+  const el = textareaRef.value
+  if (!el) return
+  const pos = el.selectionStart
+  const before = el.value.slice(0, pos)
+
+  // Match @kb:groupName/ → show docs
+  const docMatch = before.match(/@kb:([^/\s]+)\/$/)
+  if (docMatch) {
+    const groupName = docMatch[1]
+    const group = kbGroups.value.find(g => g.name === groupName)
+      || (await loadGroupsIfNeeded(), kbGroups.value.find(g => g.name === groupName))
+    if (group) {
+      kbSelectedGroup.value = group
+      try {
+        kbDocs.value = await listDocumentsByGroup(group.id)
+      } catch (e) {
+        console.error('Failed to load kb docs:', e)
+        return
+      }
+      if (kbDocs.value.length > 0) {
+        kbDropdownMode.value = 'docs'
+        kbActiveIndex.value = 0
+        kbTriggerStart.value = before.lastIndexOf('@kb:')
+      }
+      return
+    }
+  }
+
+  // Match @kb or @kb: → show groups
+  const groupMatch = before.match(/@kb:?$/)
+  if (groupMatch) {
+    await loadGroupsIfNeeded()
+    if (kbGroups.value.length > 0) {
+      kbDropdownMode.value = 'groups'
+      kbActiveIndex.value = 0
+      kbTriggerStart.value = before.lastIndexOf('@kb')
+    }
+    return
+  }
+
+  kbDropdownMode.value = null
+}
+
+async function loadGroupsIfNeeded() {
+  if (kbGroups.value.length === 0) {
+    try {
+      kbGroups.value = await listGroups()
+    } catch (e) {
+      console.error('Failed to load kb groups:', e)
+      return
+    }
+  }
+}
+
+function onTextareaKeydown(e: KeyboardEvent) {
+  if (!kbDropdownMode.value) return
+  if (e.key === 'ArrowDown') {
+    e.preventDefault()
+    kbActiveIndex.value = (kbActiveIndex.value + 1) % kbItems.value.length
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault()
+    kbActiveIndex.value = (kbActiveIndex.value - 1 + kbItems.value.length) % kbItems.value.length
+  } else if (e.key === 'Enter') {
+    e.preventDefault()
+    selectKbItem(kbItems.value[kbActiveIndex.value])
+    e.stopImmediatePropagation()
+  } else if (e.key === 'Escape') {
+    kbDropdownMode.value = null
+  }
+}
+
+function selectKbItem(item: DocumentGroup | KbDocument) {
+  const el = textareaRef.value
+  if (!el) return
+  const pos = el.selectionStart
+  const before = el.value.slice(0, pos)
+  const after = el.value.slice(pos)
+
+  if (kbDropdownMode.value === 'groups') {
+    const group = item as DocumentGroup
+    kbSelectedGroup.value = group
+    const replacement = `@kb:${group.name}/`
+    const newBefore = before.slice(0, kbTriggerStart.value) + replacement
+    inputText.value = newBefore + after
+    kbDropdownMode.value = null
+    nextTick(() => {
+      el.selectionStart = el.selectionEnd = newBefore.length
+      el.focus()
+    })
+  } else {
+    if (!kbSelectedGroup.value) {
+      kbDropdownMode.value = null
+      return
+    }
+    const doc = item as KbDocument
+    const replacement = `@kb:${kbSelectedGroup.value.name}/${doc.title} `
+    const newBefore = before.slice(0, kbTriggerStart.value) + replacement
+    inputText.value = newBefore + after
+    kbDropdownMode.value = null
+    nextTick(() => {
+      el.selectionStart = el.selectionEnd = newBefore.length
+      el.focus()
+    })
+  }
+}
+
 watch(() => messages.value.length, () => {
   nextTick(() => scrollToBottom())
 })
@@ -465,13 +590,26 @@ onUnmounted(() => {
       </div>
 
       <div class="chat-input">
-        <textarea
-          v-model="inputText"
-          @keydown.enter.exact.prevent="send"
-          placeholder="输入运维指令..."
-          :disabled="isStreaming"
-          rows="1"
-        ></textarea>
+        <div class="input-wrapper">
+          <div v-if="kbDropdownMode" class="kb-dropdown">
+            <div
+              v-for="(item, i) in kbItems" :key="getKbItemLabel(item)"
+              class="kb-dropdown-item"
+              :class="{ active: i === kbActiveIndex }"
+              @mousedown.prevent="selectKbItem(item)"
+            >{{ getKbItemLabel(item) }}</div>
+          </div>
+          <textarea
+            ref="textareaRef"
+            v-model="inputText"
+            @keydown.enter.exact.prevent="send()"
+            @keydown="onTextareaKeydown"
+            @input="onTextareaInput"
+            placeholder="输入运维指令..."
+            :disabled="isStreaming"
+            rows="1"
+          ></textarea>
+        </div>
         <button @click="send" :disabled="isStreaming || !inputText.trim()" class="send-btn">
           {{ isStreaming ? '...' : '发送' }}
         </button>
@@ -557,8 +695,21 @@ onUnmounted(() => {
 .empty-state { color: var(--muted); text-align: center; margin-top: 40%; font-size: 14px; }
 
 .chat-input { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--border); background: var(--panel); }
-.chat-input textarea { flex: 1; background: var(--input-bg); border: 1px solid var(--border); color: var(--text); padding: 8px 12px; border-radius: 6px; font-family: 'SF Mono', monospace; font-size: 13px; resize: none; outline: none; }
-.chat-input textarea:focus { border-color: var(--primary); }
+.input-wrapper { flex: 1; position: relative; display: flex; flex-direction: column; }
+.input-wrapper textarea { background: var(--input-bg); border: 1px solid var(--border); color: var(--text); padding: 8px 12px; border-radius: 6px; font-family: 'SF Mono', monospace; font-size: 13px; resize: none; outline: none; width: 100%; box-sizing: border-box; }
+.input-wrapper textarea:focus { border-color: var(--primary); }
+.kb-dropdown {
+  position: absolute; bottom: 100%; left: 0; right: 0; margin-bottom: 4px;
+  background: var(--bg-card, #1e1e1e); border: 1px solid var(--border, #333);
+  border-radius: 6px; padding: 4px; z-index: 200; max-height: 200px; overflow-y: auto;
+}
+.kb-dropdown-item {
+  padding: 6px 12px; cursor: pointer; border-radius: 4px;
+  font-size: 13px; font-family: 'SF Mono', monospace; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.kb-dropdown-item:hover { background: var(--row-hover, #2a2a2a); }
+.kb-dropdown-item.active { background: var(--row-hover, #2a2a2a); color: var(--primary); }
 .send-btn { background: var(--primary); color: #fff; border: none; padding: 8px 20px; border-radius: 6px; cursor: pointer; font-size: 13px; font-family: 'SF Mono', monospace; }
 .send-btn:hover:not(:disabled) { background: var(--primary-hover); }
 .send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
