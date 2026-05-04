@@ -72,34 +72,35 @@ func expandKBRefs(
 	}
 	query := stripKBRefs(message)
 	for _, ref := range refs {
-		var docs []*models.Document
-		if ref.docTitle != "" {
-			// exact lookup
-			var groupID *int
-			if ref.groupName != "" && groupLookup != nil {
-				groupID = groupLookup(ref.groupName)
+		var contents []string
+		// resolve group if named
+		var groupID *int
+		groupMissing := false
+		if ref.groupName != "" && groupLookup != nil {
+			groupID = groupLookup(ref.groupName)
+			if groupID == nil {
+				groupMissing = true
 			}
+		}
+		if groupMissing {
+			contents = []string{"(分组不存在)"}
+		} else if ref.docTitle != "" {
+			// exact lookup
 			if groupID != nil {
 				if doc := docLookup(*groupID, ref.docTitle); doc != nil {
-					docs = []*models.Document{doc}
+					contents = []string{doc.Content}
 				}
 			}
 		} else {
 			// vector search
-			var groupID *int
-			if ref.groupName != "" && groupLookup != nil {
-				groupID = groupLookup(ref.groupName)
-			}
 			if search != nil {
-				docs = search(query, groupID)
+				for _, d := range search(query, groupID) {
+					contents = append(contents, d.Content)
+				}
 			}
-		}
-		var contents []string
-		for _, d := range docs {
-			contents = append(contents, d.Content)
 		}
 		block := formatKBBlock(ref.displayName, contents)
-		message = strings.Replace(message, ref.raw, block, 1)
+		message = strings.ReplaceAll(message, ref.raw, block)
 	}
 	return message
 }

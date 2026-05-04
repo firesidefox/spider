@@ -93,3 +93,85 @@ func TestExpandKBRefs_GlobalSearch(t *testing.T) {
 		t.Errorf("unexpected result: %s", result)
 	}
 }
+
+func TestExpandKBRefs_ExactDoc(t *testing.T) {
+	docLookupCalled := false
+	docLookup := func(groupID int, title string) *models.Document {
+		docLookupCalled = true
+		if groupID != 42 {
+			t.Errorf("expected groupID 42, got %d", groupID)
+		}
+		if title != "nginx配置说明" {
+			t.Errorf("expected title nginx配置说明, got %s", title)
+		}
+		return &models.Document{Title: "nginx配置说明", Content: "worker_processes auto;"}
+	}
+	gid := 42
+	groupLookup := func(name string) *int {
+		if name == "运维手册" {
+			return &gid
+		}
+		return nil
+	}
+	result := expandKBRefs(
+		"@kb:运维手册/nginx配置说明 怎么限速",
+		groupLookup,
+		docLookup,
+		func(query string, groupID *int) []*models.Document { return nil },
+	)
+	if !docLookupCalled {
+		t.Error("docLookup not called")
+	}
+	if !strings.Contains(result, "worker_processes auto;") {
+		t.Errorf("expected doc content in result, got: %s", result)
+	}
+}
+
+func TestExpandKBRefs_GroupSearch(t *testing.T) {
+	searchCalled := false
+	gid := 7
+	search := func(query string, groupID *int) []*models.Document {
+		searchCalled = true
+		if groupID == nil || *groupID != 7 {
+			t.Errorf("expected groupID 7, got %v", groupID)
+		}
+		return []*models.Document{{Title: "结果", Content: "内容"}}
+	}
+	groupLookup := func(name string) *int {
+		if name == "运维手册" {
+			return &gid
+		}
+		return nil
+	}
+	result := expandKBRefs(
+		"@kb:运维手册 nginx重启",
+		groupLookup,
+		func(groupID int, title string) *models.Document { return nil },
+		search,
+	)
+	if !searchCalled {
+		t.Error("search not called")
+	}
+	if !strings.Contains(result, "[知识库: 运维手册") {
+		t.Errorf("unexpected result: %s", result)
+	}
+}
+
+func TestExpandKBRefs_DuplicateRaw(t *testing.T) {
+	callCount := 0
+	search := func(query string, groupID *int) []*models.Document {
+		callCount++
+		return []*models.Document{{Title: "结果", Content: "内容"}}
+	}
+	result := expandKBRefs(
+		"@kb nginx重启 和 @kb 怎么操作",
+		func(name string) *int { return nil },
+		func(groupID int, title string) *models.Document { return nil },
+		search,
+	)
+	// 两个 @kb 都应被替换，不应有原始 @kb 残留
+	if strings.Contains(result, "@kb") {
+		t.Errorf("raw @kb should be replaced, got: %s", result)
+	}
+	_ = callCount
+}
