@@ -32,10 +32,7 @@
           <div class="nav-row" :class="{ selected: activeTab === 'skills' }" @click="activeTab = 'skills'">
             <span class="nav-icon">🧩</span><span class="nav-label">Skills</span>
           </div>
-          <div class="nav-row" :class="{ selected: activeTab === 'llm' }" @click="activeTab = 'llm'; loadProviders()">
-            <span class="nav-icon">🤖</span><span class="nav-label">模型供应商</span>
-          </div>
-          <div class="nav-row" :class="{ selected: activeTab === 'agent' }" @click="activeTab = 'agent'; loadAgentSettings()">
+          <div class="nav-row" :class="{ selected: activeTab === 'agent' }" @click="activeTab = 'agent'; loadAgentSettings(); loadProviders()">
             <span class="nav-icon">🧠</span><span class="nav-label">智能体</span>
           </div>
           <div class="nav-row" :class="{ selected: activeTab === 'kb' }" @click="activeTab = 'kb'; loadRagConfig()">
@@ -63,7 +60,7 @@
           <button v-if="activeTab === 'info'" class="btn btn-sm" @click="showPwModal = true">修改密码</button>
           <button v-if="activeTab === 'tokens'" class="btn btn-primary btn-sm" @click="showCreate = true">+ 新建 Token</button>
           <button v-if="activeTab === 'ssh-keys'" class="btn btn-primary btn-sm" @click="showAddKey = true">+ 添加 Key</button>
-          <template v-if="activeTab === 'llm'">
+          <template v-if="activeTab === 'agent'">
             <button class="btn btn-primary btn-sm" @click="addProvider">+ 添加供应商</button>
           </template>
           <template v-if="activeTab === 'settings'">
@@ -187,9 +184,11 @@
           </div>
         </template>
 
-        <!-- Tab: 模型供应商 -->
-        <template v-if="activeTab === 'llm'">
+        <!-- Tab: 智能体 -->
+        <template v-if="activeTab === 'agent'">
+          <!-- 模型供应商 card -->
           <div class="edit-card">
+            <div class="edit-card-title">模型供应商</div>
             <p class="dim" style="margin-bottom:16px;font-size:13px">配置 AI 模型供应商，用于智能运维对话和工具调用。</p>
             <table class="table">
               <thead><tr><th>名称</th><th>类型</th><th>请求地址</th><th>模型</th><th>状态</th><th>操作</th></tr></thead>
@@ -241,10 +240,7 @@
           <div v-if="fetchError" class="edit-card">
             <p class="err" style="padding:12px;text-align:center">{{ fetchError }}</p>
           </div>
-        </template>
 
-        <!-- Tab: 智能体 -->
-        <template v-if="activeTab === 'agent'">
           <div v-if="agentError" class="err" style="margin-bottom:12px">{{ agentError }}</div>
 
           <!-- 权限模式 card -->
@@ -578,10 +574,10 @@ const roleLabel = computed(() => {
   return map[currentUser.value?.role ?? ''] ?? currentUser.value?.role ?? '—'
 })
 
-const activeTab = ref<'info' | 'tokens' | 'ssh-keys' | 'logs' | 'users' | 'install' | 'skills' | 'llm' | 'agent' | 'kb' | 'settings'>('info')
+const activeTab = ref<'info' | 'tokens' | 'ssh-keys' | 'logs' | 'users' | 'install' | 'skills' | 'agent' | 'kb' | 'settings'>('info')
 const tabTitle = computed(() => ({
   info: '基本信息', tokens: '访问令牌', 'ssh-keys': 'SSH Keys', logs: '操作日志',
-  users: '用户管理', install: '安装', llm: '模型供应商', agent: '智能体', kb: '知识库', settings: '系统设置',
+  users: '用户管理', install: '安装', agent: '智能体', kb: '知识库', settings: '系统设置',
 }[activeTab.value]))
 
 const pw = ref({ old: '', new1: '', new2: '' })
