@@ -60,9 +60,7 @@
           <button v-if="activeTab === 'info'" class="btn btn-sm" @click="showPwModal = true">修改密码</button>
           <button v-if="activeTab === 'tokens'" class="btn btn-primary btn-sm" @click="showCreate = true">+ 新建 Token</button>
           <button v-if="activeTab === 'ssh-keys'" class="btn btn-primary btn-sm" @click="showAddKey = true">+ 添加 Key</button>
-          <template v-if="activeTab === 'agent'">
-            <button class="btn btn-primary btn-sm" @click="addProvider">+ 添加供应商</button>
-          </template>
+
           <template v-if="activeTab === 'settings'">
             <div v-if="settingsEditing" style="display:flex;gap:8px">
               <button class="btn btn-primary btn-sm" @click="saveSettings">保存</button>
@@ -188,7 +186,10 @@
         <template v-if="activeTab === 'agent'">
           <!-- 模型供应商 card -->
           <div class="edit-card">
-            <div class="edit-card-title">模型供应商</div>
+            <div class="edit-card-title" style="display:flex;justify-content:space-between;align-items:center">
+              <span>模型供应商</span>
+              <button class="btn btn-primary btn-sm" @click="addProvider">+ 添加供应商</button>
+            </div>
             <p class="dim" style="margin-bottom:16px;font-size:13px">配置 AI 模型供应商，用于智能运维对话和工具调用。</p>
             <table class="table">
               <thead><tr><th>名称</th><th>类型</th><th>请求地址</th><th>模型</th><th>状态</th><th>操作</th></tr></thead>
@@ -247,7 +248,7 @@
           <div class="edit-card">
             <div class="edit-card-title" style="display:flex;justify-content:space-between;align-items:center">
               <span>权限模式</span>
-              <button v-if="!agentEditing" class="btn btn-sm" @click="agentEditing = true">编辑</button>
+              <button v-if="!agentEditing" class="btn btn-primary btn-sm" @click="agentEditing = true">编辑</button>
               <div v-else style="display:flex;gap:8px">
                 <button class="btn btn-primary btn-sm" :disabled="agentSaving" @click="saveAgentSettings">
                   {{ agentSaving ? '保存中…' : '保存' }}
