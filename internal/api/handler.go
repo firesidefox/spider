@@ -289,6 +289,85 @@ func NewRouter(app *mcppkg.App) http.Handler {
 		}
 	})
 
+	// Knowledge base API
+	mux.HandleFunc("/api/v1/rag-config", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			getRagConfig(app, w, r)
+		case http.MethodPut:
+			operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				putRagConfig(app, w, r)
+			})).ServeHTTP(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	// Knowledge base API
+	mux.HandleFunc("/api/v1/documents", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			listDocuments(app, w, r)
+		case http.MethodPost:
+			operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				ingestDocument(app, w, r)
+			})).ServeHTTP(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+	mux.HandleFunc("/api/v1/documents/search", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			searchDocuments(app, w, r)
+			return
+		}
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	})
+
+	// Document groups API
+	mux.HandleFunc("/api/v1/document-groups", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			listGroups(app, w, r)
+		case http.MethodPost:
+			operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				createGroup(app, w, r)
+			})).ServeHTTP(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+	mux.HandleFunc("/api/v1/document-groups/", func(w http.ResponseWriter, r *http.Request) {
+		id := r.URL.Path[len("/api/v1/document-groups/"):]
+		switch r.Method {
+		case http.MethodPatch:
+			operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				renameGroup(app, w, r, id)
+			})).ServeHTTP(w, r)
+		case http.MethodDelete:
+			operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				deleteGroup(app, w, r, id)
+			})).ServeHTTP(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+	mux.HandleFunc("/api/v1/documents/", func(w http.ResponseWriter, r *http.Request) {
+		id := r.URL.Path[len("/api/v1/documents/"):]
+		switch r.Method {
+		case http.MethodDelete:
+			operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				deleteDocument(app, w, r, id)
+			})).ServeHTTP(w, r)
+		case http.MethodPatch:
+			operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				moveDocumentToGroup(app, w, r, id)
+			})).ServeHTTP(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
 	// Permission approvals API (operator or above)
 	mux.HandleFunc("/api/v1/approvals", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet {
