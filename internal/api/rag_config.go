@@ -79,7 +79,13 @@ func validateRagConfig(app *mcppkg.App, w http.ResponseWriter, r *http.Request) 
 	if req.Type == "" {
 		req.Type = "openai"
 	}
-	embedder, err := rag.NewEmbedder(req.Type, req.APIKey, req.Model, req.BaseURL, 0)
+	apiKey := req.APIKey
+	if apiKey == "" {
+		if cfg, err := app.RagConfigStore.Get(); err == nil && cfg != nil {
+			apiKey = cfg.APIKey
+		}
+	}
+	embedder, err := rag.NewEmbedder(req.Type, apiKey, req.Model, req.BaseURL, 0)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
