@@ -418,16 +418,16 @@
                     @click="fetchEmbeddingModels">
                     {{ kbFetchingModels ? '获取中…' : '获取模型' }}
                   </button>
+                  <button class="btn btn-sm" :disabled="kbValidating" @click="validateRagConfig">
+                    {{ kbValidating ? '验证中…' : '验证' }}
+                  </button>
                 </div>
               </div>
             </div>
             <div v-if="kbFetchModelsError" class="err" style="margin-top:6px;font-size:13px">{{ kbFetchModelsError }}</div>
-            <div style="margin-top:12px">
-              <button class="btn btn-sm" :disabled="kbValidating" @click="validateRagConfig">
-                {{ kbValidating ? '验证中…' : '验证' }}
-              </button>
-              <span v-if="kbValidateResult === 'ok'" style="margin-left:10px;font-size:13px;color:var(--green)">✓ 配置有效</span>
-              <span v-else-if="kbValidateResult === 'error'" style="margin-left:10px;font-size:13px;color:var(--red)">{{ kbValidateError }}</span>
+            <div v-if="kbValidateResult" style="margin-top:6px;font-size:13px">
+              <span v-if="kbValidateResult === 'ok'" style="color:var(--green)">✓ 配置有效</span>
+              <span v-else style="color:var(--red)">{{ kbValidateError }}</span>
             </div>
             <div v-if="ragConfigSaveError" class="err" style="margin-top:8px;font-size:13px">{{ ragConfigSaveError }}</div>
             <div v-if="ragConfigOk" style="margin-top:8px;font-size:13px;color:var(--green)">已保存 ✓</div>
@@ -899,6 +899,13 @@ async function loadRagConfig() {
     }
     if (provRes.ok) {
       kbProviders.value = await provRes.json()
+      // 用已保存的 base_url 初始化 kbSelectedProviderId
+      const savedUrl = ragConfigForm.value.base_url
+      const match = kbProviders.value.find(p => p.base_url === savedUrl)
+      if (match) {
+        kbSelectedProviderId.value = match.id
+        kbModelOptions.value = match.models.map(m => m.model_id)
+      }
     }
   } catch (e: any) {
     ragConfigError.value = e.message
