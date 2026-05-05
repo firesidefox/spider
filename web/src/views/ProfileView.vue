@@ -299,8 +299,11 @@
 
           <!-- 风险级别定义 card -->
           <div class="edit-card">
-            <div class="edit-card-title">风险级别定义</div>
-            <table class="table">
+            <div class="edit-card-toolbar" style="cursor:pointer" @click="showRiskLevels = !showRiskLevels">
+              <div class="edit-card-title" style="margin-bottom:0;padding-bottom:0;border-bottom:none">风险级别定义</div>
+              <span class="dim">{{ showRiskLevels ? '收起 ▲' : '展开 ▼' }}</span>
+            </div>
+            <table v-if="showRiskLevels" class="table" style="margin-top:12px">
               <thead><tr><th>级别</th><th>名称</th><th>描述</th><th>示例</th></tr></thead>
               <tbody>
                 <tr><td><span class="risk-badge l1">L1</span></td><td>读</td><td>只读，无副作用</td><td class="dim">ls, cat, ps, df, ping</td></tr>
@@ -313,8 +316,11 @@
 
           <!-- 模式×级别矩阵 card -->
           <div class="edit-card">
-            <div class="edit-card-title">模式 × 级别决策矩阵</div>
-            <table class="table" style="text-align:center">
+            <div class="edit-card-toolbar" style="cursor:pointer" @click="showMatrix = !showMatrix">
+              <div class="edit-card-title" style="margin-bottom:0;padding-bottom:0;border-bottom:none">模式 × 级别决策矩阵</div>
+              <span class="dim">{{ showMatrix ? '收起 ▲' : '展开 ▼' }}</span>
+            </div>
+            <table v-if="showMatrix" class="table" style="text-align:center;margin-top:12px">
               <thead><tr><th style="text-align:left">级别</th><th>只读</th><th>询问（默认）</th><th>自动</th><th>计划</th></tr></thead>
               <tbody>
                 <tr><td style="text-align:left"><span class="risk-badge l1">L1</span> 读</td><td class="ok">✓ 执行</td><td class="ok">✓ 执行</td><td class="ok">✓ 执行</td><td class="plan-cell">📋 计划</td></tr>
@@ -1030,6 +1036,8 @@ const agentSettings = ref({ permission_mode: 'ask', approval_timeout: 300 })
 const customRules = ref<{ pattern: string; level: string; description: string }[]>([])
 const builtinRules = ref<{ pattern: string; level: string }[]>([])
 const showBuiltinRules = ref(false)
+const showRiskLevels = ref(false)
+const showMatrix = ref(false)
 const showAddRule = ref(false)
 const newRule = ref({ pattern: '', level: 'L3', description: '' })
 const agentSaving = ref(false)
