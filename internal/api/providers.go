@@ -11,6 +11,7 @@ import (
 
 type providerResponse struct {
 	models.Provider
+	APIKey string                  `json:"api_key"`
 	Models []*models.ProviderModel `json:"models"`
 }
 
@@ -26,7 +27,8 @@ func buildProviderResponse(app *mcppkg.App, p *models.Provider) (*providerRespon
 	if ms == nil {
 		ms = []*models.ProviderModel{}
 	}
-	return &providerResponse{Provider: *p, Models: ms}, nil
+	apiKey, _ := app.ProviderStore.DecryptAPIKey(p)
+	return &providerResponse{Provider: *p, APIKey: apiKey, Models: ms}, nil
 }
 
 func createProvider(app *mcppkg.App, w http.ResponseWriter, r *http.Request) {
