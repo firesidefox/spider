@@ -38,6 +38,9 @@
           <div class="nav-row" :class="{ selected: activeTab === 'agent' }" @click="activeTab = 'agent'; loadAgentSettings()">
             <span class="nav-icon">🧠</span><span class="nav-label">智能体</span>
           </div>
+          <div class="nav-row" :class="{ selected: activeTab === 'kb' }" @click="activeTab = 'kb'; loadRagConfig()">
+            <span class="nav-icon">📚</span><span class="nav-label">知识库</span>
+          </div>
           <div class="nav-row" :class="{ selected: activeTab === 'settings' }" @click="activeTab = 'settings'; loadSettings()">
             <span class="nav-icon">⚙️</span><span class="nav-label">系统设置</span>
           </div>
@@ -380,6 +383,43 @@
           </div>
         </template>
 
+        <!-- Tab: 知识库 -->
+        <template v-if="activeTab === 'kb'">
+          <div v-if="ragConfigError" class="err" style="margin-bottom:12px">{{ ragConfigError }}</div>
+          <div class="edit-card">
+            <div class="edit-card-title">Embedding 配置</div>
+            <p class="dim" style="margin-bottom:16px;font-size:13px">
+              用于知识库文档向量化和语义检索，需要支持 OpenAI 兼容 embedding 接口的供应商。
+            </p>
+            <div class="block-grid">
+              <div class="form-row">
+                <label>请求地址</label>
+                <input v-model="ragConfigForm.base_url" class="input" placeholder="留空使用 https://api.openai.com" />
+              </div>
+              <div class="form-row">
+                <label>模型</label>
+                <input v-model="ragConfigForm.model" class="input" placeholder="如 text-embedding-3-small" />
+              </div>
+              <div class="form-row">
+                <label>API Key</label>
+                <input
+                  v-model="ragConfigForm.api_key"
+                  class="input"
+                  type="password"
+                  :placeholder="ragConfig.api_key_set ? '已设置，留空保留原值' : '输入 API Key'"
+                />
+              </div>
+            </div>
+            <div v-if="ragConfigSaveError" class="err" style="margin-top:8px;font-size:13px">{{ ragConfigSaveError }}</div>
+            <div v-if="ragConfigOk" style="margin-top:8px;font-size:13px;color:var(--green)">已保存 ✓</div>
+            <div style="margin-top:16px">
+              <button class="btn btn-primary btn-sm" :disabled="ragConfigSaving" @click="saveRagConfig">
+                {{ ragConfigSaving ? '保存中…' : '保存' }}
+              </button>
+            </div>
+          </div>
+        </template>
+
         <!-- Tab: 系统设置 -->
         <template v-if="activeTab === 'settings'">
           <!-- 只读视图 -->
@@ -519,10 +559,10 @@ const roleLabel = computed(() => {
   return map[currentUser.value?.role ?? ''] ?? currentUser.value?.role ?? '—'
 })
 
-const activeTab = ref<'info' | 'tokens' | 'ssh-keys' | 'logs' | 'users' | 'install' | 'skills' | 'llm' | 'agent' | 'settings'>('info')
+const activeTab = ref<'info' | 'tokens' | 'ssh-keys' | 'logs' | 'users' | 'install' | 'skills' | 'llm' | 'agent' | 'kb' | 'settings'>('info')
 const tabTitle = computed(() => ({
   info: '基本信息', tokens: '访问令牌', 'ssh-keys': 'SSH Keys', logs: '操作日志',
-  users: '用户管理', install: '安装', llm: '模型供应商', agent: '智能体', settings: '系统设置',
+  users: '用户管理', install: '安装', llm: '模型供应商', agent: '智能体', kb: '知识库', settings: '系统设置',
 }[activeTab.value]))
 
 const pw = ref({ old: '', new1: '', new2: '' })
@@ -802,6 +842,59 @@ function cancelSettings() {
   settingsEditing.value = false
   settingsLoaded = false
   loadSettings()
+}
+
+// ── 知识库 / Embedding 配置 ──
+const ragConfig = ref({ base_url: '', model: '', api_key_set: false })
+const ragConfigForm = ref({ base_url: '', model: '', api_key: '' })
+const ragConfigSaving = ref(false)
+const ragConfigError = ref('')
+const ragConfigSaveError = ref('')
+const ragConfigOk = ref(false)
+let ragConfigLoaded = false
+
+async function loadRagConfig() {
+  if (ragConfigLoaded) return
+  ragConfigLoaded = true
+  ragConfigError.value = ''
+  try {
+    const res = await fetch('/api/v1/rag-config', { headers: authHeaders() })
+    if (!res.ok) return
+    const data = await res.json()
+    ragConfig.value = data
+    ragConfigForm.value = { base_url: data.base_url ?? '', model: data.model ?? '', api_key: '' }
+  } catch (e: any) {
+    ragConfigError.value = e.message
+  }
+}
+
+async function saveRagConfig() {
+  ragConfigSaveError.value = ''
+  ragConfigOk.value = false
+  ragConfigSaving.value = true
+  try {
+    const body: any = { base_url: ragConfigForm.value.base_url, model: ragConfigForm.value.model }
+    if (ragConfigForm.value.api_key) body.api_key = ragConfigForm.value.api_key
+    const res = await fetch('/api/v1/rag-config', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify(body),
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      ragConfigSaveError.value = err.error || '保存失败'
+      return
+    }
+    ragConfigForm.value.api_key = ''
+    ragConfigLoaded = false
+    await loadRagConfig()
+    ragConfigOk.value = true
+    setTimeout(() => { ragConfigOk.value = false }, 2000)
+  } catch (e: any) {
+    ragConfigSaveError.value = e.message
+  } finally {
+    ragConfigSaving.value = false
+  }
 }
 
 // ── Agent / 智能体 ──

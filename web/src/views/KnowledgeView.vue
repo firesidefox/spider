@@ -117,40 +117,6 @@
         <div class="detail-empty-icon">📚</div>
         <div>选择左侧文档，或输入关键词语义搜索</div>
       </div>
-
-      <!-- Embedding 配置卡片（始终显示在右侧底部） -->
-      <div v-if="!searched" class="edit-card" style="margin:16px;max-width:520px">
-        <div style="font-weight:600;margin-bottom:12px">Embedding 配置</div>
-        <p class="dim" style="font-size:13px;margin-bottom:16px">
-          用于知识库文档向量化和检索，需要支持 OpenAI 兼容 embedding 接口的供应商。
-        </p>
-        <div style="display:flex;flex-direction:column;gap:10px">
-          <div>
-            <label class="label">请求地址</label>
-            <input v-model="ragConfigForm.base_url" class="input" placeholder="留空使用 https://api.openai.com" />
-          </div>
-          <div>
-            <label class="label">模型</label>
-            <input v-model="ragConfigForm.model" class="input" placeholder="如 text-embedding-3-small" />
-          </div>
-          <div>
-            <label class="label">API Key</label>
-            <input
-              v-model="ragConfigForm.api_key"
-              class="input"
-              type="password"
-              :placeholder="ragConfig.api_key_set ? '已设置，留空保留原值' : '输入 API Key'"
-            />
-          </div>
-          <div v-if="ragConfigError" class="err" style="font-size:13px">{{ ragConfigError }}</div>
-          <div v-if="ragConfigOk" style="font-size:13px;color:var(--color-ok,#4caf50)">已保存</div>
-          <div>
-            <button class="btn btn-primary btn-sm" @click="saveRagConfig" :disabled="ragConfigSaving">
-              {{ ragConfigSaving ? '保存中...' : '保存' }}
-            </button>
-          </div>
-        </div>
-      </div>
     </div>
 
     <!-- 新建分组弹窗 -->
@@ -205,7 +171,6 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, nextTick } from 'vue'
-import { authHeaders } from '../api/auth'
 import {
   listDocuments, ingestDocument, deleteDocument, searchDocuments, moveDocument,
   listGroups, createGroup, renameGroup, deleteGroup,
@@ -393,51 +358,7 @@ function fmtTime(s: string) {
   return new Date(s).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
 
-// Embedding 配置
-const ragConfig = ref({ type: 'openai', base_url: '', model: '', api_key_set: false })
-const ragConfigForm = ref({ type: 'openai', base_url: '', model: '', api_key: '' })
-const ragConfigSaving = ref(false)
-const ragConfigError = ref('')
-const ragConfigOk = ref(false)
-
-async function loadRagConfig() {
-  try {
-    const res = await fetch('/api/v1/rag-config', { headers: authHeaders() })
-    if (!res.ok) return
-    const data = await res.json()
-    ragConfig.value = data
-    ragConfigForm.value = { type: data.type || 'openai', base_url: data.base_url || '', model: data.model || '', api_key: '' }
-  } catch {}
-}
-
-async function saveRagConfig() {
-  ragConfigSaving.value = true
-  ragConfigError.value = ''
-  ragConfigOk.value = false
-  try {
-    const res = await fetch('/api/v1/rag-config', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', ...authHeaders() },
-      body: JSON.stringify(ragConfigForm.value),
-    })
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ error: '保存失败' }))
-      ragConfigError.value = err.error || '保存失败'
-      return
-    }
-    const data = await res.json()
-    ragConfig.value = data
-    ragConfigForm.value.api_key = ''
-    ragConfigOk.value = true
-    setTimeout(() => { ragConfigOk.value = false }, 3000)
-  } catch {
-    ragConfigError.value = '网络错误'
-  } finally {
-    ragConfigSaving.value = false
-  }
-}
-
-onMounted(() => { load(); loadGroups(); loadRagConfig() })
+onMounted(() => { load(); loadGroups() })
 </script>
 
 <style scoped>
