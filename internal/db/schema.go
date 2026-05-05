@@ -208,11 +208,14 @@ func migrate(db *sql.DB) error {
 	)`)
 	db.Exec("ALTER TABLE documents ADD COLUMN group_id INTEGER REFERENCES document_groups(id) ON DELETE SET NULL")
 	db.Exec("ALTER TABLE providers ADD COLUMN embedding_model TEXT NOT NULL DEFAULT ''")
-	db.Exec(`CREATE TABLE IF NOT EXISTS rag_config (
+	// Single-row config table. Managed via DELETE + INSERT (no PK by design).
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS rag_config (
 		type              TEXT NOT NULL DEFAULT 'openai',
 		base_url          TEXT NOT NULL DEFAULT '',
 		model             TEXT NOT NULL DEFAULT '',
 		encrypted_api_key TEXT NOT NULL DEFAULT ''
-	)`)
+	)`); err != nil {
+		return err
+	}
 	return nil
 }
