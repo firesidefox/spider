@@ -239,7 +239,9 @@ func NewRouter(app *mcppkg.App) http.Handler {
 	mux.HandleFunc("/api/v1/providers", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
-			listProviders(app, w, r)
+			operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				listProviders(app, w, r)
+			})).ServeHTTP(w, r)
 		case http.MethodPost:
 			operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				createProvider(app, w, r)
