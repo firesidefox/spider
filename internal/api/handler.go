@@ -303,6 +303,16 @@ func NewRouter(app *mcppkg.App) http.Handler {
 		}
 	})
 
+	mux.HandleFunc("/api/v1/rag-config/validate", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				validateRagConfig(app, w, r)
+			})).ServeHTTP(w, r)
+			return
+		}
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	})
+
 	// Knowledge base API
 	mux.HandleFunc("/api/v1/documents", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {

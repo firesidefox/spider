@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	mcppkg "github.com/spiderai/spider/internal/mcp"
+	"github.com/spiderai/spider/internal/rag"
 	"github.com/spiderai/spider/internal/store"
 )
 
@@ -58,4 +59,34 @@ func putRagConfig(app *mcppkg.App, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	getRagConfig(app, w, r)
+}
+
+func validateRagConfig(app *mcppkg.App, w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Type    string `json:"type"`
+		BaseURL string `json:"base_url"`
+		APIKey  string `json:"api_key"`
+		Model   string `json:"model"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+	if req.Model == "" {
+		writeError(w, http.StatusBadRequest, "model is required")
+		return
+	}
+	if req.Type == "" {
+		req.Type = "openai"
+	}
+	embedder, err := rag.NewEmbedder(req.Type, req.APIKey, req.Model, req.BaseURL, 0)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if _, err := embedder.Embed(r.Context(), "test"); err != nil {
+		writeError(w, http.StatusUnprocessableEntity, "embedding request failed: "+err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
