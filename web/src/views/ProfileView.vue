@@ -245,20 +245,39 @@
 
           <!-- 权限模式 card -->
           <div class="edit-card">
-            <div class="edit-card-title">权限模式</div>
+            <div class="edit-card-title" style="display:flex;justify-content:space-between;align-items:center">
+              <span>权限模式</span>
+              <button v-if="!agentEditing" class="btn btn-sm" @click="agentEditing = true">编辑</button>
+              <div v-else style="display:flex;gap:8px">
+                <button class="btn btn-primary btn-sm" :disabled="agentSaving" @click="saveAgentSettings">
+                  {{ agentSaving ? '保存中…' : '保存' }}
+                </button>
+                <button class="btn btn-sm" @click="agentEditing = false">取消</button>
+              </div>
+            </div>
             <div class="block-grid">
               <div class="form-row">
                 <label>模式</label>
-                <select v-model="agentSettings.permission_mode" class="input">
-                  <option value="ask">询问模式 ask（默认）</option>
-                  <option value="auto">自动模式 auto</option>
-                  <option value="plan">计划模式 plan</option>
-                  <option value="readonly">只读模式 readonly</option>
-                </select>
+                <template v-if="agentEditing">
+                  <select v-model="agentSettings.permission_mode" class="input">
+                    <option value="ask">询问模式 ask（默认）</option>
+                    <option value="auto">自动模式 auto</option>
+                    <option value="plan">计划模式 plan</option>
+                    <option value="readonly">只读模式 readonly</option>
+                  </select>
+                </template>
+                <span v-else class="detail-value">
+                  <template v-if="agentSettings.permission_mode === 'ask'">询问模式 ask（默认）</template>
+                  <template v-else-if="agentSettings.permission_mode === 'auto'">自动模式 auto</template>
+                  <template v-else-if="agentSettings.permission_mode === 'plan'">计划模式 plan</template>
+                  <template v-else-if="agentSettings.permission_mode === 'readonly'">只读模式 readonly</template>
+                  <template v-else>{{ agentSettings.permission_mode }}</template>
+                </span>
               </div>
               <div class="form-row">
                 <label>审批超时（秒）</label>
-                <input v-model.number="agentSettings.approval_timeout" class="input" type="number" min="0" />
+                <input v-if="agentEditing" v-model.number="agentSettings.approval_timeout" class="input" type="number" min="0" />
+                <span v-else class="detail-value">{{ agentSettings.approval_timeout }}</span>
               </div>
             </div>
             <div class="mode-desc">
@@ -274,11 +293,6 @@
               <template v-else-if="agentSettings.permission_mode === 'readonly'">
                 <strong>只读模式 readonly</strong> — 只允许 L1 只读操作，其余全部拒绝。适合审计巡检。
               </template>
-            </div>
-            <div style="margin-top:16px">
-              <button class="btn btn-primary btn-sm" :disabled="agentSaving" @click="saveAgentSettings">
-                {{ agentSaving ? '保存中…' : '保存' }}
-              </button>
             </div>
           </div>
 
@@ -1018,6 +1032,7 @@ const showBuiltinRules = ref(false)
 const showAddRule = ref(false)
 const newRule = ref({ pattern: '', level: 'L3', description: '' })
 const agentSaving = ref(false)
+const agentEditing = ref(false)
 const agentError = ref('')
 
 async function loadAgentSettings() {
@@ -1051,6 +1066,7 @@ async function saveAgentSettings() {
     agentError.value = e.message
   }
   agentSaving.value = false
+  if (!agentError.value) agentEditing.value = false
 }
 
 async function addRule() {
