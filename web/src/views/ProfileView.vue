@@ -389,26 +389,45 @@
           <div class="edit-card">
             <div class="edit-card-title">Embedding 配置</div>
             <p class="dim" style="margin-bottom:16px;font-size:13px">
-              用于知识库文档向量化和语义检索，需要支持 OpenAI 兼容 embedding 接口的供应商。
-            </p>
+              用于知识库文档向量化和语义检索，需要支持 OpenAI 兼容 embedding 接口的供应商。</p>
             <div class="block-grid">
               <div class="form-row">
                 <label>请求地址</label>
-                <input v-model="ragConfigForm.base_url" class="input" placeholder="留空使用 https://api.openai.com" />
-              </div>
-              <div class="form-row">
-                <label>模型</label>
-                <input v-model="ragConfigForm.model" class="input" placeholder="如 text-embedding-3-small" />
+                <div class="combobox-wrap">
+                  <input v-model="ragConfigForm.base_url" class="input" placeholder="如 https://api.openai.com/v1"
+                    list="provider-urls" @change="onBaseUrlChange" @input="onBaseUrlInput" />
+                  <datalist id="provider-urls">
+                    <option v-for="p in kbProviders" :key="p.id" :value="p.base_url">{{ p.name }}</option>
+                  </datalist>
+                </div>
               </div>
               <div class="form-row">
                 <label>API Key</label>
-                <input
-                  v-model="ragConfigForm.api_key"
-                  class="input"
-                  type="password"
-                  :placeholder="ragConfig.api_key_set ? '已设置，留空保留原值' : '输入 API Key'"
-                />
+                <input v-model="ragConfigForm.api_key" class="input" type="password"
+                  :placeholder="ragConfig.api_key_set ? '已设置，留空保留原值' : '输入 API Key'" />
               </div>
+              <div class="form-row">
+                <label>模型</label>
+                <div style="display:flex;gap:8px;flex:1">
+                  <input v-model="ragConfigForm.model" class="input" placeholder="如 text-embedding-3-small"
+                    list="embedding-models" style="flex:1" />
+                  <datalist id="embedding-models">
+                    <option v-for="m in kbModelOptions" :key="m" :value="m" />
+                  </datalist>
+                  <button class="btn btn-sm" :disabled="!kbSelectedProviderId || kbFetchingModels"
+                    @click="fetchEmbeddingModels">
+                    {{ kbFetchingModels ? '获取中…' : '获取模型' }}
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div v-if="kbFetchModelsError" class="err" style="margin-top:6px;font-size:13px">{{ kbFetchModelsError }}</div>
+            <div style="margin-top:12px">
+              <button class="btn btn-sm" :disabled="kbValidating" @click="validateRagConfig">
+                {{ kbValidating ? '验证中…' : '验证' }}
+              </button>
+              <span v-if="kbValidateResult === 'ok'" style="margin-left:10px;font-size:13px;color:var(--green)">✓ 配置有效</span>
+              <span v-else-if="kbValidateResult === 'error'" style="margin-left:10px;font-size:13px;color:var(--red)">{{ kbValidateError }}</span>
             </div>
             <div v-if="ragConfigSaveError" class="err" style="margin-top:8px;font-size:13px">{{ ragConfigSaveError }}</div>
             <div v-if="ragConfigOk" style="margin-top:8px;font-size:13px;color:var(--green)">已保存 ✓</div>
@@ -710,6 +729,7 @@ function toggleLog(id: string) {
 interface ProviderModel { model_id: string; display_name: string }
 interface Provider {
   id: string; name: string; type: string; base_url: string
+  api_key: string
   selected_model: string; is_active: boolean
   models: ProviderModel[]
   created_at: string; updated_at: string
@@ -853,18 +873,108 @@ const ragConfigSaveError = ref('')
 const ragConfigOk = ref(false)
 let ragConfigLoaded = false
 
+// kb combobox state
+const kbProviders = ref<Provider[]>([])
+const kbSelectedProviderId = ref('')
+const kbModelOptions = ref<string[]>([])
+const kbFetchingModels = ref(false)
+const kbFetchModelsError = ref('')
+const kbValidating = ref(false)
+const kbValidateResult = ref<'ok' | 'error' | ''>('')
+const kbValidateError = ref('')
+
 async function loadRagConfig() {
   if (ragConfigLoaded) return
   ragConfigLoaded = true
   ragConfigError.value = ''
   try {
-    const res = await fetch('/api/v1/rag-config', { headers: authHeaders() })
-    if (!res.ok) return
-    const data = await res.json()
-    ragConfig.value = data
-    ragConfigForm.value = { base_url: data.base_url ?? '', model: data.model ?? '', api_key: '' }
+    const [ragRes, provRes] = await Promise.all([
+      fetch('/api/v1/rag-config', { headers: authHeaders() }),
+      fetch('/api/v1/providers', { headers: authHeaders() }),
+    ])
+    if (ragRes.ok) {
+      const data = await ragRes.json()
+      ragConfig.value = data
+      ragConfigForm.value = { base_url: data.base_url ?? '', model: data.model ?? '', api_key: '' }
+    }
+    if (provRes.ok) {
+      kbProviders.value = await provRes.json()
+    }
   } catch (e: any) {
     ragConfigError.value = e.message
+  }
+}
+
+function onBaseUrlChange() {
+  const url = ragConfigForm.value.base_url
+  const match = kbProviders.value.find(p => p.base_url === url)
+  if (match) {
+    kbSelectedProviderId.value = match.id
+    if (match.api_key) ragConfigForm.value.api_key = match.api_key
+    kbModelOptions.value = match.models.map(m => m.model_id)
+  }
+}
+
+function onBaseUrlInput() {
+  const url = ragConfigForm.value.base_url
+  const match = kbProviders.value.find(p => p.base_url === url)
+  if (match) {
+    kbSelectedProviderId.value = match.id
+    if (match.api_key) ragConfigForm.value.api_key = match.api_key
+  } else {
+    kbSelectedProviderId.value = ''
+    kbModelOptions.value = []
+  }
+}
+
+async function fetchEmbeddingModels() {
+  if (!kbSelectedProviderId.value) return
+  kbFetchingModels.value = true
+  kbFetchModelsError.value = ''
+  try {
+    const res = await fetch(`/api/v1/providers/${kbSelectedProviderId.value}/models`, {
+      headers: authHeaders(),
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      kbFetchModelsError.value = err.error || '获取模型失败'
+      return
+    }
+    const models: ProviderModel[] = await res.json()
+    kbModelOptions.value = models.map(m => m.model_id)
+  } catch (e: any) {
+    kbFetchModelsError.value = e.message
+  } finally {
+    kbFetchingModels.value = false
+  }
+}
+
+async function validateRagConfig() {
+  kbValidating.value = true
+  kbValidateResult.value = ''
+  kbValidateError.value = ''
+  try {
+    const res = await fetch('/api/v1/rag-config/validate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({
+        base_url: ragConfigForm.value.base_url,
+        api_key: ragConfigForm.value.api_key,
+        model: ragConfigForm.value.model,
+      }),
+    })
+    if (res.ok) {
+      kbValidateResult.value = 'ok'
+    } else {
+      const err = await res.json().catch(() => ({}))
+      kbValidateResult.value = 'error'
+      kbValidateError.value = err.error || '验证失败'
+    }
+  } catch (e: any) {
+    kbValidateResult.value = 'error'
+    kbValidateError.value = e.message
+  } finally {
+    kbValidating.value = false
   }
 }
 
