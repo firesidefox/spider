@@ -7,8 +7,8 @@ import (
 func TestSearchDocsTool_Metadata(t *testing.T) {
 	tool := NewSearchDocsTool(nil)
 
-	if tool.Name() != "search_docs" {
-		t.Errorf("got name %q, want %q", tool.Name(), "search_docs")
+	if tool.Name() != "SearchDocs" {
+		t.Errorf("got name %q, want %q", tool.Name(), "SearchDocs")
 	}
 	if tool.Description() == "" {
 		t.Error("description must not be empty")
@@ -40,8 +40,8 @@ func TestSearchDocsTool_ImplementsTool(t *testing.T) {
 func TestCallRESTAPITool_Metadata(t *testing.T) {
 	tool := NewCallRESTAPITool()
 
-	if tool.Name() != "call_rest_api" {
-		t.Errorf("got name %q, want %q", tool.Name(), "call_rest_api")
+	if tool.Name() != "CallAPI" {
+		t.Errorf("got name %q, want %q", tool.Name(), "CallAPI")
 	}
 	if tool.Description() == "" {
 		t.Error("description must not be empty")

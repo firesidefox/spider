@@ -17,7 +17,7 @@ func NewGetDeviceInfoTool(hosts *store.HostStore) *GetDeviceInfoTool {
 }
 
 func (t *GetDeviceInfoTool) DefaultRiskLevel() RiskLevel { return RiskL1 }
-func (t *GetDeviceInfoTool) Name() string                 { return "get_device_info" }
+func (t *GetDeviceInfoTool) Name() string                 { return "GetHost" }
 
 func (t *GetDeviceInfoTool) Description() string {
 	return "Get device information by host ID or name. Read-only. No side effects. Use freely in Explore phase."

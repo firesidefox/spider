@@ -12,8 +12,8 @@ func TestGetDeviceInfoTool_Interface(t *testing.T) {
 func TestGetDeviceInfoTool_Metadata(t *testing.T) {
 	tool := NewGetDeviceInfoTool(nil)
 
-	if tool.Name() != "get_device_info" {
-		t.Errorf("got name %q, want %q", tool.Name(), "get_device_info")
+	if tool.Name() != "GetHost" {
+		t.Errorf("got name %q, want %q", tool.Name(), "GetHost")
 	}
 	if tool.Description() == "" {
 		t.Error("description should not be empty")

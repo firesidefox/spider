@@ -22,7 +22,7 @@ func NewVerifyTool(hosts *store.HostStore, sshPool *ssh.Pool, sshKeys *store.SSH
 }
 
 func (t *VerifyTool) DefaultRiskLevel() RiskLevel { return RiskL1 }
-func (t *VerifyTool) Name() string                  { return "verify" }
+func (t *VerifyTool) Name() string                  { return "Verify" }
 func (t *VerifyTool) Description() string {
 	return "Verify conditions on remote hosts with retry polling. Read-only. No side effects. Use freely in Explore phase."
 }

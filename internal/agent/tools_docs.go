@@ -17,7 +17,7 @@ func NewSearchDocsTool(ragStore *rag.Store) *SearchDocsTool {
 }
 
 func (t *SearchDocsTool) DefaultRiskLevel() RiskLevel { return RiskL1 }
-func (t *SearchDocsTool) Name() string                  { return "search_docs" }
+func (t *SearchDocsTool) Name() string                  { return "SearchDocs" }
 
 func (t *SearchDocsTool) Description() string {
 	return "Search documentation for CLI commands, API references, and troubleshooting guides. Read-only. No side effects. Use freely in Explore phase."

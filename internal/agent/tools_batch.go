@@ -23,7 +23,7 @@ func NewBatchExecuteTool(hosts *store.HostStore, sshPool *ssh.Pool, logs *store.
 }
 
 func (t *BatchExecuteTool) DefaultRiskLevel() RiskLevel { return RiskL3 }
-func (t *BatchExecuteTool) Name() string                  { return "batch_execute" }
+func (t *BatchExecuteTool) Name() string                  { return "RunCommandBatch" }
 func (t *BatchExecuteTool) Description() string {
 	return `Execute a CLI command on multiple hosts in parallel. Has side effects. Use only after confirming intent in Plan phase.
 Risk depends on the command:

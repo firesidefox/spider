@@ -13,7 +13,7 @@ func TestMessageStore_SaveAndList(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Save: %v", err)
 	}
-	err = ms.Save(conv.ID, "assistant", `{"type":"text","text":"hi"}`, `[{"id":"t1","name":"execute_cli","duration_ms":100}]`)
+	err = ms.Save(conv.ID, "assistant", `{"type":"text","text":"hi"}`, `[{"id":"t1","name":"RunCommand","duration_ms":100}]`)
 	if err != nil {
 		t.Fatalf("Save: %v", err)
 	}

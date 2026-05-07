@@ -8,7 +8,7 @@ import (
 
 func TestBatchExecuteTool_Interface(t *testing.T) {
 	tool := NewBatchExecuteTool(nil, nil, nil, nil)
-	if tool.Name() != "batch_execute" {
+	if tool.Name() != "RunCommandBatch" {
 		t.Errorf("got name %q, want batch_execute", tool.Name())
 	}
 	if tool.Description() == "" {
@@ -31,7 +31,7 @@ func TestBatchExecuteTool_Interface(t *testing.T) {
 
 func TestVerifyTool_Interface(t *testing.T) {
 	tool := NewVerifyTool(nil, nil, nil)
-	if tool.Name() != "verify" {
+	if tool.Name() != "Verify" {
 		t.Errorf("got name %q, want verify", tool.Name())
 	}
 	if tool.Description() == "" {
