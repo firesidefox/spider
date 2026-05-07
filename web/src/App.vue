@@ -6,6 +6,7 @@
         <RouterLink to="/hosts" class="nav-item">主机管理</RouterLink>
         <RouterLink to="/exec" class="nav-item">命令执行</RouterLink>
         <RouterLink to="/chat" class="nav-item">智能运维</RouterLink>
+        <RouterLink to="/knowledge" class="nav-item">知识库</RouterLink>
         <RouterLink to="/audit" class="nav-item">审计</RouterLink>
         <RouterLink to="/profile" class="nav-item">个人设置</RouterLink>
       </nav>
@@ -22,14 +23,16 @@
       </button>
     </header>
     <main class="main">
-      <RouterView />
+      <KeepAlive include="ChatView">
+        <RouterView />
+      </KeepAlive>
     </main>
 
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, watchEffect, provide, onMounted, onUnmounted } from 'vue'
+import { ref, watchEffect, provide, onMounted, onUnmounted, KeepAlive } from 'vue'
 import { themes, getSavedTheme, saveTheme, type Theme } from './theme'
 
 const theme = ref<Theme>(getSavedTheme())
