@@ -24,7 +24,12 @@ func NewBatchExecuteTool(hosts *store.HostStore, sshPool *ssh.Pool, logs *store.
 
 func (t *BatchExecuteTool) DefaultRiskLevel() RiskLevel { return RiskL3 }
 func (t *BatchExecuteTool) Name() string                  { return "batch_execute" }
-func (t *BatchExecuteTool) Description() string { return "Execute a CLI command on multiple hosts in parallel" }
+func (t *BatchExecuteTool) Description() string {
+	return `Execute a CLI command on multiple hosts in parallel. Has side effects. Use only after confirming intent in Plan phase.
+Risk depends on the command:
+- Read-only commands (ls, cat, grep, ps, df, free, uname, systemctl status): safe, can use in Explore phase
+- State-changing commands (rm, kill, systemctl start|stop|restart, apt, yum, chmod, chown): use only in Act phase`
+}
 
 func (t *BatchExecuteTool) InputSchema() map[string]any {
 	return map[string]any{

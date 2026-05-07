@@ -238,3 +238,17 @@ func TestReadOnlyToolDescriptionsContainExploreHint(t *testing.T) {
 	}
 }
 
+func TestActToolDescriptionsContainSideEffectHint(t *testing.T) {
+	tools := []Tool{
+		NewExecuteCLITool(nil, nil, nil, nil),
+		NewBatchExecuteTool(nil, nil, nil, nil),
+		NewCallRESTAPITool(),
+	}
+	for _, tool := range tools {
+		desc := tool.Description()
+		if !strings.Contains(desc, "side effects") {
+			t.Errorf("tool %q description should contain 'side effects', got: %q", tool.Name(), desc)
+		}
+	}
+}
+
