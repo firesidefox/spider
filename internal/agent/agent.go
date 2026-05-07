@@ -13,6 +13,16 @@ import (
 	"github.com/spiderai/spider/internal/permission"
 )
 
+const epaSystemPromptPrefix = `## 行为约束
+
+按以下顺序处理任务：
+
+Explore：先用只读工具收集信息，在没有充分了解现状之前不执行有副作用的操作。
+Plan：基于探索结果，在内部推理出完整执行步骤，明确每步目的和预期结果。
+Act：按计划执行，每步完成后验证结果再继续；遇到意外重新进入 Explore，不盲目继续。
+
+`
+
 type EventType string
 
 const (
@@ -72,7 +82,7 @@ func NewAgent(cfg AgentConfig) *Agent {
 		registry:     cfg.Registry,
 		hooks:        cfg.Hooks,
 		msgStore:     cfg.MsgStore,
-		systemPrompt: cfg.SystemPrompt,
+		systemPrompt: epaSystemPromptPrefix + cfg.SystemPrompt,
 		maxTurns:     maxTurns,
 	}
 }
@@ -151,6 +161,8 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 					json.Unmarshal([]byte(currentToolInput), &input) //nolint:errcheck
 					toolCalls[len(toolCalls)-1].Input = input
 					currentToolInput = ""
+					tc := toolCalls[len(toolCalls)-1]
+					events <- Event{Type: EventToolStart, Content: map[string]any{"id": tc.ID, "name": tc.Name, "input": tc.Input}}
 				}
 			}
 
@@ -162,7 +174,6 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 				case "tool_start":
 					finishToolInput()
 					toolCalls = append(toolCalls, *ev.ToolCall)
-					events <- Event{Type: EventToolStart, Content: map[string]any{"id": ev.ToolCall.ID, "name": ev.ToolCall.Name}}
 				case "tool_input_delta":
 					currentToolInput += ev.Text
 				case "message_stop":
@@ -233,7 +244,7 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 				a.hooks.RunAfter(tc.Name, tc.Input, result)
 
 				events <- Event{Type: EventToolResult, Content: map[string]any{
-					"id": tc.ID, "tool": tc.Name, "result": result.Content, "is_error": result.IsError, "duration_ms": durationMs,
+					"id": tc.ID, "tool": tc.Name, "input": tc.Input, "result": result.Content, "is_error": result.IsError, "duration_ms": durationMs,
 				}}
 				history = append(history, llm.Message{Role: llm.RoleUser, Content: result.Content})
 				tcRecords = append(tcRecords, ToolCallRecord{

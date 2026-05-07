@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/spiderai/spider/internal/llm"
@@ -205,5 +206,26 @@ func TestMaxTurnsExceeded(t *testing.T) {
 	}
 }
 
+func TestNewAgentPrependsEPAPrefix(t *testing.T) {
+	cfg := AgentConfig{
+		LLMClient:    nil,
+		Registry:     NewToolRegistry(),
+		Hooks:        NewHookChain(),
+		MsgStore:     nil,
+		SystemPrompt: "你是运维助手。",
+	}
+	a := NewAgent(cfg)
+	if !strings.HasPrefix(a.systemPrompt, "## 行为约束") {
+		t.Errorf("systemPrompt should start with EPA prefix, got: %q", a.systemPrompt[:min(50, len(a.systemPrompt))])
+	}
+	if !strings.Contains(a.systemPrompt, "你是运维助手。") {
+		t.Error("systemPrompt should contain original prompt")
+	}
+}
 
-
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
