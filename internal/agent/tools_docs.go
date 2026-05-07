@@ -20,7 +20,7 @@ func (t *SearchDocsTool) DefaultRiskLevel() RiskLevel { return RiskL1 }
 func (t *SearchDocsTool) Name() string                  { return "search_docs" }
 
 func (t *SearchDocsTool) Description() string {
-	return "Search documentation for CLI commands, API references, and troubleshooting guides"
+	return "Search documentation for CLI commands, API references, and troubleshooting guides. Read-only. No side effects. Use freely in Explore phase."
 }
 
 func (t *SearchDocsTool) InputSchema() map[string]any {
@@ -29,7 +29,7 @@ func (t *SearchDocsTool) InputSchema() map[string]any {
 		"properties": map[string]any{
 			"query":    map[string]any{"type": "string", "description": "Search query"},
 			"vendor":   map[string]any{"type": "string", "description": "Device vendor (e.g. huawei, cisco)"},
-			"cli_type": map[string]any{"type": "string", "description": "CLI type (e.g. vrp, ios)"},
+			"cli_type": map[string]any{"type": "string", "description": "CLI type (e.g. vrp, ios, junos)"},
 		},
 		"required": []string{"query"},
 	}
@@ -43,23 +43,23 @@ func (t *SearchDocsTool) Execute(ctx context.Context, input map[string]any) (*To
 	vendor, _ := input["vendor"].(string)
 	cliType, _ := input["cli_type"].(string)
 
-	docs, err := t.ragStore.Search(ctx, query, vendor, cliType, 5)
+	docs, err := t.ragStore.SearchWithCLIType(ctx, query, vendor, cliType, 5)
 	if err != nil {
 		return &ToolResult{Content: fmt.Sprintf("search error: %v", err), IsError: true, RiskLevel: RiskL1}, nil
 	}
 
 	type result struct {
-		Title      string `json:"title"`
-		Content    string `json:"content"`
-		DocType    string `json:"doc_type"`
-		SourceFile string `json:"source_file"`
+		Title      string   `json:"title"`
+		Content    string   `json:"content"`
+		Tags       []string `json:"tags"`
+		SourceFile string   `json:"source_file"`
 	}
 	results := make([]result, 0, len(docs))
 	for _, d := range docs {
 		results = append(results, result{
 			Title:      d.Title,
 			Content:    d.Content,
-			DocType:    d.DocType,
+			Tags:       d.Tags,
 			SourceFile: d.SourceFile,
 		})
 	}

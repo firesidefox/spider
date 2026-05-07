@@ -20,7 +20,7 @@ func (t *GetDeviceInfoTool) DefaultRiskLevel() RiskLevel { return RiskL1 }
 func (t *GetDeviceInfoTool) Name() string                 { return "get_device_info" }
 
 func (t *GetDeviceInfoTool) Description() string {
-	return "Get device information by host ID or name"
+	return "Get device information by host ID or name. Read-only. No side effects. Use freely in Explore phase."
 }
 
 func (t *GetDeviceInfoTool) InputSchema() map[string]any {

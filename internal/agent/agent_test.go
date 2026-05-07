@@ -223,3 +223,18 @@ func TestNewAgentPrependsEPAPrefix(t *testing.T) {
 	}
 }
 
+func TestReadOnlyToolDescriptionsContainExploreHint(t *testing.T) {
+	tools := []Tool{
+		NewListDevicesTool(nil),
+		NewGetDeviceInfoTool(nil),
+		NewSearchDocsTool(nil),
+		NewVerifyTool(nil, nil, nil),
+	}
+	for _, tool := range tools {
+		desc := tool.Description()
+		if !strings.Contains(desc, "Read-only") {
+			t.Errorf("tool %q description should contain 'Read-only', got: %q", tool.Name(), desc)
+		}
+	}
+}
+
