@@ -41,10 +41,10 @@ func (s *ConversationStore) Create(userID, title string) (*models.Conversation, 
 
 func (s *ConversationStore) GetByID(id string) (*models.Conversation, error) {
 	row := s.db.QueryRow(
-		"SELECT id, user_id, title, permission_mode, created_at, updated_at FROM conversations WHERE id = ?", id,
+		"SELECT id, user_id, title, status, permission_mode, created_at, updated_at FROM conversations WHERE id = ?", id,
 	)
 	var c models.Conversation
-	err := row.Scan(&c.ID, &c.UserID, &c.Title, &c.PermissionMode, &c.CreatedAt, &c.UpdatedAt)
+	err := row.Scan(&c.ID, &c.UserID, &c.Title, &c.Status, &c.PermissionMode, &c.CreatedAt, &c.UpdatedAt)
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("conversation not found: %s", id)
 	}
@@ -56,7 +56,7 @@ func (s *ConversationStore) GetByID(id string) (*models.Conversation, error) {
 
 func (s *ConversationStore) ListByUser(userID string) ([]*models.Conversation, error) {
 	rows, err := s.db.Query(
-		"SELECT id, user_id, title, permission_mode, created_at, updated_at FROM conversations WHERE user_id = ? ORDER BY updated_at DESC",
+		"SELECT id, user_id, title, status, permission_mode, created_at, updated_at FROM conversations WHERE user_id = ? ORDER BY updated_at DESC",
 		userID,
 	)
 	if err != nil {
@@ -66,7 +66,7 @@ func (s *ConversationStore) ListByUser(userID string) ([]*models.Conversation, e
 	var list []*models.Conversation
 	for rows.Next() {
 		var c models.Conversation
-		if err := rows.Scan(&c.ID, &c.UserID, &c.Title, &c.PermissionMode, &c.CreatedAt, &c.UpdatedAt); err != nil {
+		if err := rows.Scan(&c.ID, &c.UserID, &c.Title, &c.Status, &c.PermissionMode, &c.CreatedAt, &c.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("scan conversation row: %w", err)
 		}
 		list = append(list, &c)
@@ -91,6 +91,14 @@ func (s *ConversationStore) UpdatePermissionMode(id, mode string) error {
 	_, err := s.db.Exec(
 		`UPDATE conversations SET permission_mode = ?, updated_at = ? WHERE id = ?`,
 		mode, time.Now().UTC(), id,
+	)
+	return err
+}
+
+func (s *ConversationStore) SetStatus(id, status string) error {
+	_, err := s.db.Exec(
+		"UPDATE conversations SET status = ?, updated_at = ? WHERE id = ?",
+		status, time.Now().UTC(), id,
 	)
 	return err
 }

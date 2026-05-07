@@ -55,6 +55,33 @@ func TestConversationStore_ListByUser(t *testing.T) {
 	}
 }
 
+func TestConversationStore_SetStatus(t *testing.T) {
+	database := setupTestDB(t)
+	s := NewConversationStore(database)
+
+	conv, err := s.Create("user-1", "test")
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	got, err := s.GetByID(conv.ID)
+	if err != nil {
+		t.Fatalf("GetByID: %v", err)
+	}
+	if got.Status != "idle" {
+		t.Errorf("default Status = %q, want idle", got.Status)
+	}
+	if err := s.SetStatus(conv.ID, "processing"); err != nil {
+		t.Fatalf("SetStatus: %v", err)
+	}
+	got, err = s.GetByID(conv.ID)
+	if err != nil {
+		t.Fatalf("GetByID after SetStatus: %v", err)
+	}
+	if got.Status != "processing" {
+		t.Errorf("Status = %q, want processing", got.Status)
+	}
+}
+
 func TestConversationStore_Delete(t *testing.T) {
 	database := setupTestDB(t)
 	s := NewConversationStore(database)

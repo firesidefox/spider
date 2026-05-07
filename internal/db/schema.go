@@ -217,5 +217,9 @@ func migrate(db *sql.DB) error {
 	)`); err != nil {
 		return err
 	}
+	db.Exec("ALTER TABLE rag_config ADD COLUMN name TEXT NOT NULL DEFAULT ''")
+	db.Exec("ALTER TABLE rag_config ADD COLUMN cached_models TEXT NOT NULL DEFAULT ''")
+	db.Exec("ALTER TABLE rag_config ADD COLUMN validated_at TEXT NOT NULL DEFAULT ''")
+	db.Exec("ALTER TABLE conversations ADD COLUMN status TEXT NOT NULL DEFAULT 'idle'")
 	return nil
 }
