@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -146,7 +147,7 @@ func chatSendMessage(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id
 	defer app.RemoveChatWaiter(id)
 
 	content := req.Content
-	if app.RagStore != nil {
+	if rs, rsErr := ragStore(app); rsErr == nil {
 		groupLookup := func(name string) *int {
 			if name == "" {
 				return nil
@@ -165,14 +166,16 @@ func chatSendMessage(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id
 			return doc
 		}
 		search := func(query string, groupID *int) []*models.Document {
-			docs, _ := app.RagStore.SearchByGroup(r.Context(), query, groupID, 3)
+			docs, _ := rs.SearchByGroup(r.Context(), query, groupID, 3)
 			return docs
 		}
 		content = expandKBRefs(content, groupLookup, docLookup, search)
 	}
 
-	events, err := a.Run(r.Context(), id, content, waiter)
+	app.ConvStore.SetStatus(id, "processing") //nolint:errcheck
+	events, err := a.Run(context.Background(), id, content, waiter)
 	if err != nil {
+		app.ConvStore.SetStatus(id, "idle") //nolint:errcheck
 		writeError(w, 500, err.Error())
 		return
 	}
@@ -189,6 +192,7 @@ func chatSendMessage(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id
 			flusher.Flush()
 		}
 	}
+	app.ConvStore.SetStatus(id, "idle") //nolint:errcheck
 }
 
 func chatConfirm(app *mcppkg.App, w http.ResponseWriter, r *http.Request, convID, requestID string) {
