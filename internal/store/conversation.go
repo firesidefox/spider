@@ -26,6 +26,7 @@ func (s *ConversationStore) Create(userID, title string) (*models.Conversation, 
 		ID:        uuid.New().String(),
 		UserID:    userID,
 		Title:     title,
+		Status:    "idle",
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
