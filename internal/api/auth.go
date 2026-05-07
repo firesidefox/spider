@@ -36,6 +36,18 @@ func loginHandler(app *mcppkg.App) http.HandlerFunc {
 			return
 		}
 		_ = app.UserStore.UpdateLastLogin(user.ID)
+
+		// Set httpOnly cookie for web frontend (EventSource support)
+		http.SetCookie(w, &http.Cookie{
+			Name:     "spider_token",
+			Value:    token,
+			Path:     "/",
+			HttpOnly: true,
+			Secure:   r.TLS != nil,
+			SameSite: http.SameSiteStrictMode,
+			MaxAge:   86400, // 24h
+		})
+
 		writeJSON(w, http.StatusOK, map[string]any{
 			"token":      token,
 			"expires_at": time.Now().Add(24 * time.Hour).Format(time.RFC3339),

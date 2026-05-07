@@ -49,7 +49,7 @@ func AuthMiddleware(
 				return
 			}
 
-			token := extractBearer(r)
+			token := extractToken(r)
 			if token == "" {
 				http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 				return
@@ -94,6 +94,17 @@ func RequireRole(roles ...models.Role) func(http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+// extractToken pulls token from cookie first, then falls back to Authorization header.
+// This supports both web frontend (cookie) and MCP clients (header).
+func extractToken(r *http.Request) string {
+	// 1. Try cookie first (web frontend)
+	if cookie, err := r.Cookie("spider_token"); err == nil {
+		return cookie.Value
+	}
+	// 2. Fallback to Authorization header (MCP clients, API tokens)
+	return extractBearer(r)
 }
 
 // extractBearer pulls the token from the Authorization: Bearer <token> header.

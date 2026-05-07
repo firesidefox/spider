@@ -1,14 +1,14 @@
 <script setup lang="ts">
 defineOptions({ name: 'ChatView' })
-import { ref, onActivated, onDeactivated, nextTick, watch, computed } from 'vue'
+import { ref, onMounted, onActivated, onDeactivated, onUnmounted, nextTick, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ChatMessage from '../components/ChatMessage.vue'
 import type { MessageBlock, ToolCallBlock } from '../components/ChatMessage.vue'
 import TargetPanel from '../components/TargetPanel.vue'
 import type { DeviceStatus } from '../components/TargetPanel.vue'
 import {
-  sendMessage, createConversation, listConversations,
-  getConversation, deleteConversation, confirmAction,
+  sendMessage, subscribeConversation, createConversation, listConversations,
+  getConversation, deleteConversation, confirmAction, cancelConversation,
   getActiveModel, setActiveModel, updateTitle,
   type Conversation, type ChatMessage as ChatMsg, type ChatEvent,
 } from '../api/chat'
@@ -57,28 +57,33 @@ function buildDisplayMessages(msgs: ChatMsg[]): DisplayMessage[] {
   })
 }
 
-let pollTimer: ReturnType<typeof setTimeout> | null = null
+let pollTimers: Map<string, ReturnType<typeof setTimeout>> = new Map()
+
+function clearPollTimer(convId: string) {
+  const t = pollTimers.get(convId)
+  if (t !== undefined) { clearTimeout(t); pollTimers.delete(convId) }
+}
 
 async function pollUntilIdle(convId: string) {
   const check = async () => {
     try {
       const data = await getConversation(convId)
       if (data.conversation.status === 'idle') {
+        pollTimers.delete(convId)
         messagesMap.value[convId] = buildDisplayMessages(data.messages)
         if (activeConvId.value === convId) {
           isStreaming.value = false
           await nextTick()
           scrollToBottom()
-          loadConversations()
         }
       } else {
-        pollTimer = setTimeout(check, 2000)
+        pollTimers.set(convId, setTimeout(check, 2000))
       }
     } catch {
-      pollTimer = setTimeout(check, 2000)
+      pollTimers.set(convId, setTimeout(check, 2000))
     }
   }
-  pollTimer = setTimeout(check, 2000)
+  pollTimers.set(convId, setTimeout(check, 2000))
 }
 
 const inputText = ref('')
@@ -86,6 +91,8 @@ const isStreaming = ref(false)
 const messagesRef = ref<HTMLElement | null>(null)
 const devices = ref<DeviceStatus[]>([])
 let abortCtrl: AbortController | null = null
+// Per-conversation EventSource subscriptions
+const convSubscriptions = new Map<string, () => void>()
 
 const sidebarOpen = ref(localStorage.getItem('spider-sidebar') !== 'closed')
 const targetWidth = ref(parseInt(localStorage.getItem('spider-target-width') || '280'))
@@ -182,15 +189,31 @@ async function loadConversations() {
 }
 
 async function selectConversation(id: string) {
+  clearPollTimer(id)
   const data = await getConversation(id)
   activeConvId.value = id
   localStorage.setItem('spider-last-conv', id)
-  messagesMap.value[id] = buildDisplayMessages(data.messages)
-  isStreaming.value = data.conversation.status === 'processing'
   router.replace(`/chat/${id}`)
-  if (data.conversation.status === 'processing') {
-    pollUntilIdle(id)
+
+  if (data.conversation.status === 'processing' && messagesMap.value[id]) {
+    // SSE is still writing into messagesMap[id] — don't overwrite it.
+    isStreaming.value = true
+  } else {
+    messagesMap.value[id] = buildDisplayMessages(data.messages)
+    isStreaming.value = data.conversation.status === 'processing'
+    if (data.conversation.status === 'processing') {
+      pollUntilIdle(id)
+    }
   }
+
+  // Open persistent EventSource for this conversation (if not already open)
+  // Pass lastEventId to skip messages already loaded from DB
+  if (!convSubscriptions.has(id)) {
+    const lastEventId = data.messages.length - 1
+    const unsub = subscribeConversation(id, (event) => handleConvEvent(id, event), lastEventId)
+    convSubscriptions.set(id, unsub)
+  }
+
   await nextTick()
   scrollToBottom()
 }
@@ -209,11 +232,120 @@ function scrollToBottom() {
   }
 }
 
+async function cancelSend() {
+  const convId = activeConvId.value
+  if (!convId) return
+  abortCtrl?.abort()
+  abortCtrl = null
+  await cancelConversation(convId)
+  isStreaming.value = false
+  // Reload from DB to replace the truncated in-memory assistant message
+  const data = await getConversation(convId)
+  messagesMap.value[convId] = buildDisplayMessages(data.messages)
+  await nextTick()
+  scrollToBottom()
+}
+
+function handleConvEvent(convId: string, event: ChatEvent) {
+  const convMsgs = messagesMap.value[convId]
+  if (!convMsgs) return
+
+  // 'message' type = historical replay from GET /stream
+  if (event.type === 'message') {
+    const msg = event.content as ChatMsg
+    if (!msg || msg.role === 'user') return
+    // Only append if not already present (avoid duplicates on reconnect)
+    if (!convMsgs.find(m => m.id === msg.id)) {
+      convMsgs.push(...buildDisplayMessages([msg]))
+      if (activeConvId.value === convId) nextTick(() => scrollToBottom())
+    }
+    return
+  }
+
+  // Ensure there's a streaming assistant message to receive live events.
+  // Passive tabs (multi-tab sync) never call send(), so we create one on demand.
+  if (['text_delta', 'tool_start', 'confirm_required'].includes(event.type)) {
+    const last = convMsgs[convMsgs.length - 1]
+    if (!last || last.role !== 'assistant' || !last.isStreaming) {
+      const newMsg: DisplayMessage = { id: `a-${Date.now()}`, role: 'assistant', blocks: [], isStreaming: true }
+      convMsgs.push(newMsg)
+      if (activeConvId.value === convId) {
+        isStreaming.value = true
+        nextTick(() => scrollToBottom())
+      }
+    }
+  }
+
+  const last = convMsgs[convMsgs.length - 1]
+  if (!last || last.role !== 'assistant') return
+  const blocks = last.blocks
+
+  switch (event.type) {
+    case 'text_delta': {
+      const lastBlock = blocks[blocks.length - 1]
+      if (lastBlock?.type === 'text') {
+        lastBlock.content += event.content?.text || ''
+      } else {
+        blocks.push({ type: 'text', content: event.content?.text || '' })
+      }
+      break
+    }
+    case 'tool_start':
+      blocks.push({ type: 'tool', call: {
+        id: event.content?.id || `t-${Date.now()}`,
+        name: event.content?.name || 'unknown',
+        input: event.content?.input,
+      }})
+      break
+    case 'tool_result': {
+      const tb = blocks.find(b => b.type === 'tool' && b.call.id === event.content?.id) as { type: 'tool'; call: ToolCallBlock } | undefined
+      if (tb) {
+        tb.call.result = event.content?.result
+        tb.call.isError = event.content?.is_error
+        tb.call.durationMs = event.content?.duration_ms
+      }
+      break
+    }
+    case 'confirm_required':
+      last.confirm = {
+        requestId: event.content?.request_id || '',
+        tool: event.content?.tool || '',
+        input: event.content?.input || {},
+        riskLevel: event.content?.risk_level || 'moderate',
+      }
+      break
+    case 'error': {
+      const errText = `\n\n**Error:** ${event.content?.error || 'unknown error'}`
+      const lastBlk = last.blocks[last.blocks.length - 1]
+      if (lastBlk?.type === 'text') {
+        lastBlk.content += errText
+      } else {
+        last.blocks.push({ type: 'text', content: errText })
+      }
+      last.isStreaming = false
+      if (activeConvId.value === convId) {
+        isStreaming.value = false
+        nextTick(() => scrollToBottom())
+      }
+      break
+    }
+    case 'done':
+      last.isStreaming = false
+      if (activeConvId.value === convId) {
+        isStreaming.value = false
+        nextTick(() => scrollToBottom())
+      }
+      loadConversations()
+      break
+  }
+  if (activeConvId.value === convId) {
+    nextTick(() => scrollToBottom())
+  }
+}
+
 async function send() {
   const text = inputText.value.trim()
   if (!text || isStreaming.value) return
-
-  // Handle /model command
   if (text === '/model') {
     inputText.value = ''
     await handleModelCommand()
@@ -229,6 +361,13 @@ async function send() {
   const convId = activeConvId.value!
   const convMsgs = getOrInitMessages(convId)
 
+  // Ensure EventSource is subscribed for this conversation
+  if (!convSubscriptions.has(convId)) {
+    // New conversation: no history to replay, skip all (lastEventId = -1 means skip nothing but no replay needed)
+    const unsub = subscribeConversation(convId, (event) => handleConvEvent(convId, event), -1)
+    convSubscriptions.set(convId, unsub)
+  }
+
   const userMsg: DisplayMessage = {
     id: `u-${Date.now()}`, role: 'user', blocks: [{ type: 'text', content: text }],
   }
@@ -243,63 +382,7 @@ async function send() {
   await nextTick()
   scrollToBottom()
 
-  abortCtrl = sendMessage(convId, text, (event: ChatEvent) => {
-    const last = convMsgs[convMsgs.length - 1]
-    const blocks = last.blocks
-    switch (event.type) {
-      case 'text_delta': {
-        const lastBlock = blocks[blocks.length - 1]
-        if (lastBlock?.type === 'text') {
-          lastBlock.content += event.content?.text || ''
-        } else {
-          blocks.push({ type: 'text', content: event.content?.text || '' })
-        }
-        break
-      }
-      case 'tool_start':
-        blocks.push({ type: 'tool', call: {
-          id: event.content?.id || `t-${Date.now()}`,
-          name: event.content?.name || 'unknown',
-          input: event.content?.input,
-        }})
-        break
-      case 'tool_result': {
-        const tb = blocks.find(b => b.type === 'tool' && b.call.id === event.content?.id) as { type: 'tool'; call: ToolCallBlock } | undefined
-        if (tb) {
-          tb.call.result = event.content?.result
-          tb.call.isError = event.content?.is_error
-          tb.call.durationMs = event.content?.duration_ms
-        }
-        break
-      }
-      case 'confirm_required':
-        last.confirm = {
-          requestId: event.content?.request_id || '',
-          tool: event.content?.tool || '',
-          input: event.content?.input || {},
-          riskLevel: event.content?.risk_level || 'moderate',
-        }
-        break
-      case 'error': {
-        const errText = `\n\n**Error:** ${event.content?.error || 'unknown error'}`
-        const lastBlk = last.blocks[last.blocks.length - 1]
-        if (lastBlk?.type === 'text') {
-          lastBlk.content += errText
-        } else {
-          last.blocks.push({ type: 'text', content: errText })
-        }
-        last.isStreaming = false
-        if (activeConvId.value === convId) isStreaming.value = false
-        break
-      }
-      case 'done':
-        last.isStreaming = false
-        if (activeConvId.value === convId) isStreaming.value = false
-        loadConversations()
-        break
-    }
-    nextTick(() => scrollToBottom())
-  })
+  abortCtrl = sendMessage(convId, text)
 }
 
 async function handleModelCommand() {
@@ -526,11 +609,9 @@ function selectKbItem(item: DocumentGroup | KbDocument) {
   }
 }
 
-watch(() => messages.value.length, () => {
-  nextTick(() => scrollToBottom())
-})
+let initialized = false
 
-onActivated(async () => {
+async function initView() {
   await Promise.all([loadConversations(), loadDevices()])
   getActiveModel().then(m => { currentModelName.value = m.model })
   const paramId = route.params.id as string | undefined
@@ -550,12 +631,24 @@ onActivated(async () => {
     const data = await res.json()
     globalMode.value = data.permission_mode || 'ask'
   } catch (_) { /* use default */ }
+  initialized = true
+}
+
+onMounted(() => {
+  initView()
   document.addEventListener('click', closeModeDropdown)
 })
+onActivated(() => { if (initialized) initView() })
 
 onDeactivated(() => {
-  if (pollTimer) { clearTimeout(pollTimer); pollTimer = null }
+  pollTimers.forEach((t) => clearTimeout(t))
+  pollTimers.clear()
   document.removeEventListener('click', closeModeDropdown)
+})
+
+onUnmounted(() => {
+  convSubscriptions.forEach(unsub => unsub())
+  convSubscriptions.clear()
 })
 </script>
 
@@ -579,6 +672,7 @@ onDeactivated(() => {
                  @click.stop
                  @vue:mounted="($event: any) => $event.el.focus()" />
           <span v-else class="conv-item-title" @dblclick.stop="startEditConvTitle(c.id, c.title)">{{ c.title || '未命名对话' }}</span>
+          <span v-if="c.status === 'processing'" class="conv-processing-dot" title="处理中"></span>
           <button class="conv-del" @click.stop="handleDeleteConversation(c.id)">×</button>
         </div>
       </div>
@@ -664,9 +758,8 @@ onDeactivated(() => {
             rows="1"
           ></textarea>
         </div>
-        <button @click="send" :disabled="isStreaming || !inputText.trim()" class="send-btn">
-          {{ isStreaming ? '...' : '发送' }}
-        </button>
+        <button v-if="isStreaming" @click="cancelSend" class="send-btn cancel-btn">取消</button>
+        <button v-else @click="send" :disabled="!inputText.trim()" class="send-btn">发送</button>
       </div>
     </div>
 
@@ -744,6 +837,8 @@ onDeactivated(() => {
 .conv-item-input { flex: 1; background: var(--input-bg); border: 1px solid var(--primary); color: var(--text); font-family: 'SF Mono', monospace; font-size: 13px; padding: 2px 6px; border-radius: 4px; outline: none; }
 .conv-del { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 16px; padding: 0 4px; flex-shrink: 0; }
 .conv-del:hover { color: var(--red); }
+.conv-processing-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--primary); flex-shrink: 0; margin-right: 4px; animation: pulse-dot 1.2s ease-in-out infinite; }
+@keyframes pulse-dot { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(0.7); } }
 
 .chat-messages { flex: 1; overflow-y: auto; padding: 16px; font-family: 'SF Mono', 'Fira Code', monospace; }
 .empty-state { color: var(--muted); text-align: center; margin-top: 40%; font-size: 14px; }
@@ -767,6 +862,8 @@ onDeactivated(() => {
 .send-btn { background: var(--primary); color: #fff; border: none; padding: 8px 20px; border-radius: 6px; cursor: pointer; font-size: 13px; font-family: 'SF Mono', monospace; }
 .send-btn:hover:not(:disabled) { background: var(--primary-hover); }
 .send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.cancel-btn { background: var(--red, #e05252); }
+.cancel-btn:hover { background: #c94444; }
 
 .model-picker { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; margin: 0 16px 8px; padding: 12px; }
 .model-picker-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; color: var(--text); font-size: 13px; font-family: 'SF Mono', monospace; }

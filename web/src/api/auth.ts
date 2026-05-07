@@ -37,8 +37,9 @@ export async function getMe(): Promise<UserInfo> {
 }
 
 export function authHeaders(): Record<string, string> {
-  const token = localStorage.getItem('spider_token')
-  return token ? { Authorization: `Bearer ${token}` } : {}
+  // Cookie auto-sent by browser, no need for manual header
+  // Keep localStorage for token display/status only
+  return {}
 }
 
 export function getStoredToken(): string | null {

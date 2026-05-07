@@ -18,6 +18,7 @@ import (
 	"github.com/spiderai/spider/internal/auth"
 	"github.com/spiderai/spider/internal/config"
 	"github.com/spiderai/spider/internal/permission"
+	"github.com/spiderai/spider/internal/rag"
 	sshpkg "github.com/spiderai/spider/internal/ssh"
 	"github.com/spiderai/spider/internal/store"
 )
@@ -46,8 +47,24 @@ type App struct {
 	ApprovalManager *permission.ApprovalManager
 	PermissionMode  permission.Mode
 
+	ShutdownCtx context.Context
+
 	chatWaiters   map[string]*agent.ConfirmationWaiter
 	chatWaitersMu sync.Mutex
+
+	convCancels   map[string]context.CancelFunc
+	convCancelsMu sync.Mutex
+
+	sseClients   map[string][]chan []byte // convID -> SSE client channels
+	sseClientsMu sync.Mutex
+
+	ragStoreCached *ragStoreEntry
+	ragStoreMu     sync.Mutex
+}
+
+type ragStoreEntry struct {
+	cfgKey string // type+baseURL+model fingerprint to detect config changes
+	store  *rag.Store
 }
 
 // NewAgentFactory creates a fresh AgentFactory from current DB provider state.
@@ -62,6 +79,38 @@ func (a *App) NewAgentFactory() (*agent.Factory, error) {
 	f.Enforcer = a.Enforcer
 	f.PermissionMode = a.PermissionMode
 	return f, nil
+}
+
+// GetOrBuildRagStore returns a cached *rag.Store, rebuilding only when the
+// embedding config changes. This avoids creating a new http.Client per request.
+func (a *App) GetOrBuildRagStore() (*rag.Store, error) {
+	cfg, err := a.RagConfigStore.Get()
+	if err != nil {
+		return nil, err
+	}
+	if cfg == nil || cfg.Model == "" {
+		return nil, fmt.Errorf("embedding model not configured — please set it in Knowledge settings")
+	}
+	key := cfg.Type + "|" + cfg.BaseURL + "|" + cfg.Model + "|" + cfg.APIKey
+	a.ragStoreMu.Lock()
+	defer a.ragStoreMu.Unlock()
+	if a.ragStoreCached != nil && a.ragStoreCached.cfgKey == key {
+		return a.ragStoreCached.store, nil
+	}
+	embedder, err := rag.NewEmbedder(cfg.Type, cfg.APIKey, cfg.Model, cfg.BaseURL, 0)
+	if err != nil {
+		return nil, err
+	}
+	s := rag.NewStore(a.DB, a.DocStore, embedder)
+	a.ragStoreCached = &ragStoreEntry{cfgKey: key, store: s}
+	return s, nil
+}
+
+// InvalidateRagStore clears the cached rag.Store so the next call rebuilds it.
+func (a *App) InvalidateRagStore() {
+	a.ragStoreMu.Lock()
+	a.ragStoreCached = nil
+	a.ragStoreMu.Unlock()
 }
 
 func (a *App) StoreChatWaiter(convID string, w *agent.ConfirmationWaiter) {
@@ -83,6 +132,71 @@ func (a *App) RemoveChatWaiter(convID string) {
 	a.chatWaitersMu.Lock()
 	defer a.chatWaitersMu.Unlock()
 	delete(a.chatWaiters, convID)
+}
+
+func (a *App) StoreConvCancel(convID string, cancel context.CancelFunc) {
+	a.convCancelsMu.Lock()
+	defer a.convCancelsMu.Unlock()
+	if a.convCancels == nil {
+		a.convCancels = make(map[string]context.CancelFunc)
+	}
+	a.convCancels[convID] = cancel
+}
+
+func (a *App) CancelConv(convID string) bool {
+	a.convCancelsMu.Lock()
+	defer a.convCancelsMu.Unlock()
+	cancel, ok := a.convCancels[convID]
+	if ok {
+		cancel()
+		delete(a.convCancels, convID)
+	}
+	return ok
+}
+
+func (a *App) RemoveConvCancel(convID string) {
+	a.convCancelsMu.Lock()
+	defer a.convCancelsMu.Unlock()
+	delete(a.convCancels, convID)
+}
+
+// RegisterSSEClient registers a new SSE client channel for a conversation.
+func (a *App) RegisterSSEClient(convID string, ch chan []byte) {
+	a.sseClientsMu.Lock()
+	defer a.sseClientsMu.Unlock()
+	if a.sseClients == nil {
+		a.sseClients = make(map[string][]chan []byte)
+	}
+	a.sseClients[convID] = append(a.sseClients[convID], ch)
+}
+
+// UnregisterSSEClient removes an SSE client channel.
+func (a *App) UnregisterSSEClient(convID string, ch chan []byte) {
+	a.sseClientsMu.Lock()
+	defer a.sseClientsMu.Unlock()
+	clients := a.sseClients[convID]
+	for i, c := range clients {
+		if c == ch {
+			a.sseClients[convID] = append(clients[:i], clients[i+1:]...)
+			break
+		}
+	}
+	if len(a.sseClients[convID]) == 0 {
+		delete(a.sseClients, convID)
+	}
+}
+
+// BroadcastSSE sends data to all SSE clients listening to a conversation.
+func (a *App) BroadcastSSE(convID string, data []byte) {
+	a.sseClientsMu.Lock()
+	defer a.sseClientsMu.Unlock()
+	for _, ch := range a.sseClients[convID] {
+		select {
+		case ch <- data:
+		default:
+			// Client channel full, skip
+		}
+	}
 }
 
 // newMCPServer 创建并注册工具的 MCP server。

@@ -173,7 +173,17 @@ func chatSendMessage(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id
 	}
 
 	app.ConvStore.SetStatus(id, "processing") //nolint:errcheck
-	events, err := a.Run(context.Background(), id, content, waiter)
+	parent := app.ShutdownCtx
+	if parent == nil {
+		parent = context.Background()
+	}
+	ctx, cancel := context.WithCancel(parent)
+	app.StoreConvCancel(id, cancel)
+	defer func() {
+		cancel()
+		app.RemoveConvCancel(id)
+	}()
+	events, err := a.Run(ctx, id, content, waiter)
 	if err != nil {
 		app.ConvStore.SetStatus(id, "idle") //nolint:errcheck
 		writeError(w, 500, err.Error())
@@ -187,19 +197,28 @@ func chatSendMessage(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id
 
 	for ev := range events {
 		data, _ := json.Marshal(ev)
+		// Send to POST /messages client
 		fmt.Fprintf(w, "data: %s\n\n", data)
 		if flusher != nil {
 			flusher.Flush()
 		}
+		// Broadcast to all GET /stream clients
+		app.BroadcastSSE(id, data)
 	}
 	app.ConvStore.SetStatus(id, "idle") //nolint:errcheck
 }
 
-func chatConfirm(app *mcppkg.App, w http.ResponseWriter, r *http.Request, convID, requestID string) {
-	if _, err := verifyConvOwner(app, r, convID); err != nil {
+func chatCancel(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id string) {
+	if _, err := verifyConvOwner(app, r, id); err != nil {
 		writeError(w, 404, "conversation not found")
 		return
 	}
+	app.CancelConv(id)
+	app.ConvStore.SetStatus(id, "idle") //nolint:errcheck
+	writeJSON(w, http.StatusOK, map[string]string{"status": "cancelled"})
+}
+
+func chatConfirm(app *mcppkg.App, w http.ResponseWriter, r *http.Request, convID, requestID string) {
 	var req struct {
 		Approved bool `json:"approved"`
 	}

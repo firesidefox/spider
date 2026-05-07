@@ -20,7 +20,7 @@ export interface ChatMessage {
 }
 
 export interface ChatEvent {
-  type: 'text_delta' | 'tool_start' | 'tool_result' | 'confirm_required' | 'error' | 'done'
+  type: 'text_delta' | 'tool_start' | 'tool_result' | 'confirm_required' | 'error' | 'done' | 'message'
   content?: Record<string, any>
 }
 
@@ -60,48 +60,41 @@ export async function updateTitle(id: string, title: string): Promise<void> {
   if (!res.ok) throw new Error((await res.json()).error)
 }
 
+// subscribeConversation opens a persistent EventSource for a conversation.
+// lastEventId: skip messages already loaded from DB (pass msgs.length - 1)
+// Returns a cleanup function to close the connection.
+export function subscribeConversation(
+  conversationId: string,
+  onEvent: (event: ChatEvent) => void,
+  lastEventId?: number,
+): () => void {
+  const url = lastEventId !== undefined
+    ? `/api/v1/chat/conversations/${conversationId}/stream?last_event_id=${lastEventId}`
+    : `/api/v1/chat/conversations/${conversationId}/stream`
+  const es = new EventSource(url)
+  es.onmessage = (e) => {
+    try {
+      const event: ChatEvent = JSON.parse(e.data)
+      onEvent(event)
+    } catch { /* skip malformed */ }
+  }
+  es.onerror = () => {
+    // EventSource auto-reconnects on error — don't close
+  }
+  return () => es.close()
+}
+
 export function sendMessage(
   conversationId: string,
   content: string,
-  onEvent: (event: ChatEvent) => void,
 ): AbortController {
   const ctrl = new AbortController()
-  const run = async () => {
-    const res = await fetch(`/api/v1/chat/conversations/${conversationId}/messages`, {
-      method: 'POST',
-      signal: ctrl.signal,
-      headers: { 'Content-Type': 'application/json', ...authHeaders() },
-      body: JSON.stringify({ content }),
-    })
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ error: 'request failed' }))
-      onEvent({ type: 'error', content: { error: err.error } })
-      return
-    }
-    const reader = res.body!.getReader()
-    const decoder = new TextDecoder()
-    let buffer = ''
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      buffer += decoder.decode(value, { stream: true })
-      const lines = buffer.split('\n')
-      buffer = lines.pop()!
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          try {
-            const event: ChatEvent = JSON.parse(line.slice(6))
-            onEvent(event)
-          } catch { /* skip malformed */ }
-        }
-      }
-    }
-  }
-  run().catch((err) => {
-    if (err.name !== 'AbortError') {
-      onEvent({ type: 'error', content: { error: err.message } })
-    }
-  })
+  fetch(`/api/v1/chat/conversations/${conversationId}/messages`, {
+    method: 'POST',
+    signal: ctrl.signal,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ content }),
+  }).catch(() => { /* errors come via EventSource */ })
   return ctrl
 }
 
@@ -139,4 +132,11 @@ export async function confirmAction(
     },
   )
   if (!res.ok) throw new Error((await res.json()).error)
+}
+
+export async function cancelConversation(id: string): Promise<void> {
+  await fetch(`/api/v1/chat/conversations/${id}/cancel`, {
+    method: 'POST',
+    headers: authHeaders(),
+  })
 }

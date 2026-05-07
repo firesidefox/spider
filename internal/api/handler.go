@@ -228,6 +228,10 @@ func NewRouter(app *mcppkg.App) http.Handler {
 			chatUpdateTitle(app, w, r, id)
 		case action == "messages" && r.Method == http.MethodPost:
 			chatSendMessage(app, w, r, id)
+		case action == "stream" && r.Method == http.MethodGet:
+			chatStreamGet(app, w, r, id)
+		case action == "cancel" && r.Method == http.MethodPost:
+			chatCancel(app, w, r, id)
 		case strings.HasPrefix(action, "confirm/") && r.Method == http.MethodPost:
 			requestID := action[len("confirm/"):]
 			chatConfirm(app, w, r, id, requestID)
@@ -309,6 +313,16 @@ func NewRouter(app *mcppkg.App) http.Handler {
 		if r.Method == http.MethodPost {
 			operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				validateRagConfig(app, w, r)
+			})).ServeHTTP(w, r)
+			return
+		}
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	})
+
+	mux.HandleFunc("/api/v1/rag-config/models", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				listRagModels(app, w, r)
 			})).ServeHTTP(w, r)
 			return
 		}
