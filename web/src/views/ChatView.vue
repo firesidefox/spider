@@ -64,6 +64,16 @@ function clearPollTimer(convId: string) {
   if (t !== undefined) { clearTimeout(t); pollTimers.delete(convId) }
 }
 
+function addSystemMessage(content: string) {
+  if (activeConvId.value) {
+    getOrInitMessages(activeConvId.value).push({
+      id: Date.now().toString(),
+      role: 'assistant',
+      blocks: [{ type: 'text', content }],
+    })
+  }
+}
+
 async function pollUntilIdle(convId: string) {
   const check = async () => {
     try {
@@ -206,8 +216,6 @@ async function selectConversation(id: string) {
     }
   }
 
-  // Open persistent EventSource for this conversation (if not already open)
-  // Pass lastEventId to skip messages already loaded from DB
   if (!convSubscriptions.has(id)) {
     const lastEventId = data.messages.length - 1
     const unsub = subscribeConversation(id, (event) => handleConvEvent(id, event), lastEventId)
@@ -250,11 +258,9 @@ function handleConvEvent(convId: string, event: ChatEvent) {
   const convMsgs = messagesMap.value[convId]
   if (!convMsgs) return
 
-  // 'message' type = historical replay from GET /stream
   if (event.type === 'message') {
     const msg = event.content as ChatMsg
     if (!msg || msg.role === 'user') return
-    // Only append if not already present (avoid duplicates on reconnect)
     if (!convMsgs.find(m => m.id === msg.id)) {
       convMsgs.push(...buildDisplayMessages([msg]))
       if (activeConvId.value === convId) nextTick(() => scrollToBottom())
@@ -393,11 +399,7 @@ async function handleModelCommand() {
     currentModelName.value = model
 
     if (!currentProvider.value) {
-      if (activeConvId.value) getOrInitMessages(activeConvId.value).push({
-        id: Date.now().toString(),
-        role: 'assistant',
-        blocks: [{ type: 'text', content: '未配置模型供应商。请在 个人设置 → 模型供应商 中配置。' }],
-      })
+      addSystemMessage('未配置模型供应商。请在 个人设置 → 模型供应商 中配置。')
       return
     }
 
@@ -407,11 +409,7 @@ async function handleModelCommand() {
     availableModels.value = models.map((m: any) => ({ id: m.model_id, display_name: m.display_name }))
     showModelPicker.value = true
   } catch (e: any) {
-    if (activeConvId.value) getOrInitMessages(activeConvId.value).push({
-      id: Date.now().toString(),
-      role: 'assistant',
-      blocks: [{ type: 'text', content: `获取模型列表失败: ${e.message}` }],
-    })
+    addSystemMessage(`获取模型列表失败: ${e.message}`)
   }
 }
 
@@ -421,17 +419,9 @@ async function selectModel(modelId: string) {
     currentModel.value = modelId
     currentModelName.value = modelId
     showModelPicker.value = false
-    if (activeConvId.value) getOrInitMessages(activeConvId.value).push({
-      id: Date.now().toString(),
-      role: 'assistant',
-      blocks: [{ type: 'text', content: `模型已切换为 **${modelId}**` }],
-    })
+    addSystemMessage(`模型已切换为 **${modelId}**`)
   } catch (e: any) {
-    if (activeConvId.value) getOrInitMessages(activeConvId.value).push({
-      id: Date.now().toString(),
-      role: 'assistant',
-      blocks: [{ type: 'text', content: `切换模型失败: ${e.message}` }],
-    })
+    addSystemMessage(`切换模型失败: ${e.message}`)
   }
 }
 
@@ -445,6 +435,9 @@ async function handleConfirm(requestId: string, approved: boolean) {
 async function handleDeleteConversation(id: string) {
   await deleteConversation(id)
   conversations.value = conversations.value.filter(c => c.id !== id)
+  clearPollTimer(id)
+  const unsub = convSubscriptions.get(id)
+  if (unsub) { unsub(); convSubscriptions.delete(id) }
   if (activeConvId.value === id) {
     activeConvId.value = null
     delete messagesMap.value[id]

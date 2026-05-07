@@ -37,7 +37,7 @@ func loginHandler(app *mcppkg.App) http.HandlerFunc {
 		}
 		_ = app.UserStore.UpdateLastLogin(user.ID)
 
-		// Set httpOnly cookie for web frontend (EventSource support)
+		// EventSource cannot send custom headers, so we set a cookie alongside the JSON token
 		http.SetCookie(w, &http.Cookie{
 			Name:     "spider_token",
 			Value:    token,

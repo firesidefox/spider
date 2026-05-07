@@ -96,14 +96,11 @@ func RequireRole(roles ...models.Role) func(http.Handler) http.Handler {
 	}
 }
 
-// extractToken pulls token from cookie first, then falls back to Authorization header.
-// This supports both web frontend (cookie) and MCP clients (header).
+// extractToken checks cookie first (web/EventSource), falls back to Authorization header (MCP clients).
 func extractToken(r *http.Request) string {
-	// 1. Try cookie first (web frontend)
 	if cookie, err := r.Cookie("spider_token"); err == nil {
 		return cookie.Value
 	}
-	// 2. Fallback to Authorization header (MCP clients, API tokens)
 	return extractBearer(r)
 }
 

@@ -197,12 +197,10 @@ func chatSendMessage(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id
 
 	for ev := range events {
 		data, _ := json.Marshal(ev)
-		// Send to POST /messages client
 		fmt.Fprintf(w, "data: %s\n\n", data)
 		if flusher != nil {
 			flusher.Flush()
 		}
-		// Broadcast to all GET /stream clients
 		app.BroadcastSSE(id, data)
 	}
 	app.ConvStore.SetStatus(id, "idle") //nolint:errcheck
