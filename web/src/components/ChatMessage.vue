@@ -22,6 +22,12 @@ interface ConfirmRequest {
   riskLevel: string
 }
 
+const EXPLORE_TOOLS = new Set(['ListHosts', 'GetHost', 'SearchDocs', 'Verify'])
+
+type ExploreGroup = { kind: 'explore'; calls: ToolCallBlock[] }
+type ActItem     = { kind: 'act';     call: ToolCallBlock }
+type RenderItem  = ExploreGroup | ActItem
+
 const props = defineProps<{
   role: string
   blocks: MessageBlock[]
@@ -33,14 +39,44 @@ const emit = defineEmits<{
   confirm: [requestId: string, approved: boolean]
 }>()
 
+const renderItems = computed<RenderItem[]>(() => {
+  const items: RenderItem[] = []
+  for (const block of props.blocks) {
+    if (block.type !== 'tool') continue
+    if (EXPLORE_TOOLS.has(block.call.name)) {
+      const last = items[items.length - 1]
+      if (last?.kind === 'explore') {
+        last.calls.push(block.call)
+      } else {
+        items.push({ kind: 'explore', calls: [block.call] })
+      }
+    } else {
+      items.push({ kind: 'act', call: block.call })
+    }
+  }
+  return items
+})
+
 const expandedTools = ref<Set<string>>(new Set())
+const expandedGroups = ref<Set<number>>(new Set())
 
 function toggleTool(id: string) {
-  if (expandedTools.value.has(id)) {
-    expandedTools.value.delete(id)
-  } else {
-    expandedTools.value.add(id)
-  }
+  if (expandedTools.value.has(id)) expandedTools.value.delete(id)
+  else expandedTools.value.add(id)
+}
+
+function toggleGroup(idx: number) {
+  if (expandedGroups.value.has(idx)) expandedGroups.value.delete(idx)
+  else expandedGroups.value.add(idx)
+}
+
+function exploreParam(call: ToolCallBlock): string {
+  if (!call.input) return ''
+  const vals = Object.values(call.input)
+  if (!vals.length) return ''
+  const v = vals[0]
+  const s = typeof v === 'string' ? v : JSON.stringify(v)
+  return s.length > 32 ? s.slice(0, 32) + '…' : s
 }
 
 function renderMd(text: string) {
@@ -66,31 +102,66 @@ function formatDuration(ms: number) {
           <div v-if="block.type === 'text' && block.content" class="msg-assistant">
             <div class="assistant-text" v-html="renderMd(block.content)"></div>
           </div>
-          <div v-else-if="block.type === 'tool'" class="tool-calls">
-            <div class="tool-call">
-              <div class="tool-header" @click="toggleTool(block.call.id)">
-                <span class="tool-arrow">{{ expandedTools.has(block.call.id) ? '▼' : '▶' }}</span>
-                <span class="tool-badge">Tool</span>
-                <span class="tool-name">{{ block.call.name }}</span>
-                <span v-if="block.call.durationMs != null" class="tool-duration">{{ formatDuration(block.call.durationMs) }}</span>
-                <span v-if="block.call.isError" class="tool-error-badge">error</span>
+        </template>
+
+        <!-- tool render items -->
+        <template v-for="(item, idx) in renderItems" :key="idx">
+          <!-- Explore group -->
+          <div v-if="item.kind === 'explore'" class="explore-group">
+            <div class="explore-group-header" @click="toggleGroup(idx)">
+              <span class="tool-arrow">{{ expandedGroups.has(idx) ? '▼' : '▶' }}</span>
+              <span class="explore-label">Explored</span>
+              <span class="explore-count">({{ item.calls.length }})</span>
+            </div>
+            <div v-if="expandedGroups.has(idx)" class="explore-items">
+              <div v-for="call in item.calls" :key="call.id" class="explore-item">
+                <span class="tree-branch">└</span>
+                <span class="explore-tool-name" :class="{ 'is-error': call.isError }">{{ call.name }}</span>
+                <span v-if="exploreParam(call)" class="explore-param">{{ exploreParam(call) }}</span>
+                <span v-if="call.isError" class="explore-error-mark">✕</span>
+                <span v-else-if="call.durationMs != null" class="tool-duration">{{ formatDuration(call.durationMs) }}</span>
+                <span v-else class="explore-streaming">···</span>
               </div>
-              <div v-if="expandedTools.has(block.call.id)" class="tool-detail">
-                <pre v-if="block.call.input" class="tool-input">{{ JSON.stringify(block.call.input, null, 2) }}</pre>
-                <pre v-if="block.call.result" class="tool-result" :class="{ 'is-error': block.call.isError }">{{ block.call.result }}</pre>
+            </div>
+          </div>
+
+          <!-- Act tool -->
+          <div v-else class="tool-calls">
+            <div class="tool-call" :class="{ 'has-error': item.call.isError }">
+              <div class="tool-header" @click="toggleTool(item.call.id)">
+                <span class="tool-arrow">{{ expandedTools.has(item.call.id) ? '▼' : '▶' }}</span>
+                <span class="tool-badge">Tool</span>
+                <span class="tool-name">{{ item.call.name }}</span>
+                <span v-if="item.call.isError" class="tool-error-badge">✕</span>
+                <span v-else-if="item.call.durationMs != null" class="tool-duration">{{ formatDuration(item.call.durationMs) }}</span>
+                <span v-else class="act-streaming">···</span>
+              </div>
+              <div v-if="expandedTools.has(item.call.id)" class="tool-detail">
+                <div v-if="item.call.input && Object.keys(item.call.input).length" class="tool-section">
+                  <span class="tool-section-label input-label">INPUT</span>
+                  <pre class="tool-input">{{ JSON.stringify(item.call.input, null, 2) }}</pre>
+                </div>
+                <div v-if="item.call.result" class="tool-section">
+                  <span class="tool-section-label" :class="item.call.isError ? 'error-label' : 'output-label'">{{ item.call.isError ? 'ERROR' : 'OUTPUT' }}</span>
+                  <pre class="tool-result" :class="{ 'is-error': item.call.isError }">{{ item.call.result }}</pre>
+                </div>
               </div>
             </div>
           </div>
         </template>
+
         <span v-if="isStreaming" class="cursor">▊</span>
       </div><!-- .content -->
     </div>
 
     <div v-if="confirm" class="confirm-bar" :class="confirm.riskLevel === 'dangerous' ? 'risk-dangerous' : confirm.riskLevel === 'safe' ? 'risk-safe' : 'risk-moderate'">
-      <span class="confirm-label">{{ confirm.tool }}</span>
-      <span class="risk-badge">{{ confirm.riskLevel }}</span>
-      <button class="btn-confirm" @click="emit('confirm', confirm.requestId, true)">确认执行</button>
-      <button class="btn-cancel" @click="emit('confirm', confirm.requestId, false)">取消</button>
+      <div class="confirm-header">
+        <span class="confirm-label">{{ confirm.tool }}</span>
+        <span class="risk-badge">{{ confirm.riskLevel }}</span>
+        <button class="btn-confirm" @click="emit('confirm', confirm.requestId, true)">确认执行</button>
+        <button class="btn-cancel" @click="emit('confirm', confirm.requestId, false)">取消</button>
+      </div>
+      <pre v-if="confirm.input && Object.keys(confirm.input).length" class="confirm-input">{{ JSON.stringify(confirm.input, null, 2) }}</pre>
     </div>
   </div>
 </template>
@@ -116,20 +187,45 @@ function formatDuration(ms: number) {
 .cursor { color: var(--primary); animation: blink 1s step-end infinite; }
 @keyframes blink { 50% { opacity: 0; } }
 
+/* Explore group */
+.explore-group { margin: 6px 0; }
+.explore-group-header { display: flex; align-items: center; gap: 6px; padding: 3px 0; cursor: pointer; }
+.explore-group-header:hover .explore-label { color: var(--text-sub); }
+.explore-label { color: var(--muted); font-size: 12px; font-weight: 600; }
+.explore-count { color: var(--muted); font-size: 11px; opacity: 0.6; }
+.explore-items { padding-left: 14px; }
+.explore-item { display: flex; align-items: center; gap: 8px; padding: 2px 0; }
+.tree-branch { color: var(--muted); font-size: 12px; opacity: 0.5; }
+.explore-tool-name { color: var(--text-sub); font-size: 12px; font-weight: 500; }
+.explore-tool-name.is-error { color: var(--red); }
+.explore-param { color: var(--muted); font-size: 11px; }
+.explore-error-mark { color: var(--red); font-size: 11px; }
+.explore-streaming { color: var(--muted); font-size: 11px; animation: blink 1s step-end infinite; }
+
+/* Act tool */
 .tool-calls { margin: 8px 0; }
 .tool-call { border: 1px solid var(--border); border-left: 3px solid var(--primary); border-radius: 6px; margin: 4px 0; overflow: hidden; }
+.tool-call.has-error { border-left-color: var(--red); }
 .tool-header { padding: 6px 10px; cursor: pointer; display: flex; align-items: center; gap: 8px; background: var(--input-bg); }
 .tool-header:hover { background: var(--row-hover); }
 .tool-arrow { font-size: 10px; color: var(--muted); width: 12px; }
 .tool-name { color: var(--primary); font-weight: 500; }
 .tool-badge { font-size: 10px; padding: 1px 6px; border-radius: 3px; background: var(--primary); color: #fff; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
-.tool-duration { color: var(--muted); font-size: 11px; }
-.tool-error-badge { background: var(--red); color: #fff; font-size: 10px; padding: 1px 6px; border-radius: 3px; }
-.tool-detail { padding: 8px 10px; }
-.tool-input, .tool-result { font-size: 12px; margin: 4px 0; white-space: pre-wrap; word-break: break-all; color: var(--text-sub); }
+.tool-duration { color: var(--muted); font-size: 11px; margin-left: auto; }
+.tool-error-badge { background: var(--red); color: #fff; font-size: 10px; padding: 1px 6px; border-radius: 3px; margin-left: auto; }
+.act-streaming { color: var(--muted); font-size: 11px; margin-left: auto; animation: blink 1s step-end infinite; }
+.tool-detail { padding: 0; }
+.tool-section { border-top: 1px solid var(--border); }
+.tool-section-label { display: block; font-size: 10px; font-weight: 700; letter-spacing: 0.8px; padding: 4px 10px 2px; }
+.input-label { color: var(--primary); }
+.output-label { color: var(--green, #4ade80); }
+.error-label { color: var(--red); }
+.tool-input, .tool-result { font-size: 12px; margin: 0; padding: 6px 10px 8px; white-space: pre-wrap; word-break: break-all; color: var(--text-sub); }
 .tool-result.is-error { color: var(--red); }
 
-.confirm-bar { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 6px; margin: 8px 0; }
+.confirm-bar { display: flex; flex-direction: column; gap: 6px; padding: 8px 12px; border-radius: 6px; margin: 8px 0; }
+.confirm-header { display: flex; align-items: center; gap: 10px; }
+.confirm-input { font-size: 12px; margin: 0; white-space: pre-wrap; word-break: break-all; color: var(--text-sub); background: transparent; border: none; padding: 0; font-family: inherit; }
 .confirm-bar.risk-safe { background: rgba(74, 222, 128, 0.1); border: 1px solid var(--green); }
 .confirm-bar.risk-moderate { background: rgba(251, 191, 36, 0.1); border: 1px solid var(--yellow); }
 .confirm-bar.risk-dangerous { background: rgba(248, 113, 113, 0.1); border: 1px solid var(--red); }
