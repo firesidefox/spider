@@ -64,7 +64,7 @@ func (s *ConversationStore) ListByUser(userID string) ([]*models.Conversation, e
 		return nil, fmt.Errorf("list conversations: %w", err)
 	}
 	defer rows.Close()
-	var list []*models.Conversation
+	list := make([]*models.Conversation, 0)
 	for rows.Next() {
 		var c models.Conversation
 		if err := rows.Scan(&c.ID, &c.UserID, &c.Title, &c.Status, &c.PermissionMode, &c.CreatedAt, &c.UpdatedAt); err != nil {
