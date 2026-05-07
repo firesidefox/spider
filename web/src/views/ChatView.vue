@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, nextTick, watch, computed } from 'vue'
+defineOptions({ name: 'ChatView' })
+import { ref, onActivated, onDeactivated, nextTick, watch, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ChatMessage from '../components/ChatMessage.vue'
 import type { MessageBlock, ToolCallBlock } from '../components/ChatMessage.vue'
@@ -56,8 +57,29 @@ function buildDisplayMessages(msgs: ChatMsg[]): DisplayMessage[] {
   })
 }
 
-// eslint-disable-next-line prefer-const
-let pollUntilIdle: (convId: string) => void = () => {}
+let pollTimer: ReturnType<typeof setTimeout> | null = null
+
+async function pollUntilIdle(convId: string) {
+  const check = async () => {
+    try {
+      const data = await getConversation(convId)
+      if (data.conversation.status === 'idle') {
+        messagesMap.value[convId] = buildDisplayMessages(data.messages)
+        if (activeConvId.value === convId) {
+          isStreaming.value = false
+          await nextTick()
+          scrollToBottom()
+          loadConversations()
+        }
+      } else {
+        pollTimer = setTimeout(check, 2000)
+      }
+    } catch {
+      pollTimer = setTimeout(check, 2000)
+    }
+  }
+  pollTimer = setTimeout(check, 2000)
+}
 
 const inputText = ref('')
 const isStreaming = ref(false)
@@ -508,14 +530,21 @@ watch(() => messages.value.length, () => {
   nextTick(() => scrollToBottom())
 })
 
-onMounted(async () => {
+onActivated(async () => {
   await Promise.all([loadConversations(), loadDevices()])
   getActiveModel().then(m => { currentModelName.value = m.model })
   const paramId = route.params.id as string | undefined
   if (paramId) {
-    await selectConversation(paramId)
+    if (paramId !== activeConvId.value) {
+      await selectConversation(paramId)
+    }
+  } else {
+    const lastConvId = localStorage.getItem('spider-last-conv')
+    if (lastConvId) {
+      router.replace(`/chat/${lastConvId}`)
+      await selectConversation(lastConvId)
+    }
   }
-  // Load global permission mode
   try {
     const res = await fetch('/api/v1/settings', { headers: authHeaders() })
     const data = await res.json()
@@ -524,7 +553,8 @@ onMounted(async () => {
   document.addEventListener('click', closeModeDropdown)
 })
 
-onUnmounted(() => {
+onDeactivated(() => {
+  if (pollTimer) { clearTimeout(pollTimer); pollTimer = null }
   document.removeEventListener('click', closeModeDropdown)
 })
 </script>
