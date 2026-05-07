@@ -37,13 +37,15 @@ func loginHandler(app *mcppkg.App) http.HandlerFunc {
 		}
 		_ = app.UserStore.UpdateLastLogin(user.ID)
 
-		// EventSource cannot send custom headers, so we set a cookie alongside the JSON token
+		// EventSource cannot send custom headers, so we set a cookie alongside the JSON token.
+		// Secure=true when TLS is direct or when behind a TLS-terminating reverse proxy.
+		secureCookie := r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
 		http.SetCookie(w, &http.Cookie{
 			Name:     "spider_token",
 			Value:    token,
 			Path:     "/",
 			HttpOnly: true,
-			Secure:   r.TLS != nil,
+			Secure:   secureCookie,
 			SameSite: http.SameSiteStrictMode,
 			MaxAge:   86400, // 24h
 		})
@@ -56,9 +58,15 @@ func loginHandler(app *mcppkg.App) http.HandlerFunc {
 	}
 }
 
-func logoutHandler(app *mcppkg.App) http.HandlerFunc {
+func logoutHandler(_ *mcppkg.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// 简化实现：直接返回 ok，黑名单由 JWT 过期自然失效
+		http.SetCookie(w, &http.Cookie{
+			Name:     "spider_token",
+			Value:    "",
+			Path:     "/",
+			HttpOnly: true,
+			MaxAge:   -1,
+		})
 		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 	}
 }

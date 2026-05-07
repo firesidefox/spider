@@ -628,10 +628,12 @@ async function initView() {
 }
 
 onMounted(() => {
-  initView()
   document.addEventListener('click', closeModeDropdown)
 })
-onActivated(() => { if (initialized) initView() })
+onActivated(() => {
+  document.addEventListener('click', closeModeDropdown)
+  initView()
+})
 
 onDeactivated(() => {
   pollTimers.forEach((t) => clearTimeout(t))

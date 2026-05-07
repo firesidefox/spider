@@ -19,10 +19,14 @@ func chatStreamGet(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id s
 		return
 	}
 
-	// Parse last_event_id (message index)
+	// Parse last_event_id: query param takes precedence, then browser Last-Event-ID header
 	lastEventID := 0
-	if s := r.URL.Query().Get("last_event_id"); s != "" {
-		if n, err := strconv.Atoi(s); err == nil {
+	rawID := r.URL.Query().Get("last_event_id")
+	if rawID == "" {
+		rawID = r.Header.Get("Last-Event-ID")
+	}
+	if rawID != "" {
+		if n, err := strconv.Atoi(rawID); err == nil {
 			lastEventID = n
 		}
 	}
