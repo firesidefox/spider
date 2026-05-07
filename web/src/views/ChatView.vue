@@ -28,7 +28,37 @@ interface DisplayMessage {
 
 const conversations = ref<Conversation[]>([])
 const activeConvId = ref<string | null>(null)
-const messages = ref<DisplayMessage[]>([])
+const messagesMap = ref<Record<string, DisplayMessage[]>>({})
+const messages = computed(() => messagesMap.value[activeConvId.value ?? ''] ?? [])
+
+function getOrInitMessages(convId: string): DisplayMessage[] {
+  if (!messagesMap.value[convId]) {
+    messagesMap.value[convId] = []
+  }
+  return messagesMap.value[convId]
+}
+
+function buildDisplayMessages(msgs: ChatMsg[]): DisplayMessage[] {
+  return msgs.map(m => {
+    const blocks: MessageBlock[] = []
+    if (m.content) blocks.push({ type: 'text', content: m.content })
+    if (m.tool_calls) {
+      try {
+        for (const tc of JSON.parse(m.tool_calls)) {
+          blocks.push({ type: 'tool', call: {
+            id: tc.id, name: tc.name, input: tc.input,
+            result: tc.result, isError: tc.is_error, durationMs: tc.duration_ms,
+          }})
+        }
+      } catch { /* ignore malformed */ }
+    }
+    return { id: m.id, role: m.role, blocks } as DisplayMessage
+  })
+}
+
+// eslint-disable-next-line prefer-const
+let pollUntilIdle: (convId: string) => void = () => {}
+
 const inputText = ref('')
 const isStreaming = ref(false)
 const messagesRef = ref<HTMLElement | null>(null)
@@ -132,22 +162,13 @@ async function loadConversations() {
 async function selectConversation(id: string) {
   const data = await getConversation(id)
   activeConvId.value = id
-  messages.value = data.messages.map(m => {
-    const blocks: MessageBlock[] = []
-    if (m.content) blocks.push({ type: 'text', content: m.content })
-    if (m.tool_calls) {
-      try {
-        for (const tc of JSON.parse(m.tool_calls)) {
-          blocks.push({ type: 'tool', call: {
-            id: tc.id, name: tc.name, input: tc.input,
-            result: tc.result, isError: tc.is_error, durationMs: tc.duration_ms,
-          }})
-        }
-      } catch { /* ignore malformed */ }
-    }
-    return { id: m.id, role: m.role, blocks } as DisplayMessage
-  })
+  localStorage.setItem('spider-last-conv', id)
+  messagesMap.value[id] = buildDisplayMessages(data.messages)
+  isStreaming.value = data.conversation.status === 'processing'
   router.replace(`/chat/${id}`)
+  if (data.conversation.status === 'processing') {
+    pollUntilIdle(id)
+  }
   await nextTick()
   scrollToBottom()
 }
@@ -156,7 +177,7 @@ async function createNewConversation() {
   const conv = await createConversation()
   conversations.value.unshift(conv)
   activeConvId.value = conv.id
-  messages.value = []
+  messagesMap.value[conv.id] = []
   router.replace(`/chat/${conv.id}`)
 }
 
@@ -183,22 +204,25 @@ async function send() {
     await createNewConversation()
   }
 
+  const convId = activeConvId.value!
+  const convMsgs = getOrInitMessages(convId)
+
   const userMsg: DisplayMessage = {
     id: `u-${Date.now()}`, role: 'user', blocks: [{ type: 'text', content: text }],
   }
-  messages.value.push(userMsg)
+  convMsgs.push(userMsg)
 
   const assistantMsg: DisplayMessage = {
     id: `a-${Date.now()}`, role: 'assistant',
     blocks: [], isStreaming: true,
   }
-  messages.value.push(assistantMsg)
+  convMsgs.push(assistantMsg)
   isStreaming.value = true
   await nextTick()
   scrollToBottom()
 
-  abortCtrl = sendMessage(activeConvId.value!, text, (event: ChatEvent) => {
-    const last = messages.value[messages.value.length - 1]
+  abortCtrl = sendMessage(convId, text, (event: ChatEvent) => {
+    const last = convMsgs[convMsgs.length - 1]
     const blocks = last.blocks
     switch (event.type) {
       case 'text_delta': {
@@ -243,12 +267,12 @@ async function send() {
           last.blocks.push({ type: 'text', content: errText })
         }
         last.isStreaming = false
-        isStreaming.value = false
+        if (activeConvId.value === convId) isStreaming.value = false
         break
       }
       case 'done':
         last.isStreaming = false
-        isStreaming.value = false
+        if (activeConvId.value === convId) isStreaming.value = false
         loadConversations()
         break
     }
@@ -264,7 +288,7 @@ async function handleModelCommand() {
     currentModelName.value = model
 
     if (!currentProvider.value) {
-      messages.value.push({
+      if (activeConvId.value) getOrInitMessages(activeConvId.value).push({
         id: Date.now().toString(),
         role: 'assistant',
         blocks: [{ type: 'text', content: '未配置模型供应商。请在 个人设置 → 模型供应商 中配置。' }],
@@ -278,7 +302,7 @@ async function handleModelCommand() {
     availableModels.value = models.map((m: any) => ({ id: m.model_id, display_name: m.display_name }))
     showModelPicker.value = true
   } catch (e: any) {
-    messages.value.push({
+    if (activeConvId.value) getOrInitMessages(activeConvId.value).push({
       id: Date.now().toString(),
       role: 'assistant',
       blocks: [{ type: 'text', content: `获取模型列表失败: ${e.message}` }],
@@ -292,13 +316,13 @@ async function selectModel(modelId: string) {
     currentModel.value = modelId
     currentModelName.value = modelId
     showModelPicker.value = false
-    messages.value.push({
+    if (activeConvId.value) getOrInitMessages(activeConvId.value).push({
       id: Date.now().toString(),
       role: 'assistant',
       blocks: [{ type: 'text', content: `模型已切换为 **${modelId}**` }],
     })
   } catch (e: any) {
-    messages.value.push({
+    if (activeConvId.value) getOrInitMessages(activeConvId.value).push({
       id: Date.now().toString(),
       role: 'assistant',
       blocks: [{ type: 'text', content: `切换模型失败: ${e.message}` }],
@@ -318,7 +342,7 @@ async function handleDeleteConversation(id: string) {
   conversations.value = conversations.value.filter(c => c.id !== id)
   if (activeConvId.value === id) {
     activeConvId.value = null
-    messages.value = []
+    delete messagesMap.value[id]
     router.replace('/chat')
   }
 }
