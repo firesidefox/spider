@@ -235,6 +235,7 @@ func migrate(db *sql.DB) error {
 		ssh_key_id TEXT NOT NULL DEFAULT '',
 		ssh_legacy INTEGER NOT NULL DEFAULT 0,
 		base_url TEXT NOT NULL DEFAULT '',
+		rest_auth_type TEXT NOT NULL DEFAULT '',
 		rest_username TEXT NOT NULL DEFAULT '',
 		header_name TEXT NOT NULL DEFAULT '',
 		knowledge_sources TEXT NOT NULL DEFAULT '[]',
@@ -267,7 +268,8 @@ func migrate(db *sql.DB) error {
 	db.Exec("ALTER TABLE hosts ADD COLUMN notes TEXT NOT NULL DEFAULT ''")
 	db.Exec("ALTER TABLE hosts ADD COLUMN product_name TEXT NOT NULL DEFAULT ''")
 	db.Exec("ALTER TABLE hosts ADD COLUMN product_version TEXT NOT NULL DEFAULT ''")
-	// Data migration: create one SSH access_face per existing host (idempotent via INSERT OR IGNORE)
+	// Data migration: seed one SSH access_face per existing host.
+	// Idempotent: WHERE clause skips hosts that already have an SSH face.
 	db.Exec(`INSERT OR IGNORE INTO access_faces
 		(id, host_id, type, ip, port, username, auth_type,
 		 encrypted_credential, encrypted_passphrase, ssh_key_id, ssh_legacy,
