@@ -158,10 +158,6 @@ func (s *HostStore) Delete(id string) error {
 	return nil
 }
 
-type hostScanner interface {
-	Scan(dest ...any) error
-}
-
 func scanHost(row *sql.Row) (*models.Host, error) {
 	var h models.Host
 	var tagsJSON string

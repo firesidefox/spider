@@ -15,7 +15,7 @@ func NewMemoryStore(db *sql.DB) *MemoryStore {
 	return &MemoryStore{db: db}
 }
 
-func (s *MemoryStore) Add(req *models.AddMemoryRequest, hostID string) (*models.Memory, error) {
+func (s *MemoryStore) Add(hostID string, req *models.AddMemoryRequest) (*models.Memory, error) {
 	now := time.Now().UTC()
 	res, err := s.db.Exec(`INSERT INTO host_memories (host_id,content,created_by,created_at)
 		VALUES (?,?,?,?)`, hostID, req.Content, req.CreatedBy, now)

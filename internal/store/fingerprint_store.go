@@ -17,6 +17,10 @@ func NewFingerprintStore(db *sql.DB) *FingerprintStore {
 
 func (s *FingerprintStore) Upsert(fp *models.Fingerprint) error {
 	now := time.Now().UTC()
+	snapshotAt := now
+	if fp.SnapshotAt != nil {
+		snapshotAt = *fp.SnapshotAt
+	}
 	_, err := s.db.Exec(`INSERT INTO host_fingerprints
 		(host_id,ssh_host_key,system_version,hardware_id,api_signature,status,snapshot_at)
 		VALUES (?,?,?,?,?,?,?)
@@ -28,7 +32,7 @@ func (s *FingerprintStore) Upsert(fp *models.Fingerprint) error {
 			status=excluded.status,
 			snapshot_at=excluded.snapshot_at`,
 		fp.HostID, fp.SSHHostKey, fp.SystemVersion, fp.HardwareID,
-		fp.APISignature, fp.Status, now)
+		fp.APISignature, fp.Status, snapshotAt)
 	return err
 }
 

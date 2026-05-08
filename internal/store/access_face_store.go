@@ -176,6 +176,9 @@ func scanAccessFace(s accessFaceScanner) (*models.AccessFace, error) {
 		&f.BaseURL, &f.RESTAuthType, &f.RESTUsername, &f.HeaderName,
 		&ksJSON, &f.CreatedAt, &f.UpdatedAt,
 	)
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("access face not found")
+	}
 	if err != nil {
 		return nil, err
 	}
