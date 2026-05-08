@@ -2,109 +2,160 @@ package models
 
 import "time"
 
-// AuthType 定义 SSH 认证方式。
-type AuthType string
+type AccessFaceType string
 
 const (
-	AuthPassword    AuthType = "password"
-	AuthKey         AuthType = "key"
-	AuthKeyPassword AuthType = "key_password" // 带 passphrase 的私钥
+	FaceSSH     AccessFaceType = "ssh"
+	FaceRESTAPI AccessFaceType = "restapi"
 )
 
-// Host 表示一台被管理的远程主机。
+type SSHAuthType string
+
+const (
+	SSHAuthPassword    SSHAuthType = "password"
+	SSHAuthKey         SSHAuthType = "key"
+	SSHAuthKeyPassword SSHAuthType = "key_password"
+)
+
+type RESTAuthType string
+
+const (
+	RESTAuthBearer RESTAuthType = "bearer"
+	RESTAuthBasic  RESTAuthType = "basic"
+	RESTAuthAPIKey RESTAuthType = "apikey"
+	RESTAuthNone   RESTAuthType = "none"
+)
+
+type KnowledgeSourceRef struct {
+	Type  string `json:"type"` // "group" | "doc"
+	ID    int    `json:"id"`
+}
+
+type AccessFace struct {
+	ID               string               `json:"id"`
+	HostID           string               `json:"host_id"`
+	Type             AccessFaceType       `json:"type"`
+	IP               string               `json:"ip"`
+	Port             int                  `json:"port"`
+	Username         string               `json:"username,omitempty"`
+	SSHAuthType      SSHAuthType          `json:"ssh_auth_type,omitempty"`
+	EncryptedCred    string               `json:"-"`
+	EncryptedPass    string               `json:"-"`
+	SSHKeyID         string               `json:"ssh_key_id,omitempty"`
+	SSHLegacy        bool                 `json:"ssh_legacy,omitempty"`
+	BaseURL          string               `json:"base_url,omitempty"`
+	RESTAuthType     RESTAuthType         `json:"rest_auth_type,omitempty"`
+	RESTUsername     string               `json:"rest_username,omitempty"`
+	HeaderName       string               `json:"header_name,omitempty"`
+	KnowledgeSources []KnowledgeSourceRef `json:"knowledge_sources"`
+	CreatedAt        time.Time            `json:"created_at"`
+	UpdatedAt        time.Time            `json:"updated_at"`
+}
+
+type FingerprintStatus string
+
+const (
+	FingerprintOK         FingerprintStatus = "ok"
+	FingerprintChanged    FingerprintStatus = "changed"
+	FingerprintUnverified FingerprintStatus = "unverified"
+)
+
+type Fingerprint struct {
+	HostID        string            `json:"host_id"`
+	SSHHostKey    string            `json:"ssh_host_key,omitempty"`
+	SystemVersion string            `json:"system_version,omitempty"`
+	HardwareID    string            `json:"hardware_id,omitempty"`
+	APISignature  string            `json:"api_signature,omitempty"`
+	Status        FingerprintStatus `json:"status"`
+	SnapshotAt    *time.Time        `json:"snapshot_at,omitempty"`
+}
+
+type Memory struct {
+	ID        int       `json:"id"`
+	HostID    string    `json:"host_id"`
+	Content   string    `json:"content"`
+	CreatedBy string    `json:"created_by"` // "user" | "agent"
+	CreatedAt time.Time `json:"created_at"`
+}
+
 type Host struct {
-	ID                  string    `json:"id"`
-	Name                string    `json:"name"`
-	IP                  string    `json:"ip"`
-	Port                int       `json:"port"`
-	Username            string    `json:"username"`
-	AuthType            AuthType  `json:"auth_type"`
-	EncryptedCredential string    `json:"-"`
-	EncryptedPassphrase string    `json:"-"`
-	SSHKeyID            string    `json:"-"`
-	Tags                []string  `json:"tags"`
-	DeviceType          string    `json:"device_type,omitempty"`
-	Vendor              string    `json:"vendor,omitempty"`
-	Model               string    `json:"model,omitempty"`
-	CLIType             string    `json:"cli_type,omitempty"`
-	FirmwareVersion     string    `json:"firmware_version,omitempty"`
-	CreatedAt           time.Time `json:"created_at"`
-	UpdatedAt           time.Time `json:"updated_at"`
+	ID               string               `json:"id"`
+	Name             string               `json:"name"`
+	IP               string               `json:"ip"`
+	Notes            string               `json:"notes,omitempty"`
+	Tags             []string             `json:"tags"`
+	Vendor           string               `json:"vendor,omitempty"`
+	ProductName      string               `json:"product_name,omitempty"`
+	ProductVersion   string               `json:"product_version,omitempty"`
+	CreatedAt        time.Time            `json:"created_at"`
+	UpdatedAt        time.Time            `json:"updated_at"`
+	KnowledgeSources []KnowledgeSourceRef `json:"knowledge_sources,omitempty"`
+	AccessFaces      []AccessFace         `json:"access_faces,omitempty"`
+	Fingerprint      *Fingerprint         `json:"fingerprint,omitempty"`
+	Memories         []Memory             `json:"memories,omitempty"`
 }
 
-// SafeHost 是对外展示的安全版本（不含凭据）。
-type SafeHost struct {
-	ID              string    `json:"id"`
-	Name            string    `json:"name"`
-	IP              string    `json:"ip"`
-	Port            int       `json:"port"`
-	Username        string    `json:"username"`
-	AuthType        AuthType  `json:"auth_type"`
-	SSHKeyID        string    `json:"ssh_key_id,omitempty"`
-	SSHKeyName      string    `json:"ssh_key_name,omitempty"`
-	Tags            []string  `json:"tags"`
-	DeviceType      string    `json:"device_type,omitempty"`
-	Vendor          string    `json:"vendor,omitempty"`
-	Model           string    `json:"model,omitempty"`
-	CLIType         string    `json:"cli_type,omitempty"`
-	FirmwareVersion string    `json:"firmware_version,omitempty"`
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
-}
-
-// Safe 返回不含敏感字段的版本。
-func (h *Host) Safe() *SafeHost {
-	return &SafeHost{
-		ID:              h.ID,
-		Name:            h.Name,
-		IP:              h.IP,
-		Port:            h.Port,
-		Username:        h.Username,
-		AuthType:        h.AuthType,
-		SSHKeyID:        h.SSHKeyID,
-		Tags:            h.Tags,
-		DeviceType:      h.DeviceType,
-		Vendor:          h.Vendor,
-		Model:           h.Model,
-		CLIType:         h.CLIType,
-		FirmwareVersion: h.FirmwareVersion,
-		CreatedAt:       h.CreatedAt,
-		UpdatedAt:       h.UpdatedAt,
-	}
-}
-
-// AddHostRequest 是添加主机的请求参数。
 type AddHostRequest struct {
-	Name            string   `json:"name"`
-	IP              string   `json:"ip"`
-	Port            int      `json:"port"`
-	Username        string   `json:"username"`
-	AuthType        AuthType `json:"auth_type"`
-	Credential      string   `json:"credential"`
-	Passphrase      string   `json:"passphrase"`
-	Tags            []string `json:"tags"`
-	SSHKeyID        string   `json:"ssh_key_id"`
-	DeviceType      string   `json:"device_type"`
-	Vendor          string   `json:"vendor"`
-	Model           string   `json:"model"`
-	CLIType         string   `json:"cli_type"`
-	FirmwareVersion string   `json:"firmware_version"`
+	Name           string   `json:"name"`
+	IP             string   `json:"ip"`
+	Notes          string   `json:"notes"`
+	Tags           []string `json:"tags"`
+	Vendor         string   `json:"vendor"`
+	ProductName    string   `json:"product_name"`
+	ProductVersion string   `json:"product_version"`
 }
 
-// UpdateHostRequest 是更新主机的请求参数（所有字段可选）。
 type UpdateHostRequest struct {
-	Name            *string   `json:"name"`
-	IP              *string   `json:"ip"`
-	Port            *int      `json:"port"`
-	Username        *string   `json:"username"`
-	AuthType        *AuthType `json:"auth_type"`
-	Credential      *string   `json:"credential"`
-	Passphrase      *string   `json:"passphrase"`
-	Tags            []string  `json:"tags"`
-	SSHKeyID        *string   `json:"ssh_key_id"`
-	DeviceType      *string   `json:"device_type"`
-	Vendor          *string   `json:"vendor"`
-	Model           *string   `json:"model"`
-	CLIType         *string   `json:"cli_type"`
-	FirmwareVersion *string   `json:"firmware_version"`
+	Name           *string  `json:"name"`
+	IP             *string  `json:"ip"`
+	Notes          *string  `json:"notes"`
+	Tags           []string `json:"tags"`
+	Vendor         *string  `json:"vendor"`
+	ProductName    *string  `json:"product_name"`
+	ProductVersion *string  `json:"product_version"`
+}
+
+type AddAccessFaceRequest struct {
+	Type             AccessFaceType       `json:"type"`
+	IP               string               `json:"ip"`
+	Port             int                  `json:"port"`
+	Username         string               `json:"username"`
+	SSHAuthType      SSHAuthType          `json:"ssh_auth_type"`
+	Credential       string               `json:"credential"`
+	Passphrase       string               `json:"passphrase"`
+	SSHKeyID         string               `json:"ssh_key_id"`
+	SSHLegacy        bool                 `json:"ssh_legacy"`
+	BaseURL          string               `json:"base_url"`
+	RESTAuthType     RESTAuthType         `json:"rest_auth_type"`
+	RESTUsername     string               `json:"rest_username"`
+	HeaderName       string               `json:"header_name"`
+	KnowledgeSources []KnowledgeSourceRef `json:"knowledge_sources"`
+}
+
+type UpdateAccessFaceRequest struct {
+	IP               *string              `json:"ip"`
+	Port             *int                 `json:"port"`
+	Username         *string              `json:"username"`
+	SSHAuthType      *SSHAuthType         `json:"ssh_auth_type"`
+	Credential       *string              `json:"credential"`
+	Passphrase       *string              `json:"passphrase"`
+	SSHKeyID         *string              `json:"ssh_key_id"`
+	SSHLegacy        *bool                `json:"ssh_legacy"`
+	BaseURL          *string              `json:"base_url"`
+	RESTAuthType     *RESTAuthType        `json:"rest_auth_type"`
+	RESTUsername     *string              `json:"rest_username"`
+	HeaderName       *string              `json:"header_name"`
+	KnowledgeSources []KnowledgeSourceRef `json:"knowledge_sources"`
+}
+
+type AddMemoryRequest struct {
+	Content   string `json:"content"`
+	CreatedBy string `json:"created_by"`
+}
+
+type UpdateFingerprintRequest struct {
+	SSHHostKey    string `json:"ssh_host_key"`
+	SystemVersion string `json:"system_version"`
+	HardwareID    string `json:"hardware_id"`
+	APISignature  string `json:"api_signature"`
 }
