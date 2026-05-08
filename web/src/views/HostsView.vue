@@ -104,6 +104,7 @@
                     <div class="info-item"><label>厂商</label><input v-model="overviewForm.vendor" class="input info-input" placeholder="可选" /></div>
                     <div class="info-item"><label>产品型号</label><input v-model="overviewForm.product_name" class="input info-input" placeholder="可选" /></div>
                     <div class="info-item"><label>产品版本</label><input v-model="overviewForm.product_version" class="input info-input" placeholder="可选" /></div>
+                    <div class="info-item" style="grid-column:1/-1"><label>备注</label><textarea v-model="overviewForm.notes" class="input info-input" rows="2" style="height:auto" /></div>
                   </form>
                 </template>
               </div>
@@ -359,10 +360,10 @@ const editFaceTarget = ref<AccessFace | null>(null)
 
 const editingOverview = ref(false)
 const overviewSaving = ref(false)
-const overviewForm = ref({ name: '', ip: '', vendor: '', product_name: '', product_version: '', tagsStr: '' })
+const overviewForm = ref({ name: '', ip: '', notes: '', vendor: '', product_name: '', product_version: '', tagsStr: '' })
 
 function startOverviewEdit(h: Host) {
-  overviewForm.value = { name: h.name, ip: h.ip, vendor: h.vendor ?? '', product_name: h.product_name ?? '', product_version: h.product_version ?? '', tagsStr: h.tags.join(',') }
+  overviewForm.value = { name: h.name, ip: h.ip, notes: h.notes ?? '', vendor: h.vendor ?? '', product_name: h.product_name ?? '', product_version: h.product_version ?? '', tagsStr: h.tags.join(',') }
   editingOverview.value = true
 }
 
@@ -378,6 +379,7 @@ async function saveOverview() {
     const updated = await updateHost(activeHost.value.id, {
       name: overviewForm.value.name,
       ip: overviewForm.value.ip,
+      notes: overviewForm.value.notes || undefined,
       vendor: overviewForm.value.vendor || undefined,
       product_name: overviewForm.value.product_name || undefined,
       product_version: overviewForm.value.product_version || undefined,
