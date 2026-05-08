@@ -1,6 +1,8 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 
+const apiTarget = process.env.SPIDER_API_TARGET || 'http://localhost:8000'
+
 export default defineConfig({
   plugins: [vue()],
   build: {
@@ -17,9 +19,9 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      '/api': 'http://localhost:9090',
-      '/sse': 'http://localhost:9090',
-      '/message': 'http://localhost:9090',
+      '/api': apiTarget,
+      '/sse': apiTarget,
+      '/message': apiTarget,
     },
   },
 })

@@ -46,7 +46,7 @@ const renderItems = computed<RenderItem[]>(() => {
     if (EXPLORE_TOOLS.has(block.call.name)) {
       const last = items[items.length - 1]
       if (last?.kind === 'explore') {
-        last.calls.push(block.call)
+        items[items.length - 1] = { kind: 'explore', calls: [...last.calls, block.call] }
       } else {
         items.push({ kind: 'explore', calls: [block.call] })
       }
@@ -58,17 +58,15 @@ const renderItems = computed<RenderItem[]>(() => {
 })
 
 const expandedTools = ref<Set<string>>(new Set())
-const expandedGroups = ref<Set<number>>(new Set())
+const expandedGroups = ref<Set<string>>(new Set())
 
-function toggleTool(id: string) {
-  if (expandedTools.value.has(id)) expandedTools.value.delete(id)
-  else expandedTools.value.add(id)
+function toggle(set: Set<string>, key: string) {
+  if (set.has(key)) set.delete(key)
+  else set.add(key)
 }
 
-function toggleGroup(idx: number) {
-  if (expandedGroups.value.has(idx)) expandedGroups.value.delete(idx)
-  else expandedGroups.value.add(idx)
-}
+function toggleTool(id: string) { toggle(expandedTools.value, id) }
+function toggleGroup(firstId: string) { toggle(expandedGroups.value, firstId) }
 
 function exploreParam(call: ToolCallBlock): string {
   if (!call.input) return ''
@@ -79,7 +77,8 @@ function exploreParam(call: ToolCallBlock): string {
   return s.length > 32 ? s.slice(0, 32) + '…' : s
 }
 
-function renderMd(text: string) {
+function renderMd(text: string, streaming?: boolean) {
+  if (streaming) return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   return marked.parse(text || '') as string
 }
 
@@ -100,7 +99,7 @@ function formatDuration(ms: number) {
       <div class="content assistant-body">
         <template v-for="(block, i) in blocks" :key="i">
           <div v-if="block.type === 'text' && block.content" class="msg-assistant">
-            <div class="assistant-text" v-html="renderMd(block.content)"></div>
+            <div class="assistant-text" v-html="renderMd(block.content, isStreaming)"></div>
           </div>
         </template>
 
@@ -108,12 +107,12 @@ function formatDuration(ms: number) {
         <template v-for="(item, idx) in renderItems" :key="idx">
           <!-- Explore group -->
           <div v-if="item.kind === 'explore'" class="explore-group">
-            <div class="explore-group-header" @click="toggleGroup(idx)">
-              <span class="tool-arrow">{{ expandedGroups.has(idx) ? '▼' : '▶' }}</span>
+            <div class="explore-group-header" @click="toggleGroup(item.calls[0].id)">
+              <span class="tool-arrow">{{ expandedGroups.has(item.calls[0].id) ? '▼' : '▶' }}</span>
               <span class="explore-label">Explored</span>
               <span class="explore-count">({{ item.calls.length }})</span>
             </div>
-            <div v-if="expandedGroups.has(idx)" class="explore-items">
+            <div v-if="expandedGroups.has(item.calls[0].id)" class="explore-items">
               <div v-for="call in item.calls" :key="call.id" class="explore-item">
                 <span class="tree-branch">└</span>
                 <span class="explore-tool-name" :class="{ 'is-error': call.isError }">{{ call.name }}</span>

@@ -104,6 +104,15 @@ let abortCtrl: AbortController | null = null
 // Per-conversation EventSource subscriptions
 const convSubscriptions = new Map<string, () => void>()
 
+let scrollRafId: number | null = null
+function scheduleScrollToBottom() {
+  if (scrollRafId !== null) return
+  scrollRafId = requestAnimationFrame(() => {
+    scrollRafId = null
+    scrollToBottom()
+  })
+}
+
 const sidebarOpen = ref(localStorage.getItem('spider-sidebar') !== 'closed')
 const targetWidth = ref(parseInt(localStorage.getItem('spider-target-width') || '280'))
 const isDragging = ref(false)
@@ -232,6 +241,8 @@ async function createNewConversation() {
   activeConvId.value = conv.id
   messagesMap.value[conv.id] = []
   router.replace(`/chat/${conv.id}`)
+  await nextTick()
+  textareaRef.value?.focus()
 }
 
 function scrollToBottom() {
@@ -306,6 +317,7 @@ function handleConvEvent(convId: string, event: ChatEvent) {
     case 'tool_result': {
       const tb = blocks.find(b => b.type === 'tool' && b.call.id === event.content?.id) as { type: 'tool'; call: ToolCallBlock } | undefined
       if (tb) {
+        if (event.content?.input) tb.call.input = event.content.input
         tb.call.result = event.content?.result
         tb.call.isError = event.content?.is_error
         tb.call.durationMs = event.content?.duration_ms
@@ -345,7 +357,7 @@ function handleConvEvent(convId: string, event: ChatEvent) {
       break
   }
   if (activeConvId.value === convId) {
-    nextTick(() => scrollToBottom())
+    scheduleScrollToBottom()
   }
 }
 
@@ -629,10 +641,11 @@ async function initView() {
 
 onMounted(() => {
   document.addEventListener('click', closeModeDropdown)
+  if (!initialized) { initialized = true; initView() }
 })
 onActivated(() => {
   document.addEventListener('click', closeModeDropdown)
-  initView()
+  if (!initialized) { initialized = true; initView() }
 })
 
 onDeactivated(() => {
