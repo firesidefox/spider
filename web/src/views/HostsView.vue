@@ -108,6 +108,7 @@
                 <span class="badge" :class="f.type === 'ssh' ? 'badge-ssh' : 'badge-rest'">{{ f.type === 'ssh' ? 'SSH' : 'REST API' }}</span>
                 <span class="face-addr code">{{ f.ip }}:{{ f.port }}</span>
                 <div class="face-actions">
+                  <button class="btn btn-sm" @click="startEditFace(f)">编辑</button>
                   <button class="btn btn-sm btn-danger" @click="removeFace(f)">删除</button>
                 </div>
               </div>
@@ -195,9 +196,9 @@
     </div>
 
     <!-- 添加操作面弹窗 -->
-    <div v-if="showAddFace" class="modal-overlay" @click.self="showAddFace = false">
+    <div v-if="showAddFace" class="modal-overlay" @click.self="closeFaceModal">
       <div class="modal">
-        <h3>添加操作面</h3>
+        <h3>{{ editFaceTarget ? '编辑操作面' : '添加操作面' }}</h3>
         <form @submit.prevent="submitFace">
           <div class="form-row"><label>类型</label>
             <select v-model="faceForm.type" class="input">
@@ -232,8 +233,8 @@
             <div class="form-row"><label>凭据</label><textarea v-model="faceForm.credential" class="input" rows="2" /></div>
           </template>
           <div class="modal-footer">
-            <button type="button" class="btn" @click="showAddFace = false">取消</button>
-            <button type="submit" class="btn btn-primary">添加</button>
+            <button type="button" class="btn" @click="closeFaceModal">取消</button>
+            <button type="submit" class="btn btn-primary">{{ editFaceTarget ? '保存' : '添加' }}</button>
           </div>
         </form>
       </div>
@@ -246,7 +247,7 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   listHosts, addHost, updateHost, deleteHost, pingHost,
-  listAccessFaces, addAccessFace, deleteAccessFace,
+  listAccessFaces, addAccessFace, updateAccessFace, deleteAccessFace,
   getFingerprint, listMemories, addMemory, deleteMemory,
   type Host, type AccessFace, type Fingerprint, type Memory,
 } from '../api/hosts'
@@ -276,11 +277,12 @@ const fingerprint = ref<Fingerprint | null>(null)
 const memories = ref<Memory[]>([])
 const newMemory = ref('')
 const showAddFace = ref(false)
+const editFaceTarget = ref<AccessFace | null>(null)
 
 const emptyForm = () => ({ name: '', ip: '', notes: '', vendor: '', product_name: '', product_version: '', tagsStr: '' })
 const form = ref(emptyForm())
 
-const emptyFaceForm = () => ({ type: 'ssh' as 'ssh' | 'restapi', ip: '', port: 22, username: '', ssh_auth_type: 'password', credential: '', base_url: '', rest_auth_type: 'none', rest_username: '' })
+const emptyFaceForm = () => ({ type: 'ssh' as 'ssh' | 'restapi', ip: '', port: 22, username: '', ssh_auth_type: 'password', credential: '', passphrase: '', ssh_key_id: '', ssh_legacy: false, base_url: '', rest_auth_type: 'none', rest_username: '', header_name: '' })
 const faceForm = ref(emptyFaceForm())
 
 const allTags = computed(() => {
@@ -372,20 +374,53 @@ function bulkExecSelected() { router.push({ path: '/exec', query: { hosts: selec
 
 async function submitFace() {
   if (!activeHost.value) return
-  const req: Record<string, unknown> = { type: faceForm.value.type, ip: faceForm.value.ip, port: faceForm.value.port }
+  const req: Record<string, unknown> = { type: faceForm.value.type, ip: faceForm.value.ip, port: faceForm.value.port, tags: [], knowledge_sources: [] }
   if (faceForm.value.type === 'ssh') {
     req.username = faceForm.value.username || undefined
     req.ssh_auth_type = faceForm.value.ssh_auth_type
     req.credential = faceForm.value.credential || undefined
+    req.passphrase = faceForm.value.passphrase || undefined
+    req.ssh_key_id = faceForm.value.ssh_key_id || undefined
+    req.ssh_legacy = faceForm.value.ssh_legacy
   } else {
     req.base_url = faceForm.value.base_url || undefined
     req.rest_auth_type = faceForm.value.rest_auth_type
     req.rest_username = faceForm.value.rest_username || undefined
     req.credential = faceForm.value.credential || undefined
+    req.header_name = faceForm.value.header_name || undefined
   }
-  const f = await addAccessFace(activeHost.value.id, req as Parameters<typeof addAccessFace>[1])
-  faces.value.push(f)
+  if (editFaceTarget.value) {
+    await updateAccessFace(activeHost.value.id, editFaceTarget.value.id, req as Parameters<typeof updateAccessFace>[2])
+  } else {
+    await addAccessFace(activeHost.value.id, req as Parameters<typeof addAccessFace>[1])
+  }
+  closeFaceModal()
+  faces.value = await listAccessFaces(activeHost.value.id)
+}
+
+function startEditFace(face: AccessFace) {
+  editFaceTarget.value = face
+  faceForm.value = {
+    type: face.type,
+    ip: face.ip,
+    port: face.port,
+    username: face.username || '',
+    ssh_auth_type: face.ssh_auth_type || 'password',
+    credential: '',
+    passphrase: '',
+    ssh_key_id: face.ssh_key_id || '',
+    ssh_legacy: face.ssh_legacy || false,
+    base_url: face.base_url || '',
+    rest_auth_type: face.rest_auth_type || 'none',
+    rest_username: face.rest_username || '',
+    header_name: face.header_name || '',
+  }
+  showAddFace.value = true
+}
+
+function closeFaceModal() {
   showAddFace.value = false
+  editFaceTarget.value = null
   faceForm.value = emptyFaceForm()
 }
 
