@@ -221,5 +221,66 @@ func migrate(db *sql.DB) error {
 	db.Exec("ALTER TABLE rag_config ADD COLUMN cached_models TEXT NOT NULL DEFAULT ''")
 	db.Exec("ALTER TABLE rag_config ADD COLUMN validated_at TEXT NOT NULL DEFAULT ''")
 	db.Exec("ALTER TABLE conversations ADD COLUMN status TEXT NOT NULL DEFAULT 'idle'")
+	// Host redesign: new tables
+	db.Exec(`CREATE TABLE IF NOT EXISTS access_faces (
+		id TEXT PRIMARY KEY,
+		host_id TEXT NOT NULL REFERENCES hosts(id) ON DELETE CASCADE,
+		type TEXT NOT NULL CHECK(type IN ('ssh','restapi')),
+		ip TEXT NOT NULL,
+		port INTEGER NOT NULL,
+		username TEXT NOT NULL DEFAULT '',
+		auth_type TEXT NOT NULL DEFAULT '',
+		encrypted_credential TEXT NOT NULL DEFAULT '',
+		encrypted_passphrase TEXT NOT NULL DEFAULT '',
+		ssh_key_id TEXT NOT NULL DEFAULT '',
+		ssh_legacy INTEGER NOT NULL DEFAULT 0,
+		base_url TEXT NOT NULL DEFAULT '',
+		rest_username TEXT NOT NULL DEFAULT '',
+		header_name TEXT NOT NULL DEFAULT '',
+		knowledge_sources TEXT NOT NULL DEFAULT '[]',
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL
+	)`)
+	db.Exec(`CREATE TABLE IF NOT EXISTS host_fingerprints (
+		host_id TEXT PRIMARY KEY REFERENCES hosts(id) ON DELETE CASCADE,
+		ssh_host_key TEXT NOT NULL DEFAULT '',
+		system_version TEXT NOT NULL DEFAULT '',
+		hardware_id TEXT NOT NULL DEFAULT '',
+		api_signature TEXT NOT NULL DEFAULT '',
+		status TEXT NOT NULL DEFAULT 'unverified',
+		snapshot_at DATETIME
+	)`)
+	db.Exec(`CREATE TABLE IF NOT EXISTS host_memories (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		host_id TEXT NOT NULL REFERENCES hosts(id) ON DELETE CASCADE,
+		content TEXT NOT NULL,
+		created_by TEXT NOT NULL CHECK(created_by IN ('user','agent')),
+		created_at DATETIME NOT NULL
+	)`)
+	db.Exec(`CREATE TABLE IF NOT EXISTS host_knowledge_sources (
+		host_id TEXT NOT NULL REFERENCES hosts(id) ON DELETE CASCADE,
+		type TEXT NOT NULL CHECK(type IN ('group','doc')),
+		ref_id INTEGER NOT NULL,
+		PRIMARY KEY (host_id, type, ref_id)
+	)`)
+	// New hosts columns
+	db.Exec("ALTER TABLE hosts ADD COLUMN notes TEXT NOT NULL DEFAULT ''")
+	db.Exec("ALTER TABLE hosts ADD COLUMN product_name TEXT NOT NULL DEFAULT ''")
+	db.Exec("ALTER TABLE hosts ADD COLUMN product_version TEXT NOT NULL DEFAULT ''")
+	// Data migration: create one SSH access_face per existing host (idempotent via INSERT OR IGNORE)
+	db.Exec(`INSERT OR IGNORE INTO access_faces
+		(id, host_id, type, ip, port, username, auth_type,
+		 encrypted_credential, encrypted_passphrase, ssh_key_id, ssh_legacy,
+		 base_url, rest_username, header_name, knowledge_sources,
+		 created_at, updated_at)
+		SELECT
+			lower(hex(randomblob(16))),
+			id, 'ssh', ip, port, username, auth_type,
+			encrypted_credential, encrypted_passphrase,
+			COALESCE(ssh_key_id,''), COALESCE(ssh_legacy,0),
+			'', '', '[]',
+			created_at, updated_at
+		FROM hosts
+		WHERE id NOT IN (SELECT host_id FROM access_faces WHERE type='ssh')`)
 	return nil
 }
