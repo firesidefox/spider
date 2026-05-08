@@ -2,7 +2,6 @@ package api
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"strconv"
 
@@ -11,18 +10,7 @@ import (
 )
 
 func ragStore(app *mcppkg.App) (*rag.Store, error) {
-	cfg, err := app.RagConfigStore.Get()
-	if err != nil {
-		return nil, err
-	}
-	if cfg == nil || cfg.Model == "" {
-		return nil, fmt.Errorf("embedding model not configured — please set it in Knowledge settings")
-	}
-	embedder, err := rag.NewEmbedder(cfg.Type, cfg.APIKey, cfg.Model, cfg.BaseURL, 0)
-	if err != nil {
-		return nil, err
-	}
-	return rag.NewStore(app.DB, app.DocStore, embedder), nil
+	return app.GetOrBuildRagStore()
 }
 
 func listDocuments(app *mcppkg.App, w http.ResponseWriter, r *http.Request) {

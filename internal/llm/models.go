@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -34,6 +35,7 @@ func listClaudeModels(apiKey, baseURL string) ([]ModelInfo, error) {
 	if baseURL == "" {
 		baseURL = defaultClaudeBaseURL
 	}
+	baseURL = strings.TrimRight(baseURL, "/")
 	client := modelHTTPClient
 	req, err := http.NewRequest(http.MethodGet, baseURL+"/v1/models", nil)
 	if err != nil {
@@ -72,6 +74,7 @@ func listOpenAIModels(apiKey, baseURL string) ([]ModelInfo, error) {
 	if baseURL == "" {
 		baseURL = defaultOpenAIBaseURL
 	}
+	baseURL = strings.TrimRight(baseURL, "/")
 	client := modelHTTPClient
 	req, err := http.NewRequest(http.MethodGet, baseURL+"/v1/models", nil)
 	if err != nil {

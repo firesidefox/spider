@@ -2,11 +2,17 @@ package models
 
 import "time"
 
+type DocumentGroup struct {
+	ID        int       `json:"id"`
+	Name      string    `json:"name"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
 type Document struct {
+	GroupID    *int      `json:"group_id"`
 	ID         int       `json:"id"`
 	Vendor     string    `json:"vendor"`
-	CLIType    string    `json:"cli_type"`
-	DocType    string    `json:"doc_type"`
+	Tags       []string  `json:"tags"`
 	Title      string    `json:"title"`
 	Content    string    `json:"content"`
 	Embedding  []byte    `json:"-"`

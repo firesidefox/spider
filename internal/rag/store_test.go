@@ -109,6 +109,45 @@ func TestSearchNoResults(t *testing.T) {
 	}
 }
 
+func TestSearchWithCLITypeFiltersResults(t *testing.T) {
+	db := setupTestDB(t)
+	docs := store.NewDocumentStore(db)
+	emb := &mockEmbedder{
+		dim: 3,
+		vecs: map[string][]float32{
+			"vrp interface doc": {1, 0, 0},
+			"ios interface doc": {1, 0, 0},
+			"interface query":   {1, 0, 0},
+		},
+	}
+	s := NewStore(db, docs, emb)
+	ctx := context.Background()
+
+	if err := s.Ingest(ctx, "huawei", nil, "VRP", "vrp interface doc", "vrp.md", 0, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec("UPDATE documents SET cli_type = ? WHERE title = ?", "vrp", "VRP"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Ingest(ctx, "huawei", nil, "IOS", "ios interface doc", "ios.md", 0, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec("UPDATE documents SET cli_type = ? WHERE title = ?", "ios", "IOS"); err != nil {
+		t.Fatal(err)
+	}
+
+	results, err := s.SearchWithCLIType(ctx, "interface query", "huawei", "vrp", 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+	if results[0].Title != "VRP" {
+		t.Fatalf("expected VRP result, got %q", results[0].Title)
+	}
+}
+
 func TestSearchByGroup(t *testing.T) {
 	db := setupTestDB(t)
 	emb := &mockEmbedder{

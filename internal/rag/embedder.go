@@ -18,10 +18,10 @@ type Embedder interface {
 
 // NewEmbedder creates an Embedder from raw parameters.
 // provider must be "openai". apiKey, model, and dimensions are passed directly.
-func NewEmbedder(provider, apiKey, model string, dimensions int) (Embedder, error) {
+func NewEmbedder(provider, apiKey, model, baseURL string, dimensions int) (Embedder, error) {
 	switch provider {
 	case "openai":
-		return NewOpenAIEmbedder(apiKey, model, dimensions), nil
+		return NewOpenAIEmbedder(apiKey, model, baseURL, dimensions), nil
 	default:
 		return nil, fmt.Errorf("unsupported embedding provider: %s", provider)
 	}
@@ -30,14 +30,19 @@ func NewEmbedder(provider, apiKey, model string, dimensions int) (Embedder, erro
 type OpenAIEmbedder struct {
 	apiKey     string
 	model      string
+	baseURL    string
 	dimensions int
 	http       *http.Client
 }
 
-func NewOpenAIEmbedder(apiKey, model string, dimensions int) *OpenAIEmbedder {
+func NewOpenAIEmbedder(apiKey, model, baseURL string, dimensions int) *OpenAIEmbedder {
+	if baseURL == "" {
+		baseURL = "https://api.openai.com"
+	}
 	return &OpenAIEmbedder{
 		apiKey:     apiKey,
 		model:      model,
+		baseURL:    baseURL,
 		dimensions: dimensions,
 		http:       &http.Client{Timeout: 30 * time.Second},
 	}
@@ -72,7 +77,7 @@ func (e *OpenAIEmbedder) EmbedBatch(ctx context.Context, texts []string) ([][]fl
 		return nil, err
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
-		"https://api.openai.com/v1/embeddings", bytes.NewReader(body))
+		e.baseURL+"/v1/embeddings", bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}

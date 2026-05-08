@@ -65,6 +65,18 @@ func (s *DocumentStore) ListByTag(tag string) ([]*models.Document, error) {
 	return scanDocumentRows(rows)
 }
 
+func (s *DocumentStore) ListByGroup(groupID int) ([]*models.Document, error) {
+	rows, err := s.db.Query(
+		"SELECT id, vendor, tags, title, content, source_file, chunk_index, created_at, group_id FROM documents WHERE group_id = ? ORDER BY id",
+		groupID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanDocumentRows(rows)
+}
+
 func (s *DocumentStore) DeleteBySource(sourceFile string) error {
 	_, err := s.db.Exec("DELETE FROM documents WHERE source_file = ?", sourceFile)
 	return err
