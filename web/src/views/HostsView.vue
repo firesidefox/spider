@@ -66,9 +66,10 @@
 
           <!-- 概览 tab -->
           <template v-if="activeTab === 'overview'">
+            <!-- 基本信息 section -->
             <div class="section">
               <div class="section-header">
-                <span class="section-title">基本信息</span>
+                <span class="section-title">📋 基本信息</span>
                 <button v-if="!editingOverview" class="edit-link" @click="startOverviewEdit(activeHost)">编辑</button>
                 <div v-else class="section-header-actions">
                   <button class="btn btn-primary btn-sm" :disabled="overviewSaving" @click="saveOverview">{{ overviewSaving ? '保存中…' : '保存' }}</button>
@@ -78,71 +79,98 @@
               <div class="section-body">
                 <template v-if="!editingOverview">
                   <div class="info-grid">
-                    <div class="info-item">
-                      <label>名称</label>
-                      <div class="value">{{ activeHost.name }}</div>
-                    </div>
-                    <div class="info-item">
-                      <label>IP 地址</label>
-                      <div class="value code">{{ activeHost.ip }}</div>
-                    </div>
+                    <div class="info-item"><label>名称</label><div class="value">{{ activeHost.name }}</div></div>
+                    <div class="info-item"><label>IP 地址</label><div class="value code">{{ activeHost.ip }}</div></div>
                     <div class="info-item">
                       <label>标签</label>
                       <div class="value">
-                        <template v-if="activeHost.tags.length">
-                          <span v-for="t in activeHost.tags" :key="t" class="tag small" style="margin-right:4px">{{ t }}</span>
-                        </template>
+                        <span v-if="activeHost.tags.length"><span v-for="t in activeHost.tags" :key="t" class="tag small" style="margin-right:4px">{{ t }}</span></span>
                         <span v-else class="value-muted">—</span>
                       </div>
                     </div>
-                    <div class="info-item">
-                      <label>厂商</label>
-                      <div class="value" :class="{ 'value-muted': !activeHost.vendor }">{{ activeHost.vendor || '—' }}</div>
-                    </div>
-                    <div class="info-item">
-                      <label>产品型号</label>
-                      <div class="value" :class="{ 'value-muted': !activeHost.product_name }">{{ activeHost.product_name || '—' }}</div>
-                    </div>
-                    <div class="info-item">
-                      <label>产品版本</label>
-                      <div class="value" :class="{ 'value-muted': !activeHost.product_version }">{{ activeHost.product_version || '—' }}</div>
-                    </div>
+                    <div class="info-item"><label>厂商</label><div class="value" :class="{'value-muted':!activeHost.vendor}">{{ activeHost.vendor || '—' }}</div></div>
+                    <div class="info-item"><label>产品型号</label><div class="value" :class="{'value-muted':!activeHost.product_name}">{{ activeHost.product_name || '—' }}</div></div>
+                    <div class="info-item"><label>产品版本</label><div class="value" :class="{'value-muted':!activeHost.product_version}">{{ activeHost.product_version || '—' }}</div></div>
                   </div>
                   <div v-if="activeHost.notes" class="notes-row">
-                    <div class="info-item">
-                      <label>备注</label>
-                      <div class="value" style="white-space:pre-wrap;font-weight:400">{{ activeHost.notes }}</div>
-                    </div>
+                    <div class="info-item"><label>备注</label><div class="value" style="white-space:pre-wrap;font-weight:400">{{ activeHost.notes }}</div></div>
                   </div>
                 </template>
                 <template v-else>
                   <form class="info-grid" @submit.prevent="saveOverview">
-                    <div class="info-item">
-                      <label>名称</label>
-                      <input v-model="overviewForm.name" class="input info-input" required />
-                    </div>
-                    <div class="info-item">
-                      <label>IP 地址</label>
-                      <input v-model="overviewForm.ip" class="input info-input" required />
-                    </div>
-                    <div class="info-item">
-                      <label>标签</label>
-                      <input v-model="overviewForm.tagsStr" class="input info-input" placeholder="逗号分隔" />
-                    </div>
-                    <div class="info-item">
-                      <label>厂商</label>
-                      <input v-model="overviewForm.vendor" class="input info-input" placeholder="可选" />
-                    </div>
-                    <div class="info-item">
-                      <label>产品型号</label>
-                      <input v-model="overviewForm.product_name" class="input info-input" placeholder="可选" />
-                    </div>
-                    <div class="info-item">
-                      <label>产品版本</label>
-                      <input v-model="overviewForm.product_version" class="input info-input" placeholder="可选" />
-                    </div>
+                    <div class="info-item"><label>名称</label><input v-model="overviewForm.name" class="input info-input" required /></div>
+                    <div class="info-item"><label>IP 地址</label><input v-model="overviewForm.ip" class="input info-input" required /></div>
+                    <div class="info-item"><label>标签</label><input v-model="overviewForm.tagsStr" class="input info-input" placeholder="逗号分隔" /></div>
+                    <div class="info-item"><label>厂商</label><input v-model="overviewForm.vendor" class="input info-input" placeholder="可选" /></div>
+                    <div class="info-item"><label>产品型号</label><input v-model="overviewForm.product_name" class="input info-input" placeholder="可选" /></div>
+                    <div class="info-item"><label>产品版本</label><input v-model="overviewForm.product_version" class="input info-input" placeholder="可选" /></div>
                   </form>
                 </template>
+              </div>
+            </div>
+
+            <!-- 操作面 section -->
+            <div class="section">
+              <div class="section-header">
+                <span class="section-title">🔌 操作面</span>
+                <button class="edit-link" @click="showAddFace = true">+ 添加</button>
+              </div>
+              <div class="section-body">
+                <div v-if="faces.length === 0" class="tab-empty" style="padding:12px 0">暂无操作面</div>
+                <div v-for="f in faces" :key="f.id" class="face-card">
+                  <div class="face-card-header">
+                    <span class="badge" :class="f.type === 'ssh' ? 'badge-ssh' : 'badge-rest'">{{ f.type === 'ssh' ? 'SSH' : 'REST API' }}</span>
+                    <span class="face-addr code">{{ f.type === 'ssh' ? `${f.username}@${f.ip}:${f.port}` : f.base_url }}</span>
+                    <button class="edit-link" @click="startEditFace(f)">编辑</button>
+                  </div>
+                  <div class="face-details">
+                    <span v-if="f.ssh_auth_type">认证: <b>{{ f.ssh_auth_type }}</b></span>
+                    <span v-if="f.rest_auth_type">认证: <b>{{ f.rest_auth_type }}</b></span>
+                    <span v-if="f.ssh_legacy" class="badge badge-warn">兼容模式</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 指纹 section -->
+            <div class="section">
+              <div class="section-header">
+                <span class="section-title">🔍 指纹</span>
+                <div v-if="fingerprint" style="display:flex;align-items:center;gap:8px">
+                  <span class="badge" :class="'badge-fp-' + fingerprint.status">{{ fingerprint.status }}</span>
+                  <span style="font-size:11px;color:var(--muted)">{{ fingerprint.collected_at ? new Date(fingerprint.collected_at).toLocaleString() : '' }}</span>
+                </div>
+              </div>
+              <div class="section-body">
+                <div v-if="!fingerprint" class="tab-empty" style="padding:12px 0">暂无指纹信息</div>
+                <div v-else class="info-grid">
+                  <div v-if="fingerprint.ssh_host_key" class="info-item" style="grid-column:1/-1"><label>SSH Host Key</label><div class="value code" style="font-size:12px;word-break:break-all">{{ fingerprint.ssh_host_key }}</div></div>
+                  <div v-if="fingerprint.system_version" class="info-item"><label>系统版本</label><div class="value">{{ fingerprint.system_version }}</div></div>
+                  <div v-if="fingerprint.hardware_id" class="info-item"><label>硬件序列号</label><div class="value code" style="font-size:12px">{{ fingerprint.hardware_id }}</div></div>
+                  <div v-if="fingerprint.api_signature" class="info-item" style="grid-column:1/-1"><label>API 特征</label><div class="value code" style="font-size:12px">{{ fingerprint.api_signature }}</div></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 记忆 section -->
+            <div class="section">
+              <div class="section-header">
+                <span class="section-title">🧠 记忆</span>
+              </div>
+              <div class="section-body">
+                <div v-if="memories.length === 0" class="tab-empty" style="padding:4px 0 12px">暂无记忆</div>
+                <div v-for="m in memories" :key="m.id" class="memory-item" :class="m.created_by === 'agent' ? 'memory-agent' : ''">
+                  <div class="memory-meta">
+                    <span class="badge" :class="m.created_by === 'agent' ? 'badge-agent' : 'badge-user'">{{ m.created_by === 'agent' ? 'Agent' : '用户' }}</span>
+                    <span class="memory-date">{{ new Date(m.created_at).toLocaleString() }}</span>
+                    <button class="btn btn-sm btn-danger" @click="removeMemory(m.id)">删除</button>
+                  </div>
+                  <div class="memory-content">{{ m.content }}</div>
+                </div>
+                <div class="memory-add">
+                  <textarea v-model="newMemory" class="input" rows="2" placeholder="记录操作经验…" />
+                  <button class="btn btn-sm btn-primary" :disabled="!newMemory.trim()" @click="submitMemory">保存</button>
+                </div>
               </div>
             </div>
           </template>
