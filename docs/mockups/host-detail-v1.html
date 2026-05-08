@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>主机详情 Mockup</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f1117; color: #e2e8f0; font-size: 14px; }
+
+  .layout { display: flex; height: 100vh; }
+
+  /* 左侧主机列表 */
+  .sidebar { width: 220px; background: #161b27; border-right: 1px solid #2d3748; display: flex; flex-direction: column; }
+  .sidebar-header { padding: 16px; font-size: 12px; font-weight: 600; color: #718096; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid #2d3748; }
+  .host-item { padding: 10px 16px; cursor: pointer; border-left: 3px solid transparent; }
+  .host-item:hover { background: #1e2535; }
+  .host-item.active { background: #1e2535; border-left-color: #4f8ef7; }
+  .host-item .host-name { font-weight: 500; color: #e2e8f0; }
+  .host-item .host-ip { font-size: 12px; color: #718096; margin-top: 2px; }
+  .host-item .host-tags { display: flex; gap: 4px; margin-top: 4px; flex-wrap: wrap; }
+  .tag { font-size: 10px; padding: 1px 6px; border-radius: 3px; background: #2d3748; color: #a0aec0; }
+  .add-btn { margin: 12px 16px; padding: 8px; border: 1px dashed #4a5568; border-radius: 6px; text-align: center; color: #718096; cursor: pointer; font-size: 12px; }
+  .add-btn:hover { border-color: #4f8ef7; color: #4f8ef7; }
+
+  /* 右侧详情 */
+  .detail { flex: 1; overflow-y: auto; }
+
+  /* 顶部 header */
+  .detail-header { padding: 20px 24px 0; display: flex; align-items: flex-start; justify-content: space-between; border-bottom: 1px solid #2d3748; padding-bottom: 16px; }
+  .host-title { display: flex; align-items: center; gap: 10px; }
+  .host-title h1 { font-size: 18px; font-weight: 600; }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #48bb78; margin-top: 2px; }
+  .host-subtitle { font-size: 13px; color: #718096; margin-top: 4px; }
+  .header-actions { display: flex; gap: 8px; }
+  .btn { padding: 6px 14px; border-radius: 6px; font-size: 13px; cursor: pointer; border: none; }
+  .btn-primary { background: #4f8ef7; color: white; }
+  .btn-ghost { background: transparent; color: #a0aec0; border: 1px solid #2d3748; }
+  .btn-danger { background: transparent; color: #fc8181; border: 1px solid #2d3748; }
+
+  /* Tab 导航 */
+  .tabs { display: flex; padding: 0 24px; border-bottom: 1px solid #2d3748; gap: 0; }
+  .tab { padding: 12px 16px; font-size: 13px; color: #718096; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  .tab.active { color: #4f8ef7; border-bottom-color: #4f8ef7; }
+  .tab:hover:not(.active) { color: #e2e8f0; }
+
+  /* 内容区 */
+  .content { padding: 24px; display: flex; flex-direction: column; gap: 20px; }
+
+  /* Section 卡片 */
+  .section { background: #161b27; border: 1px solid #2d3748; border-radius: 8px; overflow: hidden; }
+  .section-header { padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #2d3748; background: #1a2035; }
+  .section-title { font-size: 13px; font-weight: 600; color: #a0aec0; text-transform: uppercase; letter-spacing: 0.04em; display: flex; align-items: center; gap: 8px; }
+  .section-icon { font-size: 14px; }
+  .section-body { padding: 16px; }
+  .edit-link { font-size: 12px; color: #4f8ef7; cursor: pointer; }
+
+  /* 基本信息 grid */
+  .info-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+  .info-item label { font-size: 11px; color: #718096; text-transform: uppercase; letter-spacing: 0.04em; display: block; margin-bottom: 4px; }
+  .info-item .value { font-size: 14px; color: #e2e8f0; }
+  .info-item .value.muted { color: #718096; font-style: italic; }
+  .notes-row { margin-top: 12px; padding-top: 12px; border-top: 1px solid #2d3748; }
+
+  /* 操作面 */
+  .access-faces { display: flex; flex-direction: column; gap: 12px; }
+  .face-card { border: 1px solid #2d3748; border-radius: 6px; overflow: hidden; }
+  .face-header { padding: 10px 14px; background: #1a2035; display: flex; align-items: center; justify-content: space-between; }
+  .face-type { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 13px; }
+  .face-badge { font-size: 10px; padding: 2px 8px; border-radius: 3px; font-weight: 600; text-transform: uppercase; }
+  .badge-ssh { background: #2d4a22; color: #68d391; }
+  .badge-rest { background: #2a3a5c; color: #63b3ed; }
+  .face-body { padding: 12px 14px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .face-item label { font-size: 11px; color: #718096; display: block; margin-bottom: 3px; }
+  .face-item .value { font-size: 13px; color: #e2e8f0; }
+  .face-item .value code { font-family: monospace; background: #0f1117; padding: 1px 5px; border-radius: 3px; font-size: 12px; }
+  .knowledge-row { padding: 10px 14px; border-top: 1px solid #2d3748; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .knowledge-label { font-size: 11px; color: #718096; }
+  .knowledge-tag { font-size: 11px; padding: 2px 8px; border-radius: 3px; background: #2d3748; color: #a0aec0; display: flex; align-items: center; gap: 4px; }
+  .knowledge-tag .at { color: #4f8ef7; }
+  .add-knowledge { font-size: 11px; color: #4f8ef7; cursor: pointer; padding: 2px 8px; border: 1px dashed #4f8ef7; border-radius: 3px; }
+  .add-face-btn { padding: 10px; border: 1px dashed #4a5568; border-radius: 6px; text-align: center; color: #718096; cursor: pointer; font-size: 12px; }
+  .add-face-btn:hover { border-color: #4f8ef7; color: #4f8ef7; }
+
+  /* 指纹 */
+  .fingerprint-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .fp-item label { font-size: 11px; color: #718096; display: block; margin-bottom: 4px; }
+  .fp-item .value { font-size: 12px; color: #e2e8f0; font-family: monospace; word-break: break-all; }
+  .fp-status { display: flex; align-items: center; gap: 6px; }
+  .fp-badge { font-size: 11px; padding: 2px 8px; border-radius: 3px; font-weight: 600; }
+  .badge-ok { background: #2d4a22; color: #68d391; }
+  .badge-changed { background: #4a2020; color: #fc8181; }
+  .badge-unverified { background: #3a3520; color: #f6e05e; }
+  .fp-time { font-size: 11px; color: #718096; }
+  .fp-full-row { grid-column: 1 / -1; }
+
+  /* 记忆 */
+  .memory-list { display: flex; flex-direction: column; gap: 8px; }
+  .memory-item { padding: 10px 12px; background: #0f1117; border-radius: 6px; border-left: 3px solid #4a5568; }
+  .memory-item.agent { border-left-color: #4f8ef7; }
+  .memory-meta { font-size: 11px; color: #718096; margin-bottom: 4px; display: flex; gap: 8px; }
+  .memory-by { color: #a0aec0; }
+  .memory-content { font-size: 13px; color: #e2e8f0; line-height: 1.5; }
+  .memory-empty { color: #718096; font-size: 13px; font-style: italic; }
+  .memory-add { margin-top: 8px; display: flex; gap: 8px; }
+  .memory-input { flex: 1; background: #0f1117; border: 1px solid #2d3748; border-radius: 6px; padding: 8px 12px; color: #e2e8f0; font-size: 13px; outline: none; }
+  .memory-input:focus { border-color: #4f8ef7; }
+</style>
+</head>
+<body>
+<div class="layout">
+
+  <!-- 左侧列表 -->
+  <div class="sidebar">
+    <div class="sidebar-header">主机</div>
+    <div class="host-item">
+      <div class="host-name">core-sw-01</div>
+      <div class="host-ip">192.168.1.1</div>
+      <div class="host-tags"><span class="tag">H3C</span><span class="tag">核心</span></div>
+    </div>
+    <div class="host-item active">
+      <div class="host-name">fw-huawei-02</div>
+      <div class="host-ip">10.0.0.254</div>
+      <div class="host-tags"><span class="tag">华为</span><span class="tag">防火墙</span></div>
+    </div>
+    <div class="host-item">
+      <div class="host-name">f5-ltm-prod</div>
+      <div class="host-ip">172.16.0.10</div>
+      <div class="host-tags"><span class="tag">F5</span><span class="tag">生产</span></div>
+    </div>
+    <div class="host-item">
+      <div class="host-name">web-server-01</div>
+      <div class="host-ip">10.1.2.3</div>
+      <div class="host-tags"><span class="tag">Linux</span></div>
+    </div>
+    <div class="add-btn">+ 添加主机</div>
+  </div>
+
+  <!-- 右侧详情 -->
+  <div class="detail">
+    <div class="detail-header">
+      <div>
+        <div class="host-title">
+          <div class="status-dot"></div>
+          <h1>fw-huawei-02</h1>
+        </div>
+        <div class="host-subtitle">10.0.0.254 · 华为 · USG6000 · V500R005</div>
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-ghost">测试</button>
+        <button class="btn btn-primary">编辑</button>
+        <button class="btn btn-danger">删除</button>
+      </div>
+    </div>
+
+    <div class="tabs">
+      <div class="tab active">概览</div>
+      <div class="tab">操作面</div>
+      <div class="tab">指纹</div>
+      <div class="tab">记忆</div>
+    </div>
+
+    <div class="content">
+
+      <!-- 基本信息 -->
+      <div class="section">
+        <div class="section-header">
+          <div class="section-title"><span class="section-icon">📋</span>基本信息</div>
+          <span class="edit-link">编辑</span>
+        </div>
+        <div class="section-body">
+          <div class="info-grid">
+            <div class="info-item">
+              <label>名称</label>
+              <div class="value">fw-huawei-02</div>
+            </div>
+            <div class="info-item">
+              <label>IP 地址</label>
+              <div class="value">10.0.0.254</div>
+            </div>
+            <div class="info-item">
+              <label>标签</label>
+              <div class="value"><span class="tag">华为</span> <span class="tag">防火墙</span> <span class="tag">生产</span></div>
+            </div>
+            <div class="info-item">
+              <label>厂商</label>
+              <div class="value">华为</div>
+            </div>
+            <div class="info-item">
+              <label>产品名称</label>
+              <div class="value">USG6000</div>
+            </div>
+            <div class="info-item">
+              <label>产品版本</label>
+              <div class="value">V500R005C00</div>
+            </div>
+          </div>
+          <div class="notes-row">
+            <div class="info-item">
+              <label>备注</label>
+              <div class="value">生产核心防火墙，双机热备主机。变更需提前申请。</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 操作面 -->
+      <div class="section">
+        <div class="section-header">
+          <div class="section-title"><span class="section-icon">🔌</span>操作面</div>
+          <span class="edit-link">添加</span>
+        </div>
+        <div class="section-body">
+          <div class="access-faces">
+
+            <!-- SSH 操作面 -->
+            <div class="face-card">
+              <div class="face-header">
+                <div class="face-type">
+                  <span class="face-badge badge-ssh">SSH</span>
+                  admin@10.0.0.254:22
+                </div>
+                <span class="edit-link">编辑</span>
+              </div>
+              <div class="face-body">
+                <div class="face-item">
+                  <label>认证方式</label>
+                  <div class="value">密钥认证</div>
+                </div>
+                <div class="face-item">
+                  <label>SSH Key</label>
+                  <div class="value">prod-ops-key</div>
+                </div>
+                <div class="face-item">
+                  <label>SSH Legacy</label>
+                  <div class="value">否</div>
+                </div>
+              </div>
+              <div class="knowledge-row">
+                <span class="knowledge-label">知识来源：</span>
+                <span class="knowledge-tag"><span class="at">@</span>华为防火墙CLI手册</span>
+                <span class="knowledge-tag"><span class="at">@</span>USG6000配置指南</span>
+                <span class="add-knowledge">+ 添加</span>
+              </div>
+            </div>
+
+            <!-- REST API 操作面 -->
+            <div class="face-card">
+              <div class="face-header">
+                <div class="face-type">
+                  <span class="face-badge badge-rest">REST API</span>
+                  10.0.0.254:443
+                </div>
+                <span class="edit-link">编辑</span>
+              </div>
+              <div class="face-body">
+                <div class="face-item">
+                  <label>认证方式</label>
+                  <div class="value">Basic Auth</div>
+                </div>
+                <div class="face-item">
+                  <label>用户名</label>
+                  <div class="value">api-user</div>
+                </div>
+                <div class="face-item">
+                  <label>Base URL</label>
+                  <div class="value"><code>https://10.0.0.254/api/v1</code></div>
+                </div>
+              </div>
+              <div class="knowledge-row">
+                <span class="knowledge-label">知识来源：</span>
+                <span class="knowledge-tag"><span class="at">@</span>华为USG REST API文档</span>
+                <span class="add-knowledge">+ 添加</span>
+              </div>
+            </div>
+
+            <div class="add-face-btn">+ 添加操作面</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 指纹 -->
+      <div class="section">
+        <div class="section-header">
+          <div class="section-title"><span class="section-icon">🔍</span>指纹</div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <div class="fp-status">
+              <span class="fp-badge badge-ok">正常</span>
+              <span class="fp-time">上次采集 2026-05-08 16:42</span>
+            </div>
+          </div>
+        </div>
+        <div class="section-body">
+          <div class="fingerprint-grid">
+            <div class="fp-item">
+              <label>SSH Host Key</label>
+              <div class="value">SHA256:xK9mP2...aB3nQ7</div>
+            </div>
+            <div class="fp-item">
+              <label>系统版本</label>
+              <div class="value">VRP V200R007C00SPC500</div>
+            </div>
+            <div class="fp-item">
+              <label>硬件序列号</label>
+              <div class="value">2102350BKD10J3000001</div>
+            </div>
+            <div class="fp-item">
+              <label>API 特征</label>
+              <div class="value">v1.3.2 / schema-hash:a4f2</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 记忆 -->
+      <div class="section">
+        <div class="section-header">
+          <div class="section-title"><span class="section-icon">🧠</span>记忆</div>
+        </div>
+        <div class="section-body">
+          <div class="memory-list">
+            <div class="memory-item agent">
+              <div class="memory-meta">
+                <span class="memory-by">Agent</span>
+                <span>2026-05-07 14:23</span>
+              </div>
+              <div class="memory-content">该设备 display ip routing-table 输出较慢（约 8s），超时需设为 15s 以上。</div>
+            </div>
+            <div class="memory-item">
+              <div class="memory-meta">
+                <span class="memory-by">用户</span>
+                <span>2026-05-06 09:11</span>
+              </div>
+              <div class="memory-content">进入系统视图前需先 undo terminal monitor，否则日志刷屏导致命令解析失败。</div>
+            </div>
+          </div>
+          <div class="memory-add" style="margin-top:12px">
+            <input class="memory-input" placeholder="记录操作经验..." />
+            <button class="btn btn-primary" style="white-space:nowrap">保存</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+</body>
+</html>
