@@ -7,7 +7,7 @@ import (
 )
 
 func TestBatchExecuteTool_Interface(t *testing.T) {
-	tool := NewBatchExecuteTool(nil, nil, nil, nil)
+	tool := NewBatchExecuteTool(nil, nil, nil, nil, nil)
 	if tool.Name() != "RunCommandBatch" {
 		t.Errorf("got name %q, want batch_execute", tool.Name())
 	}
@@ -30,7 +30,7 @@ func TestBatchExecuteTool_Interface(t *testing.T) {
 }
 
 func TestVerifyTool_Interface(t *testing.T) {
-	tool := NewVerifyTool(nil, nil, nil)
+	tool := NewVerifyTool(nil, nil, nil, nil)
 	if tool.Name() != "Verify" {
 		t.Errorf("got name %q, want verify", tool.Name())
 	}
@@ -70,7 +70,7 @@ func TestParseChecks_Invalid(t *testing.T) {
 }
 
 func TestVerifyTool_Execute_NoChecks(t *testing.T) {
-	tool := NewVerifyTool(nil, nil, nil)
+	tool := NewVerifyTool(nil, nil, nil, nil)
 	res, err := tool.Execute(context.Background(), map[string]any{
 		"checks": "bad",
 	})
@@ -83,7 +83,7 @@ func TestVerifyTool_Execute_NoChecks(t *testing.T) {
 }
 
 func TestBatchExecuteTool_Execute_NoCommand(t *testing.T) {
-	tool := NewBatchExecuteTool(nil, nil, nil, nil)
+	tool := NewBatchExecuteTool(nil, nil, nil, nil, nil)
 	res, err := tool.Execute(context.Background(), map[string]any{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -94,7 +94,7 @@ func TestBatchExecuteTool_Execute_NoCommand(t *testing.T) {
 }
 
 func TestBatchExecuteTool_Execute_NoHosts(t *testing.T) {
-	tool := NewBatchExecuteTool(nil, nil, nil, nil)
+	tool := NewBatchExecuteTool(nil, nil, nil, nil, nil)
 	res, err := tool.Execute(context.Background(), map[string]any{
 		"command":  "echo hi",
 		"host_ids": []any{},
@@ -108,7 +108,7 @@ func TestBatchExecuteTool_Execute_NoHosts(t *testing.T) {
 }
 
 func TestVerifyTool_InputSchema_Checks(t *testing.T) {
-	tool := NewVerifyTool(nil, nil, nil)
+	tool := NewVerifyTool(nil, nil, nil, nil)
 	schema := tool.InputSchema()
 	props, ok := schema["properties"].(map[string]any)
 	if !ok {
@@ -122,7 +122,7 @@ func TestVerifyTool_InputSchema_Checks(t *testing.T) {
 }
 
 func TestVerifyTool_ToolResultIsJSON(t *testing.T) {
-	tool := NewVerifyTool(nil, nil, nil)
+	tool := NewVerifyTool(nil, nil, nil, nil)
 	res, _ := tool.Execute(context.Background(), map[string]any{"checks": "bad"})
 	if res == nil {
 		t.Fatal("nil result")
@@ -131,7 +131,7 @@ func TestVerifyTool_ToolResultIsJSON(t *testing.T) {
 }
 
 func TestBatchExecuteTool_RiskLevel(t *testing.T) {
-	tool := NewBatchExecuteTool(nil, nil, nil, nil)
+	tool := NewBatchExecuteTool(nil, nil, nil, nil, nil)
 	res, _ := tool.Execute(context.Background(), map[string]any{})
 	if res.RiskLevel != RiskL3 {
 		t.Errorf("expected RiskL3, got %v", res.RiskLevel)
@@ -139,7 +139,7 @@ func TestBatchExecuteTool_RiskLevel(t *testing.T) {
 }
 
 func TestVerifyTool_RiskLevel(t *testing.T) {
-	tool := NewVerifyTool(nil, nil, nil)
+	tool := NewVerifyTool(nil, nil, nil, nil)
 	res, _ := tool.Execute(context.Background(), map[string]any{"checks": "bad"})
 	if res.RiskLevel != RiskL1 {
 		t.Errorf("expected RiskL1, got %v", res.RiskLevel)
@@ -147,7 +147,7 @@ func TestVerifyTool_RiskLevel(t *testing.T) {
 }
 
 func TestVerifyTool_Timeout_EmptyChecks(t *testing.T) {
-	tool := NewVerifyTool(nil, nil, nil)
+	tool := NewVerifyTool(nil, nil, nil, nil)
 	res, err := tool.Execute(context.Background(), map[string]any{
 		"checks":   []any{},
 		"timeout":  1,

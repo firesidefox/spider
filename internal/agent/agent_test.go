@@ -228,7 +228,7 @@ func TestReadOnlyToolDescriptionsContainExploreHint(t *testing.T) {
 		NewListDevicesTool(nil),
 		NewGetDeviceInfoTool(nil),
 		NewSearchDocsTool(nil),
-		NewVerifyTool(nil, nil, nil),
+		NewVerifyTool(nil, nil, nil, nil),
 	}
 	for _, tool := range tools {
 		desc := tool.Description()
@@ -240,8 +240,8 @@ func TestReadOnlyToolDescriptionsContainExploreHint(t *testing.T) {
 
 func TestActToolDescriptionsContainSideEffectHint(t *testing.T) {
 	tools := []Tool{
-		NewExecuteCLITool(nil, nil, nil, nil),
-		NewBatchExecuteTool(nil, nil, nil, nil),
+		NewExecuteCLITool(nil, nil, nil, nil, nil),
+		NewBatchExecuteTool(nil, nil, nil, nil, nil),
 		NewCallRESTAPITool(),
 	}
 	for _, tool := range tools {
