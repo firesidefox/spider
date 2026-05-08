@@ -46,18 +46,11 @@
         <div class="detail-topbar">
           <div class="detail-topbar-left">
             <span class="detail-title">{{ activeHost.name }}</span>
-            <span v-if="activeHost.vendor" class="badge">{{ activeHost.vendor }}</span>
+            <span v-if="hostSubtitle" class="detail-subtitle">{{ hostSubtitle }}</span>
           </div>
           <div class="detail-topbar-right">
             <button class="btn btn-sm" @click="goExec(activeHost)">▶ 执行</button>
             <button class="btn btn-sm" :disabled="pinging" @click="pingActive">{{ pinging ? '测试中…' : '⚡ 测试' }}</button>
-            <template v-if="activeTab === 'overview'">
-              <button v-if="!editingOverview" class="btn btn-sm" @click="startOverviewEdit(activeHost)">编辑</button>
-              <template v-else>
-                <button class="btn btn-sm btn-primary" :disabled="overviewSaving" @click="saveOverview">{{ overviewSaving ? '保存中…' : '保存' }}</button>
-                <button class="btn btn-sm" @click="cancelOverview">取消</button>
-              </template>
-            </template>
             <button class="btn btn-sm btn-danger" @click="removeHost(activeHost)">删除</button>
           </div>
         </div>
@@ -73,71 +66,85 @@
 
           <!-- 概览 tab -->
           <template v-if="activeTab === 'overview'">
-            <template v-if="!editingOverview">
-              <div class="overview-fields">
-                <div class="overview-row">
-                  <span class="overview-label">名称</span>
-                  <span class="overview-value">{{ activeHost.name }}</span>
-                </div>
-                <div class="overview-row">
-                  <span class="overview-label">IP 地址</span>
-                  <span class="overview-value code">{{ activeHost.ip }}</span>
-                </div>
-                <div class="overview-row">
-                  <span class="overview-label">厂商</span>
-                  <span class="overview-value">{{ activeHost.vendor || '—' }}</span>
-                </div>
-                <div class="overview-row">
-                  <span class="overview-label">产品型号</span>
-                  <span class="overview-value">{{ activeHost.product_name || '—' }}</span>
-                </div>
-                <div class="overview-row">
-                  <span class="overview-label">产品版本</span>
-                  <span class="overview-value">{{ activeHost.product_version || '—' }}</span>
-                </div>
-                <div class="overview-row">
-                  <span class="overview-label">标签</span>
-                  <span class="overview-value">
-                    <template v-if="activeHost.tags.length">
-                      <span v-for="t in activeHost.tags" :key="t" class="tag small" style="margin-right:4px">{{ t }}</span>
-                    </template>
-                    <span v-else>—</span>
-                  </span>
+            <div class="section">
+              <div class="section-header">
+                <span class="section-title">基本信息</span>
+                <button v-if="!editingOverview" class="edit-link" @click="startOverviewEdit(activeHost)">编辑</button>
+                <div v-else class="section-header-actions">
+                  <button class="btn btn-primary btn-sm" :disabled="overviewSaving" @click="saveOverview">{{ overviewSaving ? '保存中…' : '保存' }}</button>
+                  <button class="btn btn-sm" @click="cancelOverview">取消</button>
                 </div>
               </div>
-            </template>
-            <template v-else>
-              <form class="overview-edit-form" @submit.prevent="saveOverview">
-                <div class="overview-row">
-                  <label class="overview-label">名称</label>
-                  <input v-model="overviewForm.name" class="input overview-input" required />
-                </div>
-                <div class="overview-row">
-                  <label class="overview-label">IP 地址</label>
-                  <input v-model="overviewForm.ip" class="input overview-input" required />
-                </div>
-                <div class="overview-row">
-                  <label class="overview-label">厂商</label>
-                  <input v-model="overviewForm.vendor" class="input overview-input" placeholder="可选" />
-                </div>
-                <div class="overview-row">
-                  <label class="overview-label">产品型号</label>
-                  <input v-model="overviewForm.product_name" class="input overview-input" placeholder="可选" />
-                </div>
-                <div class="overview-row">
-                  <label class="overview-label">产品版本</label>
-                  <input v-model="overviewForm.product_version" class="input overview-input" placeholder="可选" />
-                </div>
-                <div class="overview-row">
-                  <label class="overview-label">标签</label>
-                  <input v-model="overviewForm.tagsStr" class="input overview-input" placeholder="逗号分隔，如 prod,web" />
-                </div>
-                <div class="overview-edit-actions">
-                  <button type="submit" class="btn btn-primary btn-sm" :disabled="overviewSaving">{{ overviewSaving ? '保存中…' : '保存' }}</button>
-                  <button type="button" class="btn btn-sm" @click="cancelOverview">取消</button>
-                </div>
-              </form>
-            </template>
+              <div class="section-body">
+                <template v-if="!editingOverview">
+                  <div class="info-grid">
+                    <div class="info-item">
+                      <label>名称</label>
+                      <div class="value">{{ activeHost.name }}</div>
+                    </div>
+                    <div class="info-item">
+                      <label>IP 地址</label>
+                      <div class="value code">{{ activeHost.ip }}</div>
+                    </div>
+                    <div class="info-item">
+                      <label>标签</label>
+                      <div class="value">
+                        <template v-if="activeHost.tags.length">
+                          <span v-for="t in activeHost.tags" :key="t" class="tag small" style="margin-right:4px">{{ t }}</span>
+                        </template>
+                        <span v-else class="value-muted">—</span>
+                      </div>
+                    </div>
+                    <div class="info-item">
+                      <label>厂商</label>
+                      <div class="value" :class="{ 'value-muted': !activeHost.vendor }">{{ activeHost.vendor || '—' }}</div>
+                    </div>
+                    <div class="info-item">
+                      <label>产品型号</label>
+                      <div class="value" :class="{ 'value-muted': !activeHost.product_name }">{{ activeHost.product_name || '—' }}</div>
+                    </div>
+                    <div class="info-item">
+                      <label>产品版本</label>
+                      <div class="value" :class="{ 'value-muted': !activeHost.product_version }">{{ activeHost.product_version || '—' }}</div>
+                    </div>
+                  </div>
+                  <div v-if="activeHost.notes" class="notes-row">
+                    <div class="info-item">
+                      <label>备注</label>
+                      <div class="value" style="white-space:pre-wrap;font-weight:400">{{ activeHost.notes }}</div>
+                    </div>
+                  </div>
+                </template>
+                <template v-else>
+                  <form class="info-grid" @submit.prevent="saveOverview">
+                    <div class="info-item">
+                      <label>名称</label>
+                      <input v-model="overviewForm.name" class="input info-input" required />
+                    </div>
+                    <div class="info-item">
+                      <label>IP 地址</label>
+                      <input v-model="overviewForm.ip" class="input info-input" required />
+                    </div>
+                    <div class="info-item">
+                      <label>标签</label>
+                      <input v-model="overviewForm.tagsStr" class="input info-input" placeholder="逗号分隔" />
+                    </div>
+                    <div class="info-item">
+                      <label>厂商</label>
+                      <input v-model="overviewForm.vendor" class="input info-input" placeholder="可选" />
+                    </div>
+                    <div class="info-item">
+                      <label>产品型号</label>
+                      <input v-model="overviewForm.product_name" class="input info-input" placeholder="可选" />
+                    </div>
+                    <div class="info-item">
+                      <label>产品版本</label>
+                      <input v-model="overviewForm.product_version" class="input info-input" placeholder="可选" />
+                    </div>
+                  </form>
+                </template>
+              </div>
+            </div>
           </template>
 
           <!-- 操作面 tab -->
@@ -368,6 +375,12 @@ const allTags = computed(() => {
   return [...s]
 })
 
+const hostSubtitle = computed(() => {
+  const h = activeHost.value
+  if (!h) return ''
+  return [h.ip, h.vendor, h.product_name, h.product_version].filter(Boolean).join(' · ')
+})
+
 const filtered = computed(() => hosts.value.filter(h => {
   const q = search.value.toLowerCase()
   const matchSearch = !q || h.name.toLowerCase().includes(q) || h.ip.includes(q)
@@ -555,14 +568,23 @@ onMounted(load)
 .detail-empty-icon { color: var(--border); font-size: 40px; }
 .tab-empty { color: var(--muted); font-size: 13px; padding: 32px 0; text-align: center; }
 
-.overview-fields, .overview-edit-form { display: flex; flex-direction: column; gap: 0; }
-.overview-row { display: flex; align-items: center; min-height: 44px; border-bottom: 1px solid var(--border); gap: 16px; }
-.overview-row:last-child { border-bottom: none; }
-.overview-label { font-size: 13px; font-weight: 500; color: var(--muted); width: 90px; flex-shrink: 0; }
-.overview-value { font-size: 14px; color: var(--text); flex: 1; }
-.overview-value.code { font-family: 'SF Mono', Consolas, monospace; }
-.overview-input { flex: 1; height: 32px; font-size: 14px; padding: 0 10px; }
-.overview-edit-actions { display: flex; gap: 8px; padding-top: 16px; }
+.section { background: var(--card-bg); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin-bottom: 16px; }
+.section-header { padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); background: var(--surface); }
+.section-title { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.section-header-actions { display: flex; gap: 6px; }
+.section-body { padding: 16px; }
+.edit-link { font-size: 12px; color: var(--primary); cursor: pointer; background: none; border: none; padding: 0; }
+.edit-link:hover { text-decoration: underline; }
+
+.info-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+.info-item label { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; display: block; margin-bottom: 5px; }
+.info-item .value { font-size: 14px; color: var(--text); }
+.info-item .value.code { font-family: 'SF Mono', Consolas, monospace; }
+.value-muted { color: var(--muted); font-style: italic; }
+.info-input { width: 100%; height: 30px; font-size: 13px; padding: 0 8px; }
+.notes-row { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
+
+.detail-subtitle { font-size: 12px; color: var(--muted); margin-left: 8px; }
 
 .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .detail-field { background: var(--card-bg); border: 1px solid var(--border); border-radius: 10px; padding: 14px 20px; box-shadow: var(--card-shadow); }
