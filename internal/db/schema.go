@@ -273,16 +273,15 @@ func migrate(db *sql.DB) error {
 	db.Exec(`INSERT OR IGNORE INTO access_faces
 		(id, host_id, type, ip, port, username, auth_type,
 		 encrypted_credential, encrypted_passphrase, ssh_key_id, ssh_legacy,
-		 base_url, rest_username, header_name, knowledge_sources,
-		 created_at, updated_at)
+		 base_url, rest_auth_type, rest_username, header_name,
+		 knowledge_sources, created_at, updated_at)
 		SELECT
-			lower(hex(randomblob(16))),
-			id, 'ssh', ip, port, username, auth_type,
-			encrypted_credential, encrypted_passphrase,
+			lower(hex(randomblob(16))), id, 'ssh', ip, port,
+			COALESCE(username,''), COALESCE(auth_type,''),
+			COALESCE(encrypted_credential,''), COALESCE(encrypted_passphrase,''),
 			COALESCE(ssh_key_id,''), COALESCE(ssh_legacy,0),
-			'', '', '[]',
-			created_at, updated_at
+			'', '', '', '[]', created_at, updated_at
 		FROM hosts
-		WHERE id NOT IN (SELECT host_id FROM access_faces WHERE type='ssh')`)
+		WHERE id NOT IN (SELECT host_id FROM access_faces)`)
 	return nil
 }

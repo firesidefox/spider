@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"strconv"
 
-	authmw "github.com/spiderai/spider/internal/auth"
 	mcppkg "github.com/spiderai/spider/internal/mcp"
 	"github.com/spiderai/spider/internal/models"
 	"github.com/spiderai/spider/internal/store"
@@ -115,6 +114,11 @@ func addAccessFace(app *mcppkg.App, w http.ResponseWriter, r *http.Request, host
 }
 
 func updateAccessFace(app *mcppkg.App, w http.ResponseWriter, r *http.Request, hostID, faceID string) {
+	existing, err := app.AccessFaceStore.GetByID(faceID)
+	if err != nil || existing == nil || existing.HostID != hostID {
+		writeError(w, http.StatusNotFound, "access face not found")
+		return
+	}
 	var req models.UpdateAccessFaceRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
@@ -129,6 +133,11 @@ func updateAccessFace(app *mcppkg.App, w http.ResponseWriter, r *http.Request, h
 }
 
 func deleteAccessFace(app *mcppkg.App, w http.ResponseWriter, r *http.Request, hostID, faceID string) {
+	existing, err := app.AccessFaceStore.GetByID(faceID)
+	if err != nil || existing == nil || existing.HostID != hostID {
+		writeError(w, http.StatusNotFound, "access face not found")
+		return
+	}
 	if err := app.AccessFaceStore.Delete(faceID); err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "access face not found")
@@ -177,9 +186,7 @@ func addMemory(app *mcppkg.App, w http.ResponseWriter, r *http.Request, hostID s
 	}
 	// set created_by from auth context if not provided
 	if req.CreatedBy == "" {
-		if authmw.GetUser(r.Context()) != nil {
-			req.CreatedBy = "user"
-		}
+		req.CreatedBy = "user"
 	}
 	m, err := app.MemoryStore.Add(hostID, &req)
 	if err != nil {
