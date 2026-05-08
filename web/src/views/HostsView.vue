@@ -51,7 +51,13 @@
           <div class="detail-topbar-right">
             <button class="btn btn-sm" @click="goExec(activeHost)">▶ 执行</button>
             <button class="btn btn-sm" :disabled="pinging" @click="pingActive">{{ pinging ? '测试中…' : '⚡ 测试' }}</button>
-            <button class="btn btn-sm" @click="editHost(activeHost)">编辑</button>
+            <template v-if="activeTab === 'overview'">
+              <button v-if="!editingOverview" class="btn btn-sm" @click="startOverviewEdit(activeHost)">编辑</button>
+              <template v-else>
+                <button class="btn btn-sm btn-primary" :disabled="overviewSaving" @click="saveOverview">{{ overviewSaving ? '保存中…' : '保存' }}</button>
+                <button class="btn btn-sm" @click="cancelOverview">取消</button>
+              </template>
+            </template>
             <button class="btn btn-sm btn-danger" @click="removeHost(activeHost)">删除</button>
           </div>
         </div>
@@ -67,34 +73,71 @@
 
           <!-- 概览 tab -->
           <template v-if="activeTab === 'overview'">
-            <div class="detail-grid">
-              <div class="detail-field">
-                <div class="detail-label">IP 地址</div>
-                <div class="detail-value code">{{ activeHost.ip }}</div>
+            <template v-if="!editingOverview">
+              <div class="overview-fields">
+                <div class="overview-row">
+                  <span class="overview-label">名称</span>
+                  <span class="overview-value">{{ activeHost.name }}</span>
+                </div>
+                <div class="overview-row">
+                  <span class="overview-label">IP 地址</span>
+                  <span class="overview-value code">{{ activeHost.ip }}</span>
+                </div>
+                <div class="overview-row">
+                  <span class="overview-label">厂商</span>
+                  <span class="overview-value">{{ activeHost.vendor || '—' }}</span>
+                </div>
+                <div class="overview-row">
+                  <span class="overview-label">产品型号</span>
+                  <span class="overview-value">{{ activeHost.product_name || '—' }}</span>
+                </div>
+                <div class="overview-row">
+                  <span class="overview-label">产品版本</span>
+                  <span class="overview-value">{{ activeHost.product_version || '—' }}</span>
+                </div>
+                <div class="overview-row">
+                  <span class="overview-label">标签</span>
+                  <span class="overview-value">
+                    <template v-if="activeHost.tags.length">
+                      <span v-for="t in activeHost.tags" :key="t" class="tag small" style="margin-right:4px">{{ t }}</span>
+                    </template>
+                    <span v-else>—</span>
+                  </span>
+                </div>
               </div>
-              <div v-if="activeHost.vendor" class="detail-field">
-                <div class="detail-label">厂商</div>
-                <div class="detail-value">{{ activeHost.vendor }}</div>
-              </div>
-              <div v-if="activeHost.product_name" class="detail-field">
-                <div class="detail-label">产品型号</div>
-                <div class="detail-value">{{ activeHost.product_name }}</div>
-              </div>
-              <div v-if="activeHost.product_version" class="detail-field">
-                <div class="detail-label">版本</div>
-                <div class="detail-value">{{ activeHost.product_version }}</div>
-              </div>
-            </div>
-            <div v-if="activeHost.notes" class="detail-field" style="margin-top:12px">
-              <div class="detail-label">备注</div>
-              <div class="detail-value" style="font-size:14px;font-weight:400;white-space:pre-wrap">{{ activeHost.notes }}</div>
-            </div>
-            <div v-if="activeHost.tags.length" class="detail-field" style="margin-top:12px">
-              <div class="detail-label">标签</div>
-              <div class="tags" style="margin-top:6px">
-                <span v-for="t in activeHost.tags" :key="t" class="tag">{{ t }}</span>
-              </div>
-            </div>
+            </template>
+            <template v-else>
+              <form class="overview-edit-form" @submit.prevent="saveOverview">
+                <div class="overview-row">
+                  <label class="overview-label">名称</label>
+                  <input v-model="overviewForm.name" class="input overview-input" required />
+                </div>
+                <div class="overview-row">
+                  <label class="overview-label">IP 地址</label>
+                  <input v-model="overviewForm.ip" class="input overview-input" required />
+                </div>
+                <div class="overview-row">
+                  <label class="overview-label">厂商</label>
+                  <input v-model="overviewForm.vendor" class="input overview-input" placeholder="可选" />
+                </div>
+                <div class="overview-row">
+                  <label class="overview-label">产品型号</label>
+                  <input v-model="overviewForm.product_name" class="input overview-input" placeholder="可选" />
+                </div>
+                <div class="overview-row">
+                  <label class="overview-label">产品版本</label>
+                  <input v-model="overviewForm.product_version" class="input overview-input" placeholder="可选" />
+                </div>
+                <div class="overview-row">
+                  <label class="overview-label">标签</label>
+                  <input v-model="overviewForm.tagsStr" class="input overview-input" placeholder="逗号分隔，如 prod,web" />
+                </div>
+                <div class="overview-edit-actions">
+                  <button type="submit" class="btn btn-primary btn-sm" :disabled="overviewSaving">{{ overviewSaving ? '保存中…' : '保存' }}</button>
+                  <button type="button" class="btn btn-sm" @click="cancelOverview">取消</button>
+                </div>
+              </form>
+            </template>
           </template>
 
           <!-- 操作面 tab -->
@@ -175,10 +218,10 @@
       </div>
     </div>
 
-    <!-- 添加/编辑主机弹窗 -->
-    <div v-if="showAdd || editTarget" class="modal-overlay" @click.self="closeModal">
+    <!-- 添加主机弹窗 -->
+    <div v-if="showAdd" class="modal-overlay" @click.self="closeModal">
       <div class="modal">
-        <h3>{{ editTarget ? '编辑主机' : '添加主机' }}</h3>
+        <h3>添加主机</h3>
         <form @submit.prevent="submitHost">
           <div class="form-row"><label>名称</label><input v-model="form.name" class="input" required /></div>
           <div class="form-row"><label>IP</label><input v-model="form.ip" class="input" required /></div>
@@ -189,7 +232,7 @@
           <div class="form-row"><label>标签</label><input v-model="form.tagsStr" class="input" placeholder="逗号分隔，如 prod,web" /></div>
           <div class="modal-footer">
             <button type="button" class="btn" @click="closeModal">取消</button>
-            <button type="submit" class="btn btn-primary">{{ editTarget ? '保存' : '添加' }}</button>
+            <button type="submit" class="btn btn-primary">添加</button>
           </div>
         </form>
       </div>
@@ -279,6 +322,40 @@ const newMemory = ref('')
 const showAddFace = ref(false)
 const editFaceTarget = ref<AccessFace | null>(null)
 
+const editingOverview = ref(false)
+const overviewSaving = ref(false)
+const overviewForm = ref({ name: '', ip: '', vendor: '', product_name: '', product_version: '', tagsStr: '' })
+
+function startOverviewEdit(h: Host) {
+  overviewForm.value = { name: h.name, ip: h.ip, vendor: h.vendor ?? '', product_name: h.product_name ?? '', product_version: h.product_version ?? '', tagsStr: h.tags.join(',') }
+  editingOverview.value = true
+}
+
+function cancelOverview() {
+  editingOverview.value = false
+}
+
+async function saveOverview() {
+  if (!activeHost.value) return
+  overviewSaving.value = true
+  try {
+    const tags = overviewForm.value.tagsStr.split(',').map(t => t.trim()).filter(Boolean)
+    const updated = await updateHost(activeHost.value.id, {
+      name: overviewForm.value.name,
+      ip: overviewForm.value.ip,
+      vendor: overviewForm.value.vendor || undefined,
+      product_name: overviewForm.value.product_name || undefined,
+      product_version: overviewForm.value.product_version || undefined,
+      tags,
+    })
+    activeHost.value = { ...activeHost.value, ...updated }
+    hosts.value = hosts.value.map(h => h.id === updated.id ? { ...h, ...updated } : h)
+    editingOverview.value = false
+  } finally {
+    overviewSaving.value = false
+  }
+}
+
 const emptyForm = () => ({ name: '', ip: '', notes: '', vendor: '', product_name: '', product_version: '', tagsStr: '' })
 const form = ref(emptyForm())
 
@@ -304,6 +381,7 @@ async function selectHost(h: Host) {
   activeHost.value = h
   pingResult.value = null
   activeTab.value = 'overview'
+  editingOverview.value = false
   faces.value = []
   fingerprint.value = null
   memories.value = []
@@ -330,11 +408,6 @@ async function pingActive() {
   }
 }
 
-function editHost(h: Host) {
-  editTarget.value = h
-  form.value = { name: h.name, ip: h.ip, notes: h.notes ?? '', vendor: h.vendor ?? '', product_name: h.product_name ?? '', product_version: h.product_version ?? '', tagsStr: h.tags.join(',') }
-}
-
 function closeModal() {
   showAdd.value = false
   editTarget.value = null
@@ -344,12 +417,7 @@ function closeModal() {
 async function submitHost() {
   const tags = form.value.tagsStr.split(',').map(t => t.trim()).filter(Boolean)
   const payload = { name: form.value.name, ip: form.value.ip, notes: form.value.notes || undefined, vendor: form.value.vendor || undefined, product_name: form.value.product_name || undefined, product_version: form.value.product_version || undefined, tags }
-  if (editTarget.value) {
-    const updated = await updateHost(editTarget.value.id, payload)
-    if (activeHost.value?.id === editTarget.value.id) activeHost.value = { ...activeHost.value, ...updated }
-  } else {
-    await addHost(payload)
-  }
+  await addHost(payload)
   closeModal()
   load()
 }
@@ -486,6 +554,15 @@ onMounted(load)
 .detail-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--muted); font-size: 14px; }
 .detail-empty-icon { color: var(--border); font-size: 40px; }
 .tab-empty { color: var(--muted); font-size: 13px; padding: 32px 0; text-align: center; }
+
+.overview-fields, .overview-edit-form { display: flex; flex-direction: column; gap: 0; }
+.overview-row { display: flex; align-items: center; min-height: 44px; border-bottom: 1px solid var(--border); gap: 16px; }
+.overview-row:last-child { border-bottom: none; }
+.overview-label { font-size: 13px; font-weight: 500; color: var(--muted); width: 90px; flex-shrink: 0; }
+.overview-value { font-size: 14px; color: var(--text); flex: 1; }
+.overview-value.code { font-family: 'SF Mono', Consolas, monospace; }
+.overview-input { flex: 1; height: 32px; font-size: 14px; padding: 0 10px; }
+.overview-edit-actions { display: flex; gap: 8px; padding-top: 16px; }
 
 .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .detail-field { background: var(--card-bg); border: 1px solid var(--border); border-radius: 10px; padding: 14px 20px; box-shadow: var(--card-shadow); }
