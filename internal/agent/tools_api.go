@@ -42,8 +42,7 @@ func (t *CallRESTAPITool) InputSchema() map[string]any {
 			"method":  map[string]any{"type": "string", "description": "HTTP method", "enum": []string{"GET", "POST", "PUT", "DELETE", "PATCH"}},
 			"headers": map[string]any{"type": "object", "description": "HTTP headers"},
 			"body":    map[string]any{"type": "string", "description": "Request body"},
-			"face_id": map[string]any{"type": "string", "description": "Optional. Access face ID. If provided, auth headers are injected automatically from the stored credentials."},
-			"host_id": map[string]any{"type": "string", "description": "Optional. Spider host ID. Used with face_id for context."},
+		"face_id": map[string]any{"type": "string", "description": "Optional. Access face ID. If provided, auth headers are injected automatically from the stored credentials."},
 		},
 		"required": []string{"method"},
 	}
@@ -57,11 +56,14 @@ func (t *CallRESTAPITool) Execute(ctx context.Context, input map[string]any) (*T
 	}
 
 	faceID, _ := input["face_id"].(string)
-	if faceID != "" && t.faces != nil && strings.HasPrefix(url, "/") {
-		face, err := t.faces.GetByID(faceID)
-		if err == nil {
-			url = face.BaseURL + url
+	var face *models.AccessFace
+	if faceID != "" && t.faces != nil {
+		if f, err := t.faces.GetByID(faceID); err == nil {
+			face = f
 		}
+	}
+	if face != nil && strings.HasPrefix(url, "/") {
+		url = face.BaseURL + url
 	}
 
 	if url == "" {
@@ -82,17 +84,15 @@ func (t *CallRESTAPITool) Execute(ctx context.Context, input map[string]any) (*T
 		}
 	}
 
-	if faceID != "" && t.faces != nil {
-		if face, err := t.faces.GetByID(faceID); err == nil {
-			if cred, _, cerr := t.faces.DecryptCredential(face); cerr == nil {
-				switch face.RESTAuthType {
-				case models.RESTAuthBearer:
-					req.Header.Set("Authorization", "Bearer "+cred)
-				case models.RESTAuthBasic:
-					req.SetBasicAuth(face.RESTUsername, cred)
-				case models.RESTAuthAPIKey:
-					req.Header.Set(face.HeaderName, cred)
-				}
+	if face != nil {
+		if cred, _, cerr := t.faces.DecryptCredential(face); cerr == nil {
+			switch face.RESTAuthType {
+			case models.RESTAuthBearer:
+				req.Header.Set("Authorization", "Bearer "+cred)
+			case models.RESTAuthBasic:
+				req.SetBasicAuth(face.RESTUsername, cred)
+			case models.RESTAuthAPIKey:
+				req.Header.Set(face.HeaderName, cred)
 			}
 		}
 	}

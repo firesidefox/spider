@@ -50,8 +50,8 @@ func (s *MemoryStore) ListByHost(hostID string) ([]*models.Memory, error) {
 	return out, rows.Err()
 }
 
-func (s *MemoryStore) Delete(id int) error {
-	res, err := s.db.Exec(`DELETE FROM host_memories WHERE id=?`, id)
+func (s *MemoryStore) Delete(hostID string, id int) error {
+	res, err := s.db.Exec(`DELETE FROM host_memories WHERE id=? AND host_id=?`, id, hostID)
 	if err != nil {
 		return err
 	}

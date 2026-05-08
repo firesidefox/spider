@@ -139,7 +139,10 @@ func (s *AccessFaceStore) Update(id string, req *models.UpdateAccessFaceRequest)
 	if err != nil {
 		return nil, err
 	}
-	return s.GetByID(id)
+	cur.UpdatedAt = now
+	cur.EncryptedCred = encCred
+	cur.EncryptedPass = encPass
+	return cur, nil
 }
 
 func (s *AccessFaceStore) Delete(id string) error {

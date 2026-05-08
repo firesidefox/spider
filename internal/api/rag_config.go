@@ -21,6 +21,18 @@ type ragConfigResponse struct {
 	ValidatedAt  string   `json:"validated_at"`
 }
 
+func toRagConfigResponse(cfg *store.RagConfig) ragConfigResponse {
+	return ragConfigResponse{
+		Name:         cfg.Name,
+		Type:         cfg.Type,
+		BaseURL:      cfg.BaseURL,
+		Model:        cfg.Model,
+		APIKeySet:    cfg.APIKey != "",
+		CachedModels: cfg.CachedModels,
+		ValidatedAt:  cfg.ValidatedAt,
+	}
+}
+
 func getRagConfig(app *mcppkg.App, w http.ResponseWriter, _ *http.Request) {
 	cfg, err := app.RagConfigStore.Get()
 	if err != nil {
@@ -31,15 +43,7 @@ func getRagConfig(app *mcppkg.App, w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, ragConfigResponse{Type: "openai"})
 		return
 	}
-	writeJSON(w, http.StatusOK, ragConfigResponse{
-		Name:         cfg.Name,
-		Type:         cfg.Type,
-		BaseURL:      cfg.BaseURL,
-		Model:        cfg.Model,
-		APIKeySet:    cfg.APIKey != "",
-		CachedModels: cfg.CachedModels,
-		ValidatedAt:  cfg.ValidatedAt,
-	})
+	writeJSON(w, http.StatusOK, toRagConfigResponse(cfg))
 }
 
 func putRagConfig(app *mcppkg.App, w http.ResponseWriter, r *http.Request) {
@@ -86,15 +90,7 @@ func putRagConfig(app *mcppkg.App, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	app.InvalidateRagStore()
-	writeJSON(w, http.StatusOK, ragConfigResponse{
-		Name:         cfg.Name,
-		Type:         cfg.Type,
-		BaseURL:      cfg.BaseURL,
-		Model:        cfg.Model,
-		APIKeySet:    cfg.APIKey != "",
-		CachedModels: cfg.CachedModels,
-		ValidatedAt:  cfg.ValidatedAt,
-	})
+	writeJSON(w, http.StatusOK, toRagConfigResponse(cfg))
 }
 
 func resolveRagAPIKey(app *mcppkg.App, provided string) string {

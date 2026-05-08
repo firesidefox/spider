@@ -122,7 +122,6 @@ const showModelPicker = ref(false)
 const availableModels = ref<{id: string, display_name: string}[]>([])
 const currentModel = ref('')
 const currentProvider = ref('')
-const currentModelName = ref('')
 
 const activeConv = computed(() =>
   conversations.value.find(c => c.id === activeConvId.value) || null
@@ -408,7 +407,6 @@ async function handleModelCommand() {
     const { provider_id, model, provider_name } = await getActiveModel()
     currentProvider.value = provider_id
     currentModel.value = model
-    currentModelName.value = model
 
     if (!currentProvider.value) {
       addSystemMessage('未配置模型供应商。请在 个人设置 → 模型供应商 中配置。')
@@ -429,7 +427,6 @@ async function selectModel(modelId: string) {
   try {
     await setActiveModel(currentProvider.value, modelId)
     currentModel.value = modelId
-    currentModelName.value = modelId
     showModelPicker.value = false
     addSystemMessage(`模型已切换为 **${modelId}**`)
   } catch (e: any) {
@@ -618,7 +615,7 @@ let initialized = false
 
 async function initView() {
   await Promise.all([loadConversations(), loadDevices()])
-  getActiveModel().then(m => { currentModelName.value = m.model })
+  getActiveModel().then(m => { currentModel.value = m.model })
   const paramId = route.params.id as string | undefined
   if (paramId) {
     if (paramId !== activeConvId.value) {
@@ -698,7 +695,7 @@ onUnmounted(() => {
                @blur="saveHeaderTitle"
                @vue:mounted="($event: any) => $event.el.focus()" />
         <span v-else class="conv-title" @click="startEditHeaderTitle">{{ activeConv?.title || '新对话' }}</span>
-        <span class="current-model" v-if="currentModelName">{{ currentModelName }}</span>
+        <span class="current-model" v-if="currentModel">{{ currentModel }}</span>
         <div class="mode-badge-wrapper">
           <div class="mode-badge" :class="effectiveMode" @click.stop="showModeDropdown = !showModeDropdown">
             {{ effectiveMode }}

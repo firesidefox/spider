@@ -197,7 +197,7 @@ func addMemory(app *mcppkg.App, w http.ResponseWriter, r *http.Request, hostID s
 }
 
 func deleteMemory(app *mcppkg.App, w http.ResponseWriter, r *http.Request, hostID string, memID int) {
-	if err := app.MemoryStore.Delete(memID); err != nil {
+	if err := app.MemoryStore.Delete(hostID, memID); err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "memory not found")
 		} else {

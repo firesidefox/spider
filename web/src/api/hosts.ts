@@ -1,3 +1,5 @@
+import { authHeaders } from './auth'
+
 export interface Host {
   id: string
   name: string
@@ -89,7 +91,7 @@ export interface AddAccessFaceRequest {
 }
 
 async function apiFetch(url: string, init?: RequestInit) {
-  const res = await fetch(url, init)
+  const res = await fetch(url, { ...init, headers: { ...authHeaders(), ...(init?.headers as Record<string, string>) } })
   if (!res.ok) throw new Error((await res.json()).error)
   return res
 }
