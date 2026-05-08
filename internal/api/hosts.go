@@ -3,22 +3,12 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 
 	authmw "github.com/spiderai/spider/internal/auth"
 	mcppkg "github.com/spiderai/spider/internal/mcp"
 	"github.com/spiderai/spider/internal/models"
-	sshpkg "github.com/spiderai/spider/internal/ssh"
 )
-
-func enrichSafeHost(app *mcppkg.App, h *models.Host) *models.SafeHost {
-	safe := h.Safe()
-	if safe.SSHKeyID != "" && app.SSHKeyStore != nil {
-		if key, err := app.SSHKeyStore.GetByID(safe.SSHKeyID); err == nil {
-			safe.SSHKeyName = key.Name
-		}
-	}
-	return safe
-}
 
 func listHosts(app *mcppkg.App, w http.ResponseWriter, r *http.Request) {
 	tag := r.URL.Query().Get("tag")
@@ -27,82 +17,51 @@ func listHosts(app *mcppkg.App, w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	safe := make([]*models.SafeHost, 0, len(hosts))
-	for _, h := range hosts {
-		safe = append(safe, enrichSafeHost(app, h))
+	if hosts == nil {
+		hosts = []*models.Host{}
 	}
-	writeJSON(w, http.StatusOK, safe)
+	writeJSON(w, http.StatusOK, hosts)
 }
 
 func addHost(app *mcppkg.App, w http.ResponseWriter, r *http.Request) {
 	var req models.AddHostRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "请求体解析失败: "+err.Error())
+		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
-	}
-	if req.SSHKeyID != "" && req.Credential != "" {
-		writeError(w, http.StatusBadRequest, "ssh_key_id 和 credential 不能同时提供")
-		return
-	}
-	if req.SSHKeyID != "" {
-		uc := authmw.GetUser(r.Context())
-		key, err := app.SSHKeyStore.GetByID(req.SSHKeyID)
-		if err != nil || key.UserID != uc.UserID {
-			writeError(w, http.StatusBadRequest, "ssh_key_id 无效或不属于当前用户")
-			return
-		}
 	}
 	h, err := app.HostStore.Add(&req)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	writeJSON(w, http.StatusCreated, enrichSafeHost(app, h))
-}
-
-func getHost(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id string) {
-	h, err := app.HostStore.GetByIDOrName(id)
-	if err != nil {
-		writeError(w, http.StatusNotFound, err.Error())
-		return
-	}
-	writeJSON(w, http.StatusOK, enrichSafeHost(app, h))
-}
-
-func updateHost(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id string) {
-	h, err := app.HostStore.GetByIDOrName(id)
-	if err != nil {
-		writeError(w, http.StatusNotFound, err.Error())
-		return
-	}
-	var req models.UpdateHostRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "请求体解析失败: "+err.Error())
-		return
-	}
-	if req.SSHKeyID != nil && *req.SSHKeyID != "" {
-		uc := authmw.GetUser(r.Context())
-		key, err := app.SSHKeyStore.GetByID(*req.SSHKeyID)
-		if err != nil || key.UserID != uc.UserID {
-			writeError(w, http.StatusBadRequest, "ssh_key_id 无效或不属于当前用户")
-			return
-		}
-	}
-	updated, err := app.HostStore.Update(h.ID, &req)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, enrichSafeHost(app, updated))
+	writeJSON(w, http.StatusCreated, h)
+}
+
+func getHost(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id string) {
+	h, err := app.HostStore.GetByID(id)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "host not found")
+		return
+	}
+	writeJSON(w, http.StatusOK, h)
+}
+
+func updateHost(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id string) {
+	var req models.UpdateHostRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	h, err := app.HostStore.Update(id, &req)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, h)
 }
 
 func deleteHost(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id string) {
-	h, err := app.HostStore.GetByIDOrName(id)
-	if err != nil {
-		writeError(w, http.StatusNotFound, err.Error())
-		return
-	}
-	if err := app.HostStore.Delete(h.ID); err != nil {
+	if err := app.HostStore.Delete(id); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -110,15 +69,121 @@ func deleteHost(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id stri
 }
 
 func pingHost(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id string) {
-	h, err := app.HostStore.GetByIDOrName(id)
+	writeJSON(w, http.StatusOK, map[string]any{"connected": false, "error": "ping not yet implemented"})
+}
+
+// Access face handlers
+
+func listAccessFaces(app *mcppkg.App, w http.ResponseWriter, r *http.Request, hostID string) {
+	faces, err := app.AccessFaceStore.ListByHost(hostID)
 	if err != nil {
-		writeError(w, http.StatusNotFound, err.Error())
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	latency, err := sshpkg.CheckConnectivity(h, app.HostStore, app.SSHKeyStore)
-	if err != nil {
-		writeJSON(w, http.StatusOK, map[string]any{"connected": false, "error": err.Error()})
+	if faces == nil {
+		faces = []*models.AccessFace{}
+	}
+	writeJSON(w, http.StatusOK, faces)
+}
+
+func addAccessFace(app *mcppkg.App, w http.ResponseWriter, r *http.Request, hostID string) {
+	var req models.AddAccessFaceRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"connected": true, "latency_ms": latency.Milliseconds()})
+	f, err := app.AccessFaceStore.Add(hostID, &req)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusCreated, f)
+}
+
+func updateAccessFace(app *mcppkg.App, w http.ResponseWriter, r *http.Request, hostID, faceID string) {
+	var req models.UpdateAccessFaceRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	f, err := app.AccessFaceStore.Update(faceID, &req)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, f)
+}
+
+func deleteAccessFace(app *mcppkg.App, w http.ResponseWriter, r *http.Request, hostID, faceID string) {
+	if err := app.AccessFaceStore.Delete(faceID); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"message": "已删除"})
+}
+
+// Fingerprint handler
+
+func getFingerprint(app *mcppkg.App, w http.ResponseWriter, r *http.Request, hostID string) {
+	fp, err := app.FingerprintStore.Get(hostID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if fp == nil {
+		writeError(w, http.StatusNotFound, "fingerprint not found")
+		return
+	}
+	writeJSON(w, http.StatusOK, fp)
+}
+
+// Memory handlers
+
+func listMemories(app *mcppkg.App, w http.ResponseWriter, r *http.Request, hostID string) {
+	mems, err := app.MemoryStore.ListByHost(hostID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if mems == nil {
+		mems = []*models.Memory{}
+	}
+	writeJSON(w, http.StatusOK, mems)
+}
+
+func addMemory(app *mcppkg.App, w http.ResponseWriter, r *http.Request, hostID string) {
+	var req models.AddMemoryRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	// set created_by from auth context if not provided
+	if req.CreatedBy == "" {
+		if authmw.GetUser(r.Context()) != nil {
+			req.CreatedBy = "user"
+		}
+	}
+	m, err := app.MemoryStore.Add(hostID, &req)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusCreated, m)
+}
+
+func deleteMemory(app *mcppkg.App, w http.ResponseWriter, r *http.Request, hostID string, memID int) {
+	if err := app.MemoryStore.Delete(memID); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"message": "已删除"})
+}
+
+// parseMemID parses a string memory ID to int, returns -1 on failure.
+func parseMemID(s string) int {
+	id, err := strconv.Atoi(s)
+	if err != nil {
+		return -1
+	}
+	return id
 }

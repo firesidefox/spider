@@ -26,27 +26,27 @@ func New(baseURL string) *Client {
 
 // ── hosts ─────────────────────────────────────────────────────────────────────
 
-func (c *Client) ListHosts(tag string) ([]*models.SafeHost, error) {
+func (c *Client) ListHosts(tag string) ([]*models.Host, error) {
 	u := c.base + "/api/v1/hosts"
 	if tag != "" {
 		u += "?tag=" + url.QueryEscape(tag)
 	}
-	var hosts []*models.SafeHost
+	var hosts []*models.Host
 	return hosts, c.get(u, &hosts)
 }
 
-func (c *Client) AddHost(req *models.AddHostRequest) (*models.SafeHost, error) {
-	var h models.SafeHost
+func (c *Client) AddHost(req *models.AddHostRequest) (*models.Host, error) {
+	var h models.Host
 	return &h, c.post(c.base+"/api/v1/hosts", req, &h)
 }
 
-func (c *Client) GetHost(idOrName string) (*models.SafeHost, error) {
-	var h models.SafeHost
+func (c *Client) GetHost(idOrName string) (*models.Host, error) {
+	var h models.Host
 	return &h, c.get(c.base+"/api/v1/hosts/"+url.PathEscape(idOrName), &h)
 }
 
-func (c *Client) UpdateHost(id string, req *models.UpdateHostRequest) (*models.SafeHost, error) {
-	var h models.SafeHost
+func (c *Client) UpdateHost(id string, req *models.UpdateHostRequest) (*models.Host, error) {
+	var h models.Host
 	return &h, c.put(c.base+"/api/v1/hosts/"+url.PathEscape(id), req, &h)
 }
 

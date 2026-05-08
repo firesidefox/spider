@@ -44,21 +44,18 @@ func (t *ListDevicesTool) Execute(_ context.Context, input map[string]any) (*Too
 	}
 
 	type deviceSummary struct {
-		ID        string   `json:"id"`
-		Name      string   `json:"name"`
-		IP        string   `json:"ip"`
-		Vendor    string   `json:"vendor,omitempty"`
-		Model     string   `json:"model,omitempty"`
-		CLIType   string   `json:"cli_type,omitempty"`
-		Tags      []string `json:"tags,omitempty"`
+		ID     string   `json:"id"`
+		Name   string   `json:"name"`
+		IP     string   `json:"ip"`
+		Vendor string   `json:"vendor,omitempty"`
+		Tags   []string `json:"tags,omitempty"`
 	}
 
 	devices := make([]deviceSummary, len(hosts))
 	for i, h := range hosts {
 		devices[i] = deviceSummary{
 			ID: h.ID, Name: h.Name, IP: h.IP,
-			Vendor: h.Vendor, Model: h.Model,
-			CLIType: h.CLIType, Tags: h.Tags,
+			Vendor: h.Vendor, Tags: h.Tags,
 		}
 	}
 

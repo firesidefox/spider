@@ -36,8 +36,11 @@ type App struct {
 	JWTManager   *auth.JWTManager   // Phase 2
 	ConvStore     *store.ConversationStore
 	MsgStore      *store.MessageStore
-	DocStore      *store.DocumentStore
-	GroupStore    *store.GroupStore
+	DocStore        *store.DocumentStore
+	GroupStore      *store.GroupStore
+	AccessFaceStore  *store.AccessFaceStore
+	FingerprintStore *store.FingerprintStore
+	MemoryStore      *store.MemoryStore
 	ProviderStore  *store.ProviderStore
 	RagConfigStore *store.RagConfigStore
 	AgentFactory   *agent.Factory // nil if LLM not configured
@@ -71,7 +74,7 @@ type ragStoreEntry struct {
 // Returns nil, err if no provider configured or key decryption fails.
 func (a *App) NewAgentFactory() (*agent.Factory, error) {
 	f, err := agent.NewFactory(
-		a.ProviderStore, a.HostStore, a.Pool, a.SSHKeyStore, a.LogStore, a.MsgStore,
+		a.ProviderStore, a.HostStore, a.AccessFaceStore, a.Pool, a.SSHKeyStore, a.LogStore, a.MsgStore,
 	)
 	if err != nil {
 		return nil, err

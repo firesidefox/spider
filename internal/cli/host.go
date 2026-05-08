@@ -29,37 +29,20 @@ func NewHostCmd(url *string) *cobra.Command {
 
 func newHostAddCmd(url *string) *cobra.Command {
 	var (
-		ip         string
-		port       int
-		username   string
-		authType   string
-		keyFile    string
-		password   string
-		passphrase string
-		tags       string
+		ip    string
+		notes string
+		tags  string
 	)
 	cmd := &cobra.Command{
 		Use:   "add <name>",
 		Short: "添加主机",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			credential := password
-			if keyFile != "" {
-				data, err := os.ReadFile(keyFile)
-				if err != nil {
-					return fmt.Errorf("读取私钥文件失败: %w", err)
-				}
-				credential = string(data)
-			}
 			req := &models.AddHostRequest{
-				Name:       args[0],
-				IP:         ip,
-				Port:       port,
-				Username:   username,
-				AuthType:   models.AuthType(authType),
-				Credential: credential,
-				Passphrase: passphrase,
-				Tags:       splitTags(tags),
+				Name:  args[0],
+				IP:    ip,
+				Notes: notes,
+				Tags:  splitTags(tags),
 			}
 			host, err := client.New(*url).AddHost(req)
 			if err != nil {
@@ -70,12 +53,7 @@ func newHostAddCmd(url *string) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&ip, "ip", "", "主机 IP 地址（必填）")
-	cmd.Flags().IntVar(&port, "port", 22, "SSH 端口")
-	cmd.Flags().StringVar(&username, "user", "root", "SSH 用户名")
-	cmd.Flags().StringVar(&authType, "auth", "key", "认证类型: password | key | key_password")
-	cmd.Flags().StringVar(&keyFile, "key", "", "SSH 私钥文件路径")
-	cmd.Flags().StringVar(&password, "password", "", "SSH 密码")
-	cmd.Flags().StringVar(&passphrase, "passphrase", "", "私钥 passphrase")
+	cmd.Flags().StringVar(&notes, "notes", "", "备注")
 	cmd.Flags().StringVar(&tags, "tag", "", "标签（逗号分隔）")
 	_ = cmd.MarkFlagRequired("ip")
 	return cmd
@@ -98,11 +76,11 @@ func newHostListCmd(url *string) *cobra.Command {
 				return nil
 			}
 			w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-			fmt.Fprintln(w, "ID\tNAME\tIP\tPORT\tUSER\tAUTH\tTAGS")
+			fmt.Fprintln(w, "ID\tNAME\tIP\tTAGS")
 			for _, h := range hosts {
-				fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%s\t%s\t%s\n",
-					h.ID[:8]+"...", h.Name, h.IP, h.Port, h.Username,
-					string(h.AuthType), strings.Join(h.Tags, ","),
+				fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",
+					h.ID[:8]+"...", h.Name, h.IP,
+					strings.Join(h.Tags, ","),
 				)
 			}
 			w.Flush()
@@ -136,15 +114,10 @@ func newHostRmCmd(url *string) *cobra.Command {
 
 func newHostUpdateCmd(url *string) *cobra.Command {
 	var (
-		name       string
-		ip         string
-		port       int
-		username   string
-		authType   string
-		keyFile    string
-		password   string
-		passphrase string
-		tags       string
+		name  string
+		ip    string
+		notes string
+		tags  string
 	)
 	cmd := &cobra.Command{
 		Use:   "update <id-or-name>",
@@ -163,29 +136,8 @@ func newHostUpdateCmd(url *string) *cobra.Command {
 			if cmd.Flags().Changed("ip") {
 				req.IP = &ip
 			}
-			if cmd.Flags().Changed("port") {
-				req.Port = &port
-			}
-			if cmd.Flags().Changed("user") {
-				req.Username = &username
-			}
-			if cmd.Flags().Changed("auth") {
-				at := models.AuthType(authType)
-				req.AuthType = &at
-			}
-			if cmd.Flags().Changed("key") {
-				data, err := os.ReadFile(keyFile)
-				if err != nil {
-					return fmt.Errorf("读取私钥文件失败: %w", err)
-				}
-				s := string(data)
-				req.Credential = &s
-			}
-			if cmd.Flags().Changed("password") {
-				req.Credential = &password
-			}
-			if cmd.Flags().Changed("passphrase") {
-				req.Passphrase = &passphrase
+			if cmd.Flags().Changed("notes") {
+				req.Notes = &notes
 			}
 			if cmd.Flags().Changed("tag") {
 				req.Tags = splitTags(tags)
@@ -200,12 +152,7 @@ func newHostUpdateCmd(url *string) *cobra.Command {
 	}
 	cmd.Flags().StringVar(&name, "name", "", "新名称")
 	cmd.Flags().StringVar(&ip, "ip", "", "新 IP")
-	cmd.Flags().IntVar(&port, "port", 0, "新端口")
-	cmd.Flags().StringVar(&username, "user", "", "新用户名")
-	cmd.Flags().StringVar(&authType, "auth", "", "新认证类型")
-	cmd.Flags().StringVar(&keyFile, "key", "", "新私钥文件")
-	cmd.Flags().StringVar(&password, "password", "", "新密码")
-	cmd.Flags().StringVar(&passphrase, "passphrase", "", "新 passphrase")
+	cmd.Flags().StringVar(&notes, "notes", "", "新备注")
 	cmd.Flags().StringVar(&tags, "tag", "", "新标签（逗号分隔）")
 	return cmd
 }

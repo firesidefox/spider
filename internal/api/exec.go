@@ -41,11 +41,16 @@ func runExec(ctx context.Context, app *mcppkg.App, host *models.Host, command st
 	execCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	client, err := app.Pool.Get(host, app.HostStore, app.SSHKeyStore)
+	face, err := app.AccessFaceStore.GetSSHFaceForHost(host.ID)
+	if err != nil {
+		return execResult{Host: host.Name, Command: command, Error: fmt.Sprintf("无 SSH 访问面: %v", err)}
+	}
+
+	client, err := app.Pool.Get(face, app.AccessFaceStore, app.SSHKeyStore)
 	if err != nil {
 		return execResult{Host: host.Name, Command: command, Error: fmt.Sprintf("SSH 连接失败: %v", err)}
 	}
-	defer app.Pool.Release(host.ID)
+	defer app.Pool.Release(face.ID)
 
 	result, err := client.Execute(execCtx, command)
 	if err != nil {
@@ -133,12 +138,17 @@ func streamCommand(app *mcppkg.App, w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 
 	start := time.Now()
-	client, err := app.Pool.Get(host, app.HostStore, app.SSHKeyStore)
+	face, err := app.AccessFaceStore.GetSSHFaceForHost(host.ID)
 	if err != nil {
 		sendEvent(map[string]any{"type": "done", "exit_code": -1, "error": err.Error()})
 		return
 	}
-	defer app.Pool.Release(host.ID)
+	client, err := app.Pool.Get(face, app.AccessFaceStore, app.SSHKeyStore)
+	if err != nil {
+		sendEvent(map[string]any{"type": "done", "exit_code": -1, "error": err.Error()})
+		return
+	}
+	defer app.Pool.Release(face.ID)
 
 	result, err := client.Execute(execCtx, command)
 	if err != nil {

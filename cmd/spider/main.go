@@ -134,6 +134,9 @@ func serve(cfgFile, addrOverride, dataDirOverride string) error {
 	us := store.NewUserStore(database)
 	ts := store.NewTokenStore(database)
 	ks := store.NewSSHKeyStore(database, cm)
+	afs := store.NewAccessFaceStore(database, cm)
+	fps := store.NewFingerprintStore(database)
+	ms := store.NewMemoryStore(database)
 
 	jwtMgr, err := auth.NewJWTManager(cfg.DataDir)
 	if err != nil {
@@ -152,16 +155,19 @@ func serve(cfgFile, addrOverride, dataDirOverride string) error {
 	defer shutdownCancel()
 
 	app := &mcppkg.App{
-		HostStore:   hs,
-		SSHKeyStore: ks,
-		LogStore:    ls,
-		Pool:        pool,
-		Config:      cfg,
-		DB:          database,
-		UserStore:   us,
-		TokenStore:  ts,
-		JWTManager:  jwtMgr,
-		ShutdownCtx: shutdownCtx,
+		HostStore:        hs,
+		SSHKeyStore:      ks,
+		LogStore:         ls,
+		Pool:             pool,
+		Config:           cfg,
+		DB:               database,
+		UserStore:        us,
+		TokenStore:       ts,
+		JWTManager:       jwtMgr,
+		AccessFaceStore:  afs,
+		FingerprintStore: fps,
+		MemoryStore:      ms,
+		ShutdownCtx:      shutdownCtx,
 	}
 
 	app.ConvStore = store.NewConversationStore(database)
@@ -181,7 +187,7 @@ func serve(cfgFile, addrOverride, dataDirOverride string) error {
 	app.PermissionMode = permission.Mode(cfg.Agent.PermissionMode)
 
 	agentFactory, err := agent.NewFactory(
-		ps, hs, pool, ks, ls, app.MsgStore,
+		ps, hs, afs, pool, ks, ls, app.MsgStore,
 	)
 	if err != nil {
 		log.Printf("WARNING: agent factory not available: %v", err)

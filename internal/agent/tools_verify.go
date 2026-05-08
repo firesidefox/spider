@@ -13,12 +13,13 @@ import (
 
 type VerifyTool struct {
 	hosts   *store.HostStore
+	faces   *store.AccessFaceStore
 	sshPool *ssh.Pool
 	sshKeys *store.SSHKeyStore
 }
 
-func NewVerifyTool(hosts *store.HostStore, sshPool *ssh.Pool, sshKeys *store.SSHKeyStore) *VerifyTool {
-	return &VerifyTool{hosts: hosts, sshPool: sshPool, sshKeys: sshKeys}
+func NewVerifyTool(hosts *store.HostStore, faces *store.AccessFaceStore, sshPool *ssh.Pool, sshKeys *store.SSHKeyStore) *VerifyTool {
+	return &VerifyTool{hosts: hosts, faces: faces, sshPool: sshPool, sshKeys: sshKeys}
 }
 
 func (t *VerifyTool) DefaultRiskLevel() RiskLevel { return RiskL1 }
@@ -93,12 +94,17 @@ func (t *VerifyTool) runCheck(ctx context.Context, c verifyCheck) checkResult {
 		r.Error = err.Error()
 		return r
 	}
-	client, err := t.sshPool.Get(host, t.hosts, t.sshKeys)
+	face, err := t.faces.GetSSHFaceForHost(host.ID)
 	if err != nil {
 		r.Error = err.Error()
 		return r
 	}
-	defer t.sshPool.Release(host.ID)
+	client, err := t.sshPool.Get(face, t.faces, t.sshKeys)
+	if err != nil {
+		r.Error = err.Error()
+		return r
+	}
+	defer t.sshPool.Release(face.ID)
 	res, err := client.Execute(ctx, c.Command)
 	if err != nil {
 		r.Error = err.Error()

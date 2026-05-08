@@ -10,12 +10,12 @@ import (
 )
 
 type poolEntry struct {
-	client    *Client
-	lastUsed  time.Time
-	inUse     bool
+	client   *Client
+	lastUsed time.Time
+	inUse    bool
 }
 
-// Pool 是 SSH 连接池，按 hostID 缓存连接。
+// Pool 是 SSH 连接池，按 faceID 缓存连接。
 type Pool struct {
 	mu      sync.Mutex
 	entries map[string]*poolEntry
@@ -24,17 +24,16 @@ type Pool struct {
 
 // NewPool 创建一个新的连接池。
 func NewPool(ttl time.Duration) *Pool {
-	p := &Pool{
+	return &Pool{
 		entries: make(map[string]*poolEntry),
 		ttl:     ttl,
 	}
-	return p
 }
 
 // Get 从池中获取连接，不存在或已过期则新建。
-func (p *Pool) Get(host *models.Host, hs *store.HostStore, ks *store.SSHKeyStore) (*Client, error) {
+func (p *Pool) Get(face *models.AccessFace, afs *store.AccessFaceStore, ks *store.SSHKeyStore) (*Client, error) {
 	p.mu.Lock()
-	entry, ok := p.entries[host.ID]
+	entry, ok := p.entries[face.ID]
 	if ok && !entry.inUse && time.Since(entry.lastUsed) < p.ttl {
 		entry.inUse = true
 		p.mu.Unlock()
@@ -42,29 +41,28 @@ func (p *Pool) Get(host *models.Host, hs *store.HostStore, ks *store.SSHKeyStore
 	}
 	p.mu.Unlock()
 
-	// 解密凭据
 	var credential, passphrase string
 	var err error
-	if host.SSHKeyID != "" && ks != nil {
-		key, kerr := ks.GetByID(host.SSHKeyID)
+	if face.SSHKeyID != "" && ks != nil {
+		key, kerr := ks.GetByID(face.SSHKeyID)
 		if kerr != nil {
 			return nil, fmt.Errorf("获取 SSH key 失败: %w", kerr)
 		}
 		credential, passphrase, err = ks.DecryptKey(key)
 	} else {
-		credential, passphrase, err = hs.DecryptCredential(host)
+		credential, passphrase, err = afs.DecryptCredential(face)
 	}
 	if err != nil {
 		return nil, err
 	}
 
-	client, err := NewClientWithCredential(host, credential, passphrase)
+	client, err := NewClientWithCredential(face, credential, passphrase)
 	if err != nil {
 		return nil, fmt.Errorf("创建 SSH 连接失败: %w", err)
 	}
 
 	p.mu.Lock()
-	p.entries[host.ID] = &poolEntry{
+	p.entries[face.ID] = &poolEntry{
 		client:   client,
 		lastUsed: time.Now(),
 		inUse:    true,
@@ -74,10 +72,10 @@ func (p *Pool) Get(host *models.Host, hs *store.HostStore, ks *store.SSHKeyStore
 }
 
 // Release 将连接归还连接池。
-func (p *Pool) Release(hostID string) {
+func (p *Pool) Release(faceID string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if entry, ok := p.entries[hostID]; ok {
+	if entry, ok := p.entries[faceID]; ok {
 		entry.inUse = false
 		entry.lastUsed = time.Now()
 	}

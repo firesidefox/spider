@@ -32,35 +32,103 @@ func NewRouter(app *mcppkg.App) http.Handler {
 	})
 
 	mux.HandleFunc("/api/v1/hosts/", func(w http.ResponseWriter, r *http.Request) {
-		// /api/v1/hosts/:id  or  /api/v1/hosts/:id/ping
-		path := r.URL.Path
-		// strip prefix "/api/v1/hosts/"
-		rest := path[len("/api/v1/hosts/"):]
+		rest := r.URL.Path[len("/api/v1/hosts/"):]
+		// split into id and sub-path
+		id := rest
+		sub := ""
 		if idx := indexOf(rest, '/'); idx >= 0 {
-			id := rest[:idx]
-			action := rest[idx+1:]
-			if action == "ping" && r.Method == http.MethodPost {
+			id = rest[:idx]
+			sub = rest[idx+1:]
+		}
+		if sub == "" {
+			// /{id}
+			switch r.Method {
+			case http.MethodGet:
+				getHost(app, w, r, id)
+			case http.MethodPut:
+				operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					updateHost(app, w, r, id)
+				})).ServeHTTP(w, r)
+			case http.MethodDelete:
+				operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					deleteHost(app, w, r, id)
+				})).ServeHTTP(w, r)
+			default:
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			}
+			return
+		}
+		// split sub into section and subID
+		section := sub
+		subID := ""
+		if idx := indexOf(sub, '/'); idx >= 0 {
+			section = sub[:idx]
+			subID = sub[idx+1:]
+		}
+		switch section {
+		case "ping":
+			if r.Method == http.MethodPost {
 				pingHost(app, w, r, id)
 				return
 			}
-			http.NotFound(w, r)
-			return
+		case "faces":
+			if subID == "" {
+				switch r.Method {
+				case http.MethodGet:
+					listAccessFaces(app, w, r, id)
+					return
+				case http.MethodPost:
+					operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+						addAccessFace(app, w, r, id)
+					})).ServeHTTP(w, r)
+					return
+				}
+			} else {
+				switch r.Method {
+				case http.MethodPut:
+					operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+						updateAccessFace(app, w, r, id, subID)
+					})).ServeHTTP(w, r)
+					return
+				case http.MethodDelete:
+					operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+						deleteAccessFace(app, w, r, id, subID)
+					})).ServeHTTP(w, r)
+					return
+				}
+			}
+		case "fingerprint":
+			if r.Method == http.MethodGet {
+				getFingerprint(app, w, r, id)
+				return
+			}
+		case "memories":
+			if subID == "" {
+				switch r.Method {
+				case http.MethodGet:
+					listMemories(app, w, r, id)
+					return
+				case http.MethodPost:
+					operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+						addMemory(app, w, r, id)
+					})).ServeHTTP(w, r)
+					return
+				}
+			} else {
+				if r.Method == http.MethodDelete {
+					memID := parseMemID(subID)
+					if memID < 0 {
+						http.NotFound(w, r)
+						return
+					}
+					operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+						deleteMemory(app, w, r, id, memID)
+					})).ServeHTTP(w, r)
+					return
+				}
+			}
 		}
-		id := rest
-		switch r.Method {
-		case http.MethodGet:
-			getHost(app, w, r, id)
-		case http.MethodPut:
-			operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				updateHost(app, w, r, id)
-			})).ServeHTTP(w, r)
-		case http.MethodDelete:
-			operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				deleteHost(app, w, r, id)
-			})).ServeHTTP(w, r)
-		default:
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		}
+		http.NotFound(w, r)
 	})
 
 	mux.HandleFunc("/api/v1/exec", func(w http.ResponseWriter, r *http.Request) {

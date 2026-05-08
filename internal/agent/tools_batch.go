@@ -13,13 +13,14 @@ import (
 
 type BatchExecuteTool struct {
 	hosts   *store.HostStore
+	faces   *store.AccessFaceStore
 	sshPool *ssh.Pool
 	logs    *store.LogStore
 	sshKeys *store.SSHKeyStore
 }
 
-func NewBatchExecuteTool(hosts *store.HostStore, sshPool *ssh.Pool, logs *store.LogStore, sshKeys *store.SSHKeyStore) *BatchExecuteTool {
-	return &BatchExecuteTool{hosts: hosts, sshPool: sshPool, logs: logs, sshKeys: sshKeys}
+func NewBatchExecuteTool(hosts *store.HostStore, faces *store.AccessFaceStore, sshPool *ssh.Pool, logs *store.LogStore, sshKeys *store.SSHKeyStore) *BatchExecuteTool {
+	return &BatchExecuteTool{hosts: hosts, faces: faces, sshPool: sshPool, logs: logs, sshKeys: sshKeys}
 }
 
 func (t *BatchExecuteTool) DefaultRiskLevel() RiskLevel { return RiskL3 }
@@ -89,13 +90,19 @@ func (t *BatchExecuteTool) Execute(ctx context.Context, input map[string]any) (*
 		go func(idx int, h *models.Host) {
 			defer wg.Done()
 			r := batchHostResult{HostID: h.ID, HostName: h.Name}
-			client, err := t.sshPool.Get(h, t.hosts, t.sshKeys)
+			face, ferr := t.faces.GetSSHFaceForHost(h.ID)
+			if ferr != nil {
+				r.Error = ferr.Error()
+				results[idx] = r
+				return
+			}
+			client, err := t.sshPool.Get(face, t.faces, t.sshKeys)
 			if err != nil {
 				r.Error = err.Error()
 				results[idx] = r
 				return
 			}
-			defer t.sshPool.Release(h.ID)
+			defer t.sshPool.Release(face.ID)
 			res, err := client.Execute(ctx, command)
 			if err != nil {
 				r.Error = err.Error()

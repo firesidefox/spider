@@ -48,16 +48,11 @@ func (t *GetDeviceInfoTool) Execute(_ context.Context, input map[string]any) (*T
 	}
 
 	info := map[string]any{
-		"id":               h.ID,
-		"name":             h.Name,
-		"ip":               h.IP,
-		"port":             h.Port,
-		"vendor":           h.Vendor,
-		"device_type":      h.DeviceType,
-		"model":            h.Model,
-		"cli_type":         h.CLIType,
-		"firmware_version": h.FirmwareVersion,
-		"tags":             h.Tags,
+		"id":     h.ID,
+		"name":   h.Name,
+		"ip":     h.IP,
+		"vendor": h.Vendor,
+		"tags":   h.Tags,
 	}
 
 	out, err := json.Marshal(info)

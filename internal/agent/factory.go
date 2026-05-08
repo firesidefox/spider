@@ -14,6 +14,7 @@ import (
 type Factory struct {
 	LLMClient      llm.Client
 	Hosts          *store.HostStore
+	AccessFaces    *store.AccessFaceStore
 	SSHPool        *ssh.Pool
 	SSHKeys        *store.SSHKeyStore
 	Logs           *store.LogStore
@@ -26,6 +27,7 @@ type Factory struct {
 func NewFactory(
 	providerStore *store.ProviderStore,
 	hosts *store.HostStore,
+	faces *store.AccessFaceStore,
 	pool *ssh.Pool,
 	keys *store.SSHKeyStore,
 	logs *store.LogStore,
@@ -53,12 +55,13 @@ func NewFactory(
 	}
 
 	return &Factory{
-		LLMClient: llmClient,
-		Hosts:     hosts,
-		SSHPool:   pool,
-		SSHKeys:   keys,
-		Logs:      logs,
-		MsgStore:  msgs,
+		LLMClient:   llmClient,
+		Hosts:       hosts,
+		AccessFaces: faces,
+		SSHPool:     pool,
+		SSHKeys:     keys,
+		Logs:        logs,
+		MsgStore:    msgs,
 	}, nil
 }
 
@@ -67,9 +70,9 @@ func (f *Factory) NewAgent(systemPrompt string) *Agent {
 	registry := NewToolRegistry()
 	registry.Register(NewListDevicesTool(f.Hosts))
 	registry.Register(NewGetDeviceInfoTool(f.Hosts))
-	registry.Register(NewExecuteCLITool(f.Hosts, f.SSHPool, f.Logs, f.SSHKeys))
-	registry.Register(NewBatchExecuteTool(f.Hosts, f.SSHPool, f.Logs, f.SSHKeys))
-	registry.Register(NewVerifyTool(f.Hosts, f.SSHPool, f.SSHKeys))
+	registry.Register(NewExecuteCLITool(f.Hosts, f.AccessFaces, f.SSHPool, f.Logs, f.SSHKeys))
+	registry.Register(NewBatchExecuteTool(f.Hosts, f.AccessFaces, f.SSHPool, f.Logs, f.SSHKeys))
+	registry.Register(NewVerifyTool(f.Hosts, f.AccessFaces, f.SSHPool, f.SSHKeys))
 	registry.Register(NewCallRESTAPITool())
 
 	hooks := NewHookChain()

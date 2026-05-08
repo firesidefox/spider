@@ -13,13 +13,14 @@ import (
 
 type ExecuteCLITool struct {
 	hosts   *store.HostStore
+	faces   *store.AccessFaceStore
 	sshPool *ssh.Pool
 	logs    *store.LogStore
 	sshKeys *store.SSHKeyStore
 }
 
-func NewExecuteCLITool(hosts *store.HostStore, sshPool *ssh.Pool, logs *store.LogStore, sshKeys *store.SSHKeyStore) *ExecuteCLITool {
-	return &ExecuteCLITool{hosts: hosts, sshPool: sshPool, logs: logs, sshKeys: sshKeys}
+func NewExecuteCLITool(hosts *store.HostStore, faces *store.AccessFaceStore, sshPool *ssh.Pool, logs *store.LogStore, sshKeys *store.SSHKeyStore) *ExecuteCLITool {
+	return &ExecuteCLITool{hosts: hosts, faces: faces, sshPool: sshPool, logs: logs, sshKeys: sshKeys}
 }
 
 func (t *ExecuteCLITool) DefaultRiskLevel() RiskLevel { return RiskL2 }
@@ -63,11 +64,16 @@ func (t *ExecuteCLITool) Execute(ctx context.Context, input map[string]any) (*To
 		return &ToolResult{Content: fmt.Sprintf("host not found: %v", err), IsError: true, RiskLevel: risk}, nil
 	}
 
-	client, err := t.sshPool.Get(h, t.hosts, t.sshKeys)
+	face, err := t.faces.GetSSHFaceForHost(h.ID)
+	if err != nil {
+		return &ToolResult{Content: fmt.Sprintf("no SSH access face: %v", err), IsError: true, RiskLevel: risk}, nil
+	}
+
+	client, err := t.sshPool.Get(face, t.faces, t.sshKeys)
 	if err != nil {
 		return &ToolResult{Content: fmt.Sprintf("SSH connect failed: %v", err), IsError: true, RiskLevel: risk}, nil
 	}
-	defer t.sshPool.Release(h.ID)
+	defer t.sshPool.Release(face.ID)
 
 	result, err := client.Execute(ctx, command)
 	if err != nil {

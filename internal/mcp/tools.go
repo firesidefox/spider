@@ -21,11 +21,7 @@ func makeListHosts(app *App) func(context.Context, mcpgo.CallToolRequest) (*mcpg
 		if err != nil {
 			return toolError(fmt.Sprintf("查询主机列表失败: %v", err))
 		}
-		safeHosts := make([]*models.SafeHost, len(hosts))
-		for i, h := range hosts {
-			safeHosts[i] = h.Safe()
-		}
-		data, _ := json.MarshalIndent(safeHosts, "", "  ")
+		data, _ := json.MarshalIndent(hosts, "", "  ")
 		return toolText(string(data))
 	}
 }
@@ -34,35 +30,20 @@ func makeListHosts(app *App) func(context.Context, mcpgo.CallToolRequest) (*mcpg
 func makeAddHost(app *App) func(context.Context, mcpgo.CallToolRequest) (*mcpgo.CallToolResult, error) {
 	return func(ctx context.Context, req mcpgo.CallToolRequest) (*mcpgo.CallToolResult, error) {
 		args := req.GetArguments()
-		authType := models.AuthType(getString(args, "auth_type"))
-		switch authType {
-		case models.AuthPassword, models.AuthKey, models.AuthKeyPassword:
-		default:
-			return toolError(fmt.Sprintf("无效的 auth_type: %s，必须是 password | key | key_password", authType))
-		}
-
 		addReq := &models.AddHostRequest{
-			Name:       getString(args, "name"),
-			IP:         getString(args, "ip"),
-			Port:       getInt(args, "port", 22),
-			Username:   getString(args, "username"),
-			AuthType:   authType,
-			Credential: getString(args, "credential"),
-			Passphrase: getString(args, "passphrase"),
-			Tags:       splitTags(getString(args, "tags")),
+			Name:           getString(args, "name"),
+			IP:             getString(args, "ip"),
+			Notes:          getString(args, "notes"),
+			Tags:           splitTags(getString(args, "tags")),
+			Vendor:         getString(args, "vendor"),
+			ProductName:    getString(args, "product_name"),
+			ProductVersion: getString(args, "product_version"),
 		}
-
-		sshKeyID := getString(args, "ssh_key_id")
-		if sshKeyID != "" && addReq.Credential != "" {
-			return toolError("ssh_key_id 和 credential 不能同时提供")
-		}
-		addReq.SSHKeyID = sshKeyID
-
 		host, err := app.HostStore.Add(addReq)
 		if err != nil {
 			return toolError(fmt.Sprintf("添加主机失败: %v", err))
 		}
-		data, _ := json.MarshalIndent(host.Safe(), "", "  ")
+		data, _ := json.MarshalIndent(host, "", "  ")
 		return toolText(fmt.Sprintf("主机添加成功:\n%s", string(data)))
 	}
 }
@@ -106,34 +87,27 @@ func makeUpdateHost(app *App) func(context.Context, mcpgo.CallToolRequest) (*mcp
 		if v := getString(args, "ip"); v != "" {
 			updateReq.IP = &v
 		}
-		if v := getInt(args, "port", 0); v != 0 {
-			updateReq.Port = &v
-		}
-		if v := getString(args, "username"); v != "" {
-			updateReq.Username = &v
-		}
-		if v := getString(args, "auth_type"); v != "" {
-			at := models.AuthType(v)
-			updateReq.AuthType = &at
-		}
-		if v := getString(args, "credential"); v != "" {
-			updateReq.Credential = &v
-		}
-		if v := getString(args, "passphrase"); v != "" {
-			updateReq.Passphrase = &v
+		if v := getString(args, "notes"); v != "" {
+			updateReq.Notes = &v
 		}
 		if v := getString(args, "tags"); v != "" {
 			updateReq.Tags = splitTags(v)
 		}
-		if v := getString(args, "ssh_key_id"); v != "" {
-			updateReq.SSHKeyID = &v
+		if v := getString(args, "vendor"); v != "" {
+			updateReq.Vendor = &v
+		}
+		if v := getString(args, "product_name"); v != "" {
+			updateReq.ProductName = &v
+		}
+		if v := getString(args, "product_version"); v != "" {
+			updateReq.ProductVersion = &v
 		}
 
 		updated, err := app.HostStore.Update(host.ID, updateReq)
 		if err != nil {
 			return toolError(fmt.Sprintf("更新主机失败: %v", err))
 		}
-		data, _ := json.MarshalIndent(updated.Safe(), "", "  ")
+		data, _ := json.MarshalIndent(updated, "", "  ")
 		return toolText(fmt.Sprintf("主机更新成功:\n%s", string(data)))
 	}
 }
@@ -153,15 +127,20 @@ func makeExecuteCommand(app *App) func(context.Context, mcpgo.CallToolRequest) (
 			return toolError(fmt.Sprintf("主机不存在: %s", hostIDOrName))
 		}
 
+		face, err := app.AccessFaceStore.GetSSHFaceForHost(host.ID)
+		if err != nil {
+			return toolError(fmt.Sprintf("主机无 SSH 访问面: %v", err))
+		}
+
 		timeout := getTimeout(args, app.Config)
 		execCtx, cancel := context.WithTimeout(ctx, timeout)
 		defer cancel()
 
-		client, err := app.Pool.Get(host, app.HostStore, app.SSHKeyStore)
+		client, err := app.Pool.Get(face, app.AccessFaceStore, app.SSHKeyStore)
 		if err != nil {
 			return toolError(fmt.Sprintf("建立 SSH 连接失败: %v", err))
 		}
-		defer app.Pool.Release(host.ID)
+		defer app.Pool.Release(face.ID)
 
 		result, err := client.Execute(execCtx, command)
 		if err != nil {
@@ -256,12 +235,17 @@ func makeExecuteCommandBatch(app *App) func(context.Context, mcpgo.CallToolReque
 				execCtx, cancel := context.WithTimeout(ctx, timeout)
 				defer cancel()
 
-				client, err := app.Pool.Get(j.host, app.HostStore, app.SSHKeyStore)
+				face, ferr := app.AccessFaceStore.GetSSHFaceForHost(j.host.ID)
+				if ferr != nil {
+					results[j.idx] = hostResult{Host: j.host.Name, Command: command, Error: ferr.Error()}
+					return
+				}
+				client, err := app.Pool.Get(face, app.AccessFaceStore, app.SSHKeyStore)
 				if err != nil {
 					results[j.idx] = hostResult{Host: j.host.Name, Command: command, Error: err.Error()}
 					return
 				}
-				defer app.Pool.Release(j.host.ID)
+				defer app.Pool.Release(face.ID)
 
 				res, err := client.Execute(execCtx, command)
 				if err != nil {
@@ -302,7 +286,12 @@ func makeCheckConnectivity(app *App) func(context.Context, mcpgo.CallToolRequest
 			return toolError(fmt.Sprintf("主机不存在: %s", hostIDOrName))
 		}
 
-		latency, err := sshpkg.CheckConnectivity(host, app.HostStore, app.SSHKeyStore)
+		face, err := app.AccessFaceStore.GetSSHFaceForHost(host.ID)
+		if err != nil {
+			return toolError(fmt.Sprintf("主机无 SSH 访问面: %v", err))
+		}
+
+		latency, err := sshpkg.CheckConnectivity(face, app.AccessFaceStore, app.SSHKeyStore)
 		result := map[string]any{
 			"host":       host.Name,
 			"connected":  err == nil,
@@ -330,11 +319,15 @@ func makeUploadFile(app *App) func(context.Context, mcpgo.CallToolRequest) (*mcp
 		if err != nil {
 			return toolError(fmt.Sprintf("主机不存在: %s", hostIDOrName))
 		}
-		client, err := app.Pool.Get(host, app.HostStore, app.SSHKeyStore)
+		face, err := app.AccessFaceStore.GetSSHFaceForHost(host.ID)
+		if err != nil {
+			return toolError(fmt.Sprintf("主机无 SSH 访问面: %v", err))
+		}
+		client, err := app.Pool.Get(face, app.AccessFaceStore, app.SSHKeyStore)
 		if err != nil {
 			return toolError(fmt.Sprintf("建立 SSH 连接失败: %v", err))
 		}
-		defer app.Pool.Release(host.ID)
+		defer app.Pool.Release(face.ID)
 		uploadCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 		defer cancel()
 		if err := client.Upload(uploadCtx, localPath, remotePath); err != nil {
@@ -358,11 +351,15 @@ func makeDownloadFile(app *App) func(context.Context, mcpgo.CallToolRequest) (*m
 		if err != nil {
 			return toolError(fmt.Sprintf("主机不存在: %s", hostIDOrName))
 		}
-		client, err := app.Pool.Get(host, app.HostStore, app.SSHKeyStore)
+		face, err := app.AccessFaceStore.GetSSHFaceForHost(host.ID)
+		if err != nil {
+			return toolError(fmt.Sprintf("主机无 SSH 访问面: %v", err))
+		}
+		client, err := app.Pool.Get(face, app.AccessFaceStore, app.SSHKeyStore)
 		if err != nil {
 			return toolError(fmt.Sprintf("建立 SSH 连接失败: %v", err))
 		}
-		defer app.Pool.Release(host.ID)
+		defer app.Pool.Release(face.ID)
 		downloadCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 		defer cancel()
 		if err := client.Download(downloadCtx, remotePath, localPath); err != nil {

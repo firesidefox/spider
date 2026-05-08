@@ -15,85 +15,93 @@ import (
 
 // ExecResult 是命令执行结果。
 type ExecResult struct {
-	Stdout     string
-	Stderr     string
-	ExitCode   int
-	Duration   time.Duration
+	Stdout   string
+	Stderr   string
+	ExitCode int
+	Duration time.Duration
 }
 
 // Client 封装一个 SSH 连接。
 type Client struct {
 	conn *gossh.Client
-	host *models.Host
+	face *models.AccessFace
 }
 
-// NewClient 根据主机信息建立 SSH 连接（支持密码、私钥）。
-func NewClient(host *models.Host, hs *store.HostStore) (*Client, error) {
-	credential, passphrase, err := hs.DecryptCredential(host)
-	if err != nil {
-		return nil, err
-	}
-
-	authMethods, err := buildAuthMethods(host.AuthType, credential, passphrase)
-	if err != nil {
-		return nil, err
-	}
-
+func newSSHConfig(face *models.AccessFace, authMethods []gossh.AuthMethod) *gossh.ClientConfig {
 	cfg := &gossh.ClientConfig{
-		User:            host.Username,
+		User:            face.Username,
 		Auth:            authMethods,
 		HostKeyCallback: gossh.InsecureIgnoreHostKey(),
 		Timeout:         15 * time.Second,
 	}
-
-	addr := fmt.Sprintf("%s:%d", host.IP, host.Port)
-	conn, err := gossh.Dial("tcp", addr, cfg)
-	if err != nil {
-		return nil, fmt.Errorf("SSH 连接 %s 失败: %w", addr, err)
+	if face.SSHLegacy {
+		cfg.Config = gossh.Config{
+			KeyExchanges: []string{
+				"curve25519-sha256", "curve25519-sha256@libssh.org",
+				"ecdh-sha2-nistp256", "ecdh-sha2-nistp384", "ecdh-sha2-nistp521",
+				"diffie-hellman-group14-sha256", "diffie-hellman-group14-sha1",
+				"diffie-hellman-group1-sha1",
+			},
+			Ciphers: []string{
+				"aes128-gcm@openssh.com", "chacha20-poly1305@openssh.com",
+				"aes128-ctr", "aes192-ctr", "aes256-ctr",
+				"aes128-cbc", "3des-cbc",
+			},
+		}
 	}
-	return &Client{conn: conn, host: host}, nil
+	return cfg
+}
+
+// NewClientFromFace 根据 AccessFace 建立 SSH 连接（解密凭据）。
+func NewClientFromFace(face *models.AccessFace, afs *store.AccessFaceStore, ks *store.SSHKeyStore) (*Client, error) {
+	var credential, passphrase string
+	var err error
+	if face.SSHKeyID != "" && ks != nil {
+		key, kerr := ks.GetByID(face.SSHKeyID)
+		if kerr != nil {
+			return nil, fmt.Errorf("获取 SSH key 失败: %w", kerr)
+		}
+		credential, passphrase, err = ks.DecryptKey(key)
+	} else {
+		credential, passphrase, err = afs.DecryptCredential(face)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return NewClientWithCredential(face, credential, passphrase)
 }
 
 // NewClientWithCredential 根据预解密的凭据建立 SSH 连接。
-func NewClientWithCredential(host *models.Host, credential, passphrase string) (*Client, error) {
-	authMethods, err := buildAuthMethods(host.AuthType, credential, passphrase)
+func NewClientWithCredential(face *models.AccessFace, credential, passphrase string) (*Client, error) {
+	authMethods, err := buildAuthMethods(face.SSHAuthType, credential, passphrase)
 	if err != nil {
 		return nil, err
 	}
-	cfg := &gossh.ClientConfig{
-		User:            host.Username,
-		Auth:            authMethods,
-		HostKeyCallback: gossh.InsecureIgnoreHostKey(),
-		Timeout:         15 * time.Second,
-	}
-	addr := fmt.Sprintf("%s:%d", host.IP, host.Port)
-	conn, err := gossh.Dial("tcp", addr, cfg)
+	addr := fmt.Sprintf("%s:%d", face.IP, face.Port)
+	conn, err := gossh.Dial("tcp", addr, newSSHConfig(face, authMethods))
 	if err != nil {
 		return nil, fmt.Errorf("SSH 连接 %s 失败: %w", addr, err)
 	}
-	return &Client{conn: conn, host: host}, nil
+	return &Client{conn: conn, face: face}, nil
 }
 
 // buildAuthMethods 根据认证类型构建 SSH 认证方法列表。
-func buildAuthMethods(authType models.AuthType, credential, passphrase string) ([]gossh.AuthMethod, error) {
+func buildAuthMethods(authType models.SSHAuthType, credential, passphrase string) ([]gossh.AuthMethod, error) {
 	switch authType {
-	case models.AuthPassword:
+	case models.SSHAuthPassword:
 		return []gossh.AuthMethod{gossh.Password(credential)}, nil
-
-	case models.AuthKey:
+	case models.SSHAuthKey:
 		signer, err := gossh.ParsePrivateKey([]byte(credential))
 		if err != nil {
 			return nil, fmt.Errorf("解析私钥失败: %w", err)
 		}
 		return []gossh.AuthMethod{gossh.PublicKeys(signer)}, nil
-
-	case models.AuthKeyPassword:
+	case models.SSHAuthKeyPassword:
 		signer, err := gossh.ParsePrivateKeyWithPassphrase([]byte(credential), []byte(passphrase))
 		if err != nil {
 			return nil, fmt.Errorf("解析带 passphrase 的私钥失败: %w", err)
 		}
 		return []gossh.AuthMethod{gossh.PublicKeys(signer)}, nil
-
 	default:
 		return nil, fmt.Errorf("不支持的认证类型: %s", authType)
 	}
@@ -112,8 +120,6 @@ func (c *Client) Execute(ctx context.Context, command string) (*ExecResult, erro
 	session.Stderr = &stderr
 
 	start := time.Now()
-
-	// 通过 context 实现超时控制
 	done := make(chan error, 1)
 	go func() {
 		done <- session.Run(command)
@@ -146,10 +152,9 @@ func (c *Client) Execute(ctx context.Context, command string) (*ExecResult, erro
 }
 
 // CheckConnectivity 测试 SSH 连通性，返回延迟。
-func CheckConnectivity(host *models.Host, hs *store.HostStore, ks *store.SSHKeyStore) (latency time.Duration, err error) {
+func CheckConnectivity(face *models.AccessFace, afs *store.AccessFaceStore, ks *store.SSHKeyStore) (latency time.Duration, err error) {
 	start := time.Now()
-	// 先测试 TCP 连通性
-	addr := fmt.Sprintf("%s:%d", host.IP, host.Port)
+	addr := fmt.Sprintf("%s:%d", face.IP, face.Port)
 	conn, err := net.DialTimeout("tcp", addr, 10*time.Second)
 	if err != nil {
 		return 0, fmt.Errorf("TCP 连接失败: %w", err)
@@ -157,23 +162,21 @@ func CheckConnectivity(host *models.Host, hs *store.HostStore, ks *store.SSHKeyS
 	conn.Close()
 	tcpLatency := time.Since(start)
 
-	// 解密凭据
 	var credential, passphrase string
-	if host.SSHKeyID != "" && ks != nil {
-		key, kerr := ks.GetByID(host.SSHKeyID)
+	if face.SSHKeyID != "" && ks != nil {
+		key, kerr := ks.GetByID(face.SSHKeyID)
 		if kerr != nil {
 			return tcpLatency, fmt.Errorf("获取 SSH key 失败: %w", kerr)
 		}
 		credential, passphrase, err = ks.DecryptKey(key)
 	} else {
-		credential, passphrase, err = hs.DecryptCredential(host)
+		credential, passphrase, err = afs.DecryptCredential(face)
 	}
 	if err != nil {
 		return tcpLatency, fmt.Errorf("解密凭据失败: %w", err)
 	}
 
-	// 再测试 SSH 握手
-	client, err := NewClientWithCredential(host, credential, passphrase)
+	client, err := NewClientWithCredential(face, credential, passphrase)
 	if err != nil {
 		return tcpLatency, fmt.Errorf("SSH 握手失败: %w", err)
 	}
