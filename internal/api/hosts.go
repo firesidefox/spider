@@ -2,12 +2,14 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 
 	authmw "github.com/spiderai/spider/internal/auth"
 	mcppkg "github.com/spiderai/spider/internal/mcp"
 	"github.com/spiderai/spider/internal/models"
+	"github.com/spiderai/spider/internal/store"
 )
 
 func listHosts(app *mcppkg.App, w http.ResponseWriter, r *http.Request) {
@@ -40,7 +42,11 @@ func addHost(app *mcppkg.App, w http.ResponseWriter, r *http.Request) {
 func getHost(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id string) {
 	h, err := app.HostStore.GetByID(id)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "host not found")
+		if errors.Is(err, store.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "host not found")
+		} else {
+			writeError(w, http.StatusInternalServerError, err.Error())
+		}
 		return
 	}
 	writeJSON(w, http.StatusOK, h)
@@ -54,7 +60,11 @@ func updateHost(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id stri
 	}
 	h, err := app.HostStore.Update(id, &req)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		if errors.Is(err, store.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "host not found")
+		} else {
+			writeError(w, http.StatusInternalServerError, err.Error())
+		}
 		return
 	}
 	writeJSON(w, http.StatusOK, h)
@@ -62,7 +72,11 @@ func updateHost(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id stri
 
 func deleteHost(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id string) {
 	if err := app.HostStore.Delete(id); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		if errors.Is(err, store.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "host not found")
+		} else {
+			writeError(w, http.StatusInternalServerError, err.Error())
+		}
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"message": "已删除"})
@@ -116,7 +130,11 @@ func updateAccessFace(app *mcppkg.App, w http.ResponseWriter, r *http.Request, h
 
 func deleteAccessFace(app *mcppkg.App, w http.ResponseWriter, r *http.Request, hostID, faceID string) {
 	if err := app.AccessFaceStore.Delete(faceID); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		if errors.Is(err, store.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "access face not found")
+		} else {
+			writeError(w, http.StatusInternalServerError, err.Error())
+		}
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"message": "已删除"})
@@ -173,7 +191,11 @@ func addMemory(app *mcppkg.App, w http.ResponseWriter, r *http.Request, hostID s
 
 func deleteMemory(app *mcppkg.App, w http.ResponseWriter, r *http.Request, hostID string, memID int) {
 	if err := app.MemoryStore.Delete(memID); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		if errors.Is(err, store.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "memory not found")
+		} else {
+			writeError(w, http.StatusInternalServerError, err.Error())
+		}
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"message": "已删除"})

@@ -3,6 +3,7 @@ package store
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -10,6 +11,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/spiderai/spider/internal/models"
 )
+
+// ErrNotFound is returned when a requested record does not exist.
+var ErrNotFound = errors.New("not found")
 
 // HostStore 提供主机的 CRUD 操作。
 type HostStore struct {
@@ -153,7 +157,7 @@ func (s *HostStore) Delete(id string) error {
 	}
 	n, _ := res.RowsAffected()
 	if n == 0 {
-		return fmt.Errorf("主机不存在: %s", id)
+		return ErrNotFound
 	}
 	return nil
 }
@@ -167,7 +171,7 @@ func scanHost(row *sql.Row) (*models.Host, error) {
 		&tagsJSON, &h.CreatedAt, &h.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {
-		return nil, fmt.Errorf("主机不存在")
+		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("扫描主机数据失败: %w", err)

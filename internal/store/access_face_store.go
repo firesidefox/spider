@@ -143,8 +143,15 @@ func (s *AccessFaceStore) Update(id string, req *models.UpdateAccessFaceRequest)
 }
 
 func (s *AccessFaceStore) Delete(id string) error {
-	_, err := s.db.Exec(`DELETE FROM access_faces WHERE id=?`, id)
-	return err
+	res, err := s.db.Exec(`DELETE FROM access_faces WHERE id=?`, id)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 func (s *AccessFaceStore) DecryptCredential(f *models.AccessFace) (cred, pass string, err error) {
@@ -177,7 +184,7 @@ func scanAccessFace(s accessFaceScanner) (*models.AccessFace, error) {
 		&ksJSON, &f.CreatedAt, &f.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {
-		return nil, fmt.Errorf("access face not found")
+		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, err
