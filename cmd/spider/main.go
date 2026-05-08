@@ -129,7 +129,7 @@ func serve(cfgFile, addrOverride, dataDirOverride string) error {
 	}
 	defer database.Close()
 
-	hs := store.NewHostStore(database, cm)
+	hs := store.NewHostStore(database)
 	ls := store.NewLogStore(database)
 	us := store.NewUserStore(database)
 	ts := store.NewTokenStore(database)
@@ -148,6 +148,9 @@ func serve(cfgFile, addrOverride, dataDirOverride string) error {
 	pool.StartCleanup()
 	defer pool.Close()
 
+	shutdownCtx, shutdownCancel := context.WithCancel(context.Background())
+	defer shutdownCancel()
+
 	app := &mcppkg.App{
 		HostStore:   hs,
 		SSHKeyStore: ks,
@@ -158,6 +161,7 @@ func serve(cfgFile, addrOverride, dataDirOverride string) error {
 		UserStore:   us,
 		TokenStore:  ts,
 		JWTManager:  jwtMgr,
+		ShutdownCtx: shutdownCtx,
 	}
 
 	app.ConvStore = store.NewConversationStore(database)
