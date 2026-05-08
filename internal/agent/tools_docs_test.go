@@ -38,7 +38,7 @@ func TestSearchDocsTool_ImplementsTool(t *testing.T) {
 }
 
 func TestCallRESTAPITool_Metadata(t *testing.T) {
-	tool := NewCallRESTAPITool()
+	tool := NewCallRESTAPITool(nil)
 
 	if tool.Name() != "CallAPI" {
 		t.Errorf("got name %q, want %q", tool.Name(), "CallAPI")
@@ -63,5 +63,5 @@ func TestCallRESTAPITool_Metadata(t *testing.T) {
 }
 
 func TestCallRESTAPITool_ImplementsTool(t *testing.T) {
-	var _ Tool = NewCallRESTAPITool()
+	var _ Tool = NewCallRESTAPITool(nil)
 }

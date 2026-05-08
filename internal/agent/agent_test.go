@@ -242,7 +242,7 @@ func TestActToolDescriptionsContainSideEffectHint(t *testing.T) {
 	tools := []Tool{
 		NewExecuteCLITool(nil, nil, nil, nil, nil),
 		NewBatchExecuteTool(nil, nil, nil, nil, nil),
-		NewCallRESTAPITool(),
+		NewCallRESTAPITool(nil),
 	}
 	for _, tool := range tools {
 		desc := tool.Description()
