@@ -13,3 +13,5 @@ docs/superpowers/
 dist/
 install-arm64.sh
 *.png
+.superpowers/
+.superpowers/
