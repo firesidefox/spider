@@ -8,20 +8,27 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/spiderai/spider/internal/models"
+	"github.com/spiderai/spider/internal/store"
 )
 
 const maxResponseBody = 64 * 1024
 
 type CallRESTAPITool struct {
-	http *http.Client
+	http  *http.Client
+	faces *store.AccessFaceStore
 }
 
-func NewCallRESTAPITool() *CallRESTAPITool {
-	return &CallRESTAPITool{http: &http.Client{Timeout: 30 * time.Second}}
+func NewCallRESTAPITool(faces *store.AccessFaceStore) *CallRESTAPITool {
+	return &CallRESTAPITool{
+		http:  &http.Client{Timeout: 30 * time.Second},
+		faces: faces,
+	}
 }
 
 func (t *CallRESTAPITool) DefaultRiskLevel() RiskLevel { return RiskL2 }
-func (t *CallRESTAPITool) Name() string                  { return "CallAPI" }
+func (t *CallRESTAPITool) Name() string                { return "CallAPI" }
 
 func (t *CallRESTAPITool) Description() string {
 	return "Call a REST API endpoint on a gateway device. Has side effects for POST/PUT/DELETE methods. Use GET freely in Explore phase; use mutating methods only in Act phase after confirming intent."
@@ -35,16 +42,30 @@ func (t *CallRESTAPITool) InputSchema() map[string]any {
 			"method":  map[string]any{"type": "string", "description": "HTTP method", "enum": []string{"GET", "POST", "PUT", "DELETE", "PATCH"}},
 			"headers": map[string]any{"type": "object", "description": "HTTP headers"},
 			"body":    map[string]any{"type": "string", "description": "Request body"},
+			"face_id": map[string]any{"type": "string", "description": "Optional. Access face ID. If provided, auth headers are injected automatically from the stored credentials."},
+			"host_id": map[string]any{"type": "string", "description": "Optional. Spider host ID. Used with face_id for context."},
 		},
-		"required": []string{"url", "method"},
+		"required": []string{"method"},
 	}
 }
 
 func (t *CallRESTAPITool) Execute(ctx context.Context, input map[string]any) (*ToolResult, error) {
 	url, _ := input["url"].(string)
 	method, _ := input["method"].(string)
-	if url == "" || method == "" {
-		return &ToolResult{Content: "url and method are required", IsError: true, RiskLevel: RiskL2}, nil
+	if method == "" {
+		return &ToolResult{Content: "method is required", IsError: true, RiskLevel: RiskL2}, nil
+	}
+
+	faceID, _ := input["face_id"].(string)
+	if faceID != "" && t.faces != nil && strings.HasPrefix(url, "/") {
+		face, err := t.faces.GetByID(faceID)
+		if err == nil {
+			url = face.BaseURL + url
+		}
+	}
+
+	if url == "" {
+		return &ToolResult{Content: "url is required", IsError: true, RiskLevel: RiskL2}, nil
 	}
 
 	bodyStr, _ := input["body"].(string)
@@ -57,6 +78,21 @@ func (t *CallRESTAPITool) Execute(ctx context.Context, input map[string]any) (*T
 		for k, v := range hdrs {
 			if s, ok := v.(string); ok {
 				req.Header.Set(k, s)
+			}
+		}
+	}
+
+	if faceID != "" && t.faces != nil {
+		if face, err := t.faces.GetByID(faceID); err == nil {
+			if cred, _, cerr := t.faces.DecryptCredential(face); cerr == nil {
+				switch face.RESTAuthType {
+				case models.RESTAuthBearer:
+					req.Header.Set("Authorization", "Bearer "+cred)
+				case models.RESTAuthBasic:
+					req.SetBasicAuth(face.RESTUsername, cred)
+				case models.RESTAuthAPIKey:
+					req.Header.Set(face.HeaderName, cred)
+				}
 			}
 		}
 	}

@@ -73,7 +73,7 @@ func (f *Factory) NewAgent(systemPrompt string) *Agent {
 	registry.Register(NewExecuteCLITool(f.Hosts, f.AccessFaces, f.SSHPool, f.Logs, f.SSHKeys))
 	registry.Register(NewBatchExecuteTool(f.Hosts, f.AccessFaces, f.SSHPool, f.Logs, f.SSHKeys))
 	registry.Register(NewVerifyTool(f.Hosts, f.AccessFaces, f.SSHPool, f.SSHKeys))
-	registry.Register(NewCallRESTAPITool())
+	registry.Register(NewCallRESTAPITool(f.AccessFaces))
 
 	hooks := NewHookChain()
 	if f.Enforcer != nil {
