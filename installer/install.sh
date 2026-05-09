@@ -167,11 +167,12 @@ detail "spdctl host list    # 查看主机列表"
 detail "spdctl mcp register # 注册到 Claude Code"
 
 if [[ ":$PATH:" != *":$BIN_DIR:"* ]]; then
-  printf "\n  ${yellow}PATH 提示：${reset}\n"
-  printf "  $BIN_DIR 不在 PATH 中，请添加到 ~/.zshrc 或 ~/.bashrc：\n"
-  printf "  ${bold}export PATH=\"\$HOME/.local/bin:\$PATH\"${reset}\n"
+  warn "PATH 提示：$BIN_DIR 不在 PATH 中"
+  detail "添加到 ~/.zshrc 或 ~/.bashrc："
+  detail "export PATH=\"\$HOME/.local/bin:\$PATH\""
 fi
 
 printf "\n  ${yellow}首次登录提示：${reset}\n"
-printf "  初始管理员密码已打印到服务日志，运行以下命令查看：\n"
-printf "  ${bold}grep -i 'default admin created' $LOG_DIR/spider.log${reset}\n"
+warn "首次登录提示"
+detail "初始管理员密码已打印到服务日志，运行以下命令查看："
+detail "grep -i 'default admin created' $LOG_DIR/spider.log"
