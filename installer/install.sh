@@ -174,4 +174,4 @@ fi
 
 printf "\n  ${yellow}首次登录提示：${reset}\n"
 printf "  初始管理员密码已打印到服务日志，运行以下命令查看：\n"
-printf "  ${bold}grep 'default admin created' $LOG_DIR/spider.log${reset}\n"
+printf "  ${bold}grep -i 'default admin created' $LOG_DIR/spider.log${reset}\n"
