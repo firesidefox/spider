@@ -120,18 +120,20 @@ fi
 success "端口 8000 可用"
 
 step "启动服务"
+_bootstrap_err=$(mktemp)
+trap 'rm -f "$_bootstrap_err"' EXIT
 if [ "$OS" = "Darwin" ]; then
-  if ! launchctl bootstrap "gui/$(id -u)" "$PLIST_DST" 2>/tmp/spider-bootstrap.err; then
+  if ! launchctl bootstrap "gui/$(id -u)" "$PLIST_DST" 2>"$_bootstrap_err"; then
     error "launchctl bootstrap 失败"
-    cat /tmp/spider-bootstrap.err >&2
+    cat "$_bootstrap_err" >&2
     detail "查看日志：tail -f $LOG_DIR/spider.log"
     detail "手动启动：$BIN_DIR/spider"
     exit 1
   fi
 elif [ "$OS" = "Linux" ]; then
-  if ! systemctl --user enable --now spider 2>/tmp/spider-bootstrap.err; then
+  if ! systemctl --user enable --now spider 2>"$_bootstrap_err"; then
     error "systemctl enable 失败"
-    cat /tmp/spider-bootstrap.err >&2
+    cat "$_bootstrap_err" >&2
     detail "查看日志：tail -f $LOG_DIR/spider.log"
     detail "手动启动：$BIN_DIR/spider"
     exit 1
