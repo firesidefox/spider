@@ -17,53 +17,83 @@ error()   { printf "  ${red}✖ %s${reset}\n" "$*" >&2; }
 detail()  { printf "    ${dim}%s${reset}\n" "$*"; }
 # ────────────────────────────────────────────────────────
 
-if [[ $EUID -ne 0 ]]; then
-  error "请使用 sudo 运行此脚本"
-  detail "sudo ./install.sh"
-  exit 1
-fi
-
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PLIST_LABEL="ai.fty.spider"
-PLIST_DST="/Library/LaunchDaemons/${PLIST_LABEL}.plist"
+BIN_DIR="$HOME/.local/bin"
+DATA_DIR="$HOME/.spider/data"
+LOG_DIR="$HOME/.spider/logs"
+OS="$(uname -s)"
 
 h1 "Spider 安装"
 
+if [ "$(id -u)" -eq 0 ]; then
+  error "请勿以 root 用户运行此脚本，直接运行 ./install.sh 即可。"
+  exit 1
+fi
+
+
+
 step "停止旧版本服务"
-launchctl bootout "system/${PLIST_LABEL}" 2>/dev/null || true
-# 等待 launchd 完成异步卸载（print 返回非零 = 已完全移除）
-for i in $(seq 10); do
-  launchctl print "system/${PLIST_LABEL}" >/dev/null 2>&1 || break
-  sleep 1
-done
+if [ "$OS" = "Darwin" ]; then
+  launchctl bootout "gui/$(id -u)/${PLIST_LABEL}" 2>/dev/null || true
+  for i in $(seq 10); do
+    launchctl print "gui/$(id -u)/${PLIST_LABEL}" >/dev/null 2>&1 || break
+    sleep 1
+  done
+elif [ "$OS" = "Linux" ]; then
+  systemctl --user stop spider 2>/dev/null || true
+fi
 success "旧服务已停止（或不存在）"
 
 step "安装二进制"
-install -m 755 "${SCRIPT_DIR}/spider" /usr/local/bin/spider
-install -m 755 "${SCRIPT_DIR}/spdctl" /usr/local/bin/spdctl
-success "spider / spdctl → /usr/local/bin/"
+mkdir -p "$BIN_DIR"
+install -m 755 "${SCRIPT_DIR}/spider" "$BIN_DIR/spider"
+install -m 755 "${SCRIPT_DIR}/spdctl" "$BIN_DIR/spdctl"
+success "spider / spdctl → $BIN_DIR/"
 
 step "创建日志目录"
-mkdir -p /var/log/spider
-chmod 755 /var/log/spider
-success "/var/log/spider 已就绪"
+mkdir -p "$LOG_DIR"
+success "$LOG_DIR 已就绪"
 
 step "创建数据目录"
-mkdir -p /var/lib/spider
-chmod 700 /var/lib/spider
-success "/var/lib/spider 已就绪"
+mkdir -p "$DATA_DIR"
+success "$DATA_DIR 已就绪"
 
 step "安装内置 Skills"
 if [ -d "${SCRIPT_DIR}/skills" ]; then
-  cp -r "${SCRIPT_DIR}/skills/." /var/lib/spider/skills/
-  success "Skills → /var/lib/spider/skills/"
+  cp -r "${SCRIPT_DIR}/skills/." "$DATA_DIR/skills/"
+  success "Skills → $DATA_DIR/skills/"
 else
   warn "未找到 skills 目录，跳过"
 fi
 
-step "安装 launchd plist"
-install -m 644 "${SCRIPT_DIR}/spider.plist" "${PLIST_DST}"
-success "${PLIST_DST}"
+step "安装服务配置"
+if [ "$OS" = "Darwin" ]; then
+  PLIST_DST="$HOME/Library/LaunchAgents/${PLIST_LABEL}.plist"
+  mkdir -p "$HOME/Library/LaunchAgents"
+  sed "s|__HOME__|$HOME|g" "${SCRIPT_DIR}/spider.plist" > "$PLIST_DST"
+  chmod 644 "$PLIST_DST"
+  success "$PLIST_DST"
+elif [ "$OS" = "Linux" ]; then
+  SERVICE_DST="$HOME/.config/systemd/user/spider.service"
+  mkdir -p "$HOME/.config/systemd/user"
+  cat > "$SERVICE_DST" <<EOF
+[Unit]
+Description=Spider AI
+After=network.target
+
+[Service]
+ExecStart=$BIN_DIR/spider serve --data-dir $DATA_DIR
+Restart=always
+StandardOutput=append:$LOG_DIR/spider.log
+StandardError=append:$LOG_DIR/spider.log
+
+[Install]
+WantedBy=default.target
+EOF
+  systemctl --user daemon-reload
+  success "$SERVICE_DST"
+fi
 
 step "检查端口 8000"
 if lsof -iTCP:8000 -sTCP:LISTEN -t >/dev/null 2>&1; then
@@ -80,12 +110,29 @@ fi
 success "端口 8000 可用"
 
 step "启动服务"
-if ! launchctl bootstrap system "${PLIST_DST}" 2>/tmp/spider-bootstrap.err; then
-  error "launchctl bootstrap 失败"
-  cat /tmp/spider-bootstrap.err >&2
-  detail "查看日志：tail -f /var/log/spider/spider.log"
-  detail "手动启动：/usr/local/bin/spider"
-  exit 1
+if [ "$OS" = "Darwin" ]; then
+  if ! launchctl bootstrap "gui/$(id -u)" "$PLIST_DST" 2>/tmp/spider-bootstrap.err; then
+    error "launchctl bootstrap 失败"
+    cat /tmp/spider-bootstrap.err >&2
+    detail "查看日志：tail -f $LOG_DIR/spider.log"
+    detail "手动启动：$BIN_DIR/spider"
+    exit 1
+  fi
+elif [ "$OS" = "Linux" ]; then
+  if ! systemctl --user enable --now spider 2>/tmp/spider-bootstrap.err; then
+    error "systemctl enable 失败"
+    cat /tmp/spider-bootstrap.err >&2
+    detail "查看日志：tail -f $LOG_DIR/spider.log"
+    detail "手动启动：$BIN_DIR/spider"
+    exit 1
+  fi
+  step "启用开机自启（linger）"
+  if sudo loginctl enable-linger "$(whoami)" 2>/dev/null; then
+    success "linger 已启用，开机无需登录即可运行"
+  else
+    warn "linger 启用失败（需要 sudo），服务仅在登录后运行"
+    detail "手动执行：sudo loginctl enable-linger $(whoami)"
+  fi
 fi
 
 step "验证服务"
@@ -99,7 +146,7 @@ for i in $(seq 5); do
     break
   fi
   if [[ $i -eq 5 ]]; then
-    printf "\r  ${yellow}⚠ 服务未响应，查看日志：tail -f /var/log/spider/spider.log${reset}\n"
+    printf "\r  ${yellow}⚠ 服务未响应，查看日志：tail -f $LOG_DIR/spider.log${reset}\n"
   fi
 done
 
@@ -107,6 +154,12 @@ h1 "安装完成"
 detail "spdctl host list    # 查看主机列表"
 detail "spdctl mcp register # 注册到 Claude Code"
 
+if [[ ":$PATH:" != *":$BIN_DIR:"* ]]; then
+  printf "\n  ${yellow}PATH 提示：${reset}\n"
+  printf "  $BIN_DIR 不在 PATH 中，请添加到 ~/.zshrc 或 ~/.bashrc：\n"
+  printf "  ${bold}export PATH=\"\$HOME/.local/bin:\$PATH\"${reset}\n"
+fi
+
 printf "\n  ${yellow}首次登录提示：${reset}\n"
 printf "  初始管理员密码已打印到服务日志，运行以下命令查看：\n"
-printf "  ${bold}sudo grep 'default admin created' /var/log/spider/spider.log${reset}\n"
+printf "  ${bold}grep 'default admin created' $LOG_DIR/spider.log${reset}\n"
