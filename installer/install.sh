@@ -31,8 +31,6 @@ if [ "$(id -u)" -eq 0 ]; then
   exit 1
 fi
 
-
-
 step "停止旧版本服务"
 if [ "$OS" = "Darwin" ]; then
   launchctl bootout "gui/$(id -u)/${PLIST_LABEL}" 2>/dev/null || true
@@ -103,8 +101,8 @@ if lsof -iTCP:8000 -sTCP:LISTEN -t >/dev/null 2>&1; then
   printf "\n" >&2
   printf "  ${yellow}解决方案：${reset}\n" >&2
   detail "1. 停止占用进程：kill $(lsof -iTCP:8000 -sTCP:LISTEN -t 2>/dev/null)"
-  detail "2. 或修改监听端口：编辑 /etc/spider/config.yaml，设置 addr: :9090"
-  detail "   然后同步修改 spider.plist，重新运行 install.sh"
+  detail "2. 或修改监听端口：编辑 ~/.spider/data/config.yaml，设置 addr: :9090"
+  detail "   然后同步修改 ~/Library/LaunchAgents/ai.fty.spider.plist，重新运行 install.sh"
   exit 1
 fi
 success "端口 8000 可用"
