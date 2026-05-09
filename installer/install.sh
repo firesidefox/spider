@@ -23,6 +23,7 @@ BIN_DIR="$HOME/.local/bin"
 DATA_DIR="$HOME/.spider/data"
 LOG_DIR="$HOME/.spider/logs"
 OS="$(uname -s)"
+PLIST_DST=""
 
 h1 "Spider 安装"
 
@@ -94,15 +95,26 @@ EOF
 fi
 
 step "检查端口 8000"
-if lsof -iTCP:8000 -sTCP:LISTEN -t >/dev/null 2>&1; then
+if [ "$OS" = "Darwin" ]; then
+  _port_check() { lsof -iTCP:8000 -sTCP:LISTEN -t >/dev/null 2>&1; }
+  _port_list()  { lsof -iTCP:8000 -sTCP:LISTEN; }
+  _port_pid()   { lsof -iTCP:8000 -sTCP:LISTEN -t 2>/dev/null; }
+  _service_hint() { detail "   然后同步修改 ~/Library/LaunchAgents/ai.fty.spider.plist，重新运行 install.sh"; }
+else
+  _port_check() { ss -tlnp 2>/dev/null | grep -q ':8000 '; }
+  _port_list()  { ss -tlnp 2>/dev/null | grep ':8000 '; }
+  _port_pid()   { ss -tlnp 2>/dev/null | grep ':8000 ' | grep -oP 'pid=\K[0-9]+' | head -1; }
+  _service_hint() { detail "   然后同步修改 ~/.config/systemd/user/spider.service，重新运行 install.sh"; }
+fi
+if _port_check; then
   error "端口 8000 已被占用"
   printf "\n" >&2
-  lsof -iTCP:8000 -sTCP:LISTEN >&2
+  _port_list >&2
   printf "\n" >&2
   printf "  ${yellow}解决方案：${reset}\n" >&2
-  detail "1. 停止占用进程：kill $(lsof -iTCP:8000 -sTCP:LISTEN -t 2>/dev/null)"
+  detail "1. 停止占用进程：kill $(_port_pid)"
   detail "2. 或修改监听端口：编辑 ~/.spider/data/config.yaml，设置 addr: :9090"
-  detail "   然后同步修改 ~/Library/LaunchAgents/ai.fty.spider.plist，重新运行 install.sh"
+  _service_hint
   exit 1
 fi
 success "端口 8000 可用"

@@ -21,6 +21,11 @@ OS="$(uname -s)"
 
 h1 "Spider 卸载"
 
+if [ "$(id -u)" -eq 0 ]; then
+  error "请勿以 root 用户运行此脚本，直接运行 ./uninstall.sh 即可。"
+  exit 1
+fi
+
 step "停止服务"
 if [ "$OS" = "Darwin" ]; then
   launchctl bootout "gui/$(id -u)/${PLIST_LABEL}" 2>/dev/null || true
