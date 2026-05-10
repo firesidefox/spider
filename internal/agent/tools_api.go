@@ -46,7 +46,7 @@ func (t *CallRESTAPITool) InputSchema() map[string]any {
 		"face_id": map[string]any{"type": "string", "description": "Optional. Access face ID. If provided, auth headers are injected automatically from the stored credentials."},
 			"intent":  map[string]any{"type": "string", "description": "What you are trying to achieve with this API call (goal only). Required for POST/PUT/DELETE/PATCH."},
 			},
-		"required": []string{"method"},
+		"required": []string{"method", "intent"},
 	}
 }
 

@@ -16,10 +16,15 @@ func TestExecuteCLITool_InputSchema_HasIntent(t *testing.T) {
 		t.Error("intent field missing from InputSchema")
 	}
 	required, _ := schema["required"].([]string)
+	found := false
 	for _, r := range required {
 		if r == "intent" {
-			t.Error("intent should NOT be in required (warn-only, not hard required)")
+			found = true
+			break
 		}
+	}
+	if !found {
+		t.Error("intent should be in required")
 	}
 }
 

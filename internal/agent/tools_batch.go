@@ -41,7 +41,7 @@ func (t *BatchExecuteTool) InputSchema() map[string]any {
 			"risk_level": map[string]any{"type": "string", "enum": []string{"L1", "L2", "L3", "L4"}, "description": "Risk level. L1=read-only, L2=standard change, L3=destructive, L4=critical"},
 			"intent":     map[string]any{"type": "string", "description": "What you are trying to achieve with this command (goal only, no device names). Required for L2/L3/L4."},
 		},
-		"required": []string{"command"},
+		"required": []string{"command", "intent"},
 	}
 }
 
