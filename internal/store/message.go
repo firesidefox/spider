@@ -52,3 +52,29 @@ func (s *MessageStore) DeleteByConversation(conversationID string) error {
 	_, err := s.db.Exec("DELETE FROM messages WHERE conversation_id = ?", conversationID)
 	return err
 }
+
+func (s *MessageStore) ListAfterMessage(conversationID, messageID string) ([]*models.Message, error) {
+	if messageID == "" {
+		return s.ListByConversation(conversationID)
+	}
+	rows, err := s.db.Query(`
+		SELECT id, conversation_id, role, content, tool_calls, created_at
+		FROM messages
+		WHERE conversation_id = ?
+		  AND created_at > (SELECT created_at FROM messages WHERE id = ?)
+		ORDER BY created_at ASC`,
+		conversationID, messageID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var msgs []*models.Message
+	for rows.Next() {
+		m := &models.Message{}
+		if err := rows.Scan(&m.ID, &m.ConversationID, &m.Role, &m.Content, &m.ToolCalls, &m.CreatedAt); err != nil {
+			return nil, err
+		}
+		msgs = append(msgs, m)
+	}
+	return msgs, rows.Err()
+}
