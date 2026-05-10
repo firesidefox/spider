@@ -6,7 +6,7 @@ import (
 )
 
 func TestCallRESTAPITool_InputSchema_HasIntent(t *testing.T) {
-	tool := &CallRESTAPITool{}
+	tool := NewCallRESTAPITool(nil)
 	schema := tool.InputSchema()
 	props, ok := schema["properties"].(map[string]any)
 	if !ok {
@@ -24,7 +24,7 @@ func TestCallRESTAPITool_InputSchema_HasIntent(t *testing.T) {
 }
 
 func TestCallRESTAPITool_Description_MentionsIntent(t *testing.T) {
-	tool := &CallRESTAPITool{}
+	tool := NewCallRESTAPITool(nil)
 	if !strings.Contains(tool.Description(), "intent") {
 		t.Error("Description should mention intent field")
 	}
