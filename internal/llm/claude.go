@@ -40,7 +40,8 @@ func NewClaudeClient(apiKey, model, baseURL string) *ClaudeClient {
 
 func (c *ClaudeClient) ChatStream(ctx context.Context, req *ChatRequest) (<-chan StreamEvent, error) {
 	log := logger.FromContext(ctx).With().Str("module", "llm").Logger()
-	log.Debug().Str("model", c.model).Int("msgs", len(req.Messages)).Msg("llm stream start")
+	msgsJSON, _ := json.Marshal(req.Messages)
+	log.Debug().Str("model", c.model).Int("msgs", len(req.Messages)).RawJSON("messages", msgsJSON).Msg("llm stream start")
 	start := time.Now()
 
 	body := map[string]any{
@@ -85,7 +86,8 @@ func (c *ClaudeClient) ChatStream(ctx context.Context, req *ChatRequest) (<-chan
 
 func (c *ClaudeClient) Chat(ctx context.Context, req *ChatRequest) (string, error) {
 	log := logger.FromContext(ctx).With().Str("module", "llm").Logger()
-	log.Debug().Str("model", c.model).Int("msgs", len(req.Messages)).Msg("llm chat start")
+	msgsJSON, _ := json.Marshal(req.Messages)
+	log.Debug().Str("model", c.model).Int("msgs", len(req.Messages)).RawJSON("messages", msgsJSON).Msg("llm chat start")
 	start := time.Now()
 	maxTokens := req.MaxTokens
 	if maxTokens == 0 {
@@ -133,7 +135,7 @@ func (c *ClaudeClient) Chat(ctx context.Context, req *ChatRequest) (string, erro
 	if len(result.Content) == 0 {
 		return "", fmt.Errorf("empty response content")
 	}
-	log.Debug().Str("model", c.model).Int64("duration_ms", time.Since(start).Milliseconds()).Msg("llm chat done")
+	log.Debug().Str("model", c.model).Int64("duration_ms", time.Since(start).Milliseconds()).Str("response", result.Content[0].Text).Msg("llm chat done")
 	return result.Content[0].Text, nil
 }
 

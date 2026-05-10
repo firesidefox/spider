@@ -233,7 +233,7 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 				if assistantText != "" {
 					a.msgStore.Save(conversationID, "assistant", assistantText, "")
 				}
-				log.Debug().Int("turn", turn).Int64("duration_ms", time.Since(turnStart).Milliseconds()).Int("input_tokens", usage.InputTokens).Int("output_tokens", usage.OutputTokens).Msg("turn done")
+				log.Debug().Int("turn", turn).Int64("duration_ms", time.Since(turnStart).Milliseconds()).Int("input_tokens", usage.InputTokens).Int("output_tokens", usage.OutputTokens).Str("response", assistantText).Msg("turn done")
 				log.Info().Int("turn", turn).Msg("agent done")
 				events <- Event{Type: EventDone}
 				return
@@ -293,7 +293,7 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 					result = &ToolResult{Content: err.Error(), IsError: true, RiskLevel: riskLevel}
 					log.Error().Err(err).Str("tool", tc.Name).Int64("duration_ms", durationMs).Msg("tool call error")
 				} else {
-					log.Debug().Str("tool", tc.Name).Int64("duration_ms", durationMs).Bool("is_error", result.IsError).Msg("tool call done")
+					log.Debug().Str("tool", tc.Name).Int64("duration_ms", durationMs).Bool("is_error", result.IsError).Interface("input", tc.Input).Str("output", result.Content).Msg("tool call done")
 				}
 				a.hooks.RunAfter(tc.Name, tc.Input, result)
 
@@ -310,7 +310,7 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 
 			tcJSON, _ := json.Marshal(tcRecords)
 			a.msgStore.Save(conversationID, "assistant", assistantText, string(tcJSON))
-			log.Debug().Int("turn", turn).Int64("duration_ms", time.Since(turnStart).Milliseconds()).Int("input_tokens", usage.InputTokens).Int("output_tokens", usage.OutputTokens).Int("tools", len(tcRecords)).Msg("turn done")
+			log.Debug().Int("turn", turn).Int64("duration_ms", time.Since(turnStart).Milliseconds()).Int("input_tokens", usage.InputTokens).Int("output_tokens", usage.OutputTokens).Int("tools", len(tcRecords)).Str("response", assistantText).Msg("turn done")
 		}
 
 		events <- Event{Type: EventError, Content: map[string]any{"error": "max turns exceeded"}}
