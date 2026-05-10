@@ -83,7 +83,7 @@ func CurrentLevel() string {
 
 func IsValidLevel(s string) bool {
 	switch s {
-	case "debug", "info", "error":
+	case "debug", "info", "warn", "error":
 		return true
 	}
 	return false
@@ -96,6 +96,8 @@ func parseLevel(s string) zerolog.Level {
 	switch s {
 	case "debug":
 		return zerolog.DebugLevel
+	case "warn":
+		return zerolog.WarnLevel
 	case "error":
 		return zerolog.ErrorLevel
 	default:

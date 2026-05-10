@@ -584,6 +584,7 @@
                 <select v-model="logLevel" class="input" style="max-width:160px">
                   <option value="debug">debug</option>
                   <option value="info">info</option>
+                  <option value="warn">warn</option>
                   <option value="error">error</option>
                 </select>
               </div>

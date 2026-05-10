@@ -77,7 +77,7 @@ func (c *ClaudeClient) ChatStream(ctx context.Context, req *ChatRequest) (<-chan
 		return nil, fmt.Errorf("claude API error %d: %s", resp.StatusCode, string(errBody))
 	}
 
-	log.Debug().Str("model", c.model).Dur("ttfb_ms", time.Since(start)).Msg("llm stream connected")
+	log.Debug().Str("model", c.model).Int64("ttfb_ms", time.Since(start).Milliseconds()).Msg("llm stream connected")
 	ch := make(chan StreamEvent, 32)
 	go c.readSSE(resp.Body, ch)
 	return ch, nil
