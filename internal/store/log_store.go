@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/spiderai/spider/internal/logger"
 	"github.com/spiderai/spider/internal/models"
 )
 
@@ -39,6 +40,7 @@ func (s *LogStore) Save(log *models.ExecutionLog) error {
 	if err != nil {
 		return fmt.Errorf("保存执行日志失败: %w", err)
 	}
+	logger.Global().Debug().Str("host_id", log.HostID).Str("triggered_by", log.TriggeredBy).Msg("store: execution log saved")
 	return nil
 }
 
@@ -90,5 +92,9 @@ func (s *LogStore) List(hostID, triggeredBy string, limit, offset int) ([]*model
 		log.HostName = hostName.String
 		logs = append(logs, &log)
 	}
-	return logs, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	logger.Global().Debug().Str("host_id", hostID).Int("count", len(logs)).Msg("store: execution logs listed")
+	return logs, nil
 }

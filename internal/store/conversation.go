@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/spiderai/spider/internal/logger"
 	"github.com/spiderai/spider/internal/models"
 )
 
@@ -37,6 +38,7 @@ func (s *ConversationStore) Create(userID, title string) (*models.Conversation, 
 	if err != nil {
 		return nil, fmt.Errorf("insert conversation: %w", err)
 	}
+	logger.Global().Debug().Str("conv_id", conv.ID).Str("user_id", userID).Msg("store: conversation created")
 	return conv, nil
 }
 
@@ -52,6 +54,7 @@ func (s *ConversationStore) GetByID(id string) (*models.Conversation, error) {
 	if err != nil {
 		return nil, fmt.Errorf("scan conversation: %w", err)
 	}
+	logger.Global().Debug().Str("conv_id", id).Msg("store: conversation fetched")
 	return &c, nil
 }
 
@@ -72,6 +75,7 @@ func (s *ConversationStore) ListByUser(userID string) ([]*models.Conversation, e
 		}
 		list = append(list, &c)
 	}
+	logger.Global().Debug().Str("user_id", userID).Int("count", len(list)).Msg("store: conversations listed")
 	return list, nil
 }
 
@@ -85,7 +89,11 @@ func (s *ConversationStore) UpdateTitle(id, title string) error {
 
 func (s *ConversationStore) Delete(id string) error {
 	_, err := s.db.Exec("DELETE FROM conversations WHERE id = ?", id)
-	return err
+	if err != nil {
+		return err
+	}
+	logger.Global().Debug().Str("conv_id", id).Msg("store: conversation deleted")
+	return nil
 }
 
 func (s *ConversationStore) UpdatePermissionMode(id, mode string) error {
@@ -101,5 +109,9 @@ func (s *ConversationStore) SetStatus(id, status string) error {
 		"UPDATE conversations SET status = ?, updated_at = ? WHERE id = ?",
 		status, time.Now().UTC(), id,
 	)
-	return err
+	if err != nil {
+		return err
+	}
+	logger.Global().Debug().Str("conv_id", id).Str("status", status).Msg("store: conversation status set")
+	return nil
 }

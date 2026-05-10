@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/spiderai/spider/internal/logger"
 	"github.com/spiderai/spider/internal/models"
 )
 
@@ -25,6 +26,7 @@ func (s *MessageStore) Save(conversationID, role, content, toolCalls string) err
 	if err != nil {
 		return fmt.Errorf("insert message: %w", err)
 	}
+	logger.Global().Debug().Str("conv_id", conversationID).Str("role", role).Msg("store: message saved")
 	return nil
 }
 
@@ -45,12 +47,17 @@ func (s *MessageStore) ListByConversation(conversationID string) ([]*models.Mess
 		}
 		list = append(list, &m)
 	}
+	logger.Global().Debug().Str("conv_id", conversationID).Int("count", len(list)).Msg("store: messages listed")
 	return list, nil
 }
 
 func (s *MessageStore) DeleteByConversation(conversationID string) error {
 	_, err := s.db.Exec("DELETE FROM messages WHERE conversation_id = ?", conversationID)
-	return err
+	if err != nil {
+		return err
+	}
+	logger.Global().Debug().Str("conv_id", conversationID).Msg("store: messages deleted")
+	return nil
 }
 
 func (s *MessageStore) ListAfterMessage(conversationID, messageID string) ([]*models.Message, error) {

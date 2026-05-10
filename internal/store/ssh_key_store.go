@@ -11,6 +11,7 @@ import (
 	gossh "golang.org/x/crypto/ssh"
 
 	"github.com/spiderai/spider/internal/crypto"
+	"github.com/spiderai/spider/internal/logger"
 	"github.com/spiderai/spider/internal/models"
 )
 
@@ -65,6 +66,7 @@ func (s *SSHKeyStore) Add(userID string, req *models.AddSSHKeyRequest) (*models.
 		}
 		return nil, fmt.Errorf("插入 SSH 密钥失败: %w", err)
 	}
+	logger.Global().Debug().Str("key_id", id).Str("user_id", userID).Msg("store: ssh key added")
 	return s.GetByID(id)
 }
 
@@ -112,7 +114,11 @@ func (s *SSHKeyStore) ListByUser(userID string) ([]*models.SSHKey, error) {
 		}
 		keys = append(keys, k)
 	}
-	return keys, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	logger.Global().Debug().Str("user_id", userID).Int("count", len(keys)).Msg("store: ssh keys listed")
+	return keys, nil
 }
 
 // DecryptKey 解密 SSH 密钥的私钥和 passphrase。
@@ -145,6 +151,7 @@ func (s *SSHKeyStore) Delete(id, userID string) error {
 	if n == 0 {
 		return ErrSSHKeyNotFound
 	}
+	logger.Global().Debug().Str("key_id", id).Msg("store: ssh key deleted")
 	return nil
 }
 

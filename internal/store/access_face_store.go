@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/spiderai/spider/internal/crypto"
+	"github.com/spiderai/spider/internal/logger"
 	"github.com/spiderai/spider/internal/models"
 )
 
@@ -43,7 +44,12 @@ func (s *AccessFaceStore) Add(hostID string, req *models.AddAccessFaceRequest) (
 	if err != nil {
 		return nil, err
 	}
-	return s.GetByID(id)
+	f, err := s.GetByID(id)
+	if err != nil {
+		return nil, err
+	}
+	logger.Global().Debug().Str("host_id", hostID).Str("face_id", f.ID).Msg("store: access face added")
+	return f, nil
 }
 
 func (s *AccessFaceStore) GetByID(id string) (*models.AccessFace, error) {
@@ -65,7 +71,11 @@ func (s *AccessFaceStore) ListByHost(hostID string) ([]*models.AccessFace, error
 		}
 		out = append(out, f)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	logger.Global().Debug().Str("host_id", hostID).Int("count", len(out)).Msg("store: access faces listed")
+	return out, nil
 }
 
 func (s *AccessFaceStore) GetSSHFaceForHost(hostID string) (*models.AccessFace, error) {
@@ -154,6 +164,7 @@ func (s *AccessFaceStore) Delete(id string) error {
 	if n == 0 {
 		return ErrNotFound
 	}
+	logger.Global().Debug().Str("face_id", id).Msg("store: access face deleted")
 	return nil
 }
 

@@ -8,6 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/spiderai/spider/internal/logger"
+
 	"github.com/spiderai/spider/internal/models"
 )
 
@@ -42,6 +44,7 @@ func (s *TodoTaskStore) Create(task *models.TodoTask) error {
 	task.ID = id
 	task.CreatedAt = now
 	task.UpdatedAt = now
+	logger.Global().Debug().Int64("task_id", task.ID).Str("conv_id", task.ConversationID).Msg("store: todo task created")
 	return nil
 }
 
@@ -95,6 +98,7 @@ func (s *TodoTaskStore) Update(conversationID string, id int64, subject, descrip
 		return nil, err
 	}
 	json.Unmarshal([]byte(blockedByJSON), &t.BlockedBy) //nolint:errcheck
+	logger.Global().Debug().Int64("task_id", id).Str("status", status).Msg("store: todo task updated")
 	return &t, nil
 }
 
@@ -120,7 +124,11 @@ func (s *TodoTaskStore) List(conversationID string) ([]*models.TodoTask, error) 
 		json.Unmarshal([]byte(blockedByJSON), &t.BlockedBy) //nolint:errcheck
 		tasks = append(tasks, &t)
 	}
-	return tasks, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	logger.Global().Debug().Str("conv_id", conversationID).Int("count", len(tasks)).Msg("store: todo tasks listed")
+	return tasks, nil
 }
 
 func (s *TodoTaskStore) Get(id int64) (*models.TodoTask, error) {

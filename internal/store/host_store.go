@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/spiderai/spider/internal/logger"
 	"github.com/spiderai/spider/internal/models"
 )
 
@@ -45,7 +46,12 @@ func (s *HostStore) Add(req *models.AddHostRequest) (*models.Host, error) {
 		}
 		return nil, fmt.Errorf("插入主机失败: %w", err)
 	}
-	return s.GetByID(id)
+	h, err := s.GetByID(id)
+	if err != nil {
+		return nil, err
+	}
+	logger.Global().Debug().Str("host_id", h.ID).Str("name", h.Name).Msg("store: host added")
+	return h, nil
 }
 
 // GetByID 按 ID 查询主机。
@@ -54,7 +60,12 @@ func (s *HostStore) GetByID(id string) (*models.Host, error) {
 		`SELECT id, name, ip, notes, vendor, product_name, product_version, tags, created_at, updated_at
 		 FROM hosts WHERE id = ?`, id,
 	)
-	return scanHost(row)
+	h, err := scanHost(row)
+	if err != nil {
+		return nil, err
+	}
+	logger.Global().Debug().Str("host_id", id).Msg("store: host fetched")
+	return h, nil
 }
 
 // GetByName 按名称查询主机。
@@ -105,6 +116,7 @@ func (s *HostStore) List(tag string) ([]*models.Host, error) {
 		}
 		hosts = append(hosts, h)
 	}
+	logger.Global().Debug().Str("tag", tag).Int("count", len(hosts)).Msg("store: hosts listed")
 	return hosts, rows.Err()
 }
 
@@ -159,6 +171,7 @@ func (s *HostStore) Delete(id string) error {
 	if n == 0 {
 		return ErrNotFound
 	}
+	logger.Global().Debug().Str("host_id", id).Msg("store: host deleted")
 	return nil
 }
 
