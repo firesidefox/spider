@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 
 	"github.com/spiderai/spider/internal/models"
 	"github.com/spiderai/spider/internal/permission"
@@ -27,7 +28,7 @@ func (t *ExecuteCLITool) DefaultRiskLevel() RiskLevel { return RiskL2 }
 func (t *ExecuteCLITool) Name() string                  { return "RunCommand" }
 
 func (t *ExecuteCLITool) Description() string {
-	return `Execute a CLI command on a remote host via SSH. Has side effects. Use only after confirming intent in Plan phase.
+	return `Execute a CLI command on a remote host via SSH. Has side effects. Use only after confirming intent in Plan phase. Always set ` + "`intent`" + ` to a short goal description (e.g. "重启 nginx 使配置生效").
 Risk depends on the command:
 - Read-only commands (ls, cat, grep, ps, df, free, uname, systemctl status): safe, can use in Explore phase
 - State-changing commands (rm, kill, systemctl start|stop|restart, apt, yum, chmod, chown): use only in Act phase`
@@ -37,9 +38,10 @@ func (t *ExecuteCLITool) InputSchema() map[string]any {
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
-			"host_id":    map[string]any{"type": "string", "description": "Host ID"},
-			"command":    map[string]any{"type": "string", "description": "CLI command to execute"},
-			"risk_level": map[string]any{"type": "string", "enum": []string{"L1", "L2", "L3", "L4"}},
+			"host_id":    map[string]any{"type": "string", "description": "Target host ID or name"},
+			"command":    map[string]any{"type": "string", "description": "Shell command to execute"},
+			"risk_level": map[string]any{"type": "string", "enum": []string{"L1", "L2", "L3", "L4"}, "description": "Risk level. L1=read-only, L2=standard change, L3=destructive, L4=critical"},
+			"intent":     map[string]any{"type": "string", "description": "What you are trying to achieve with this command (goal only, no device names). Required for L2/L3/L4."},
 		},
 		"required": []string{"host_id", "command"},
 	}
@@ -49,6 +51,10 @@ func (t *ExecuteCLITool) Execute(ctx context.Context, input map[string]any) (*To
 	hostID, _ := input["host_id"].(string)
 	command, _ := input["command"].(string)
 	riskStr, _ := input["risk_level"].(string)
+	intent, _ := input["intent"].(string)
+	if intent == "" {
+		log.Printf("WARNING: RunCommand called without intent field (host=%s)", hostID)
+	}
 
 	if hostID == "" || command == "" {
 		return &ToolResult{Content: "missing required fields: host_id, command", IsError: true, RiskLevel: RiskL2}, nil
