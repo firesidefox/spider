@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -31,7 +32,7 @@ func (t *CallRESTAPITool) DefaultRiskLevel() RiskLevel { return RiskL2 }
 func (t *CallRESTAPITool) Name() string                { return "CallAPI" }
 
 func (t *CallRESTAPITool) Description() string {
-	return "Call a REST API endpoint on a gateway device. Has side effects for POST/PUT/DELETE methods. Use GET freely in Explore phase; use mutating methods only in Act phase after confirming intent."
+	return "Call a REST API endpoint on a gateway device. Has side effects for POST/PUT/DELETE methods. Use GET freely in Explore phase; use mutating methods only in Act phase after confirming intent. Always set `intent` to a short goal description for mutating calls."
 }
 
 func (t *CallRESTAPITool) InputSchema() map[string]any {
@@ -43,7 +44,8 @@ func (t *CallRESTAPITool) InputSchema() map[string]any {
 			"headers": map[string]any{"type": "object", "description": "HTTP headers"},
 			"body":    map[string]any{"type": "string", "description": "Request body"},
 		"face_id": map[string]any{"type": "string", "description": "Optional. Access face ID. If provided, auth headers are injected automatically from the stored credentials."},
-		},
+			"intent":  map[string]any{"type": "string", "description": "What you are trying to achieve with this API call (goal only). Required for POST/PUT/DELETE/PATCH."},
+			},
 		"required": []string{"method"},
 	}
 }
@@ -53,6 +55,11 @@ func (t *CallRESTAPITool) Execute(ctx context.Context, input map[string]any) (*T
 	method, _ := input["method"].(string)
 	if method == "" {
 		return &ToolResult{Content: "method is required", IsError: true, RiskLevel: RiskL2}, nil
+	}
+
+	intent, _ := input["intent"].(string)
+	if intent == "" && method != "GET" {
+		log.Printf("WARNING: CallAPI called without intent field (method=%s)", method)
 	}
 
 	faceID, _ := input["face_id"].(string)
