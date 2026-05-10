@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"sync"
 
 	"github.com/spiderai/spider/internal/models"
@@ -27,20 +28,18 @@ func NewBatchExecuteTool(hosts *store.HostStore, faces *store.AccessFaceStore, s
 func (t *BatchExecuteTool) DefaultRiskLevel() RiskLevel { return RiskL2 }
 func (t *BatchExecuteTool) Name() string                  { return "RunCommandBatch" }
 func (t *BatchExecuteTool) Description() string {
-	return `Execute a CLI command on multiple hosts in parallel. Has side effects. Use only after confirming intent in Plan phase.
-Risk depends on the command:
-- Read-only commands (ls, cat, grep, ps, df, free, uname, systemctl status): safe, can use in Explore phase
-- State-changing commands (rm, kill, systemctl start|stop|restart, apt, yum, chmod, chown): use only in Act phase`
+	return "Execute a CLI command on multiple hosts in parallel. Has side effects. Use only after confirming intent in Plan phase. Always set `intent` to a short goal description (e.g. \"重启 nginx 使配置生效\")."
 }
 
 func (t *BatchExecuteTool) InputSchema() map[string]any {
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
-			"host_ids":   map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "List of host IDs"},
-			"tag":        map[string]any{"type": "string", "description": "Host tag to select hosts (alternative to host_ids)"},
-			"command":    map[string]any{"type": "string", "description": "CLI command to execute on all hosts"},
-			"risk_level": map[string]any{"type": "string", "enum": []string{"L1", "L2", "L3", "L4"}},
+			"host_ids":   map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "List of host IDs to target (use instead of tag)"},
+			"tag":        map[string]any{"type": "string", "description": "Target all hosts with this tag (use instead of host_ids)"},
+			"command":    map[string]any{"type": "string", "description": "Shell command to execute on all target hosts"},
+			"risk_level": map[string]any{"type": "string", "enum": []string{"L1", "L2", "L3", "L4"}, "description": "Risk level. L1=read-only, L2=standard change, L3=destructive, L4=critical"},
+			"intent":     map[string]any{"type": "string", "description": "What you are trying to achieve with this command (goal only, no device names). Required for L2/L3/L4."},
 		},
 		"required": []string{"command"},
 	}
@@ -66,6 +65,11 @@ func (t *BatchExecuteTool) Execute(ctx context.Context, input map[string]any) (*
 	risk := RiskL2
 	if riskStr != "" {
 		risk = permission.ParseRiskLevel(riskStr)
+	}
+
+	intent, _ := input["intent"].(string)
+	if intent == "" && risk != RiskL1 {
+		log.Printf("WARNING: RunCommandBatch called without intent field (risk=%s)", riskStr)
 	}
 
 	var hostList []*models.Host
