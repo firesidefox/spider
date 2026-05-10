@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -89,10 +88,7 @@ func chatExportConversation(app *mcppkg.App, w http.ResponseWriter, r *http.Requ
 			"conversation": conv,
 			"messages":     msgs,
 		}
-		data, _ := json.MarshalIndent(payload, "", "  ")
-		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s.json"`, base))
-		w.WriteHeader(200)
-		w.Write(data)
+		writeJSON(w, 200, payload)
 	}
 }
