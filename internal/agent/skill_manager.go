@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"io/fs"
 	"os"
@@ -12,6 +13,7 @@ import (
 )
 
 const maxDescriptionChars = 250
+const skillListBudgetBytes = 8192
 
 type skillFrontmatter struct {
 	Description string `yaml:"description"`
@@ -110,4 +112,72 @@ func (sm *SkillManager) LoadSkills() ([]SkillEntry, error) {
 	}
 	sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
 	return entries, nil
+}
+
+func (sm *SkillManager) ComputeHash() (string, error) {
+	if _, err := os.Stat(sm.dir); os.IsNotExist(err) {
+		return "", nil
+	}
+	var parts []string
+	err := filepath.WalkDir(sm.dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() || d.Name() != "SKILL.md" {
+			return nil
+		}
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+		parts = append(parts, fmt.Sprintf("%s:%d\n", path, info.ModTime().UnixNano()))
+		return nil
+	})
+	if err != nil {
+		return "", err
+	}
+	sort.Strings(parts)
+	h := sha256.New()
+	for _, p := range parts {
+		h.Write([]byte(p))
+	}
+	return fmt.Sprintf("%x", h.Sum(nil)), nil
+}
+
+func (sm *SkillManager) RenderList(entries []SkillEntry) string {
+	var ok []SkillEntry
+	for _, e := range entries {
+		if e.Status == "ok" {
+			ok = append(ok, e)
+		}
+	}
+	if len(ok) == 0 {
+		return ""
+	}
+	if s := renderLines(ok, func(e SkillEntry) string {
+		return fmt.Sprintf("- %s: %s", e.Name, e.Description)
+	}); len(s) <= skillListBudgetBytes {
+		return s
+	}
+	if s := renderLines(ok, func(e SkillEntry) string {
+		desc := e.Description
+		if len([]rune(desc)) > 80 {
+			desc = string([]rune(desc)[:80]) + "…"
+		}
+		return fmt.Sprintf("- %s: %s", e.Name, desc)
+	}); len(s) <= skillListBudgetBytes {
+		return s
+	}
+	return renderLines(ok, func(e SkillEntry) string {
+		return fmt.Sprintf("- %s", e.Name)
+	})
+}
+
+func renderLines(entries []SkillEntry, format func(SkillEntry) string) string {
+	var sb strings.Builder
+	for _, e := range entries {
+		sb.WriteString(format(e))
+		sb.WriteByte('\n')
+	}
+	return sb.String()
 }
