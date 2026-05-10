@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/spiderai/spider/internal/logger"
 	"github.com/spiderai/spider/internal/models"
 	"github.com/spiderai/spider/internal/store"
 )
@@ -51,6 +52,7 @@ func AuthMiddleware(
 
 			token := extractToken(r)
 			if token == "" {
+				logger.FromContext(r.Context()).Debug().Str("path", r.URL.Path).Msg("auth: missing token")
 				http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 				return
 			}
@@ -68,6 +70,7 @@ func AuthMiddleware(
 				if err == errAccountDisabled {
 					status = http.StatusForbidden
 				}
+				logger.FromContext(r.Context()).Warn().Err(err).Str("path", r.URL.Path).Int("status", status).Msg("auth: rejected")
 				http.Error(w, `{"error":"`+err.Error()+`"}`, status)
 				return
 			}

@@ -17,6 +17,7 @@ import (
 	"github.com/spiderai/spider/internal/agent"
 	"github.com/spiderai/spider/internal/auth"
 	"github.com/spiderai/spider/internal/config"
+	"github.com/spiderai/spider/internal/logger"
 	"github.com/spiderai/spider/internal/permission"
 	"github.com/spiderai/spider/internal/rag"
 	sshpkg "github.com/spiderai/spider/internal/ssh"
@@ -231,7 +232,7 @@ func Serve(app *App) error {
 
 	errCh := make(chan error, 1)
 	go func() {
-		fmt.Fprintf(os.Stderr, "Spider MCP server listening on %s\n", app.Config.SSE.Addr)
+		logger.Global().Info().Str("addr", app.Config.SSE.Addr).Msg("mcp server listening")
 		errCh <- h.Start(app.Config.SSE.Addr)
 	}()
 
