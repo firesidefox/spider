@@ -28,6 +28,7 @@ type Factory struct {
 	LLMModel       string
 	TodoTaskStore  *store.TodoTaskStore
 	SSEBroadcaster SSEBroadcaster
+	SkillsDir      string
 }
 
 // NewFactory creates a Factory by reading the active provider from the DB.
@@ -86,6 +87,9 @@ func (f *Factory) NewAgent(systemPrompt string, conversationID string) *Agent {
 	if f.TodoTaskStore != nil {
 		registry.Register(NewTodoTaskTool(f.TodoTaskStore, f.SSEBroadcaster, conversationID))
 	}
+	if f.SkillsDir != "" {
+		registry.Register(NewInvokeSkillTool(f.SkillsDir))
+	}
 
 	hooks := NewHookChain()
 	if f.Enforcer != nil {
@@ -106,6 +110,7 @@ func (f *Factory) NewAgent(systemPrompt string, conversationID string) *Agent {
 		SystemPrompt: systemPrompt,
 		MaxTurns:     15,
 		Compactor:    compactor,
+		SkillManager: NewSkillManager(f.SkillsDir),
 	})
 }
 

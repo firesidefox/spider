@@ -58,13 +58,15 @@ type MessageStorer interface {
 }
 
 type Agent struct {
-	llmClient    llm.Client
-	registry     *ToolRegistry
-	hooks        *HookChain
-	msgStore     MessageStorer
-	systemPrompt string
-	maxTurns     int
-	compactor    *Compactor
+	llmClient     llm.Client
+	registry      *ToolRegistry
+	hooks         *HookChain
+	msgStore      MessageStorer
+	systemPrompt  string
+	maxTurns      int
+	compactor     *Compactor
+	skillManager  *SkillManager
+	lastSkillHash string
 }
 
 type AgentConfig struct {
@@ -75,6 +77,7 @@ type AgentConfig struct {
 	SystemPrompt string
 	MaxTurns     int
 	Compactor    *Compactor
+	SkillManager *SkillManager
 }
 
 func NewAgent(cfg AgentConfig) *Agent {
@@ -90,6 +93,7 @@ func NewAgent(cfg AgentConfig) *Agent {
 		systemPrompt: epaSystemPromptPrefix + cfg.SystemPrompt,
 		maxTurns:     maxTurns,
 		compactor:    cfg.Compactor,
+		skillManager: cfg.SkillManager,
 	}
 }
 
@@ -140,7 +144,19 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 		ctx = logger.WithContext(ctx, &log)
 		log.Info().Msg("agent started")
 
-		a.msgStore.Save(conversationID, "user", userMessage, "")
+		finalUserMessage := userMessage
+		if a.skillManager != nil {
+			currentHash, _ := a.skillManager.ComputeHash()
+			if currentHash != a.lastSkillHash {
+				entries, _ := a.skillManager.LoadSkills()
+				list := a.skillManager.RenderList(entries)
+				if list != "" {
+					finalUserMessage = fmt.Sprintf("<skills>\nNOTE: Replaces any earlier skill list in this conversation.\n%s\n</skills>\n\n%s", list, userMessage)
+				}
+				a.lastSkillHash = currentHash
+			}
+		}
+		a.msgStore.Save(conversationID, "user", finalUserMessage, "")
 
 		var history []llm.Message
 		var err error
@@ -300,6 +316,9 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 				events <- Event{Type: EventToolResult, Content: map[string]any{
 					"id": tc.ID, "tool": tc.Name, "input": tc.Input, "result": result.Content, "is_error": result.IsError, "duration_ms": durationMs,
 				}}
+				for _, msg := range result.NewMessages {
+					history = append(history, llm.Message{Role: llm.RoleUser, Content: msg.Content})
+				}
 				history = append(history, llm.Message{Role: llm.RoleUser, Content: result.Content})
 				tcRecords = append(tcRecords, ToolCallRecord{
 					ID: tc.ID, Name: tc.Name, Input: tc.Input,
