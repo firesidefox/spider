@@ -22,7 +22,8 @@
             @click="selectSkill(skill)"
           >
             <span class="sp-row-name">{{ skill.name }}</span>
-            <span class="badge" :class="skill.status === 'ok' ? 'badge-ok' : 'badge-err'">
+            <span class="badge" :class="skill.status === 'ok' ? 'badge-ok' : 'badge-err'"
+              :title="skill.error || undefined">
               {{ skill.status === 'ok' ? 'ok' : 'error' }}
             </span>
           </div>
@@ -43,6 +44,10 @@
           </div>
         </div>
         <div class="sp-body">
+          <div v-if="selected.status === 'error'" class="sp-error-banner">
+            <strong>解析失败：</strong>{{ selected.error }}<br>
+            <span class="sp-error-hint">请上传包含有效 YAML frontmatter 的 .md 文件（需含 <code>description</code> 字段）</span>
+          </div>
           <div class="sp-card">
             <div v-if="loading" class="sp-loading">加载中…</div>
             <CodeBlock v-else :code="rawContent" wrap />
@@ -213,6 +218,13 @@ onMounted(() => { loadSkills() })
   border-radius: 10px; overflow: hidden; box-shadow: var(--card-shadow);
 }
 .sp-loading { color: var(--muted); font-size: 13px; padding: 24px 28px; }
+.sp-error-banner {
+  background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.3);
+  border-radius: 8px; padding: 12px 16px; margin-bottom: 16px;
+  font-size: 13px; color: var(--red); line-height: 1.6;
+}
+.sp-error-hint { color: var(--text-sub); font-size: 12px; }
+.sp-error-hint code { font-family: monospace; background: rgba(0,0,0,0.08); padding: 1px 4px; border-radius: 3px; }
 .sp-empty-state { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--muted); font-size: 14px; }
 .sp-empty-icon { color: var(--border); font-size: 40px; }
 
