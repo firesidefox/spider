@@ -132,5 +132,5 @@ func (t *BatchExecuteTool) Execute(ctx context.Context, input map[string]any) (*
 	wg.Wait()
 
 	out, _ := json.Marshal(results)
-	return &ToolResult{Content: string(out), RiskLevel: risk}, nil
+	return &ToolResult{Content: string(out) + execNudge, RiskLevel: risk}, nil
 }

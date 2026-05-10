@@ -118,5 +118,9 @@ func (t *CallRESTAPITool) Execute(ctx context.Context, input map[string]any) (*T
 		"headers":     respHeaders,
 		"body":        string(raw),
 	})
-	return &ToolResult{Content: string(out), RiskLevel: RiskL2}, nil
+	nudge := ""
+	if method != "GET" {
+		nudge = apiMutateNudge
+	}
+	return &ToolResult{Content: string(out) + nudge, RiskLevel: RiskL2}, nil
 }

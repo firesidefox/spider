@@ -99,5 +99,5 @@ func (t *ExecuteCLITool) Execute(ctx context.Context, input map[string]any) (*To
 	if err != nil {
 		return &ToolResult{Content: fmt.Sprintf("marshal error: %v", err), IsError: true, RiskLevel: risk}, nil
 	}
-	return &ToolResult{Content: string(out), RiskLevel: risk}, nil
+	return &ToolResult{Content: string(out) + execNudge, RiskLevel: risk}, nil
 }
