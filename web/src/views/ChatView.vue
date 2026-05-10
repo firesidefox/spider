@@ -382,13 +382,13 @@ async function send() {
     return
   }
 
-  if (text.startsWith('/export')) {
-    inputText.value = ''
+  if (text === '/export' || text.startsWith('/export ')) {
     const fmt = parseExportFormat(text)
     if (fmt === 'invalid') {
       addSystemMessage('用法：/export [md|json] 或 /export --format [md|json]')
       return
     }
+    inputText.value = ''
     if (!activeConvId.value) {
       addSystemMessage('没有活跃的会话')
       return
