@@ -22,7 +22,9 @@
             @click="selectSkill(skill)"
           >
             <span class="sp-row-name">{{ skill.name }}</span>
-            <span v-if="skill.source === 'custom'" class="badge">自定义</span>
+            <span class="badge" :class="skill.status === 'ok' ? 'badge-ok' : 'badge-err'">
+              {{ skill.status === 'ok' ? 'ok' : 'error' }}
+            </span>
           </div>
           <div v-if="skills.length === 0" class="sp-empty">暂无 Skills</div>
         </template>
@@ -37,7 +39,7 @@
           <span class="sp-detail-title">{{ selected.name }}</span>
           <div class="sp-topbar-right">
             <button class="btn btn-sm btn-primary" @click="triggerUpload(selected.name)">上传新版本</button>
-            <button v-if="selected.source === 'custom'" class="btn btn-sm btn-danger" @click="deleteSkill(selected.name)">删除</button>
+            <button class="btn btn-sm btn-danger" @click="deleteSkill(selected.name)">删除</button>
           </div>
         </div>
         <div class="sp-body">
@@ -63,7 +65,7 @@ import CodeBlock from '../components/CodeBlock.vue'
 
 const encodeSkillName = (name: string) => name.split('/').map(encodeURIComponent).join('/')
 
-interface Skill { name: string; source: string }
+interface Skill { name: string; status: string; error?: string }
 type UploadStatus = { type: 'idle' } | { type: 'uploading'; name: string } | { type: 'success'; name: string } | { type: 'error'; msg: string }
 
 const skills = ref<Skill[]>([])
@@ -83,7 +85,7 @@ const statusClass = computed(() => ({
 
 const statusText = computed(() => {
   const s = status.value
-  if (s.type === 'idle') return '拖拽 .md 文件到列表区上传'
+  if (s.type === 'idle') return '拖拽 .md 文件到列表区上传（需含 YAML frontmatter）'
   if (s.type === 'uploading') return `⟳ 上传 ${s.name} 中…`
   if (s.type === 'success') return `✓ ${s.name} 已上传`
   return `✗ ${s.msg}`
@@ -129,7 +131,10 @@ async function uploadFile(file: File, name: string) {
       await loadSkills()
       if (selected.value?.name === name) await selectSkill(selected.value)
     } else {
-      setStatus({ type: 'error', msg: '上传失败，请重试' })
+      const body = await res.text().catch(() => '')
+      let msg = '上传失败'
+      try { const j = JSON.parse(body); if (j.error) msg = j.error } catch { if (body) msg = body }
+      setStatus({ type: 'error', msg })
     }
   } catch { setStatus({ type: 'error', msg: '上传失败，请重试' }) }
 }

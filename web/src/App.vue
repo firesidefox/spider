@@ -322,6 +322,8 @@ textarea.input { resize: vertical; }
   font-size: 11px;
   font-weight: 600;
 }
+.badge-ok { background: rgba(34,197,94,0.12); color: var(--green); border-color: rgba(34,197,94,0.3); }
+.badge-err { background: rgba(239,68,68,0.12); color: var(--red); border-color: rgba(239,68,68,0.3); }
 
 /* ── 标签 ── */
 .tag {
