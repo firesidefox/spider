@@ -194,6 +194,8 @@ func serve(cfgFile, addrOverride, dataDirOverride string) error {
 	} else {
 		agentFactory.Enforcer = app.Enforcer
 		agentFactory.PermissionMode = app.PermissionMode
+		agentFactory.SummaryStore = store.NewSummaryStore(database)
+		agentFactory.CompactionCfg = cfg.Agent.Compaction
 		app.AgentFactory = agentFactory
 	}
 

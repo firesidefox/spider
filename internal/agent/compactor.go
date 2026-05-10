@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/spiderai/spider/internal/config"
 	"github.com/spiderai/spider/internal/llm"
 	"github.com/spiderai/spider/internal/models"
 	"github.com/spiderai/spider/internal/store"
@@ -14,19 +15,12 @@ import (
 // ErrCannotAdvanceBoundary 边界无法推进（消息不足 recent_turns 轮）
 var ErrCannotAdvanceBoundary = errors.New("cannot advance compaction boundary: not enough turns")
 
-// CompactionConfig 压缩配置（Phase 4 会从 config 包引入，这里先内联定义供 Phase 3 使用）
-type CompactionConfig struct {
-	ThresholdTokens  int // 0 = 自动用模型表
-	RecentTurns      int // 默认 20
-	MaxSummaryTokens int // 默认 4000
-}
-
 type Compactor struct {
 	llmClient    llm.Client
 	summaryStore *store.SummaryStore
 	msgStore     MessageStorer
 	model        string
-	cfg          CompactionConfig
+	cfg          config.CompactionConfig
 }
 
 func NewCompactor(
@@ -34,7 +28,7 @@ func NewCompactor(
 	summaryStore *store.SummaryStore,
 	msgStore MessageStorer,
 	model string,
-	cfg CompactionConfig,
+	cfg config.CompactionConfig,
 ) *Compactor {
 	if cfg.RecentTurns == 0 {
 		cfg.RecentTurns = 20

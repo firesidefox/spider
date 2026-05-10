@@ -13,13 +13,13 @@ import (
 	"github.com/spiderai/spider/internal/permission"
 )
 
-const epaSystemPromptPrefix = `## 行为约束
+const epaSystemPromptPrefix = `## Behavioral Constraints
 
-按以下顺序处理任务：
+Process tasks in the following order:
 
-Explore：先用只读工具收集信息，在没有充分了解现状之前不执行有副作用的操作。
-Plan：基于探索结果，在内部推理出完整执行步骤，明确每步目的和预期结果。
-Act：按计划执行，每步完成后验证结果再继续；遇到意外重新进入 Explore，不盲目继续。
+Explore: Use read-only tools to gather information first. Do not perform any side-effecting operations until you have a clear understanding of the current state.
+Plan: Based on exploration results, reason through a complete execution plan internally. Clarify the purpose and expected outcome of each step.
+Act: Execute the plan step by step, verifying results after each step before continuing. If anything unexpected occurs, re-enter Explore — do not proceed blindly.
 
 `
 
@@ -62,6 +62,7 @@ type Agent struct {
 	msgStore     MessageStorer
 	systemPrompt string
 	maxTurns     int
+	compactor    *Compactor
 }
 
 type AgentConfig struct {
@@ -71,6 +72,7 @@ type AgentConfig struct {
 	MsgStore     MessageStorer
 	SystemPrompt string
 	MaxTurns     int
+	Compactor    *Compactor
 }
 
 func NewAgent(cfg AgentConfig) *Agent {
@@ -85,6 +87,7 @@ func NewAgent(cfg AgentConfig) *Agent {
 		msgStore:     cfg.MsgStore,
 		systemPrompt: epaSystemPromptPrefix + cfg.SystemPrompt,
 		maxTurns:     maxTurns,
+		compactor:    cfg.Compactor,
 	}
 }
 
@@ -132,10 +135,21 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 		defer close(events)
 		a.msgStore.Save(conversationID, "user", userMessage, "")
 
-		msgs, _ := a.msgStore.ListByConversation(conversationID)
-		history := make([]llm.Message, 0, len(msgs))
-		for _, m := range msgs {
-			history = append(history, llm.Message{Role: llm.Role(m.Role), Content: m.Content})
+		var history []llm.Message
+		var err error
+		if a.compactor != nil {
+			history, err = a.compactor.BuildHistory(ctx, conversationID)
+			if err != nil {
+				events <- Event{Type: EventError, Content: map[string]any{"error": err.Error()}}
+				return
+			}
+		} else {
+			stored, err := a.msgStore.ListByConversation(conversationID)
+			if err != nil {
+				events <- Event{Type: EventError, Content: map[string]any{"error": err.Error()}}
+				return
+			}
+			history = toLLMMessages(stored)
 		}
 
 		toolDefs := a.registry.Definitions()

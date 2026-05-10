@@ -231,7 +231,7 @@ func TestNewAgentPrependsEPAPrefix(t *testing.T) {
 		SystemPrompt: "你是运维助手。",
 	}
 	a := NewAgent(cfg)
-	if !strings.HasPrefix(a.systemPrompt, "## 行为约束") {
+	if !strings.HasPrefix(a.systemPrompt, "## Behavioral Constraints") {
 		t.Errorf("systemPrompt should start with EPA prefix, got: %q", a.systemPrompt[:min(50, len(a.systemPrompt))])
 	}
 	if !strings.Contains(a.systemPrompt, "你是运维助手。") {
