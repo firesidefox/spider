@@ -15,9 +15,15 @@ import (
 // ErrCannotAdvanceBoundary 边界无法推进（消息不足 recent_turns 轮）
 var ErrCannotAdvanceBoundary = errors.New("cannot advance compaction boundary: not enough turns")
 
+// summaryStorer is the minimal interface Compactor needs from SummaryStore.
+type summaryStorer interface {
+	Get(conversationID string) (*store.ConversationSummary, error)
+	Upsert(conversationID, upToMessageID string, chunks []string) error
+}
+
 type Compactor struct {
 	llmClient    llm.Client
-	summaryStore *store.SummaryStore
+	summaryStore summaryStorer
 	msgStore     MessageStorer
 	model        string
 	cfg          config.CompactionConfig
@@ -25,7 +31,7 @@ type Compactor struct {
 
 func NewCompactor(
 	llmClient llm.Client,
-	summaryStore *store.SummaryStore,
+	summaryStore summaryStorer,
 	msgStore MessageStorer,
 	model string,
 	cfg config.CompactionConfig,
