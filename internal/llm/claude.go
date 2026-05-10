@@ -76,6 +76,96 @@ func (c *ClaudeClient) ChatStream(ctx context.Context, req *ChatRequest) (<-chan
 	return ch, nil
 }
 
+func (c *ClaudeClient) Chat(ctx context.Context, req *ChatRequest) (string, error) {
+	maxTokens := req.MaxTokens
+	if maxTokens == 0 {
+		maxTokens = 4096
+	}
+	body := map[string]any{
+		"model":      c.model,
+		"max_tokens": maxTokens,
+		"system":     req.System,
+		"messages":   req.Messages,
+	}
+	if len(req.Tools) > 0 {
+		body["tools"] = req.Tools
+	}
+
+	jsonBody, err := json.Marshal(body)
+	if err != nil {
+		return "", fmt.Errorf("marshal request: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/v1/messages", bytes.NewReader(jsonBody))
+	if err != nil {
+		return "", fmt.Errorf("create request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("x-api-key", c.apiKey)
+	httpReq.Header.Set("anthropic-version", "2023-06-01")
+
+	resp, err := c.http.Do(httpReq)
+	if err != nil {
+		return "", fmt.Errorf("http request: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		errBody, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("claude API error %d: %s", resp.StatusCode, string(errBody))
+	}
+
+	var result struct {
+		Content []struct {
+			Text string `json:"text"`
+		} `json:"content"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", fmt.Errorf("decode response: %w", err)
+	}
+	if len(result.Content) == 0 {
+		return "", fmt.Errorf("empty response content")
+	}
+	return result.Content[0].Text, nil
+}
+
+func (c *ClaudeClient) CountTokens(ctx context.Context, msgs []Message) (int, error) {
+	body := map[string]any{
+		"model":    c.model,
+		"system":   "",
+		"messages": msgs,
+	}
+	jsonBody, err := json.Marshal(body)
+	if err != nil {
+		return 0, fmt.Errorf("marshal request: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/v1/messages/count_tokens", bytes.NewReader(jsonBody))
+	if err != nil {
+		return 0, fmt.Errorf("create request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("x-api-key", c.apiKey)
+	httpReq.Header.Set("anthropic-version", "2023-06-01")
+
+	resp, err := c.http.Do(httpReq)
+	if err != nil {
+		return 0, fmt.Errorf("http request: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		errBody, _ := io.ReadAll(resp.Body)
+		return 0, fmt.Errorf("claude API error %d: %s", resp.StatusCode, string(errBody))
+	}
+
+	var result struct {
+		InputTokens int `json:"input_tokens"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return 0, fmt.Errorf("decode response: %w", err)
+	}
+	return result.InputTokens, nil
+}
+
 func (c *ClaudeClient) readSSE(body io.ReadCloser, ch chan<- StreamEvent) {
 	defer close(ch)
 	defer body.Close()

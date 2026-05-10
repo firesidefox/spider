@@ -92,6 +92,72 @@ func (c *OpenAIClient) ChatStream(ctx context.Context, req *ChatRequest) (<-chan
 	return ch, nil
 }
 
+func (c *OpenAIClient) Chat(ctx context.Context, req *ChatRequest) (string, error) {
+	msgs := make([]map[string]any, 0, len(req.Messages)+1)
+	if req.System != "" {
+		msgs = append(msgs, map[string]any{"role": "system", "content": req.System})
+	}
+	for _, m := range req.Messages {
+		msgs = append(msgs, map[string]any{"role": string(m.Role), "content": m.Content})
+	}
+
+	maxTokens := req.MaxTokens
+	if maxTokens == 0 {
+		maxTokens = 4096
+	}
+	body := map[string]any{
+		"model":      c.model,
+		"messages":   msgs,
+		"stream":     false,
+		"max_tokens": maxTokens,
+	}
+
+	jsonBody, err := json.Marshal(body)
+	if err != nil {
+		return "", fmt.Errorf("marshal request: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/v1/chat/completions", bytes.NewReader(jsonBody))
+	if err != nil {
+		return "", fmt.Errorf("create request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+c.apiKey)
+
+	resp, err := c.http.Do(httpReq)
+	if err != nil {
+		return "", fmt.Errorf("http request: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		errBody, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("openai API error %d: %s", resp.StatusCode, string(errBody))
+	}
+
+	var result struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", fmt.Errorf("decode response: %w", err)
+	}
+	if len(result.Choices) == 0 {
+		return "", fmt.Errorf("empty choices in response")
+	}
+	return result.Choices[0].Message.Content, nil
+}
+
+func (c *OpenAIClient) CountTokens(_ context.Context, msgs []Message) (int, error) {
+	total := 0
+	for _, m := range msgs {
+		total += EstimateTokens(m.Content)
+	}
+	return total, nil
+}
+
 // openaiDelta is the partial structure of an OpenAI SSE chunk.
 type openaiDelta struct {
 	Content   string `json:"content"`
