@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/spiderai/spider/internal/models"
+	"github.com/spiderai/spider/internal/permission"
 	"github.com/spiderai/spider/internal/ssh"
 	"github.com/spiderai/spider/internal/store"
 )
@@ -23,7 +24,7 @@ func NewBatchExecuteTool(hosts *store.HostStore, faces *store.AccessFaceStore, s
 	return &BatchExecuteTool{hosts: hosts, faces: faces, sshPool: sshPool, logs: logs, sshKeys: sshKeys}
 }
 
-func (t *BatchExecuteTool) DefaultRiskLevel() RiskLevel { return RiskL3 }
+func (t *BatchExecuteTool) DefaultRiskLevel() RiskLevel { return RiskL2 }
 func (t *BatchExecuteTool) Name() string                  { return "RunCommandBatch" }
 func (t *BatchExecuteTool) Description() string {
 	return `Execute a CLI command on multiple hosts in parallel. Has side effects. Use only after confirming intent in Plan phase.
@@ -36,9 +37,10 @@ func (t *BatchExecuteTool) InputSchema() map[string]any {
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
-			"host_ids": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "List of host IDs"},
-			"tag":      map[string]any{"type": "string", "description": "Host tag to select hosts (alternative to host_ids)"},
-			"command":  map[string]any{"type": "string", "description": "CLI command to execute on all hosts"},
+			"host_ids":   map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "List of host IDs"},
+			"tag":        map[string]any{"type": "string", "description": "Host tag to select hosts (alternative to host_ids)"},
+			"command":    map[string]any{"type": "string", "description": "CLI command to execute on all hosts"},
+			"risk_level": map[string]any{"type": "string", "enum": []string{"L1", "L2", "L3", "L4"}},
 		},
 		"required": []string{"command"},
 	}
@@ -57,14 +59,20 @@ type batchHostResult struct {
 func (t *BatchExecuteTool) Execute(ctx context.Context, input map[string]any) (*ToolResult, error) {
 	command, _ := input["command"].(string)
 	if command == "" {
-		return &ToolResult{Content: "command is required", IsError: true, RiskLevel: RiskL3}, nil
+		return &ToolResult{Content: "command is required", IsError: true, RiskLevel: RiskL2}, nil
+	}
+
+	riskStr, _ := input["risk_level"].(string)
+	risk := RiskL2
+	if riskStr != "" {
+		risk = permission.ParseRiskLevel(riskStr)
 	}
 
 	var hostList []*models.Host
 	if tag, ok := input["tag"].(string); ok && tag != "" {
 		hosts, err := t.hosts.List(tag)
 		if err != nil {
-			return &ToolResult{Content: fmt.Sprintf("failed to list hosts by tag: %v", err), IsError: true, RiskLevel: RiskL3}, nil
+			return &ToolResult{Content: fmt.Sprintf("failed to list hosts by tag: %v", err), IsError: true, RiskLevel: risk}, nil
 		}
 		hostList = hosts
 	} else if ids, ok := input["host_ids"].([]any); ok {
@@ -72,14 +80,14 @@ func (t *BatchExecuteTool) Execute(ctx context.Context, input map[string]any) (*
 			if sid, ok := id.(string); ok {
 				h, err := t.hosts.GetByID(sid)
 				if err != nil {
-					return &ToolResult{Content: fmt.Sprintf("host %s not found: %v", sid, err), IsError: true, RiskLevel: RiskL3}, nil
+					return &ToolResult{Content: fmt.Sprintf("host %s not found: %v", sid, err), IsError: true, RiskLevel: risk}, nil
 				}
 				hostList = append(hostList, h)
 			}
 		}
 	}
 	if len(hostList) == 0 {
-		return &ToolResult{Content: "no hosts selected", IsError: true, RiskLevel: RiskL3}, nil
+		return &ToolResult{Content: "no hosts selected", IsError: true, RiskLevel: risk}, nil
 	}
 
 	results := make([]batchHostResult, len(hostList))
@@ -124,5 +132,5 @@ func (t *BatchExecuteTool) Execute(ctx context.Context, input map[string]any) (*
 	wg.Wait()
 
 	out, _ := json.Marshal(results)
-	return &ToolResult{Content: string(out), RiskLevel: RiskL3}, nil
+	return &ToolResult{Content: string(out), RiskLevel: risk}, nil
 }
