@@ -35,11 +35,17 @@ func TestSetLevel(t *testing.T) {
 func TestFromContext(t *testing.T) {
 	logger.Init(logger.Config{Level: "info", Format: "json"})
 	ctx := context.Background()
-	_ = logger.FromContext(ctx) // returns global logger, no panic
+	got := logger.FromContext(ctx)
+	if got == nil {
+		t.Fatal("expected non-nil logger from empty context")
+	}
 
 	enriched := logger.Global().With().Str("req_id", "abc").Logger()
 	ctx2 := logger.WithContext(ctx, &enriched)
-	_ = logger.FromContext(ctx2)
+	got2 := logger.FromContext(ctx2)
+	if got2 == logger.Global() {
+		t.Error("expected enriched logger from context, got global logger")
+	}
 }
 
 func TestMiddleware(t *testing.T) {

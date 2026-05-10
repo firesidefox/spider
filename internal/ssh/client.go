@@ -151,7 +151,7 @@ func (c *Client) Execute(ctx context.Context, command string) (*ExecResult, erro
 		}
 	}
 
-	log.Debug().Str("host", c.face.IP).Int("exit_code", exitCode).Dur("duration_ms", duration).Msg("ssh execute done")
+	log.Debug().Str("host", c.face.IP).Int("exit_code", exitCode).Int64("duration_ms", duration.Milliseconds()).Msg("ssh execute done")
 	return &ExecResult{
 		Stdout:   stdout.String(),
 		Stderr:   stderr.String(),

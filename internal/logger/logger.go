@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
-	"gopkg.in/natefinch/lumberjack.v2"
+	"gopkg.in/lumberjack.v2"
 )
 
 // Config mirrors config.LogConfig to avoid import cycle.

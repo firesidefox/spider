@@ -42,7 +42,7 @@ func Middleware() func(http.Handler) http.Handler {
 			}
 			l.WithLevel(level).
 				Int("status", rec.status).
-				Dur("duration_ms", time.Since(start)).
+				Int64("duration_ms", time.Since(start).Milliseconds()).
 				Msg("request done")
 		})
 	}
