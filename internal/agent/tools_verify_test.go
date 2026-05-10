@@ -133,8 +133,8 @@ func TestVerifyTool_ToolResultIsJSON(t *testing.T) {
 func TestBatchExecuteTool_RiskLevel(t *testing.T) {
 	tool := NewBatchExecuteTool(nil, nil, nil, nil, nil)
 	res, _ := tool.Execute(context.Background(), map[string]any{})
-	if res.RiskLevel != RiskL3 {
-		t.Errorf("expected RiskL3, got %v", res.RiskLevel)
+	if res.RiskLevel != RiskL2 {
+		t.Errorf("expected RiskL2, got %v", res.RiskLevel)
 	}
 }
 

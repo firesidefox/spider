@@ -8,8 +8,10 @@ import (
 
 func TestDefaultConfig(t *testing.T) {
 	cfg := DefaultConfig()
-	if cfg.DataDir != "/var/lib/spider" {
-		t.Errorf("默认 DataDir = %q，期望 /var/lib/spider", cfg.DataDir)
+	home, _ := os.UserHomeDir()
+	want := filepath.Join(home, ".spider", "data")
+	if cfg.DataDir != want {
+		t.Errorf("默认 DataDir = %q，期望 %q", cfg.DataDir, want)
 	}
 }
 
@@ -19,8 +21,10 @@ func TestLoad_NoFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("文件不存在时不应返回错误: %v", err)
 	}
-	if cfg.DataDir != "/var/lib/spider" {
-		t.Errorf("DataDir = %q，期望 /var/lib/spider", cfg.DataDir)
+	home, _ := os.UserHomeDir()
+	want := filepath.Join(home, ".spider", "data")
+	if cfg.DataDir != want {
+		t.Errorf("DataDir = %q，期望 %q", cfg.DataDir, want)
 	}
 }
 
@@ -42,13 +46,15 @@ func TestLoad_FileOverridesDefault(t *testing.T) {
 }
 
 func TestLoad_EmptyPath_UsesDefaultDataDir(t *testing.T) {
-	// path="" 时尝试读取 /var/lib/spider/config.yaml，不存在则静默使用默认值
+	// path="" 时尝试读取 DataDir/config.yaml，不存在则静默使用默认值
 	cfg, err := Load("")
 	if err != nil {
 		t.Fatalf("Load(\"\") 不应返回错误: %v", err)
 	}
-	if cfg.DataDir != "/var/lib/spider" {
-		t.Errorf("DataDir = %q，期望 /var/lib/spider", cfg.DataDir)
+	home, _ := os.UserHomeDir()
+	want := filepath.Join(home, ".spider", "data")
+	if cfg.DataDir != want {
+		t.Errorf("DataDir = %q，期望 %q", cfg.DataDir, want)
 	}
 }
 
@@ -93,13 +99,15 @@ agent:
 }
 
 func TestLoad_NoSPIDER_DATA_DIR(t *testing.T) {
-	// 确保环境变量不再影响 DataDir
+	// 确保环境变量不影响 DataDir
 	t.Setenv("SPIDER_DATA_DIR", "/should/be/ignored")
 	cfg, err := Load("")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.DataDir != "/var/lib/spider" {
+	home, _ := os.UserHomeDir()
+	want := filepath.Join(home, ".spider", "data")
+	if cfg.DataDir != want {
 		t.Errorf("SPIDER_DATA_DIR 不应影响 DataDir，got %q", cfg.DataDir)
 	}
 }
