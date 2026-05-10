@@ -117,7 +117,7 @@ func TestIntegration_ShortConversation(t *testing.T) {
 	cfg := config.CompactionConfig{ThresholdTokens: 100000, RecentTurns: 20, MaxSummaryTokens: 4000}
 	c := NewCompactor(llmC, sumStore, msgStore, "test-model", cfg)
 
-	history, err := c.BuildHistory(context.Background(), convID)
+	history, err := c.BuildHistory(context.Background(), convID, false)
 	if err != nil {
 		t.Fatalf("BuildHistory: %v", err)
 	}
@@ -156,7 +156,7 @@ func TestIntegration_CacheReuse(t *testing.T) {
 	cfg := config.CompactionConfig{ThresholdTokens: 100000, RecentTurns: 20, MaxSummaryTokens: 4000}
 	c := NewCompactor(llmC, sumStore, msgStore, "test-model", cfg)
 
-	history, err := c.BuildHistory(context.Background(), convID)
+	history, err := c.BuildHistory(context.Background(), convID, false)
 	if err != nil {
 		t.Fatalf("BuildHistory: %v", err)
 	}
@@ -188,7 +188,7 @@ func TestIntegration_FirstCompaction(t *testing.T) {
 	cfg := config.CompactionConfig{ThresholdTokens: 100, RecentTurns: 5, MaxSummaryTokens: 4000}
 	c := NewCompactor(llmC, sumStore, msgStore, "test-model", cfg)
 
-	history, err := c.BuildHistory(context.Background(), convID)
+	history, err := c.BuildHistory(context.Background(), convID, false)
 	if err != nil {
 		t.Fatalf("BuildHistory: %v", err)
 	}
@@ -222,7 +222,7 @@ func TestIntegration_BoundaryAdvance(t *testing.T) {
 	cfg := config.CompactionConfig{ThresholdTokens: 100, RecentTurns: 5, MaxSummaryTokens: 4000}
 	c := NewCompactor(llmC, sumStore, msgStore, "test-model", cfg)
 
-	if _, err := c.BuildHistory(context.Background(), convID); err != nil {
+	if _, err := c.BuildHistory(context.Background(), convID, false); err != nil {
 		t.Fatalf("first BuildHistory: %v", err)
 	}
 	sum1, _ := sumStore.Get(convID)
@@ -234,7 +234,7 @@ func TestIntegration_BoundaryAdvance(t *testing.T) {
 	// Insert 5 more pairs with offset to avoid ID collision
 	insertTestMessages(t, db, convID, 5, strings.Repeat("y", 200), 10)
 
-	if _, err := c.BuildHistory(context.Background(), convID); err != nil {
+	if _, err := c.BuildHistory(context.Background(), convID, false); err != nil {
 		t.Fatalf("second BuildHistory: %v", err)
 	}
 	sum2, _ := sumStore.Get(convID)
@@ -272,7 +272,7 @@ func TestIntegration_ChunksConsolidation(t *testing.T) {
 	cfg := config.CompactionConfig{ThresholdTokens: 100, RecentTurns: 5, MaxSummaryTokens: 50}
 	c := NewCompactor(llmC, sumStore, msgStore, "test-model", cfg)
 
-	if _, err := c.BuildHistory(context.Background(), convID); err != nil {
+	if _, err := c.BuildHistory(context.Background(), convID, false); err != nil {
 		t.Fatalf("BuildHistory: %v", err)
 	}
 	sum, _ := sumStore.Get(convID)
@@ -300,7 +300,7 @@ func TestIntegration_ThresholdConfig(t *testing.T) {
 	cfg := config.CompactionConfig{ThresholdTokens: 50, RecentTurns: 5, MaxSummaryTokens: 4000}
 	c := NewCompactor(llmC, sumStore, msgStore, "test-model", cfg)
 
-	if _, err := c.BuildHistory(context.Background(), convID); err != nil {
+	if _, err := c.BuildHistory(context.Background(), convID, false); err != nil {
 		t.Fatalf("BuildHistory: %v", err)
 	}
 	if llmC.chatCalls == 0 {
@@ -331,7 +331,7 @@ func TestIntegration_UnknownModelFallback(t *testing.T) {
 	cfg := config.CompactionConfig{ThresholdTokens: 0, RecentTurns: 20, MaxSummaryTokens: 4000}
 	c := NewCompactor(llmC, sumStore, msgStore, model, cfg)
 
-	if _, err := c.BuildHistory(context.Background(), convID); err != nil {
+	if _, err := c.BuildHistory(context.Background(), convID, false); err != nil {
 		t.Fatalf("BuildHistory: %v", err)
 	}
 	if llmC.chatCalls != 0 {

@@ -8,6 +8,7 @@ cmd/spider/dist/
 .worktrees/
 excalidraw.log
 *.log
+*.db
 docs/superpowers/
 .DS_Store
 dist/
@@ -17,5 +18,4 @@ install-arm64.sh
 *.jpg
 test.sh
 whitepaper/
-.superpowers/
 .superpowers/

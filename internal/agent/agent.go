@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -138,7 +139,7 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 		var history []llm.Message
 		var err error
 		if a.compactor != nil {
-			history, err = a.compactor.BuildHistory(ctx, conversationID)
+			history, err = a.compactor.BuildHistory(ctx, conversationID, false)
 			if err != nil {
 				events <- Event{Type: EventError, Content: map[string]any{"error": err.Error()}}
 				return
@@ -162,8 +163,22 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 				MaxTokens: 4096,
 			})
 			if err != nil {
-				events <- Event{Type: EventError, Content: map[string]any{"error": err.Error()}}
-				return
+				if a.compactor != nil && isContextLengthError(err) {
+					forced, ferr := a.compactor.BuildHistory(ctx, conversationID, true)
+					if ferr == nil {
+						history = forced
+						stream, err = a.llmClient.ChatStream(ctx, &llm.ChatRequest{
+							System:    a.systemPrompt,
+							Messages:  history,
+							Tools:     toolDefs,
+							MaxTokens: 4096,
+						})
+					}
+				}
+				if err != nil {
+					events <- Event{Type: EventError, Content: map[string]any{"error": err.Error()}}
+					return
+				}
 			}
 
 			var assistantText string
@@ -277,4 +292,15 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 	}()
 
 	return events, nil
+}
+
+func isContextLengthError(err error) bool {
+	if err == nil {
+		return false
+	}
+	s := strings.ToLower(err.Error())
+	return strings.Contains(s, "context_length_exceeded") ||
+		strings.Contains(s, "context length") ||
+		strings.Contains(s, "too many tokens") ||
+		strings.Contains(s, "maximum context")
 }

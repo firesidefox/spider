@@ -50,8 +50,8 @@ func NewCompactor(
 }
 
 // BuildHistory 返回注入摘要后的 history，供 Agent.Run() 使用。
-// 若触发压缩，同步完成后返回。
-func (c *Compactor) BuildHistory(ctx context.Context, conversationID string) ([]llm.Message, error) {
+// forceCompact=true 时跳过 threshold 检查，直接压缩（用于 context-length 错误重试）。
+func (c *Compactor) BuildHistory(ctx context.Context, conversationID string, forceCompact bool) ([]llm.Message, error) {
 	// 1. 取摘要缓存
 	summary, err := c.summaryStore.Get(conversationID)
 	if err != nil {
@@ -78,8 +78,8 @@ func (c *Compactor) BuildHistory(ctx context.Context, conversationID string) ([]
 		return nil, fmt.Errorf("count tokens: %w", err)
 	}
 
-	// 4. 未超限：直接返回
-	if totalTokens < threshold {
+	// 4. 未超限且非强制：直接返回
+	if !forceCompact && totalTokens < threshold {
 		return injectSummary(existingChunks, msgs), nil
 	}
 
@@ -133,6 +133,9 @@ func findBoundaryByTurns(msgs []*models.Message, n int) int {
 		if msgs[i].Role == "user" {
 			count++
 			if count == n {
+				if i == 0 {
+					return -1
+				}
 				return i
 			}
 		}

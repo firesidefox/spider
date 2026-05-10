@@ -85,7 +85,7 @@ func TestBuildHistory_UnderThreshold(t *testing.T) {
 		RecentTurns:     20,
 	})
 
-	history, err := c.BuildHistory(context.Background(), "conv1")
+	history, err := c.BuildHistory(context.Background(), "conv1", false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -111,7 +111,7 @@ func TestBuildHistory_OverThreshold_NoCache(t *testing.T) {
 		RecentTurns:     5,
 	})
 
-	history, err := c.BuildHistory(context.Background(), "conv1")
+	history, err := c.BuildHistory(context.Background(), "conv1", false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -146,7 +146,7 @@ func TestBuildHistory_OverThreshold_WithCache(t *testing.T) {
 		MaxSummaryTokens: 100000,
 	})
 
-	_, err := c.BuildHistory(context.Background(), "conv1")
+	_, err := c.BuildHistory(context.Background(), "conv1", false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -178,7 +178,7 @@ func TestBuildHistory_ChunksOverflow(t *testing.T) {
 		MaxSummaryTokens: 50,
 	})
 
-	_, err := c.BuildHistory(context.Background(), "conv1")
+	_, err := c.BuildHistory(context.Background(), "conv1", false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -201,7 +201,7 @@ func TestBuildHistory_CannotAdvanceBoundary(t *testing.T) {
 		RecentTurns:     5,
 	})
 
-	_, err := c.BuildHistory(context.Background(), "conv1")
+	_, err := c.BuildHistory(context.Background(), "conv1", false)
 	if !errors.Is(err, ErrCannotAdvanceBoundary) {
 		t.Errorf("err = %v, want ErrCannotAdvanceBoundary", err)
 	}
@@ -227,9 +227,9 @@ func TestFindBoundaryByTurns(t *testing.T) {
 		t.Errorf("n=3: got %d, want 2", got)
 	}
 	// n=4 means we need 4 user messages from the tail; the 4th is at index 0,
-	// which findBoundaryByTurns returns as 0 (not-enough sentinel).
-	if got := findBoundaryByTurns(msgs, 4); got != 0 {
-		t.Errorf("n=4: got %d, want 0 (not enough)", got)
+	// which findBoundaryByTurns returns as -1 (not-enough sentinel).
+	if got := findBoundaryByTurns(msgs, 4); got != -1 {
+		t.Errorf("n=4: got %d, want -1 (not enough)", got)
 	}
 }
 
@@ -265,7 +265,7 @@ func TestBuildHistory_CountTokensError(t *testing.T) {
 		RecentTurns:     20,
 	})
 
-	_, err := c.BuildHistory(context.Background(), "conv1")
+	_, err := c.BuildHistory(context.Background(), "conv1", false)
 	if err == nil {
 		t.Error("expected error from CountTokens, got nil")
 	}
@@ -290,7 +290,7 @@ func TestBuildHistory_SummarizeError(t *testing.T) {
 		RecentTurns:     5,
 	})
 
-	_, err := c.BuildHistory(context.Background(), "conv1")
+	_, err := c.BuildHistory(context.Background(), "conv1", false)
 	if err == nil {
 		t.Error("expected error from summarize, got nil")
 	}
@@ -311,7 +311,7 @@ func TestBuildHistory_ConcurrentSafe(t *testing.T) {
 				ThresholdTokens: 10,
 				RecentTurns:     5,
 			})
-			_, err := c.BuildHistory(context.Background(), "conv1")
+			_, err := c.BuildHistory(context.Background(), "conv1", false)
 			errs <- err
 		}()
 	}
