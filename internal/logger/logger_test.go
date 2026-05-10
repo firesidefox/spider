@@ -38,7 +38,7 @@ func TestFromContext(t *testing.T) {
 	_ = logger.FromContext(ctx) // returns global logger, no panic
 
 	enriched := logger.Global().With().Str("req_id", "abc").Logger()
-	ctx2 := logger.WithContext(ctx, enriched)
+	ctx2 := logger.WithContext(ctx, &enriched)
 	_ = logger.FromContext(ctx2)
 }
 

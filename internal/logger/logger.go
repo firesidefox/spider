@@ -70,7 +70,7 @@ func Init(cfg Config) error {
 	return nil
 }
 
-func Global() zerolog.Logger { return global }
+func Global() *zerolog.Logger { return &global }
 
 func SetLevel(level string) {
 	l := parseLevel(level)

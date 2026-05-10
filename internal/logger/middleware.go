@@ -29,7 +29,7 @@ func Middleware() func(http.Handler) http.Handler {
 				Str("path", r.URL.Path).
 				Logger()
 
-			ctx := WithContext(r.Context(), l)
+			ctx := WithContext(r.Context(), &l)
 			l.Debug().Msg("request started")
 
 			rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}

@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 	"io/fs"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -16,6 +16,7 @@ import (
 	apipkg "github.com/spiderai/spider/internal/api"
 	"github.com/spiderai/spider/internal/agent"
 	"github.com/spiderai/spider/internal/auth"
+	"github.com/spiderai/spider/internal/logger"
 	mcppkg "github.com/spiderai/spider/internal/mcp"
 	"github.com/spiderai/spider/internal/permission"
 	sshpkg "github.com/spiderai/spider/internal/ssh"
@@ -43,33 +44,34 @@ func newRootCmd() *cobra.Command {
 	var cfgFile string
 	var addr string
 	var dataDir string
+	var debug bool
 
 	root := &cobra.Command{
 		Use:          "spider",
 		Short:        "Spider — 智能运维平台 MCP Server",
 		SilenceUsage: true,
-		// 无子命令时直接启动服务
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return serve(cfgFile, addr, dataDir)
+			return serve(cfgFile, addr, dataDir, debug)
 		},
 	}
 
 	root.PersistentFlags().StringVar(&cfgFile, "config", "", "配置文件路径（默认 ~/.spider/config.yaml）")
 	root.PersistentFlags().StringVar(&addr, "addr", "", "监听地址（覆盖配置，如 :9090）")
 	root.PersistentFlags().StringVar(&dataDir, "data-dir", "", "数据目录（覆盖配置和 SPIDER_DATA_DIR）")
+	root.PersistentFlags().BoolVar(&debug, "debug", false, "启用 debug 日志级别")
 
-	root.AddCommand(newServeCmd(&cfgFile, &addr, &dataDir))
+	root.AddCommand(newServeCmd(&cfgFile, &addr, &dataDir, &debug))
 	root.AddCommand(newVersionCmd())
 
 	return root
 }
 
-func newServeCmd(cfgFile, addr, dataDir *string) *cobra.Command {
+func newServeCmd(cfgFile, addr, dataDir *string, debug *bool) *cobra.Command {
 	return &cobra.Command{
 		Use:   "serve",
 		Short: "启动 Spider MCP Server（默认行为）",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return serve(*cfgFile, *addr, *dataDir)
+			return serve(*cfgFile, *addr, *dataDir, *debug)
 		},
 	}
 }
@@ -101,7 +103,7 @@ func spaHandler(fsys http.FileSystem) http.Handler {
 	})
 }
 
-func serve(cfgFile, addrOverride, dataDirOverride string) error {
+func serve(cfgFile, addrOverride, dataDirOverride string, debug bool) error {
 	cfg, err := config.Load(cfgFile)
 	if err != nil {
 		return fmt.Errorf("加载配置失败: %w", err)
@@ -117,6 +119,25 @@ func serve(cfgFile, addrOverride, dataDirOverride string) error {
 	if err := cfg.EnsureDataDir(); err != nil {
 		return fmt.Errorf("初始化数据目录失败: %w", err)
 	}
+
+	logFile := cfg.Log.File
+	if logFile == "" {
+		logFile = filepath.Join(cfg.DataDir, "logs", "spider.log")
+	}
+	if debug {
+		cfg.Log.Level = "debug"
+	}
+	if err := logger.Init(logger.Config{
+		Level:      cfg.Log.Level,
+		Format:     cfg.Log.Format,
+		File:       logFile,
+		MaxSizeMB:  cfg.Log.MaxSizeMB,
+		MaxBackups: cfg.Log.MaxBackups,
+		Stderr:     cfg.Log.Stderr,
+	}); err != nil {
+		return fmt.Errorf("初始化日志失败: %w", err)
+	}
+	logger.Global().Info().Str("version", version).Str("addr", cfg.SSE.Addr).Msg("spider starting")
 
 	cm, err := crypto.NewManager(cfg.DataDir)
 	if err != nil {
@@ -191,7 +212,7 @@ func serve(cfgFile, addrOverride, dataDirOverride string) error {
 		ps, hs, afs, pool, ks, ls, app.MsgStore,
 	)
 	if err != nil {
-		log.Printf("WARNING: agent factory not available: %v", err)
+		logger.Global().Warn().Err(err).Msg("agent factory not available")
 	} else {
 		agentFactory.Enforcer = app.Enforcer
 		agentFactory.PermissionMode = app.PermissionMode
@@ -221,9 +242,11 @@ func serve(cfgFile, addrOverride, dataDirOverride string) error {
 
 	errCh := make(chan error, 1)
 	go func() {
-		fmt.Fprintf(os.Stderr, "Spider %s listening on %s\n", version, cfg.SSE.Addr)
-		fmt.Fprintf(os.Stderr, "MCP endpoint:  %s/mcp\n", cfg.SSE.BaseURL)
-		fmt.Fprintf(os.Stderr, "Web dashboard: %s\n", cfg.SSE.BaseURL)
+		logger.Global().Info().
+			Str("addr", cfg.SSE.Addr).
+			Str("mcp", cfg.SSE.BaseURL+"/mcp").
+			Str("web", cfg.SSE.BaseURL).
+			Msg("spider listening")
 		errCh <- srv.ListenAndServe()
 	}()
 
