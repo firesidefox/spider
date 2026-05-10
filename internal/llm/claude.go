@@ -127,7 +127,6 @@ func (c *ClaudeClient) Chat(ctx context.Context, req *ChatRequest) (string, erro
 func (c *ClaudeClient) CountTokens(ctx context.Context, msgs []Message) (int, error) {
 	body := map[string]any{
 		"model":    c.model,
-		"system":   "",
 		"messages": msgs,
 	}
 	jsonBody, err := json.Marshal(body)
@@ -143,19 +142,18 @@ func (c *ClaudeClient) CountTokens(ctx context.Context, msgs []Message) (int, er
 
 	resp, err := c.http.Do(httpReq)
 	if err != nil {
-		return 0, fmt.Errorf("http request: %w", err)
+		return estimateMessagesTokens(msgs), nil
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
-		errBody, _ := io.ReadAll(resp.Body)
-		return 0, fmt.Errorf("claude API error %d: %s", resp.StatusCode, string(errBody))
+		return estimateMessagesTokens(msgs), nil
 	}
 
 	var result struct {
 		InputTokens int `json:"input_tokens"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return 0, fmt.Errorf("decode response: %w", err)
+		return estimateMessagesTokens(msgs), nil
 	}
 	return result.InputTokens, nil
 }

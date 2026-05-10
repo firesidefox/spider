@@ -85,7 +85,7 @@ func (c *Compactor) BuildHistory(ctx context.Context, conversationID string) ([]
 
 	// 5. 超限：计算新边界
 	boundaryIdx := findBoundaryByTurns(msgs, c.cfg.RecentTurns)
-	if boundaryIdx <= 0 {
+	if boundaryIdx < 0 {
 		return nil, ErrCannotAdvanceBoundary
 	}
 
@@ -126,7 +126,7 @@ func (c *Compactor) resolveThreshold() int {
 }
 
 // findBoundaryByTurns 从尾部数 n 个 role=user 消息，返回第 n 个 user 消息的索引。
-// 若消息不足 n 轮，返回 0（调用方应返回 ErrCannotAdvanceBoundary）。
+// 若消息不足 n 轮，返回 -1。
 func findBoundaryByTurns(msgs []*models.Message, n int) int {
 	count := 0
 	for i := len(msgs) - 1; i >= 0; i-- {
@@ -137,7 +137,7 @@ func findBoundaryByTurns(msgs []*models.Message, n int) int {
 			}
 		}
 	}
-	return 0
+	return -1
 }
 
 func injectSummary(chunks []string, recent []*models.Message) []llm.Message {
@@ -201,19 +201,29 @@ func (c *Compactor) summarize(ctx context.Context, msgs []*models.Message) (stri
 	for _, m := range msgs {
 		fmt.Fprintf(&sb, "[%s]: %s\n", m.Role, m.Content)
 	}
-	return c.llmClient.Chat(ctx, &llm.ChatRequest{
+	req := &llm.ChatRequest{
 		Messages: []llm.Message{
 			{Role: "user", Content: fmt.Sprintf(segmentSummaryPrompt, sb.String())},
 		},
 		MaxTokens: 1024,
-	})
+	}
+	result, err := c.llmClient.Chat(ctx, req)
+	if err != nil {
+		result, err = c.llmClient.Chat(ctx, req)
+	}
+	return result, err
 }
 
 func (c *Compactor) consolidate(ctx context.Context, chunks []string) (string, error) {
-	return c.llmClient.Chat(ctx, &llm.ChatRequest{
+	req := &llm.ChatRequest{
 		Messages: []llm.Message{
 			{Role: "user", Content: fmt.Sprintf(consolidateSummaryPrompt, strings.Join(chunks, "\n\n---\n\n"))},
 		},
 		MaxTokens: 1024,
-	})
+	}
+	result, err := c.llmClient.Chat(ctx, req)
+	if err != nil {
+		result, err = c.llmClient.Chat(ctx, req)
+	}
+	return result, err
 }

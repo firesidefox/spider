@@ -52,6 +52,9 @@ type Client interface {
 // r > 0x2E80 覆盖 CJK 及 Hangul/Kana 等东亚字符，约 1 token/字；
 // 其他 Unicode（阿拉伯、西里尔等）归入 ascii 路径，误差较大但可接受。
 func EstimateTokens(s string) int {
+	if s == "" {
+		return 0
+	}
 	var cjk, ascii int
 	for _, r := range s {
 		if r > 0x2E80 {
@@ -60,7 +63,19 @@ func EstimateTokens(s string) int {
 			ascii++
 		}
 	}
-	return cjk + ascii/4
+	t := cjk + ascii/4
+	if t == 0 {
+		t = 1
+	}
+	return t
+}
+
+func estimateMessagesTokens(msgs []Message) int {
+	total := 0
+	for _, m := range msgs {
+		total += EstimateTokens(m.Content)
+	}
+	return total
 }
 
 func NewClient(providerType, apiKey, model, baseURL string) (Client, error) {

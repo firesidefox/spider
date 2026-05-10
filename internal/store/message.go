@@ -61,8 +61,8 @@ func (s *MessageStore) ListAfterMessage(conversationID, messageID string) ([]*mo
 		SELECT id, conversation_id, role, content, tool_calls, created_at
 		FROM messages
 		WHERE conversation_id = ?
-		  AND created_at > (SELECT created_at FROM messages WHERE id = ?)
-		ORDER BY created_at ASC`,
+		  AND rowid > (SELECT rowid FROM messages WHERE id = ?)
+		ORDER BY rowid ASC`,
 		conversationID, messageID)
 	if err != nil {
 		return nil, err

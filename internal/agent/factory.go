@@ -87,7 +87,10 @@ func (f *Factory) NewAgent(systemPrompt string) *Agent {
 		hooks.AddBefore(DefaultRiskHook())
 	}
 
-	compactor := NewCompactor(f.LLMClient, f.SummaryStore, f.MsgStore, f.LLMModel, f.CompactionCfg)
+	var compactor *Compactor
+	if f.SummaryStore != nil {
+		compactor = NewCompactor(f.LLMClient, f.SummaryStore, f.MsgStore, f.LLMModel, f.CompactionCfg)
+	}
 	return NewAgent(AgentConfig{
 		LLMClient:    f.LLMClient,
 		Registry:     registry,

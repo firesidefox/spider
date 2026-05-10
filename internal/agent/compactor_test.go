@@ -246,3 +246,78 @@ func TestEstimateChunksTokens(t *testing.T) {
 		t.Errorf("cjk: got %d, want 20", got)
 	}
 }
+
+// errCountTokensClient returns an error from CountTokens.
+type errCountTokensClient struct {
+	mockChatClient
+}
+
+func (e *errCountTokensClient) CountTokens(_ context.Context, _ []llm.Message) (int, error) {
+	return 0, errors.New("count tokens unavailable")
+}
+
+func TestBuildHistory_CountTokensError(t *testing.T) {
+	msgs := makeAltMessages(3, "hello world")
+	ss := &mockSummaryStore{}
+	llmC := &errCountTokensClient{}
+	c := newCompactor(llmC, ss, msgs, config.CompactionConfig{
+		ThresholdTokens: 100000,
+		RecentTurns:     20,
+	})
+
+	_, err := c.BuildHistory(context.Background(), "conv1")
+	if err == nil {
+		t.Error("expected error from CountTokens, got nil")
+	}
+}
+
+// errChatClient returns an error from Chat (even after retry).
+type errChatClient struct {
+	mockLLMClient
+}
+
+func (e *errChatClient) Chat(_ context.Context, _ *llm.ChatRequest) (string, error) {
+	return "", errors.New("LLM unavailable")
+}
+
+func TestBuildHistory_SummarizeError(t *testing.T) {
+	content := strings.Repeat("x", 100)
+	msgs := makeAltMessages(50, content)
+	ss := &mockSummaryStore{}
+	llmC := &errChatClient{}
+	c := newCompactor(llmC, ss, msgs, config.CompactionConfig{
+		ThresholdTokens: 10,
+		RecentTurns:     5,
+	})
+
+	_, err := c.BuildHistory(context.Background(), "conv1")
+	if err == nil {
+		t.Error("expected error from summarize, got nil")
+	}
+}
+
+func TestBuildHistory_ConcurrentSafe(t *testing.T) {
+	content := strings.Repeat("x", 100)
+	msgs := makeAltMessages(50, content)
+
+	const goroutines = 10
+	errs := make(chan error, goroutines)
+	for range goroutines {
+		go func() {
+			// Each goroutine gets its own LLM client and summary store to avoid shared state.
+			llmC := &mockChatClient{chatReply: "summary"}
+			ss := &mockSummaryStore{}
+			c := newCompactor(llmC, ss, msgs, config.CompactionConfig{
+				ThresholdTokens: 10,
+				RecentTurns:     5,
+			})
+			_, err := c.BuildHistory(context.Background(), "conv1")
+			errs <- err
+		}()
+	}
+	for range goroutines {
+		if err := <-errs; err != nil {
+			t.Errorf("concurrent BuildHistory error: %v", err)
+		}
+	}
+}

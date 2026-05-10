@@ -287,7 +287,7 @@ func migrate(db *sql.DB) error {
 		FROM hosts
 		WHERE id NOT IN (SELECT host_id FROM access_faces)`)
 	// Context compaction
-	db.Exec(`CREATE TABLE IF NOT EXISTS conversation_summaries (
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS conversation_summaries (
 		id               INTEGER PRIMARY KEY AUTOINCREMENT,
 		conversation_id  TEXT NOT NULL,
 		up_to_message_id TEXT NOT NULL,
@@ -295,7 +295,11 @@ func migrate(db *sql.DB) error {
 		created_at       DATETIME DEFAULT CURRENT_TIMESTAMP,
 		updated_at       DATETIME DEFAULT CURRENT_TIMESTAMP,
 		UNIQUE(conversation_id)
-	)`)
-	db.Exec(`CREATE INDEX IF NOT EXISTS idx_messages_conv_created ON messages(conversation_id, created_at)`)
+	)`); err != nil {
+		return err
+	}
+	if _, err := db.Exec(`CREATE INDEX IF NOT EXISTS idx_messages_conv_created ON messages(conversation_id, created_at)`); err != nil {
+		return err
+	}
 	return nil
 }

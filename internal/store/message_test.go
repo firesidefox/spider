@@ -100,3 +100,31 @@ func TestListAfterMessage_WithID(t *testing.T) {
 		t.Errorf("after[1].Content = %q, want %q", after[1].Content, "msg3")
 	}
 }
+
+// TestListAfterMessage_SameSecond verifies that messages inserted within the same
+// second are not dropped. This would fail if the query used created_at instead of rowid.
+func TestListAfterMessage_SameSecond(t *testing.T) {
+	database := setupTestDB(t)
+	cs := NewConversationStore(database)
+	ms := NewMessageStore(database)
+
+	conv, _ := cs.Create("user-1", "")
+	// Insert three messages back-to-back; they will share the same created_at second.
+	ms.Save(conv.ID, "user", "first", "")
+	ms.Save(conv.ID, "assistant", "second", "")
+	ms.Save(conv.ID, "user", "third", "")
+
+	all, _ := ms.ListByConversation(conv.ID)
+	if len(all) != 3 {
+		t.Fatalf("setup: expected 3 messages, got %d", len(all))
+	}
+	anchor := all[0].ID
+
+	after, err := ms.ListAfterMessage(conv.ID, anchor)
+	if err != nil {
+		t.Fatalf("ListAfterMessage: %v", err)
+	}
+	if len(after) != 2 {
+		t.Errorf("len = %d, want 2 (same-second messages must not be dropped)", len(after))
+	}
+}

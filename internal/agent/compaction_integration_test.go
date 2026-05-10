@@ -16,11 +16,9 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const testDBPath = "/Users/cw/.spider/spider.db"
-
 func openIntegrationDB(t *testing.T) *sql.DB {
 	t.Helper()
-	db, err := sql.Open("sqlite", testDBPath)
+	db, err := sql.Open("sqlite", t.TempDir()+"/test.db")
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
