@@ -333,6 +333,7 @@ function handleConvEvent(convId: string, event: ChatEvent) {
         id: event.content?.id || `t-${Date.now()}`,
         name: event.content?.name || 'unknown',
         input: event.content?.input,
+        hostNames: event.content?.host_names,
       }})
       break
     case 'tool_result': {

@@ -204,6 +204,9 @@ func chatSendMessage(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id
 	flusher, _ := w.(http.Flusher)
 
 	for ev := range events {
+		if ev.Type == agent.EventToolStart {
+			injectHostNames(app, ev.Content)
+		}
 		data, _ := json.Marshal(ev)
 		fmt.Fprintf(w, "data: %s\n\n", data)
 		if flusher != nil {
@@ -212,6 +215,39 @@ func chatSendMessage(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id
 		app.BroadcastSSE(id, data)
 	}
 	app.ConvStore.SetStatus(id, "idle") //nolint:errcheck
+}
+
+func injectHostNames(app *mcppkg.App, content map[string]any) {
+	input, _ := content["input"].(map[string]any)
+	if input == nil {
+		return
+	}
+	var ids []string
+	switch v := input["host_ids"].(type) {
+	case []any:
+		for _, x := range v {
+			if s, ok := x.(string); ok {
+				ids = append(ids, s)
+			}
+		}
+	case []string:
+		ids = v
+	}
+	if s, ok := input["host_id"].(string); ok && s != "" {
+		ids = append(ids, s)
+	}
+	if len(ids) == 0 {
+		return
+	}
+	names := make([]string, 0, len(ids))
+	for _, id := range ids {
+		if h, err := app.HostStore.GetByID(id); err == nil {
+			names = append(names, h.Name)
+		} else {
+			names = append(names, id)
+		}
+	}
+	content["host_names"] = names
 }
 
 func chatCancel(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id string) {
