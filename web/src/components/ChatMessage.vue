@@ -61,6 +61,8 @@ const renderItems = computed<RenderItem[]>(() => {
 
 const expandedTools = ref<Set<string>>(new Set())
 const collapsedGroups = ref<Set<string>>(new Set())
+const expandedIntents = ref<Set<string>>(new Set())
+function toggleIntent(id: string) { toggle(expandedIntents.value, id) }
 
 function toggle(set: Set<string>, key: string) {
   if (set.has(key)) set.delete(key)
@@ -85,6 +87,34 @@ function renderMd(text: string) {
 
 function formatDuration(ms: number) {
   return ms >= 1000 ? (ms / 1000).toFixed(1) + 's' : ms + 'ms'
+}
+
+function formatTargets(call: ToolCallBlock): string {
+  if (!call.input) return ''
+  const hostId = call.input['host_id']
+  if (typeof hostId === 'string' && hostId) return `(${hostId})`
+  const hostIds = call.input['host_ids']
+  if (Array.isArray(hostIds) && hostIds.length > 0) {
+    const shown = hostIds.slice(0, 2).join(', ')
+    const extra = hostIds.length - 2
+    return extra > 0 ? `(${shown} +${extra}台)` : `(${shown})`
+  }
+  return ''
+}
+
+function formatIntentLine(call: ToolCallBlock): string {
+  const intent = call.input?.['intent']
+  if (!intent) return ''
+  const targets = formatTargets(call)
+  const line = targets ? `${targets} -> ${intent}` : `-> ${intent}`
+  return line.length > 60 ? line.slice(0, 60) + '...' : line
+}
+
+function fullIntentLine(call: ToolCallBlock): string {
+  const intent = call.input?.['intent']
+  if (!intent) return ''
+  const targets = formatTargets(call)
+  return targets ? `${targets} -> ${intent}` : `-> ${intent}`
 }
 </script>
 
@@ -126,6 +156,12 @@ function formatDuration(ms: number) {
           <!-- Act tool -->
           <div v-else class="tool-calls">
             <div class="tool-call" :class="{ 'has-error': item.call.isError }">
+              <!-- Intent line -->
+              <div v-if="formatIntentLine(item.call)" class="tool-intent">
+                <span class="intent-text" @click="toggleIntent(item.call.id)">
+                  {{ expandedIntents.has(item.call.id) ? fullIntentLine(item.call) : formatIntentLine(item.call) }}
+                </span>
+              </div>
               <div class="tool-header" @click="toggleTool(item.call.id)">
                 <span class="tool-arrow">{{ expandedTools.has(item.call.id) ? '▼' : '▶' }}</span>
                 <span class="tool-badge">Tool</span>
@@ -236,6 +272,15 @@ function formatDuration(ms: number) {
 .error-label { color: var(--red); }
 .tool-input, .tool-result { font-size: 12px; margin: 0; padding: 6px 10px 8px; white-space: pre-wrap; word-break: break-all; color: var(--text-sub); }
 .tool-result.is-error { color: var(--red); }
+
+.tool-intent { padding: 4px 8px 2px 8px; }
+.intent-text {
+  font-size: 12px;
+  color: var(--text-muted, #888);
+  cursor: pointer;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}
+.intent-text:hover { color: var(--text); }
 
 .confirm-bar { display: flex; flex-direction: column; gap: 6px; padding: 8px 12px; border-radius: 6px; margin: 8px 0; }
 .confirm-header { display: flex; align-items: center; gap: 10px; }
