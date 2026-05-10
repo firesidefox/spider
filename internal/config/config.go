@@ -23,6 +23,7 @@ type Config struct {
 	SSE      SSEConfig   `yaml:"sse"`
 	Auth     AuthConfig  `yaml:"auth"`
 	Agent    AgentConfig `yaml:"agent"`
+	Log      LogConfig   `yaml:"log"`
 }
 
 // RuleConfig 是单条权限规则配置。
@@ -50,6 +51,16 @@ type AgentConfig struct {
 // AuthConfig 是认证相关配置。
 type AuthConfig struct {
 	Enabled bool `yaml:"enabled"` // 默认 false
+}
+
+// LogConfig 是日志相关配置。
+type LogConfig struct {
+	Level      string `yaml:"level"`
+	Format     string `yaml:"format"`
+	File       string `yaml:"file"`
+	MaxSizeMB  int    `yaml:"max_size_mb"`
+	MaxBackups int    `yaml:"max_backups"`
+	Stderr     bool   `yaml:"stderr"`
 }
 
 // SSEConfig 是 MCP SSE server 相关配置。
@@ -88,6 +99,12 @@ func DefaultConfig() *Config {
 				RecentTurns:      20,
 				MaxSummaryTokens: 4000,
 			},
+		},
+		Log: LogConfig{
+			Level:      "info",
+			Format:     "json",
+			MaxSizeMB:  100,
+			MaxBackups: 7,
 		},
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/spiderai/spider/internal/logger"
 	mcppkg "github.com/spiderai/spider/internal/mcp"
 	"github.com/spiderai/spider/internal/permission"
 	"gopkg.in/yaml.v3"
@@ -95,4 +96,25 @@ func updateSettings(app *mcppkg.App, w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, buildSettingsResponse(app))
+}
+
+func getLogLevel(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]string{"level": logger.CurrentLevel()})
+}
+
+func setLogLevel(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Level string `json:"level"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request")
+		return
+	}
+	if !logger.IsValidLevel(req.Level) {
+		writeError(w, http.StatusBadRequest, "level must be debug, info, or error")
+		return
+	}
+	logger.SetLevel(req.Level)
+	logger.FromContext(r.Context()).Info().Str("level", req.Level).Msg("log level changed")
+	writeJSON(w, http.StatusOK, map[string]string{"level": req.Level})
 }

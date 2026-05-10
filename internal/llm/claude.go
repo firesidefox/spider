@@ -9,6 +9,8 @@ import (
 	"io"
 	"net/http"
 	"time"
+
+	"github.com/spiderai/spider/internal/logger"
 )
 
 const defaultClaudeBaseURL = "https://api.anthropic.com"
@@ -37,6 +39,10 @@ func NewClaudeClient(apiKey, model, baseURL string) *ClaudeClient {
 }
 
 func (c *ClaudeClient) ChatStream(ctx context.Context, req *ChatRequest) (<-chan StreamEvent, error) {
+	log := logger.FromContext(ctx).With().Str("module", "llm").Logger()
+	log.Debug().Str("model", c.model).Int("msgs", len(req.Messages)).Msg("llm stream start")
+	start := time.Now()
+
 	body := map[string]any{
 		"model":      c.model,
 		"max_tokens": req.MaxTokens,
@@ -61,14 +67,17 @@ func (c *ClaudeClient) ChatStream(ctx context.Context, req *ChatRequest) (<-chan
 
 	resp, err := c.http.Do(httpReq)
 	if err != nil {
+		log.Error().Err(err).Str("model", c.model).Msg("llm stream error")
 		return nil, fmt.Errorf("http request: %w", err)
 	}
 	if resp.StatusCode != 200 {
 		defer resp.Body.Close()
 		errBody, _ := io.ReadAll(resp.Body)
+		log.Error().Str("model", c.model).Int("status", resp.StatusCode).Msg("llm stream api error")
 		return nil, fmt.Errorf("claude API error %d: %s", resp.StatusCode, string(errBody))
 	}
 
+	log.Debug().Str("model", c.model).Int64("ttfb_ms", time.Since(start).Milliseconds()).Msg("llm stream connected")
 	ch := make(chan StreamEvent, 32)
 	go c.readSSE(resp.Body, ch)
 	return ch, nil

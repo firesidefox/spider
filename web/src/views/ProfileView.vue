@@ -39,7 +39,7 @@
             <span class="nav-icon">📚</span><span class="nav-label">知识库</span>
           </div>
           <div class="nav-row" :class="{ selected: activeTab === 'settings' }" @click="activeTab = 'settings'; loadSettings()">
-            <span class="nav-icon">⚙️</span><span class="nav-label">系统设置</span>
+            <span class="nav-icon">⚙️</span><span class="nav-label">偏好设置</span>
           </div>
         </template>
       </nav>
@@ -524,7 +524,7 @@
           </div>
         </template>
 
-        <!-- Tab: 系统设置 -->
+        <!-- Tab: 偏好设置 -->
         <template v-if="activeTab === 'settings'">
           <!-- 只读视图 -->
           <template v-if="!settingsEditing">
@@ -553,6 +553,10 @@
                 <div class="detail-label">直连地址（No Proxy）</div>
                 <div class="detail-value">{{ settings.ssh_no_proxy || '—' }}</div>
               </div>
+              <div class="detail-field">
+                <div class="detail-label">日志级别</div>
+                <div class="detail-value">{{ logLevel || '—' }}</div>
+              </div>
             </div>
           </template>
           <!-- 编辑视图 -->
@@ -572,6 +576,19 @@
                 <div class="form-row"><label>最大连接数</label><input v-model.number="settings.ssh_max_pool_size" class="input" type="number" /></div>
                 <div class="form-row"><label>直连地址（No Proxy）</label><input v-model="settings.ssh_no_proxy" class="input" placeholder="10.0.0.0/8,192.168.0.0/16" /></div>
               </div>
+            </div>
+            <div class="edit-card">
+              <div class="edit-card-title">日志</div>
+              <div class="form-row">
+                <label>日志级别</label>
+                <select v-model="logLevel" class="input" style="max-width:160px">
+                  <option value="debug">debug</option>
+                  <option value="info">info</option>
+                  <option value="warn">warn</option>
+                  <option value="error">error</option>
+                </select>
+              </div>
+              <div v-if="logLevelError" class="err" style="margin-top:4px;font-size:12px">{{ logLevelError }}</div>
             </div>
             <div v-if="settingsError" class="err" style="margin-top:4px">{{ settingsError }}</div>
           </template>
@@ -671,7 +688,7 @@ const roleLabel = computed(() => {
 const activeTab = ref<'info' | 'tokens' | 'ssh-keys' | 'logs' | 'users' | 'install' | 'skills' | 'agent' | 'kb' | 'settings'>('info')
 const tabTitle = computed(() => ({
   info: '基本信息', tokens: '访问令牌', 'ssh-keys': 'SSH Keys', logs: '操作日志',
-  users: '用户管理', install: '安装', agent: '智能体', kb: '知识库', settings: '系统设置',
+  users: '用户管理', install: '安装', agent: '智能体', kb: '知识库', settings: '偏好设置',
 }[activeTab.value]))
 
 const pw = ref({ old: '', new1: '', new2: '' })
@@ -842,6 +859,8 @@ const settings = ref<Settings>({
 })
 const settingsEditing = ref(false)
 const settingsError = ref('')
+const logLevel = ref('info')
+const logLevelError = ref('')
 let settingsLoaded = false
 
 async function loadProviders() {
@@ -855,7 +874,10 @@ async function loadProviders() {
 async function loadSettings() {
   if (settingsLoaded) return
   settingsLoaded = true
-  const res = await fetch('/api/v1/settings', { headers: authHeaders() })
+  const [res, lvlRes] = await Promise.all([
+    fetch('/api/v1/settings', { headers: authHeaders() }),
+    fetch('/api/v1/log-level', { headers: authHeaders() }),
+  ])
   if (!res.ok) return
   const data = await res.json()
   settings.value = {
@@ -866,17 +888,34 @@ async function loadSettings() {
     ssh_max_pool_size: data.ssh_max_pool_size ?? 50,
     ssh_no_proxy: data.ssh_no_proxy || '',
   }
+  if (lvlRes.ok) {
+    const lvlData = await lvlRes.json()
+    logLevel.value = lvlData.level || 'info'
+  }
 }
 
 async function saveSettings() {
   settingsError.value = ''
+  logLevelError.value = ''
   const res = await fetch('/api/v1/settings', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify(settings.value),
   })
-  if (res.ok) { settingsEditing.value = false }
-  else settingsError.value = (await res.json()).error
+  if (!res.ok) {
+    settingsError.value = (await res.json()).error
+    return
+  }
+  const lvlRes = await fetch('/api/v1/log-level', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ level: logLevel.value }),
+  })
+  if (!lvlRes.ok) {
+    logLevelError.value = (await lvlRes.json()).error
+    return
+  }
+  settingsEditing.value = false
 }
 
 async function saveProvider() {

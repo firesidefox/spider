@@ -6,6 +6,7 @@ import (
 
 	"github.com/spiderai/spider/internal/config"
 	"github.com/spiderai/spider/internal/llm"
+	"github.com/spiderai/spider/internal/logger"
 	"github.com/spiderai/spider/internal/permission"
 	"github.com/spiderai/spider/internal/ssh"
 	"github.com/spiderai/spider/internal/store"
@@ -74,6 +75,7 @@ func NewFactory(
 
 // NewAgent creates a new Agent with all tools registered.
 func (f *Factory) NewAgent(systemPrompt string, conversationID string) *Agent {
+	logger.Global().Info().Str("model", f.LLMModel).Str("conv_id", conversationID).Msg("agent factory: creating agent")
 	registry := NewToolRegistry()
 	registry.Register(NewListDevicesTool(f.Hosts))
 	registry.Register(NewGetDeviceInfoTool(f.Hosts))
