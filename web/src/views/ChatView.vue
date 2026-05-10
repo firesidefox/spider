@@ -9,7 +9,7 @@ import type { DeviceStatus } from '../components/TargetPanel.vue'
 import {
   sendMessage, subscribeConversation, createConversation, listConversations,
   getConversation, deleteConversation, confirmAction, cancelConversation,
-  getActiveModel, setActiveModel, updateTitle,
+  getActiveModel, setActiveModel, updateTitle, exportConversation,
   type Conversation, type ChatMessage as ChatMsg, type ChatEvent,
 } from '../api/chat'
 import { listHosts, type SafeHost } from '../api/hosts'
@@ -28,6 +28,14 @@ interface DisplayMessage {
 }
 
 const conversations = ref<Conversation[]>([])
+const showExportMenu = ref(false)
+
+async function doExport(format: 'md' | 'json') {
+  showExportMenu.value = false
+  if (!activeConvId.value) return
+  await exportConversation(activeConvId.value, format)
+}
+
 const activeConvId = ref<string | null>(null)
 const messagesMap = ref<Record<string, DisplayMessage[]>>({})
 const messages = computed(() => messagesMap.value[activeConvId.value ?? ''] ?? [])
@@ -689,7 +697,7 @@ onUnmounted(() => {
     </div>
 
     <!-- Chat main -->
-    <div class="chat-main">
+    <div class="chat-main" @click="showExportMenu = false; showModeDropdown = false">
       <div class="chat-header">
         <button v-if="!sidebarOpen" class="sidebar-toggle" @click="toggleSidebar">≡</button>
         <button v-if="!sidebarOpen" class="header-new-btn" @click="createNewConversation()">+</button>
@@ -714,6 +722,13 @@ onUnmounted(() => {
             <div class="mode-option reset" @click.stop="setConversationMode('')">
               使用全局默认
             </div>
+          </div>
+        </div>
+        <div v-if="activeConv" class="export-wrapper">
+          <button class="export-btn" @click.stop="showExportMenu = !showExportMenu">导出</button>
+          <div v-if="showExportMenu" class="export-menu">
+            <div class="export-option" @click="doExport('md')">Markdown</div>
+            <div class="export-option" @click="doExport('json')">JSON</div>
           </div>
         </div>
       </div>
@@ -874,6 +889,12 @@ onUnmounted(() => {
 .send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .cancel-btn { background: var(--red, #e05252); }
 .cancel-btn:hover { background: #c94444; }
+.export-wrapper { position: relative; margin-left: auto; }
+.export-btn { background: none; border: 1px solid var(--border); color: var(--text); padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; font-family: 'SF Mono', monospace; }
+.export-btn:hover { background: var(--row-hover); }
+.export-menu { position: absolute; right: 0; top: calc(100% + 4px); background: var(--panel); border: 1px solid var(--border); border-radius: 6px; min-width: 120px; z-index: 100; box-shadow: 0 4px 12px rgba(0,0,0,.15); }
+.export-option { padding: 8px 14px; cursor: pointer; font-size: 13px; color: var(--text); font-family: 'SF Mono', monospace; }
+.export-option:hover { background: var(--row-hover); }
 
 .model-picker { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; margin: 0 16px 8px; padding: 12px; }
 .model-picker-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; color: var(--text); font-size: 13px; font-family: 'SF Mono', monospace; }
