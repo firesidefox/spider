@@ -52,6 +52,7 @@ type ToolCallRecord struct {
 type MessageStorer interface {
 	Save(conversationID, role, content, toolCalls string) error
 	ListByConversation(conversationID string) ([]*models.Message, error)
+	ListAfterMessage(conversationID, messageID string) ([]*models.Message, error)
 }
 
 type Agent struct {

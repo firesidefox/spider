@@ -62,6 +62,10 @@ func (m *mockMsgStore) ListByConversation(convID string) ([]*models.Message, err
 	return out, nil
 }
 
+func (m *mockMsgStore) ListAfterMessage(convID, _ string) ([]*models.Message, error) {
+	return m.ListByConversation(convID)
+}
+
 type mockResultTool struct {
 	name   string
 	result *ToolResult
