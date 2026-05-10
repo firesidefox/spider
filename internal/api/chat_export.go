@@ -15,8 +15,9 @@ var unsafeFilename = regexp.MustCompile(`[^\w\-. ]+`)
 func safeFilename(title string) string {
 	s := unsafeFilename.ReplaceAllString(title, "-")
 	s = strings.Trim(s, "-")
-	if len(s) > 64 {
-		s = s[:64]
+	runes := []rune(s)
+	if len(runes) > 64 {
+		s = string(runes[:64])
 	}
 	if s == "" {
 		s = "conversation"
