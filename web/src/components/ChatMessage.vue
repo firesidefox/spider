@@ -178,10 +178,25 @@ function formatDuration(ms: number) {
   50% { opacity: 1; text-shadow: 0 0 8px var(--primary); }
 }
 .assistant-body { }
-.msg-assistant { color: var(--text-sub); line-height: 1.6; }
-.assistant-text :deep(code) { background: var(--input-bg); padding: 2px 6px; border-radius: 3px; font-size: 12px; }
-.assistant-text :deep(pre) { background: var(--input-bg); padding: 12px; border-radius: 6px; overflow-x: auto; margin: 8px 0; }
-.assistant-text :deep(ol), .assistant-text :deep(ul) { padding-left: 1.5em; margin: 4px 0; }
+.msg-assistant { line-height: 1.6; }
+.assistant-text { font-family: -apple-system, 'Segoe UI', sans-serif; font-size: 13.5px; color: var(--text-sub); line-height: 1.65; }
+.assistant-text :deep(h1),
+.assistant-text :deep(h2) { font-size: 14px; font-weight: 600; color: var(--text); margin: 0 0 8px; }
+.assistant-text :deep(h3) { font-size: 11px; font-weight: 700; color: var(--label); margin: 10px 0 3px; text-transform: uppercase; letter-spacing: 0.8px; }
+.assistant-text :deep(p) { margin-bottom: 7px; }
+.assistant-text :deep(p:last-child) { margin-bottom: 0; }
+.assistant-text :deep(strong) { color: var(--text); }
+.assistant-text :deep(code) { background: var(--input-bg); color: var(--purple); padding: 1px 5px; border-radius: 3px; font-family: 'SF Mono', monospace; font-size: 11.5px; }
+.assistant-text :deep(pre) { background: var(--panel); border: 1px solid var(--border); border-left: 3px solid var(--border); border-radius: 0 5px 5px 0; padding: 8px 12px; margin: 7px 0; overflow-x: auto; }
+.assistant-text :deep(pre code) { background: none; color: var(--label); padding: 0; font-size: 11.5px; line-height: 1.55; }
+.assistant-text :deep(ul) { padding-left: 1.3em; margin: 3px 0 7px; }
+.assistant-text :deep(ol) { padding-left: 1.3em; margin: 3px 0 7px; }
+.assistant-text :deep(li) { margin-bottom: 3px; color: var(--label); }
+.assistant-text :deep(ol li::marker) { color: var(--primary); }
+.assistant-text :deep(blockquote) { border-left: 2px solid var(--border); padding-left: 10px; color: var(--label); margin: 7px 0; font-size: 13px; }
+.assistant-text :deep(table) { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 12.5px; }
+.assistant-text :deep(th) { color: var(--primary); font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--border); padding: 5px 10px; text-align: left; }
+.assistant-text :deep(td) { padding: 5px 10px; border-bottom: 1px solid var(--border); color: var(--text-sub); }
 .cursor { color: var(--primary); animation: blink 1s step-end infinite; }
 @keyframes blink { 50% { opacity: 0; } }
 
