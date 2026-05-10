@@ -136,7 +136,7 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 	go func() {
 		defer close(events)
 
-		log := logger.FromContext(ctx).With().Str("conv_id", conversationID).Logger()
+		log := logger.FromContext(ctx).With().Str("module", "agent").Str("conv_id", conversationID).Logger()
 		ctx = logger.WithContext(ctx, &log)
 		log.Info().Msg("agent started")
 

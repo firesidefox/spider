@@ -39,7 +39,7 @@ func NewClaudeClient(apiKey, model, baseURL string) *ClaudeClient {
 }
 
 func (c *ClaudeClient) ChatStream(ctx context.Context, req *ChatRequest) (<-chan StreamEvent, error) {
-	log := logger.FromContext(ctx)
+	log := logger.FromContext(ctx).With().Str("module", "llm").Logger()
 	log.Debug().Str("model", c.model).Int("msgs", len(req.Messages)).Msg("llm stream start")
 	start := time.Now()
 

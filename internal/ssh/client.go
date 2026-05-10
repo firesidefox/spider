@@ -113,7 +113,7 @@ func buildAuthMethods(authType models.SSHAuthType, credential, passphrase string
 
 // Execute 在远程主机上执行命令，返回 stdout/stderr/exit_code。
 func (c *Client) Execute(ctx context.Context, command string) (*ExecResult, error) {
-	log := logger.FromContext(ctx)
+	log := logger.FromContext(ctx).With().Str("module", "ssh").Logger()
 	log.Debug().Str("host", c.face.IP).Str("cmd", command).Msg("ssh execute start")
 
 	session, err := c.conn.NewSession()
