@@ -6,7 +6,6 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// WithContext stores an enriched logger in ctx.
 func WithContext(ctx context.Context, l *zerolog.Logger) context.Context {
 	return l.WithContext(ctx)
 }

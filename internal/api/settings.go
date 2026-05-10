@@ -110,9 +110,7 @@ func setLogLevel(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid request")
 		return
 	}
-	switch req.Level {
-	case "debug", "info", "error":
-	default:
+	if !logger.IsValidLevel(req.Level) {
 		writeError(w, http.StatusBadRequest, "level must be debug, info, or error")
 		return
 	}

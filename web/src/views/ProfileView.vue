@@ -873,7 +873,10 @@ async function loadProviders() {
 async function loadSettings() {
   if (settingsLoaded) return
   settingsLoaded = true
-  const res = await fetch('/api/v1/settings', { headers: authHeaders() })
+  const [res, lvlRes] = await Promise.all([
+    fetch('/api/v1/settings', { headers: authHeaders() }),
+    fetch('/api/v1/log-level', { headers: authHeaders() }),
+  ])
   if (!res.ok) return
   const data = await res.json()
   settings.value = {
@@ -884,7 +887,6 @@ async function loadSettings() {
     ssh_max_pool_size: data.ssh_max_pool_size ?? 50,
     ssh_no_proxy: data.ssh_no_proxy || '',
   }
-  const lvlRes = await fetch('/api/v1/log-level', { headers: authHeaders() })
   if (lvlRes.ok) {
     const lvlData = await lvlRes.json()
     logLevel.value = lvlData.level || 'info'

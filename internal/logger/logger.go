@@ -4,7 +4,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"sync/atomic"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -23,14 +22,12 @@ type Config struct {
 
 var (
 	global   zerolog.Logger
-	levelVal atomic.Int32
 	extraOut io.Writer
 )
 
 func Init(cfg Config) error {
 	level := parseLevel(cfg.Level)
 	zerolog.SetGlobalLevel(level)
-	levelVal.Store(int32(level))
 
 	var writers []io.Writer
 
@@ -74,12 +71,22 @@ func Global() *zerolog.Logger { return &global }
 
 func SetLevel(level string) {
 	l := parseLevel(level)
+	if l == zerolog.GlobalLevel() {
+		return
+	}
 	zerolog.SetGlobalLevel(l)
-	levelVal.Store(int32(l))
 }
 
 func CurrentLevel() string {
-	return zerolog.Level(levelVal.Load()).String()
+	return zerolog.GlobalLevel().String()
+}
+
+func IsValidLevel(s string) bool {
+	switch s {
+	case "debug", "info", "error":
+		return true
+	}
+	return false
 }
 
 // SetOutput redirects all log output — for tests only.
