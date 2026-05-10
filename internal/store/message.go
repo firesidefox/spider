@@ -26,7 +26,7 @@ func (s *MessageStore) Save(conversationID, role, content, toolCalls string) err
 	if err != nil {
 		return fmt.Errorf("insert message: %w", err)
 	}
-	logger.Global().Debug().Str("conv_id", conversationID).Str("role", role).Msg("store: message saved")
+	logger.Global().Debug().Str("table", "messages").Str("op", "insert").Str("conv_id", conversationID).Str("role", role).Msg("store")
 	return nil
 }
 
@@ -47,7 +47,7 @@ func (s *MessageStore) ListByConversation(conversationID string) ([]*models.Mess
 		}
 		list = append(list, &m)
 	}
-	logger.Global().Debug().Str("conv_id", conversationID).Int("count", len(list)).Msg("store: messages listed")
+	logger.Global().Debug().Str("table", "messages").Str("op", "select").Str("conv_id", conversationID).Int("count", len(list)).Msg("store")
 	return list, nil
 }
 
@@ -56,7 +56,7 @@ func (s *MessageStore) DeleteByConversation(conversationID string) error {
 	if err != nil {
 		return err
 	}
-	logger.Global().Debug().Str("conv_id", conversationID).Msg("store: messages deleted")
+	logger.Global().Debug().Str("table", "messages").Str("op", "delete").Str("conv_id", conversationID).Msg("store")
 	return nil
 }
 

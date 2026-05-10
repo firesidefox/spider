@@ -38,7 +38,7 @@ func (s *ConversationStore) Create(userID, title string) (*models.Conversation, 
 	if err != nil {
 		return nil, fmt.Errorf("insert conversation: %w", err)
 	}
-	logger.Global().Debug().Str("conv_id", conv.ID).Str("user_id", userID).Msg("store: conversation created")
+	logger.Global().Debug().Str("table", "conversations").Str("op", "insert").Str("conv_id", conv.ID).Str("user_id", userID).Msg("store")
 	return conv, nil
 }
 
@@ -54,7 +54,7 @@ func (s *ConversationStore) GetByID(id string) (*models.Conversation, error) {
 	if err != nil {
 		return nil, fmt.Errorf("scan conversation: %w", err)
 	}
-	logger.Global().Debug().Str("conv_id", id).Msg("store: conversation fetched")
+	logger.Global().Debug().Str("table", "conversations").Str("op", "select").Str("conv_id", id).Msg("store")
 	return &c, nil
 }
 
@@ -75,7 +75,7 @@ func (s *ConversationStore) ListByUser(userID string) ([]*models.Conversation, e
 		}
 		list = append(list, &c)
 	}
-	logger.Global().Debug().Str("user_id", userID).Int("count", len(list)).Msg("store: conversations listed")
+	logger.Global().Debug().Str("table", "conversations").Str("op", "select").Str("user_id", userID).Int("count", len(list)).Msg("store")
 	return list, nil
 }
 
@@ -92,7 +92,7 @@ func (s *ConversationStore) Delete(id string) error {
 	if err != nil {
 		return err
 	}
-	logger.Global().Debug().Str("conv_id", id).Msg("store: conversation deleted")
+	logger.Global().Debug().Str("table", "conversations").Str("op", "delete").Str("conv_id", id).Msg("store")
 	return nil
 }
 
@@ -112,6 +112,6 @@ func (s *ConversationStore) SetStatus(id, status string) error {
 	if err != nil {
 		return err
 	}
-	logger.Global().Debug().Str("conv_id", id).Str("status", status).Msg("store: conversation status set")
+	logger.Global().Debug().Str("table", "conversations").Str("op", "update").Str("conv_id", id).Str("status", status).Msg("store")
 	return nil
 }

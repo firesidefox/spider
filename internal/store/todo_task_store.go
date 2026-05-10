@@ -44,7 +44,7 @@ func (s *TodoTaskStore) Create(task *models.TodoTask) error {
 	task.ID = id
 	task.CreatedAt = now
 	task.UpdatedAt = now
-	logger.Global().Debug().Int64("task_id", task.ID).Str("conv_id", task.ConversationID).Msg("store: todo task created")
+	logger.Global().Debug().Str("table", "todo_tasks").Str("op", "insert").Int64("task_id", task.ID).Str("conv_id", task.ConversationID).Msg("store")
 	return nil
 }
 
@@ -98,7 +98,7 @@ func (s *TodoTaskStore) Update(conversationID string, id int64, subject, descrip
 		return nil, err
 	}
 	json.Unmarshal([]byte(blockedByJSON), &t.BlockedBy) //nolint:errcheck
-	logger.Global().Debug().Int64("task_id", id).Str("status", status).Msg("store: todo task updated")
+	logger.Global().Debug().Str("table", "todo_tasks").Str("op", "update").Int64("task_id", id).Str("status", status).Msg("store")
 	return &t, nil
 }
 
@@ -127,7 +127,7 @@ func (s *TodoTaskStore) List(conversationID string) ([]*models.TodoTask, error) 
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	logger.Global().Debug().Str("conv_id", conversationID).Int("count", len(tasks)).Msg("store: todo tasks listed")
+	logger.Global().Debug().Str("table", "todo_tasks").Str("op", "select").Str("conv_id", conversationID).Int("count", len(tasks)).Msg("store")
 	return tasks, nil
 }
 

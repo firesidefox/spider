@@ -40,7 +40,7 @@ func (s *LogStore) Save(log *models.ExecutionLog) error {
 	if err != nil {
 		return fmt.Errorf("保存执行日志失败: %w", err)
 	}
-	logger.Global().Debug().Str("host_id", log.HostID).Str("triggered_by", log.TriggeredBy).Msg("store: execution log saved")
+	logger.Global().Debug().Str("table", "execution_logs").Str("op", "insert").Str("host_id", log.HostID).Str("triggered_by", log.TriggeredBy).Msg("store")
 	return nil
 }
 
@@ -95,6 +95,6 @@ func (s *LogStore) List(hostID, triggeredBy string, limit, offset int) ([]*model
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	logger.Global().Debug().Str("host_id", hostID).Int("count", len(logs)).Msg("store: execution logs listed")
+	logger.Global().Debug().Str("table", "execution_logs").Str("op", "select").Str("host_id", hostID).Int("count", len(logs)).Msg("store")
 	return logs, nil
 }

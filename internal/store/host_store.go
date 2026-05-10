@@ -50,7 +50,7 @@ func (s *HostStore) Add(req *models.AddHostRequest) (*models.Host, error) {
 	if err != nil {
 		return nil, err
 	}
-	logger.Global().Debug().Str("host_id", h.ID).Str("name", h.Name).Msg("store: host added")
+	logger.Global().Debug().Str("table", "hosts").Str("op", "insert").Str("host_id", h.ID).Str("name", h.Name).Msg("store")
 	return h, nil
 }
 
@@ -64,7 +64,7 @@ func (s *HostStore) GetByID(id string) (*models.Host, error) {
 	if err != nil {
 		return nil, err
 	}
-	logger.Global().Debug().Str("host_id", id).Msg("store: host fetched")
+	logger.Global().Debug().Str("table", "hosts").Str("op", "select").Str("host_id", id).Msg("store")
 	return h, nil
 }
 
@@ -116,7 +116,7 @@ func (s *HostStore) List(tag string) ([]*models.Host, error) {
 		}
 		hosts = append(hosts, h)
 	}
-	logger.Global().Debug().Str("tag", tag).Int("count", len(hosts)).Msg("store: hosts listed")
+	logger.Global().Debug().Str("table", "hosts").Str("op", "select").Str("tag", tag).Int("count", len(hosts)).Msg("store")
 	return hosts, rows.Err()
 }
 
@@ -171,7 +171,7 @@ func (s *HostStore) Delete(id string) error {
 	if n == 0 {
 		return ErrNotFound
 	}
-	logger.Global().Debug().Str("host_id", id).Msg("store: host deleted")
+	logger.Global().Debug().Str("table", "hosts").Str("op", "delete").Str("host_id", id).Msg("store")
 	return nil
 }
 
