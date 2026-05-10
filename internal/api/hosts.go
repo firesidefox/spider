@@ -8,6 +8,7 @@ import (
 
 	mcppkg "github.com/spiderai/spider/internal/mcp"
 	"github.com/spiderai/spider/internal/models"
+	sshpkg "github.com/spiderai/spider/internal/ssh"
 	"github.com/spiderai/spider/internal/store"
 )
 
@@ -82,7 +83,17 @@ func deleteHost(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id stri
 }
 
 func pingHost(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id string) {
-	writeJSON(w, http.StatusOK, map[string]any{"connected": false, "error": "ping not yet implemented"})
+	sshFace, err := app.AccessFaceStore.GetSSHFaceForHost(id)
+	if err != nil {
+		writeJSON(w, http.StatusOK, map[string]any{"connected": false, "error": "无 SSH 操作面"})
+		return
+	}
+	latency, err := sshpkg.CheckConnectivity(sshFace, app.AccessFaceStore, app.SSHKeyStore)
+	if err != nil {
+		writeJSON(w, http.StatusOK, map[string]any{"connected": false, "error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"connected": true, "latency_ms": latency.Milliseconds()})
 }
 
 // Access face handlers

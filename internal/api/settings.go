@@ -17,6 +17,7 @@ type settingsResponse struct {
 	SSHTimeout      int    `json:"ssh_default_timeout_seconds"`
 	SSHPoolTTL      int    `json:"ssh_pool_ttl_seconds"`
 	SSHMaxPool      int    `json:"ssh_max_pool_size"`
+	SSHNoProxy      string `json:"ssh_no_proxy"`
 	PermissionMode  string `json:"permission_mode"`
 	ApprovalTimeout int    `json:"approval_timeout"`
 }
@@ -46,6 +47,7 @@ func buildSettingsResponse(app *mcppkg.App) settingsResponse {
 		SSHTimeout:      app.Config.SSH.DefaultTimeout,
 		SSHPoolTTL:      app.Config.SSH.PoolTTL,
 		SSHMaxPool:      app.Config.SSH.MaxPoolSize,
+		SSHNoProxy:      app.Config.SSH.NoProxy,
 		PermissionMode:  app.Config.Agent.PermissionMode,
 		ApprovalTimeout: app.Config.Agent.ApprovalTimeout,
 	}
@@ -77,6 +79,8 @@ func updateSettings(app *mcppkg.App, w http.ResponseWriter, r *http.Request) {
 	if req.SSHMaxPool > 0 {
 		app.Config.SSH.MaxPoolSize = req.SSHMaxPool
 	}
+	// no_proxy 允许设为空字符串（清除），所以不用 != "" 判断，直接覆盖
+	app.Config.SSH.NoProxy = req.SSHNoProxy
 	if req.PermissionMode != "" {
 		app.Config.Agent.PermissionMode = req.PermissionMode
 		app.PermissionMode = permission.Mode(req.PermissionMode)

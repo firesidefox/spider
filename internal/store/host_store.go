@@ -34,8 +34,8 @@ func (s *HostStore) Add(req *models.AddHostRequest) (*models.Host, error) {
 	now := time.Now().UTC()
 	id := uuid.New().String()
 	_, err := s.db.Exec(
-		`INSERT INTO hosts (id, name, ip, notes, vendor, product_name, product_version, tags, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO hosts (id, name, ip, notes, vendor, product_name, product_version, tags, username, auth_type, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, '', '', ?, ?)`,
 		id, req.Name, req.IP, req.Notes, req.Vendor, req.ProductName, req.ProductVersion,
 		string(tagsJSON), now, now,
 	)

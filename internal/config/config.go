@@ -8,6 +8,13 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+func defaultDataDir() string {
+	if home, err := os.UserHomeDir(); err == nil {
+		return filepath.Join(home, ".spider", "data")
+	}
+	return "/var/lib/spider"
+}
+
 // Config 是 Spider 的全局配置。
 type Config struct {
 	DataDir  string      `yaml:"data_dir" json:"-"`
@@ -45,15 +52,16 @@ type SSEConfig struct {
 
 // SSHConfig 是 SSH 相关配置。
 type SSHConfig struct {
-	DefaultTimeout int `yaml:"default_timeout_seconds"` // 默认命令超时（秒）
-	PoolTTL        int `yaml:"pool_ttl_seconds"`        // 连接池 TTL
-	MaxPoolSize    int `yaml:"max_pool_size"`
+	DefaultTimeout int    `yaml:"default_timeout_seconds"` // 默认命令超时（秒）
+	PoolTTL        int    `yaml:"pool_ttl_seconds"`        // 连接池 TTL
+	MaxPoolSize    int    `yaml:"max_pool_size"`
+	NoProxy        string `yaml:"no_proxy,omitempty"` // 逗号分隔的直连地址/CIDR，绕过系统代理
 }
 
 // DefaultConfig 返回默认配置。
 func DefaultConfig() *Config {
 	return &Config{
-		DataDir:  "/var/lib/spider",
+		DataDir:  defaultDataDir(),
 		LogLevel: "info",
 		SSH: SSHConfig{
 			DefaultTimeout: 30,
