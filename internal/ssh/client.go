@@ -9,6 +9,7 @@ import (
 
 	gossh "golang.org/x/crypto/ssh"
 
+	"github.com/spiderai/spider/internal/logger"
 	"github.com/spiderai/spider/internal/models"
 	"github.com/spiderai/spider/internal/store"
 )
@@ -78,10 +79,13 @@ func NewClientWithCredential(face *models.AccessFace, credential, passphrase str
 		return nil, err
 	}
 	addr := fmt.Sprintf("%s:%d", face.IP, face.Port)
+	logger.Global().Debug().Str("host", face.IP).Str("user", face.Username).Msg("ssh connecting")
 	conn, err := gossh.Dial("tcp", addr, newSSHConfig(face, authMethods))
 	if err != nil {
+		logger.Global().Error().Err(err).Str("host", face.IP).Msg("ssh connect failed")
 		return nil, fmt.Errorf("SSH 连接 %s 失败: %w", addr, err)
 	}
+	logger.Global().Info().Str("host", face.IP).Msg("ssh connected")
 	return &Client{conn: conn, face: face}, nil
 }
 
@@ -109,6 +113,9 @@ func buildAuthMethods(authType models.SSHAuthType, credential, passphrase string
 
 // Execute 在远程主机上执行命令，返回 stdout/stderr/exit_code。
 func (c *Client) Execute(ctx context.Context, command string) (*ExecResult, error) {
+	log := logger.FromContext(ctx)
+	log.Debug().Str("host", c.face.IP).Str("cmd", command).Msg("ssh execute start")
+
 	session, err := c.conn.NewSession()
 	if err != nil {
 		return nil, fmt.Errorf("创建 SSH session 失败: %w", err)
@@ -139,10 +146,12 @@ func (c *Client) Execute(ctx context.Context, command string) (*ExecResult, erro
 		if exitErr, ok := runErr.(*gossh.ExitError); ok {
 			exitCode = exitErr.ExitStatus()
 		} else {
+			log.Error().Err(runErr).Str("host", c.face.IP).Str("cmd", command).Msg("ssh execute error")
 			return nil, fmt.Errorf("执行命令失败: %w", runErr)
 		}
 	}
 
+	log.Debug().Str("host", c.face.IP).Int("exit_code", exitCode).Dur("duration_ms", duration).Msg("ssh execute done")
 	return &ExecResult{
 		Stdout:   stdout.String(),
 		Stderr:   stderr.String(),
