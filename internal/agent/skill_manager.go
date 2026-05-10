@@ -162,15 +162,19 @@ func (sm *SkillManager) RenderList(entries []SkillEntry) string {
 	if s := renderLines(ok, func(e SkillEntry) string {
 		desc := e.Description
 		if len([]rune(desc)) > 80 {
-			desc = string([]rune(desc)[:80]) + "…"
+			desc = string([]rune(desc)[:79]) + "…"
 		}
 		return fmt.Sprintf("- %s: %s", e.Name, desc)
 	}); len(s) <= skillListBudgetBytes {
 		return s
 	}
-	return renderLines(ok, func(e SkillEntry) string {
+	s := renderLines(ok, func(e SkillEntry) string {
 		return fmt.Sprintf("- %s", e.Name)
 	})
+	if len(s) > skillListBudgetBytes {
+		s = s[:skillListBudgetBytes]
+	}
+	return s
 }
 
 func renderLines(entries []SkillEntry, format func(SkillEntry) string) string {
