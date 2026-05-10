@@ -382,6 +382,21 @@ async function send() {
     return
   }
 
+  if (text.startsWith('/export')) {
+    inputText.value = ''
+    const fmt = parseExportFormat(text)
+    if (fmt === 'invalid') {
+      addSystemMessage('用法：/export [md|json] 或 /export --format [md|json]')
+      return
+    }
+    if (!activeConvId.value) {
+      addSystemMessage('没有活跃的会话')
+      return
+    }
+    await exportConversation(activeConvId.value, fmt === 'default' ? 'md' : fmt)
+    return
+  }
+
   inputText.value = ''
 
   if (!activeConvId.value) {
@@ -413,6 +428,15 @@ async function send() {
   scrollToBottom()
 
   abortCtrl = sendMessage(convId, text)
+}
+
+function parseExportFormat(text: string): 'md' | 'json' | 'invalid' | 'default' {
+  const rest = text.slice('/export'.length).trim()
+  if (rest === '') return 'default'
+  if (rest === 'md' || rest === 'json') return rest
+  const m = rest.match(/^--format\s+(md|json)$/)
+  if (m) return m[1] as 'md' | 'json'
+  return 'invalid'
 }
 
 async function handleModelCommand() {
