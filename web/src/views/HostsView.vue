@@ -54,19 +54,13 @@
             <button class="btn btn-sm btn-danger" @click="removeHost(activeHost)">删除</button>
           </div>
         </div>
-        <!-- tabs -->
-        <div class="detail-tabs">
-          <button v-for="tab in tabs" :key="tab.key" class="tab-btn" :class="{ active: activeTab === tab.key }" @click="activeTab = tab.key">{{ tab.label }}</button>
-        </div>
         <div class="detail-body">
           <div v-if="pingResult" class="ping-result" :class="pingResult.connected ? 'ping-ok' : 'ping-fail'">
             <span v-if="pingResult.connected">● 已连接 ({{ pingResult.latency_ms }}ms)</span>
             <span v-else>● 连接失败: {{ pingResult.error }}</span>
           </div>
 
-          <!-- 概览 tab -->
-          <template v-if="activeTab === 'overview'">
-            <!-- 基本信息 section -->
+          <!-- 基本信息 section -->
             <div class="section">
               <div class="section-header">
                 <span class="section-title">📋 基本信息</span>
@@ -114,20 +108,45 @@
             <div class="section">
               <div class="section-header">
                 <span class="section-title">🔌 操作面</span>
-                <button class="edit-link" @click="showAddFace = true">+ 添加</button>
+                <button class="edit-link" @click="openAddFace">+ 添加</button>
               </div>
               <div class="section-body">
                 <div v-if="faces.length === 0" class="tab-empty" style="padding:12px 0">暂无操作面</div>
                 <div v-for="f in faces" :key="f.id" class="face-card">
-                  <div class="face-card-header">
-                    <span class="badge" :class="f.type === 'ssh' ? 'badge-ssh' : 'badge-rest'">{{ f.type === 'ssh' ? 'SSH' : 'REST API' }}</span>
-                    <span class="face-addr code">{{ f.type === 'ssh' ? `${f.username}@${f.ip}:${f.port}` : f.base_url }}</span>
+                  <div class="face-header">
+                    <div class="face-type">
+                      <span class="badge" :class="f.type === 'ssh' ? 'badge-ssh' : 'badge-rest'">{{ f.type === 'ssh' ? 'SSH' : 'REST API' }}</span>
+                      <span class="face-addr code">{{ f.type === 'ssh' ? `${f.username}@${f.ip}:${f.port}` : f.base_url || `${f.ip}:${f.port}` }}</span>
+                    </div>
                     <button class="edit-link" @click="startEditFace(f)">编辑</button>
                   </div>
-                  <div class="face-details">
-                    <span v-if="f.ssh_auth_type">认证: <b>{{ f.ssh_auth_type }}</b></span>
-                    <span v-if="f.rest_auth_type">认证: <b>{{ f.rest_auth_type }}</b></span>
-                    <span v-if="f.ssh_legacy" class="badge badge-warn">兼容模式</span>
+                  <div class="face-body">
+                    <div v-if="f.type === 'ssh'" class="face-item"><label>认证方式</label><div class="value">{{ f.ssh_auth_type === 'password' ? '密码' : f.ssh_auth_type === 'key' ? 'SSH Key' : 'SSH Key + 密码' }}</div></div>
+                    <div v-if="f.type === 'ssh' && f.ssh_key_id" class="face-item"><label>SSH Key</label><div class="value">{{ sshKeys.find(k => k.id === f.ssh_key_id)?.name || f.ssh_key_id }}</div></div>
+                    <div v-if="f.type === 'ssh'" class="face-item"><label>兼容模式</label><div class="value">{{ f.ssh_legacy ? '是' : '否' }}</div></div>
+                    <div v-if="f.type === 'restapi'" class="face-item"><label>认证方式</label><div class="value">{{ f.rest_auth_type }}</div></div>
+                    <div v-if="f.type === 'restapi' && f.rest_username" class="face-item"><label>用户名</label><div class="value">{{ f.rest_username }}</div></div>
+                    <div v-if="f.type === 'restapi' && f.base_url" class="face-item" style="grid-column:1/-1"><label>Base URL</label><div class="value"><code>{{ f.base_url }}</code></div></div>
+                  </div>
+                  <div class="knowledge-row">
+                    <span class="knowledge-label">知识来源：</span>
+                    <span v-for="ks in f.knowledge_sources" :key="ks.type+ks.id" class="knowledge-tag">
+                      <span class="at">@</span>{{ docGroupsMap.get(ks.id)?.name || ks.id }}
+                      <button class="ks-remove" @click.stop="saveKnowledgeSources(f, f.knowledge_sources.filter(k => k.id !== ks.id).map(k => k.id))">×</button>
+                    </span>
+                    <div class="ks-picker-wrap">
+                      <button class="add-knowledge" @click.stop="ksPickerFaceId = ksPickerFaceId === f.id ? null : f.id">+ 添加</button>
+                      <div v-if="ksPickerFaceId === f.id" class="ks-dropdown" @click.stop>
+                        <label v-for="g in docGroups" :key="g.id" class="ks-option">
+                          <input type="checkbox"
+                            :checked="f.knowledge_sources.some(k => k.id === g.id)"
+                            @change="toggleKnowledgeSource(f, g.id)"
+                          />
+                          {{ g.name }}
+                        </label>
+                        <div v-if="docGroups.length === 0" class="ks-empty">暂无文档组</div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -174,78 +193,6 @@
                 </div>
               </div>
             </div>
-          </template>
-
-          <!-- 操作面 tab -->
-          <template v-if="activeTab === 'faces'">
-            <div class="faces-header">
-              <button class="btn btn-sm btn-primary" @click="showAddFace = true">+ 添加操作面</button>
-            </div>
-            <div v-if="faces.length === 0" class="tab-empty">暂无操作面</div>
-            <div v-for="f in faces" :key="f.id" class="face-card">
-              <div class="face-card-header">
-                <span class="badge" :class="f.type === 'ssh' ? 'badge-ssh' : 'badge-rest'">{{ f.type === 'ssh' ? 'SSH' : 'REST API' }}</span>
-                <span class="face-addr code">{{ f.ip }}:{{ f.port }}</span>
-                <div class="face-actions">
-                  <button class="btn btn-sm" @click="startEditFace(f)">编辑</button>
-                  <button class="btn btn-sm btn-danger" @click="removeFace(f)">删除</button>
-                </div>
-              </div>
-              <div class="face-details">
-                <span v-if="f.username">用户: <b>{{ f.username }}</b></span>
-                <span v-if="f.ssh_auth_type">认证: <b>{{ f.ssh_auth_type }}</b></span>
-                <span v-if="f.rest_auth_type">认证: <b>{{ f.rest_auth_type }}</b></span>
-                <span v-if="f.base_url">URL: <b class="code">{{ f.base_url }}</b></span>
-                <span v-if="f.ssh_legacy" class="badge badge-warn">兼容模式</span>
-              </div>
-            </div>
-          </template>
-
-          <!-- 指纹 tab -->
-          <template v-if="activeTab === 'fingerprint'">
-            <div v-if="!fingerprint" class="tab-empty">暂无指纹信息</div>
-            <template v-else>
-              <div class="detail-field" style="margin-bottom:12px">
-                <div class="detail-label">状态</div>
-                <span class="badge" :class="'badge-fp-' + fingerprint.status">{{ fingerprint.status }}</span>
-              </div>
-              <div class="detail-grid">
-                <div v-if="fingerprint.system_version" class="detail-field">
-                  <div class="detail-label">系统版本</div>
-                  <div class="detail-value">{{ fingerprint.system_version }}</div>
-                </div>
-                <div v-if="fingerprint.hardware_id" class="detail-field">
-                  <div class="detail-label">硬件 ID</div>
-                  <div class="detail-value code" style="font-size:12px;word-break:break-all">{{ fingerprint.hardware_id }}</div>
-                </div>
-                <div v-if="fingerprint.ssh_host_key" class="detail-field" style="grid-column:1/-1">
-                  <div class="detail-label">SSH Host Key</div>
-                  <div class="detail-value code" style="font-size:11px;word-break:break-all">{{ fingerprint.ssh_host_key }}</div>
-                </div>
-                <div v-if="fingerprint.api_signature" class="detail-field" style="grid-column:1/-1">
-                  <div class="detail-label">API Signature</div>
-                  <div class="detail-value code" style="font-size:11px;word-break:break-all">{{ fingerprint.api_signature }}</div>
-                </div>
-              </div>
-            </template>
-          </template>
-
-          <!-- 记忆 tab -->
-          <template v-if="activeTab === 'memories'">
-            <div v-if="memories.length === 0" class="tab-empty">暂无记忆</div>
-            <div v-for="m in memories" :key="m.id" class="memory-item">
-              <div class="memory-meta">
-                <span class="badge" :class="m.created_by === 'agent' ? 'badge-agent' : 'badge-user'">{{ m.created_by === 'agent' ? 'Agent' : '用户' }}</span>
-                <span class="memory-date">{{ new Date(m.created_at).toLocaleString() }}</span>
-                <button class="btn btn-sm btn-danger" @click="removeMemory(m.id)">删除</button>
-              </div>
-              <div class="memory-content">{{ m.content }}</div>
-            </div>
-            <div class="memory-add">
-              <textarea v-model="newMemory" class="input" rows="2" placeholder="添加记忆…" />
-              <button class="btn btn-sm btn-primary" :disabled="!newMemory.trim()" @click="submitMemory">添加</button>
-            </div>
-          </template>
         </div>
       </template>
       <div v-else class="detail-empty">
@@ -292,11 +239,25 @@
             <div class="form-row"><label>认证方式</label>
               <select v-model="faceForm.ssh_auth_type" class="input">
                 <option value="password">密码</option>
-                <option value="key">私钥</option>
-                <option value="key_password">私钥+密码</option>
+                <option value="key">SSH Key</option>
+                <option value="key_password">SSH Key + 密码</option>
               </select>
             </div>
-            <div class="form-row"><label>凭据</label><textarea v-model="faceForm.credential" class="input" rows="2" /></div>
+            <div v-if="faceForm.ssh_auth_type === 'key' || faceForm.ssh_auth_type === 'key_password'" class="form-row">
+              <label>SSH Key</label>
+              <select v-model="faceForm.ssh_key_id" class="input">
+                <option value="">— 选择 SSH Key —</option>
+                <option v-for="k in sshKeys" :key="k.id" :value="k.id">{{ k.name }}</option>
+              </select>
+            </div>
+            <div v-if="faceForm.ssh_auth_type === 'password' || faceForm.ssh_auth_type === 'key_password'" class="form-row">
+              <label>{{ faceForm.ssh_auth_type === 'key_password' ? '密钥密码' : '密码' }}</label>
+              <input v-model="faceForm.credential" class="input" type="password" autocomplete="new-password" />
+            </div>
+            <div class="form-row">
+              <label>兼容模式</label>
+              <label class="checkbox-label"><input type="checkbox" v-model="faceForm.ssh_legacy" /> 启用（旧版 SSH 算法）</label>
+            </div>
           </template>
           <template v-if="faceForm.type === 'restapi'">
             <div class="form-row"><label>Base URL</label><input v-model="faceForm.base_url" class="input" /></div>
@@ -311,6 +272,16 @@
             <div class="form-row"><label>用户名</label><input v-model="faceForm.rest_username" class="input" /></div>
             <div class="form-row"><label>凭据</label><textarea v-model="faceForm.credential" class="input" rows="2" /></div>
           </template>
+          <div v-if="docGroups.length > 0" class="form-row">
+            <label>知识来源</label>
+            <div class="ks-checkboxes">
+              <label v-for="g in docGroups" :key="g.id" class="checkbox-label">
+                <input type="checkbox" :value="g.id" :checked="faceForm.knowledge_sources.some(k => k.type==='group' && k.id===g.id)"
+                  @change="toggleFormKnowledgeSource(g.id)" />
+                {{ g.name }}
+              </label>
+            </div>
+          </div>
           <div class="modal-footer">
             <button type="button" class="btn" @click="closeFaceModal">取消</button>
             <button type="submit" class="btn btn-primary">{{ editFaceTarget ? '保存' : '添加' }}</button>
@@ -322,7 +293,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   listHosts, addHost, updateHost, deleteHost, pingHost,
@@ -330,6 +301,8 @@ import {
   getFingerprint, listMemories, addMemory, deleteMemory,
   type Host, type AccessFace, type Fingerprint, type Memory,
 } from '../api/hosts'
+import { listSSHKeys, type SafeSSHKey } from '../api/ssh-keys'
+import { listGroups, type DocumentGroup } from '../api/documents'
 
 const router = useRouter()
 const hosts = ref<Host[]>([])
@@ -342,14 +315,8 @@ const editTarget = ref<Host | null>(null)
 const pinging = ref(false)
 const pingResult = ref<{ connected: boolean; latency_ms?: number; error?: string } | null>(null)
 let pingTimer: ReturnType<typeof setTimeout> | null = null
+const ksPickerFaceId = ref<string | null>(null)
 
-const activeTab = ref<'overview' | 'faces' | 'fingerprint' | 'memories'>('overview')
-const tabs = [
-  { key: 'overview', label: '概览' },
-  { key: 'faces', label: '操作面' },
-  { key: 'fingerprint', label: '指纹' },
-  { key: 'memories', label: '记忆' },
-] as const
 
 const faces = ref<AccessFace[]>([])
 const fingerprint = ref<Fingerprint | null>(null)
@@ -357,6 +324,8 @@ const memories = ref<Memory[]>([])
 const newMemory = ref('')
 const showAddFace = ref(false)
 const editFaceTarget = ref<AccessFace | null>(null)
+const sshKeys = ref<SafeSSHKey[]>([])
+const docGroups = ref<DocumentGroup[]>([])
 
 const editingOverview = ref(false)
 const overviewSaving = ref(false)
@@ -396,7 +365,7 @@ async function saveOverview() {
 const emptyForm = () => ({ name: '', ip: '', notes: '', vendor: '', product_name: '', product_version: '', tagsStr: '' })
 const form = ref(emptyForm())
 
-const emptyFaceForm = () => ({ type: 'ssh' as 'ssh' | 'restapi', ip: '', port: 22, username: '', ssh_auth_type: 'password', credential: '', passphrase: '', ssh_key_id: '', ssh_legacy: false, base_url: '', rest_auth_type: 'none', rest_username: '', header_name: '' })
+const emptyFaceForm = () => ({ type: 'ssh' as 'ssh' | 'restapi', ip: activeHost.value?.ip ?? '', port: 22, username: '', ssh_auth_type: 'password', credential: '', passphrase: '', ssh_key_id: '', ssh_legacy: false, base_url: '', rest_auth_type: 'none', rest_username: '', header_name: '', knowledge_sources: [] as Array<{type:'group'|'doc';id:number}> })
 const faceForm = ref(emptyFaceForm())
 
 const allTags = computed(() => {
@@ -418,12 +387,13 @@ const filtered = computed(() => hosts.value.filter(h => {
   return matchSearch && matchTag
 }))
 
+const docGroupsMap = computed(() => new Map(docGroups.value.map(g => [g.id, g])))
+
 async function load() { hosts.value = await listHosts() }
 
 async function selectHost(h: Host) {
   activeHost.value = h
   pingResult.value = null
-  activeTab.value = 'overview'
   editingOverview.value = false
   faces.value = []
   fingerprint.value = null
@@ -445,6 +415,8 @@ async function pingActive() {
   if (pingTimer) clearTimeout(pingTimer)
   try {
     pingResult.value = await pingHost(activeHost.value.id)
+  } catch (e: any) {
+    pingResult.value = { connected: false, error: e.message || '请求失败' }
   } finally {
     pinging.value = false
     pingTimer = setTimeout(() => { pingResult.value = null }, 5000)
@@ -483,9 +455,37 @@ async function bulkDelete() {
 function goExec(h: Host) { router.push({ path: '/exec', query: { host: h.id } }) }
 function bulkExecSelected() { router.push({ path: '/exec', query: { hosts: selected.value.join(',') } }) }
 
+async function saveKnowledgeSources(face: AccessFace, groupIds: number[]) {
+  if (!activeHost.value) return
+  const prev = face.knowledge_sources
+  const ks = groupIds.map(id => ({ type: 'group' as const, id }))
+  face.knowledge_sources = ks
+  ksPickerFaceId.value = null
+  try {
+    await updateAccessFace(activeHost.value.id, face.id, { knowledge_sources: ks })
+  } catch {
+    face.knowledge_sources = prev
+  }
+}
+
+function toggleKnowledgeSource(face: AccessFace, groupId: number) {
+  const ids = face.knowledge_sources.some(k => k.id === groupId)
+    ? face.knowledge_sources.filter(k => k.id !== groupId).map(k => k.id)
+    : [...face.knowledge_sources.map(k => k.id), groupId]
+  saveKnowledgeSources(face, ids)
+}
+
+function toggleFormKnowledgeSource(groupId: number) {
+  const ks = faceForm.value.knowledge_sources
+  const exists = ks.some(k => k.type === 'group' && k.id === groupId)
+  faceForm.value.knowledge_sources = exists
+    ? ks.filter(k => !(k.type === 'group' && k.id === groupId))
+    : [...ks, { type: 'group' as const, id: groupId }]
+}
+
 async function submitFace() {
   if (!activeHost.value) return
-  const req: Record<string, unknown> = { type: faceForm.value.type, ip: faceForm.value.ip, port: faceForm.value.port, tags: [], knowledge_sources: [] }
+  const req: Record<string, unknown> = { type: faceForm.value.type, ip: faceForm.value.ip, port: faceForm.value.port, tags: [], knowledge_sources: faceForm.value.knowledge_sources }
   if (faceForm.value.type === 'ssh') {
     req.username = faceForm.value.username || undefined
     req.ssh_auth_type = faceForm.value.ssh_auth_type
@@ -525,7 +525,14 @@ function startEditFace(face: AccessFace) {
     rest_auth_type: face.rest_auth_type || 'none',
     rest_username: face.rest_username || '',
     header_name: face.header_name || '',
+    knowledge_sources: face.knowledge_sources ? [...face.knowledge_sources] : [],
   }
+  showAddFace.value = true
+}
+
+function openAddFace() {
+  faceForm.value = emptyFaceForm()
+  editFaceTarget.value = null
   showAddFace.value = true
 }
 
@@ -554,7 +561,35 @@ async function removeMemory(id: number) {
   memories.value = memories.value.filter(m => m.id !== id)
 }
 
-onMounted(load)
+function handleEsc(e: KeyboardEvent) {
+  if (e.key !== 'Escape') return
+  if (ksPickerFaceId.value) { ksPickerFaceId.value = null; return }
+  if (showAddFace.value) { closeFaceModal(); return }
+  if (showAdd.value) { closeModal(); return }
+}
+
+function handleOutsideClick(e: MouseEvent) {
+  if (ksPickerFaceId.value && !(e.target as Element).closest('.ks-picker-wrap')) {
+    ksPickerFaceId.value = null
+  }
+}
+
+onMounted(async () => {
+  window.addEventListener('keydown', handleEsc)
+  document.addEventListener('mousedown', handleOutsideClick)
+  const [, keys, groups] = await Promise.all([
+    load(),
+    listSSHKeys().catch((): SafeSSHKey[] => []),
+    listGroups().catch((): DocumentGroup[] => []),
+  ])
+  sshKeys.value = keys
+  docGroups.value = groups
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleEsc)
+  document.removeEventListener('mousedown', handleOutsideClick)
+})
 </script>
 
 <style scoped>
@@ -588,17 +623,12 @@ onMounted(load)
 .detail-topbar-right { display: flex; gap: 8px; }
 .detail-title { font-size: 15px; font-weight: 700; color: var(--text); }
 
-.detail-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); background: var(--surface); flex-shrink: 0; }
-.tab-btn { padding: 8px 18px; font-size: 13px; font-weight: 500; color: var(--text-sub); background: none; border: none; border-bottom: 2px solid transparent; cursor: pointer; transition: color 0.15s, border-color 0.15s; }
-.tab-btn:hover { color: var(--text); }
-.tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); }
-
 .detail-body { flex: 1; overflow-y: auto; padding: 20px 24px; }
 .detail-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--muted); font-size: 14px; }
 .detail-empty-icon { color: var(--border); font-size: 40px; }
 .tab-empty { color: var(--muted); font-size: 13px; padding: 32px 0; text-align: center; }
 
-.section { background: var(--card-bg); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin-bottom: 16px; }
+.section { background: var(--card-bg); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 16px; }
 .section-header { padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); background: var(--surface); }
 .section-title { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
 .section-header-actions { display: flex; gap: 6px; }
@@ -627,13 +657,34 @@ onMounted(load)
 .ping-fail { background: rgba(239,68,68,0.12); color: #dc2626; }
 
 .faces-header { margin-bottom: 14px; }
-.face-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 10px; padding: 14px 18px; margin-bottom: 10px; }
-.face-card-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
-.face-addr { font-size: 13px; color: var(--text); flex: 1; }
+.face-card { border: 1px solid var(--border); border-radius: 8px; margin-bottom: 10px; }
+.face-header { padding: 10px 14px; background: var(--surface); display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); }
+.face-type { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 13px; }
+.face-addr { font-size: 13px; color: var(--text); }
+.face-body { padding: 12px 14px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.face-item label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; display: block; margin-bottom: 3px; }
+.face-item .value { font-size: 13px; color: var(--text); }
+.face-item .value code { font-family: 'SF Mono', Consolas, monospace; font-size: 12px; }
 .face-actions { display: flex; gap: 6px; }
 .face-details { display: flex; gap: 12px; flex-wrap: wrap; font-size: 13px; color: var(--text-sub); }
+.knowledge-row { padding: 8px 14px; border-top: 1px solid var(--border); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.knowledge-label { font-size: 11px; color: var(--muted); }
+.knowledge-tag { font-size: 11px; padding: 2px 8px; border-radius: 4px; background: var(--surface); border: 1px solid var(--border); color: var(--text-sub); display: flex; align-items: center; gap: 3px; }
+.knowledge-tag .at { color: var(--primary); }
+.add-knowledge { font-size: 11px; color: var(--primary); cursor: pointer; padding: 2px 8px; border: 1px dashed var(--primary); border-radius: 4px; background: none; }
+.add-knowledge:hover { background: rgba(99,102,241,0.08); }
+.ks-remove { background: none; border: none; color: var(--muted); cursor: pointer; padding: 0 0 0 4px; font-size: 12px; line-height: 1; }
+.ks-remove:hover { color: var(--danger, #ef4444); }
+.ks-picker-wrap { position: relative; display: inline-flex; }
+.ks-dropdown { position: absolute; top: calc(100% + 4px); left: 0; z-index: 100; background: var(--card-bg); border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); padding: 6px 0; min-width: 160px; }
+.ks-option { display: flex; align-items: center; gap: 8px; padding: 6px 12px; font-size: 13px; color: var(--text); cursor: pointer; white-space: nowrap; }
+.ks-option:hover { background: var(--surface); }
+.ks-option input { cursor: pointer; }
+.ks-empty { padding: 8px 12px; font-size: 12px; color: var(--muted); }
+.ks-checkboxes { display: flex; flex-direction: column; gap: 6px; }
 
-.memory-item { background: var(--card-bg); border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; margin-bottom: 10px; }
+.memory-item { padding: 10px 12px; background: var(--card-bg); border-radius: 6px; border-left: 3px solid var(--border); margin-bottom: 8px; }
+.memory-item.memory-agent { border-left-color: var(--primary); }
 .memory-meta { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
 .memory-date { font-size: 12px; color: var(--muted); flex: 1; }
 .memory-content { font-size: 13px; color: var(--text); white-space: pre-wrap; }
@@ -658,6 +709,7 @@ onMounted(load)
 .modal { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 24px; width: 420px; max-width: 95vw; max-height: 90vh; overflow-y: auto; }
 .modal h3 { margin: 0 0 18px; font-size: 16px; font-weight: 700; color: var(--text); }
 .form-row { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
+.checkbox-label { display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; }
 .form-row label { font-size: 12px; font-weight: 600; color: var(--muted); }
 .modal-footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
 

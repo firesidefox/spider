@@ -121,7 +121,7 @@ export async function deleteHost(id: string): Promise<void> {
 }
 
 export async function pingHost(id: string): Promise<{ connected: boolean; latency_ms?: number; error?: string }> {
-  return (await fetch(`/api/v1/hosts/${id}/ping`, { method: 'POST' })).json()
+  return (await apiFetch(`/api/v1/hosts/${id}/ping`, { method: 'POST' })).json()
 }
 
 export async function listAccessFaces(hostId: string): Promise<AccessFace[]> {

@@ -549,6 +549,10 @@
                 <div class="detail-label">最大连接数</div>
                 <div class="detail-value">{{ settings.ssh_max_pool_size }}</div>
               </div>
+              <div class="detail-field">
+                <div class="detail-label">直连地址（No Proxy）</div>
+                <div class="detail-value">{{ settings.ssh_no_proxy || '—' }}</div>
+              </div>
             </div>
           </template>
           <!-- 编辑视图 -->
@@ -566,6 +570,7 @@
                 <div class="form-row"><label>命令超时（秒）</label><input v-model.number="settings.ssh_default_timeout_seconds" class="input" type="number" /></div>
                 <div class="form-row"><label>连接池 TTL（秒）</label><input v-model.number="settings.ssh_pool_ttl_seconds" class="input" type="number" /></div>
                 <div class="form-row"><label>最大连接数</label><input v-model.number="settings.ssh_max_pool_size" class="input" type="number" /></div>
+                <div class="form-row"><label>直连地址（No Proxy）</label><input v-model="settings.ssh_no_proxy" class="input" placeholder="10.0.0.0/8,192.168.0.0/16" /></div>
               </div>
             </div>
             <div v-if="settingsError" class="err" style="margin-top:4px">{{ settingsError }}</div>
@@ -822,6 +827,7 @@ interface Provider {
 interface Settings {
   sse_addr: string; sse_base_url: string
   ssh_default_timeout_seconds: number; ssh_pool_ttl_seconds: number; ssh_max_pool_size: number
+  ssh_no_proxy: string
 }
 const providers = ref<Provider[]>([])
 const editingProviderId = ref('')
@@ -832,6 +838,7 @@ let providersLoaded = false
 const settings = ref<Settings>({
   sse_addr: '', sse_base_url: '',
   ssh_default_timeout_seconds: 30, ssh_pool_ttl_seconds: 300, ssh_max_pool_size: 50,
+  ssh_no_proxy: '',
 })
 const settingsEditing = ref(false)
 const settingsError = ref('')
@@ -857,6 +864,7 @@ async function loadSettings() {
     ssh_default_timeout_seconds: data.ssh_default_timeout_seconds ?? 30,
     ssh_pool_ttl_seconds: data.ssh_pool_ttl_seconds ?? 300,
     ssh_max_pool_size: data.ssh_max_pool_size ?? 50,
+    ssh_no_proxy: data.ssh_no_proxy || '',
   }
 }
 

@@ -298,9 +298,10 @@ function handleConvEvent(convId: string, event: ChatEvent) {
 
   switch (event.type) {
     case 'text_delta': {
-      const lastBlock = blocks[blocks.length - 1]
+      const lastIdx = blocks.length - 1
+      const lastBlock = blocks[lastIdx]
       if (lastBlock?.type === 'text') {
-        lastBlock.content += event.content?.text || ''
+        blocks[lastIdx] = { type: 'text', content: lastBlock.content + (event.content?.text || '') }
       } else {
         blocks.push({ type: 'text', content: event.content?.text || '' })
       }
@@ -314,12 +315,16 @@ function handleConvEvent(convId: string, event: ChatEvent) {
       }})
       break
     case 'tool_result': {
-      const tb = blocks.find(b => b.type === 'tool' && b.call.id === event.content?.id) as { type: 'tool'; call: ToolCallBlock } | undefined
-      if (tb) {
-        if (event.content?.input) tb.call.input = event.content.input
-        tb.call.result = event.content?.result
-        tb.call.isError = event.content?.is_error
-        tb.call.durationMs = event.content?.duration_ms
+      const idx = blocks.findIndex(b => b.type === 'tool' && b.call.id === event.content?.id)
+      if (idx !== -1) {
+        const old = (blocks[idx] as { type: 'tool'; call: ToolCallBlock }).call
+        blocks[idx] = { type: 'tool', call: {
+          ...old,
+          input: event.content?.input ?? old.input,
+          result: event.content?.result,
+          isError: event.content?.is_error,
+          durationMs: event.content?.duration_ms,
+        }}
       }
       break
     }

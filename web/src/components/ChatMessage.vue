@@ -24,9 +24,10 @@ interface ConfirmRequest {
 
 const EXPLORE_TOOLS = new Set(['ListHosts', 'GetHost', 'SearchDocs', 'Verify'])
 
+type TextItem    = { kind: 'text';    content: string }
 type ExploreGroup = { kind: 'explore'; calls: ToolCallBlock[] }
 type ActItem     = { kind: 'act';     call: ToolCallBlock }
-type RenderItem  = ExploreGroup | ActItem
+type RenderItem  = TextItem | ExploreGroup | ActItem
 
 const props = defineProps<{
   role: string
@@ -42,8 +43,9 @@ const emit = defineEmits<{
 const renderItems = computed<RenderItem[]>(() => {
   const items: RenderItem[] = []
   for (const block of props.blocks) {
-    if (block.type !== 'tool') continue
-    if (EXPLORE_TOOLS.has(block.call.name)) {
+    if (block.type === 'text') {
+      if (block.content) items.push({ kind: 'text', content: block.content })
+    } else if (EXPLORE_TOOLS.has(block.call.name)) {
       const last = items[items.length - 1]
       if (last?.kind === 'explore') {
         items[items.length - 1] = { kind: 'explore', calls: [...last.calls, block.call] }
@@ -58,7 +60,7 @@ const renderItems = computed<RenderItem[]>(() => {
 })
 
 const expandedTools = ref<Set<string>>(new Set())
-const expandedGroups = ref<Set<string>>(new Set())
+const collapsedGroups = ref<Set<string>>(new Set())
 
 function toggle(set: Set<string>, key: string) {
   if (set.has(key)) set.delete(key)
@@ -66,7 +68,7 @@ function toggle(set: Set<string>, key: string) {
 }
 
 function toggleTool(id: string) { toggle(expandedTools.value, id) }
-function toggleGroup(firstId: string) { toggle(expandedGroups.value, firstId) }
+function toggleGroup(firstId: string) { toggle(collapsedGroups.value, firstId) }
 
 function exploreParam(call: ToolCallBlock): string {
   if (!call.input) return ''
@@ -77,8 +79,7 @@ function exploreParam(call: ToolCallBlock): string {
   return s.length > 32 ? s.slice(0, 32) + '…' : s
 }
 
-function renderMd(text: string, streaming?: boolean) {
-  if (streaming) return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+function renderMd(text: string) {
   return marked.parse(text || '') as string
 }
 
@@ -97,22 +98,20 @@ function formatDuration(ms: number) {
     <div v-else class="msg-assistant-wrap">
       <div class="gutter"><span class="prompt prompt-assistant" :class="{ streaming: isStreaming }">*</span></div>
       <div class="content assistant-body">
-        <template v-for="(block, i) in blocks" :key="i">
-          <div v-if="block.type === 'text' && block.content" class="msg-assistant">
-            <div class="assistant-text" v-html="renderMd(block.content, isStreaming)"></div>
-          </div>
-        </template>
-
-        <!-- tool render items -->
         <template v-for="(item, idx) in renderItems" :key="idx">
+          <!-- Text block -->
+          <div v-if="item.kind === 'text'" class="msg-assistant">
+            <div class="assistant-text" v-html="renderMd(item.content, isStreaming)"></div>
+          </div>
+
           <!-- Explore group -->
-          <div v-if="item.kind === 'explore'" class="explore-group">
+          <div v-else-if="item.kind === 'explore'" class="explore-group">
             <div class="explore-group-header" @click="toggleGroup(item.calls[0].id)">
-              <span class="tool-arrow">{{ expandedGroups.has(item.calls[0].id) ? '▼' : '▶' }}</span>
+              <span class="tool-arrow">{{ collapsedGroups.has(item.calls[0].id) ? '▶' : '▼' }}</span>
               <span class="explore-label">Explored</span>
               <span class="explore-count">({{ item.calls.length }})</span>
             </div>
-            <div v-if="expandedGroups.has(item.calls[0].id)" class="explore-items">
+            <div v-if="!collapsedGroups.has(item.calls[0].id)" class="explore-items">
               <div v-for="call in item.calls" :key="call.id" class="explore-item">
                 <span class="tree-branch">└</span>
                 <span class="explore-tool-name" :class="{ 'is-error': call.isError }">{{ call.name }}</span>
