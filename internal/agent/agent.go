@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/spiderai/spider/internal/llm"
+	"github.com/spiderai/spider/internal/logger"
 	"github.com/spiderai/spider/internal/models"
 	"github.com/spiderai/spider/internal/permission"
 )
@@ -134,6 +135,11 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 	events := make(chan Event, 64)
 	go func() {
 		defer close(events)
+
+		log := logger.FromContext(ctx).With().Str("conv_id", conversationID).Logger()
+		ctx = logger.WithContext(ctx, &log)
+		log.Info().Msg("agent started")
+
 		a.msgStore.Save(conversationID, "user", userMessage, "")
 
 		var history []llm.Message
@@ -215,6 +221,7 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 				if assistantText != "" {
 					a.msgStore.Save(conversationID, "assistant", assistantText, "")
 				}
+				log.Info().Int("turn", turn).Msg("agent done")
 				events <- Event{Type: EventDone}
 				return
 			}
@@ -266,10 +273,14 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 				}
 
 				start := time.Now()
+				log.Debug().Str("tool", tc.Name).Msg("tool call start")
 				result, err := tool.Execute(ctx, tc.Input)
 				durationMs := time.Since(start).Milliseconds()
 				if err != nil {
 					result = &ToolResult{Content: err.Error(), IsError: true, RiskLevel: riskLevel}
+					log.Error().Err(err).Str("tool", tc.Name).Int64("duration_ms", durationMs).Msg("tool call error")
+				} else {
+					log.Debug().Str("tool", tc.Name).Int64("duration_ms", durationMs).Bool("is_error", result.IsError).Msg("tool call done")
 				}
 				a.hooks.RunAfter(tc.Name, tc.Input, result)
 
@@ -289,6 +300,7 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 		}
 
 		events <- Event{Type: EventError, Content: map[string]any{"error": "max turns exceeded"}}
+		log.Error().Int("max_turns", a.maxTurns).Msg("agent max turns exceeded")
 	}()
 
 	return events, nil
