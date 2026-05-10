@@ -553,6 +553,10 @@
                 <div class="detail-label">直连地址（No Proxy）</div>
                 <div class="detail-value">{{ settings.ssh_no_proxy || '—' }}</div>
               </div>
+              <div class="detail-field">
+                <div class="detail-label">日志级别</div>
+                <div class="detail-value">{{ logLevel || '—' }}</div>
+              </div>
             </div>
           </template>
           <!-- 编辑视图 -->
@@ -572,6 +576,18 @@
                 <div class="form-row"><label>最大连接数</label><input v-model.number="settings.ssh_max_pool_size" class="input" type="number" /></div>
                 <div class="form-row"><label>直连地址（No Proxy）</label><input v-model="settings.ssh_no_proxy" class="input" placeholder="10.0.0.0/8,192.168.0.0/16" /></div>
               </div>
+            </div>
+            <div class="edit-card">
+              <div class="edit-card-title">日志</div>
+              <div class="form-row">
+                <label>日志级别</label>
+                <select v-model="logLevel" class="input" style="max-width:160px">
+                  <option value="debug">debug</option>
+                  <option value="info">info</option>
+                  <option value="error">error</option>
+                </select>
+              </div>
+              <div v-if="logLevelError" class="err" style="margin-top:4px;font-size:12px">{{ logLevelError }}</div>
             </div>
             <div v-if="settingsError" class="err" style="margin-top:4px">{{ settingsError }}</div>
           </template>
@@ -842,6 +858,8 @@ const settings = ref<Settings>({
 })
 const settingsEditing = ref(false)
 const settingsError = ref('')
+const logLevel = ref('info')
+const logLevelError = ref('')
 let settingsLoaded = false
 
 async function loadProviders() {
@@ -866,17 +884,35 @@ async function loadSettings() {
     ssh_max_pool_size: data.ssh_max_pool_size ?? 50,
     ssh_no_proxy: data.ssh_no_proxy || '',
   }
+  const lvlRes = await fetch('/api/v1/log-level', { headers: authHeaders() })
+  if (lvlRes.ok) {
+    const lvlData = await lvlRes.json()
+    logLevel.value = lvlData.level || 'info'
+  }
 }
 
 async function saveSettings() {
   settingsError.value = ''
+  logLevelError.value = ''
   const res = await fetch('/api/v1/settings', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify(settings.value),
   })
-  if (res.ok) { settingsEditing.value = false }
-  else settingsError.value = (await res.json()).error
+  if (!res.ok) {
+    settingsError.value = (await res.json()).error
+    return
+  }
+  const lvlRes = await fetch('/api/v1/log-level', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ level: logLevel.value }),
+  })
+  if (!lvlRes.ok) {
+    logLevelError.value = (await lvlRes.json()).error
+    return
+  }
+  settingsEditing.value = false
 }
 
 async function saveProvider() {
