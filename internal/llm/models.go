@@ -9,6 +9,21 @@ import (
 	"time"
 )
 
+var knownContextWindows = map[string]int{
+	"claude-sonnet-4-6": 1_000_000,
+	"claude-opus-4-7":   1_000_000,
+	"claude-haiku-4-5":  200_000,
+	"gpt-4o":            128_000,
+	"gpt-4o-mini":       128_000,
+}
+
+func DefaultThreshold(model string) int {
+	if w, ok := knownContextWindows[model]; ok {
+		return w / 2
+	}
+	return 120_000
+}
+
 var modelHTTPClient = &http.Client{Timeout: 15 * time.Second}
 
 // ModelInfo describes a single model available from a provider.

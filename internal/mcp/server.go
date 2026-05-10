@@ -81,6 +81,8 @@ func (a *App) NewAgentFactory() (*agent.Factory, error) {
 	}
 	f.Enforcer = a.Enforcer
 	f.PermissionMode = a.PermissionMode
+	f.SummaryStore = store.NewSummaryStore(a.DB)
+	f.CompactionCfg = a.Config.Agent.Compaction
 	return f, nil
 }
 

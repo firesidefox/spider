@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/spiderai/spider/internal/config"
 	"github.com/spiderai/spider/internal/llm"
 	"github.com/spiderai/spider/internal/permission"
 	"github.com/spiderai/spider/internal/ssh"
@@ -21,6 +22,9 @@ type Factory struct {
 	MsgStore       MessageStorer
 	Enforcer       *permission.Enforcer
 	PermissionMode permission.Mode
+	SummaryStore   *store.SummaryStore
+	CompactionCfg  config.CompactionConfig
+	LLMModel       string
 }
 
 // NewFactory creates a Factory by reading the active provider from the DB.
@@ -62,6 +66,7 @@ func NewFactory(
 		SSHKeys:     keys,
 		Logs:        logs,
 		MsgStore:    msgs,
+		LLMModel:    provider.SelectedModel,
 	}, nil
 }
 
@@ -82,6 +87,7 @@ func (f *Factory) NewAgent(systemPrompt string) *Agent {
 		hooks.AddBefore(DefaultRiskHook())
 	}
 
+	compactor := NewCompactor(f.LLMClient, f.SummaryStore, f.MsgStore, f.LLMModel, f.CompactionCfg)
 	return NewAgent(AgentConfig{
 		LLMClient:    f.LLMClient,
 		Registry:     registry,
@@ -89,6 +95,7 @@ func (f *Factory) NewAgent(systemPrompt string) *Agent {
 		MsgStore:     f.MsgStore,
 		SystemPrompt: systemPrompt,
 		MaxTurns:     15,
+		Compactor:    compactor,
 	})
 }
 

@@ -27,6 +27,18 @@ func (m *mockLLMClient) ChatStream(_ context.Context, _ *llm.ChatRequest) (<-cha
 	return ch, nil
 }
 
+func (m *mockLLMClient) Chat(_ context.Context, _ *llm.ChatRequest) (string, error) {
+	return "summary", nil
+}
+
+func (m *mockLLMClient) CountTokens(_ context.Context, msgs []llm.Message) (int, error) {
+	total := 0
+	for _, msg := range msgs {
+		total += llm.EstimateTokens(msg.Content)
+	}
+	return total, nil
+}
+
 type mockMsgStore struct {
 	messages []struct{ convID, role, content, toolCalls string }
 }
@@ -48,6 +60,10 @@ func (m *mockMsgStore) ListByConversation(convID string) ([]*models.Message, err
 		}
 	}
 	return out, nil
+}
+
+func (m *mockMsgStore) ListAfterMessage(convID, _ string) ([]*models.Message, error) {
+	return m.ListByConversation(convID)
 }
 
 type mockResultTool struct {
@@ -215,7 +231,7 @@ func TestNewAgentPrependsEPAPrefix(t *testing.T) {
 		SystemPrompt: "你是运维助手。",
 	}
 	a := NewAgent(cfg)
-	if !strings.HasPrefix(a.systemPrompt, "## 行为约束") {
+	if !strings.HasPrefix(a.systemPrompt, "## Behavioral Constraints") {
 		t.Errorf("systemPrompt should start with EPA prefix, got: %q", a.systemPrompt[:min(50, len(a.systemPrompt))])
 	}
 	if !strings.Contains(a.systemPrompt, "你是运维助手。") {

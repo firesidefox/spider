@@ -44,6 +44,23 @@ type ChatRequest struct {
 
 type Client interface {
 	ChatStream(ctx context.Context, req *ChatRequest) (<-chan StreamEvent, error)
+	Chat(ctx context.Context, req *ChatRequest) (string, error)
+	CountTokens(ctx context.Context, msgs []Message) (int, error)
+}
+
+// EstimateTokens 字符分段估算 token 数。
+// r > 0x2E80 覆盖 CJK 及 Hangul/Kana 等东亚字符，约 1 token/字；
+// 其他 Unicode（阿拉伯、西里尔等）归入 ascii 路径，误差较大但可接受。
+func EstimateTokens(s string) int {
+	var cjk, ascii int
+	for _, r := range s {
+		if r > 0x2E80 {
+			cjk++
+		} else {
+			ascii++
+		}
+	}
+	return cjk + ascii/4
 }
 
 func NewClient(providerType, apiKey, model, baseURL string) (Client, error) {

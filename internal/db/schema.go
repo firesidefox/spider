@@ -163,6 +163,9 @@ CREATE TABLE IF NOT EXISTS provider_models (
 CREATE INDEX IF NOT EXISTS idx_provider_models_provider_id ON provider_models(provider_id);
 `
 
+// Migrate 导出版本，供测试使用。
+func Migrate(db *sql.DB) error { return migrate(db) }
+
 // migrate 创建所有表（幂等）。
 func migrate(db *sql.DB) error {
 	if _, err := db.Exec(schemaSQL); err != nil {
@@ -283,5 +286,16 @@ func migrate(db *sql.DB) error {
 			'', '', '', '[]', created_at, updated_at
 		FROM hosts
 		WHERE id NOT IN (SELECT host_id FROM access_faces)`)
+	// Context compaction
+	db.Exec(`CREATE TABLE IF NOT EXISTS conversation_summaries (
+		id               INTEGER PRIMARY KEY AUTOINCREMENT,
+		conversation_id  TEXT NOT NULL,
+		up_to_message_id TEXT NOT NULL,
+		chunks           TEXT NOT NULL,
+		created_at       DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at       DATETIME DEFAULT CURRENT_TIMESTAMP,
+		UNIQUE(conversation_id)
+	)`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_messages_conv_created ON messages(conversation_id, created_at)`)
 	return nil
 }

@@ -32,11 +32,19 @@ type RuleConfig struct {
 	Description string `yaml:"description,omitempty" json:"description,omitempty"`
 }
 
+// CompactionConfig 是会话上下文压缩配置。
+type CompactionConfig struct {
+	ThresholdTokens  int `yaml:"threshold_tokens"`   // 0 = 自动用模型表
+	RecentTurns      int `yaml:"recent_turns"`        // 默认 20
+	MaxSummaryTokens int `yaml:"max_summary_tokens"`  // 默认 4000
+}
+
 // AgentConfig 是 Agent 执行权限相关配置。
 type AgentConfig struct {
-	PermissionMode  string       `yaml:"permission_mode"`            // ask | auto | plan | readonly，默认 ask
-	ApprovalTimeout int          `yaml:"approval_timeout"`           // 审批超时秒数，默认 300
-	Rules           []RuleConfig `yaml:"rules,omitempty" json:"rules,omitempty"` // 自定义权限规则
+	PermissionMode  string           `yaml:"permission_mode"`            // ask | auto | plan | readonly，默认 ask
+	ApprovalTimeout int              `yaml:"approval_timeout"`           // 审批超时秒数，默认 300
+	Rules           []RuleConfig     `yaml:"rules,omitempty" json:"rules,omitempty"` // 自定义权限规则
+	Compaction      CompactionConfig `yaml:"compaction"`
 }
 
 // AuthConfig 是认证相关配置。
@@ -75,6 +83,11 @@ func DefaultConfig() *Config {
 		Agent: AgentConfig{
 			PermissionMode:  "ask",
 			ApprovalTimeout: 300,
+			Compaction: CompactionConfig{
+				ThresholdTokens:  0,
+				RecentTurns:      20,
+				MaxSummaryTokens: 4000,
+			},
 		},
 	}
 }
