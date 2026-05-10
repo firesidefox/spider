@@ -28,15 +28,25 @@ PLIST_DST=""
 h1 "Spider 安装"
 
 if [ "$(id -u)" -eq 0 ]; then
-  error "请勿以 root 用户运行此脚本，直接运行 ./install.sh 即可。"
+  error "请勿以 root 用户运行此脚本（不要加 sudo），直接运行 ./install.sh 即可。"
   exit 1
+fi
+
+# macOS LaunchDaemon 需要 sudo
+if [ "$(uname -s)" = "Darwin" ]; then
+  if ! sudo -n true 2>/dev/null; then
+    detail "安装 macOS 系统服务需要管理员权限，请输入密码："
+    sudo -v || { error "sudo 授权失败"; exit 1; }
+  fi
 fi
 
 step "停止旧版本服务"
 if [ "$OS" = "Darwin" ]; then
+  # 兼容旧版 LaunchAgent
   launchctl bootout "gui/$(id -u)/${PLIST_LABEL}" 2>/dev/null || true
+  sudo launchctl bootout "system/${PLIST_LABEL}" 2>/dev/null || true
   for i in $(seq 10); do
-    launchctl print "gui/$(id -u)/${PLIST_LABEL}" >/dev/null 2>&1 || break
+    sudo launchctl print "system/${PLIST_LABEL}" >/dev/null 2>&1 || break
     sleep 1
   done
 elif [ "$OS" = "Linux" ]; then
@@ -68,10 +78,11 @@ fi
 
 step "安装服务配置"
 if [ "$OS" = "Darwin" ]; then
-  PLIST_DST="$HOME/Library/LaunchAgents/${PLIST_LABEL}.plist"
-  mkdir -p "$HOME/Library/LaunchAgents"
-  sed "s|__HOME__|$HOME|g" "${SCRIPT_DIR}/spider.plist" > "$PLIST_DST"
-  chmod 644 "$PLIST_DST"
+  PLIST_DST="/Library/LaunchDaemons/${PLIST_LABEL}.plist"
+  _plist_tmp=$(mktemp /tmp/${PLIST_LABEL}.XXXXXX.plist)
+  sed -e "s|__HOME__|$HOME|g" -e "s|__USER__|$(whoami)|g" "${SCRIPT_DIR}/spider.plist" > "$_plist_tmp"
+  sudo install -m 644 -o root -g wheel "$_plist_tmp" "$PLIST_DST"
+  rm -f "$HOME/Library/LaunchAgents/${PLIST_LABEL}.plist" 2>/dev/null || true
   success "$PLIST_DST"
 elif [ "$OS" = "Linux" ]; then
   SERVICE_DST="$HOME/.config/systemd/user/spider.service"
@@ -99,7 +110,7 @@ if [ "$OS" = "Darwin" ]; then
   _port_check() { lsof -iTCP:8000 -sTCP:LISTEN -t >/dev/null 2>&1; }
   _port_list()  { lsof -iTCP:8000 -sTCP:LISTEN; }
   _port_pid()   { lsof -iTCP:8000 -sTCP:LISTEN -t 2>/dev/null; }
-  _service_hint() { detail "   然后同步修改 ~/Library/LaunchAgents/ai.fty.spider.plist，重新运行 install.sh"; }
+  _service_hint() { detail "   然后同步修改 /Library/LaunchDaemons/ai.fty.spider.plist，重新运行 install.sh"; }
 else
   _port_check() { ss -tlnp 2>/dev/null | grep -q ':8000 '; }
   _port_list()  { ss -tlnp 2>/dev/null | grep ':8000 '; }
@@ -121,9 +132,9 @@ success "端口 8000 可用"
 
 step "启动服务"
 _bootstrap_err=$(mktemp)
-trap 'rm -f "$_bootstrap_err"' EXIT
+trap 'rm -f "${_plist_tmp:-}" "$_bootstrap_err"' EXIT
 if [ "$OS" = "Darwin" ]; then
-  if ! launchctl bootstrap "gui/$(id -u)" "$PLIST_DST" 2>"$_bootstrap_err"; then
+  if ! sudo launchctl bootstrap "system" "$PLIST_DST" 2>"$_bootstrap_err"; then
     error "launchctl bootstrap 失败"
     cat "$_bootstrap_err" >&2
     detail "查看日志：tail -f $LOG_DIR/spider.log"
@@ -172,7 +183,6 @@ if [[ ":$PATH:" != *":$BIN_DIR:"* ]]; then
   detail "export PATH=\"\$HOME/.local/bin:\$PATH\""
 fi
 
-printf "\n  ${yellow}首次登录提示：${reset}\n"
 warn "首次登录提示"
 detail "初始管理员密码已打印到服务日志，运行以下命令查看："
 detail "grep -i 'default admin created' $LOG_DIR/spider.log"
