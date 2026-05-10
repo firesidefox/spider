@@ -39,7 +39,7 @@
             <span class="nav-icon">📚</span><span class="nav-label">知识库</span>
           </div>
           <div class="nav-row" :class="{ selected: activeTab === 'settings' }" @click="activeTab = 'settings'; loadSettings()">
-            <span class="nav-icon">⚙️</span><span class="nav-label">系统设置</span>
+            <span class="nav-icon">⚙️</span><span class="nav-label">偏好设置</span>
           </div>
         </template>
       </nav>
@@ -524,7 +524,7 @@
           </div>
         </template>
 
-        <!-- Tab: 系统设置 -->
+        <!-- Tab: 偏好设置 -->
         <template v-if="activeTab === 'settings'">
           <!-- 只读视图 -->
           <template v-if="!settingsEditing">
@@ -688,7 +688,7 @@ const roleLabel = computed(() => {
 const activeTab = ref<'info' | 'tokens' | 'ssh-keys' | 'logs' | 'users' | 'install' | 'skills' | 'agent' | 'kb' | 'settings'>('info')
 const tabTitle = computed(() => ({
   info: '基本信息', tokens: '访问令牌', 'ssh-keys': 'SSH Keys', logs: '操作日志',
-  users: '用户管理', install: '安装', agent: '智能体', kb: '知识库', settings: '系统设置',
+  users: '用户管理', install: '安装', agent: '智能体', kb: '知识库', settings: '偏好设置',
 }[activeTab.value]))
 
 const pw = ref({ old: '', new1: '', new2: '' })
