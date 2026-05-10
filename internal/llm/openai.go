@@ -40,7 +40,7 @@ func NewOpenAIClient(apiKey, model, baseURL string) *OpenAIClient {
 func (c *OpenAIClient) ChatStream(ctx context.Context, req *ChatRequest) (<-chan StreamEvent, error) {
 	log := logger.FromContext(ctx).With().Str("module", "llm").Logger()
 	msgsJSON, _ := json.Marshal(req.Messages)
-	log.Debug().Str("model", c.model).Int("msgs", len(req.Messages)).RawJSON("messages", msgsJSON).Msg("llm stream start")
+	log.Debug().Str("model", c.model).Int("msgs", len(req.Messages)).Str("system", req.System).RawJSON("messages", msgsJSON).Msg("llm stream start")
 	start := time.Now()
 
 	msgs := c.buildMessages(req)
@@ -98,7 +98,7 @@ func (c *OpenAIClient) ChatStream(ctx context.Context, req *ChatRequest) (<-chan
 func (c *OpenAIClient) Chat(ctx context.Context, req *ChatRequest) (string, error) {
 	log := logger.FromContext(ctx).With().Str("module", "llm").Logger()
 	msgsJSON, _ := json.Marshal(req.Messages)
-	log.Debug().Str("model", c.model).Int("msgs", len(req.Messages)).RawJSON("messages", msgsJSON).Msg("llm chat start")
+	log.Debug().Str("model", c.model).Int("msgs", len(req.Messages)).Str("system", req.System).RawJSON("messages", msgsJSON).Msg("llm chat start")
 	start := time.Now()
 	msgs := c.buildMessages(req)
 
