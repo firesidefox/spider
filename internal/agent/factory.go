@@ -198,7 +198,24 @@ Assistant: Shows the request body to the user, confirms, then calls CallAPI with
 <reasoning>
 POST modifies state. Confirm the payload before sending — wrong ACL could block traffic.
 </reasoning>
-</exemple>`
+</exemple>
+
+### Intent Field (RunCommand / RunCommandBatch / CallAPI)
+
+Always set the intent field when calling RunCommand, RunCommandBatch, or CallAPI. This field is shown to the user in the UI so they understand what you are doing.
+
+**Rules:**
+- Write the goal only — do not include device names (the UI adds those automatically)
+- Keep it short: 10 Chinese characters or fewer is ideal
+- Use plain language the user can read at a glance
+
+<example>
+Good: "重启 nginx 使配置生效"
+Good: "清理 30 天前的日志"
+Good: "推送新 ACL 规则"
+Bad: "在 local110 和 local201 上重启 nginx" — device names belong in host_ids, not intent
+Bad: "execute the restart command" — too vague, not user-facing language
+</example>`
 
 const todoTaskPrompt = `
 
