@@ -3,6 +3,7 @@ package agent
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -40,6 +41,16 @@ func TestParseSkillFrontmatter_DescriptionTooLong(t *testing.T) {
 	}
 }
 
+func TestParseSkillFrontmatter_DescriptionTooLong_Unicode(t *testing.T) {
+	// 251 Chinese characters = 251 runes but 753 bytes
+	desc := strings.Repeat("中", 251)
+	content := "---\ndescription: " + desc + "\n---\n\n# Body"
+	_, _, err := parseSkillFrontmatter(content)
+	if err == nil {
+		t.Fatal("expected error for description > 250 runes")
+	}
+}
+
 func TestParseSkillFrontmatter_NoFrontmatter(t *testing.T) {
 	content := "# Just a body"
 	_, _, err := parseSkillFrontmatter(content)
@@ -67,6 +78,24 @@ func TestSkillManager_LoadSkills(t *testing.T) {
 	}
 	if skills[0].Status != "ok" {
 		t.Errorf("expected status 'ok', got %q", skills[0].Status)
+	}
+}
+
+func TestSkillEntry_Body(t *testing.T) {
+	dir := t.TempDir()
+	writeSkillFile(t, dir, "deploy", "---\ndescription: Use when deploying.\n---\n\n# Deploy Steps")
+
+	sm := NewSkillManager(dir)
+	skills, _ := sm.LoadSkills()
+	if len(skills) != 1 {
+		t.Fatalf("expected 1 skill")
+	}
+	body, err := skills[0].Body()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(body, "# Deploy Steps") {
+		t.Errorf("body missing expected content: %q", body)
 	}
 }
 

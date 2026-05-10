@@ -26,6 +26,20 @@ type SkillEntry struct {
 	bodyPath    string
 }
 
+// Body reads and returns the skill body (frontmatter stripped).
+// Returns error if the file cannot be read or parsed.
+func (e *SkillEntry) Body() (string, error) {
+	data, err := os.ReadFile(e.bodyPath)
+	if err != nil {
+		return "", err
+	}
+	_, body, err := parseSkillFrontmatter(string(data))
+	if err != nil {
+		return "", err
+	}
+	return body, nil
+}
+
 // SkillManager scans the skills directory and provides skill metadata.
 type SkillManager struct {
 	dir string
@@ -52,7 +66,7 @@ func parseSkillFrontmatter(content string) (skillFrontmatter, string, error) {
 	if meta.Description == "" {
 		return skillFrontmatter{}, "", fmt.Errorf("description is required")
 	}
-	if len(meta.Description) > maxDescriptionChars {
+	if len([]rune(meta.Description)) > maxDescriptionChars {
 		return skillFrontmatter{}, "", fmt.Errorf("description exceeds %d characters (%d)", maxDescriptionChars, len(meta.Description))
 	}
 	body := strings.TrimPrefix(parts[2], "\n")
