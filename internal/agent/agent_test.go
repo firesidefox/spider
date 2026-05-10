@@ -27,6 +27,18 @@ func (m *mockLLMClient) ChatStream(_ context.Context, _ *llm.ChatRequest) (<-cha
 	return ch, nil
 }
 
+func (m *mockLLMClient) Chat(_ context.Context, _ *llm.ChatRequest) (string, error) {
+	return "summary", nil
+}
+
+func (m *mockLLMClient) CountTokens(_ context.Context, msgs []llm.Message) (int, error) {
+	total := 0
+	for _, msg := range msgs {
+		total += llm.EstimateTokens(msg.Content)
+	}
+	return total, nil
+}
+
 type mockMsgStore struct {
 	messages []struct{ convID, role, content, toolCalls string }
 }
