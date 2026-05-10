@@ -193,6 +193,7 @@ function formatDuration(ms: number) {
 .assistant-text :deep(ol) { padding-left: 1.3em; margin: 3px 0 7px; }
 .assistant-text :deep(li) { margin-bottom: 3px; color: var(--label); }
 .assistant-text :deep(ol li::marker) { color: var(--primary); }
+.assistant-text :deep(ul li::marker) { color: var(--primary); }
 .assistant-text :deep(blockquote) { border-left: 2px solid var(--border); padding-left: 10px; color: var(--label); margin: 7px 0; font-size: 13px; }
 .assistant-text :deep(table) { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 12.5px; }
 .assistant-text :deep(th) { color: var(--primary); font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--border); padding: 5px 10px; text-align: left; }
