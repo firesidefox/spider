@@ -177,6 +177,7 @@ func serve(cfgFile, addrOverride, dataDirOverride string) error {
 	ps := store.NewProviderStore(database, cm)
 	app.ProviderStore = ps
 	app.RagConfigStore = store.NewRagConfigStore(database, cm)
+	app.TodoTaskStore = store.NewTodoTaskStore(database)
 
 	app.Classifier = permission.NewClassifier(nil)
 	if len(cfg.Agent.Rules) > 0 {

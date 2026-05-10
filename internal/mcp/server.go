@@ -43,6 +43,7 @@ type App struct {
 	MemoryStore      *store.MemoryStore
 	ProviderStore  *store.ProviderStore
 	RagConfigStore *store.RagConfigStore
+	TodoTaskStore  *store.TodoTaskStore
 	AgentFactory   *agent.Factory // nil if LLM not configured
 
 	Classifier      *permission.Classifier
@@ -83,6 +84,8 @@ func (a *App) NewAgentFactory() (*agent.Factory, error) {
 	f.PermissionMode = a.PermissionMode
 	f.SummaryStore = store.NewSummaryStore(a.DB)
 	f.CompactionCfg = a.Config.Agent.Compaction
+	f.TodoTaskStore = a.TodoTaskStore
+	f.SSEBroadcaster = a
 	return f, nil
 }
 

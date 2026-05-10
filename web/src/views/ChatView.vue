@@ -10,7 +10,7 @@ import {
   sendMessage, subscribeConversation, createConversation, listConversations,
   getConversation, deleteConversation, confirmAction, cancelConversation,
   getActiveModel, setActiveModel, updateTitle, exportConversation,
-  type Conversation, type ChatMessage as ChatMsg, type ChatEvent,
+  type Conversation, type ChatMessage as ChatMsg, type ChatEvent, type TodoTask,
 } from '../api/chat'
 import { listHosts, type SafeHost } from '../api/hosts'
 import { authHeaders } from '../api/auth'
@@ -106,6 +106,16 @@ async function pollUntilIdle(convId: string) {
 
 const inputText = ref('')
 const isStreaming = ref(false)
+
+const todoTasksMap = ref<Record<string, Map<number, TodoTask>>>({})
+const sortedTasks = computed(() => Array.from((todoTasksMap.value[activeConvId.value ?? ''] ?? new Map<number, TodoTask>()).values()).sort((a, b) => a.id - b.id))
+const completedCount = computed(() => sortedTasks.value.filter(t => t.status === 'completed').length)
+function taskIcon(t: TodoTask) {
+  if (t.status === 'completed') return '✓'
+  if (t.status === 'in_progress') return '●'
+  return '○'
+}
+function taskClass(t: TodoTask) { return `todo-${t.status}` }
 const messagesRef = ref<HTMLElement | null>(null)
 const devices = ref<DeviceStatus[]>([])
 let abortCtrl: AbortController | null = null
@@ -218,6 +228,9 @@ async function selectConversation(id: string) {
   clearPollTimer(id)
   const data = await getConversation(id)
   activeConvId.value = id
+  const taskMap = new Map<number, TodoTask>()
+  for (const t of data.todo_tasks ?? []) taskMap.set(t.id, t)
+  todoTasksMap.value[id] = taskMap
   localStorage.setItem('spider-last-conv', id)
   router.replace(`/chat/${id}`)
 
@@ -367,6 +380,13 @@ function handleConvEvent(convId: string, event: ChatEvent) {
       }
       loadConversations()
       break
+    case 'todotask_update': {
+      const task = event.content as TodoTask
+      if (!todoTasksMap.value[convId]) todoTasksMap.value[convId] = new Map()
+      todoTasksMap.value[convId].set(task.id, task)
+      todoTasksMap.value[convId] = todoTasksMap.value[convId]
+      break
+    }
   }
   if (activeConvId.value === convId) {
     scheduleScrollToBottom()
@@ -786,6 +806,14 @@ onUnmounted(() => {
         </div>
       </div>
 
+      <div v-if="sortedTasks.length > 0" class="todo-panel">
+        <div class="todo-header">TASKS {{ completedCount }}/{{ sortedTasks.length }}</div>
+        <div v-for="task in sortedTasks" :key="task.id" class="todo-row" :class="taskClass(task)">
+          <span class="todo-icon">{{ taskIcon(task) }}</span>
+          <span class="todo-subject">{{ task.subject }}</span>
+        </div>
+      </div>
+
       <div class="chat-input">
         <div class="input-wrapper">
           <div v-if="kbDropdownMode" class="kb-dropdown">
@@ -932,4 +960,19 @@ onUnmounted(() => {
 .drag-handle { width: 5px; cursor: col-resize; background: transparent; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: background 0.15s; }
 .drag-handle:hover, .chat-page.dragging .drag-handle { background: rgba(108, 140, 255, 0.3); }
 .drag-indicator { width: 2px; height: 32px; border-radius: 1px; background: var(--border); }
+
+/* Todo panel */
+.todo-panel { margin: 0 16px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); font-family: 'SF Mono', monospace; font-size: 12px; overflow: hidden; }
+.todo-header { padding: 5px 10px; color: var(--text-sub); font-size: 11px; letter-spacing: 0.05em; border-bottom: 1px solid var(--border); }
+.todo-row { display: flex; align-items: center; gap: 8px; padding: 4px 10px; color: var(--text-sub); }
+.todo-row + .todo-row { border-top: 1px solid var(--border); }
+.todo-icon { width: 14px; text-align: center; flex-shrink: 0; }
+.todo-subject { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.todo-pending .todo-icon { color: var(--text-sub); }
+.todo-in_progress .todo-icon { color: var(--primary); }
+.todo-in_progress .todo-subject { color: var(--text); }
+.todo-completed .todo-icon { color: var(--green, #4caf50); }
+.todo-completed .todo-subject { color: var(--text-sub); text-decoration: line-through; }
+.todo-deleted .todo-icon { color: var(--red, #e05252); opacity: 0.5; }
+.todo-deleted .todo-subject { opacity: 0.4; text-decoration: line-through; }
 </style>

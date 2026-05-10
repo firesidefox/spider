@@ -301,5 +301,18 @@ func migrate(db *sql.DB) error {
 	if _, err := db.Exec(`CREATE INDEX IF NOT EXISTS idx_messages_conv_created ON messages(conversation_id, created_at)`); err != nil {
 		return err
 	}
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS todo_tasks (
+		id              INTEGER PRIMARY KEY AUTOINCREMENT,
+		conversation_id TEXT    NOT NULL,
+		subject         TEXT    NOT NULL,
+		description     TEXT    NOT NULL DEFAULT '',
+		status          TEXT    NOT NULL DEFAULT 'pending',
+		owner           TEXT    NOT NULL DEFAULT '',
+		blocked_by      TEXT    NOT NULL DEFAULT '[]',
+		created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP
+	)`); err != nil {
+		return err
+	}
 	return nil
 }

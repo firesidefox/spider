@@ -62,7 +62,15 @@ func chatGetConversation(app *mcppkg.App, w http.ResponseWriter, r *http.Request
 		writeError(w, 500, err.Error())
 		return
 	}
-	writeJSON(w, 200, map[string]any{"conversation": conv, "messages": msgs})
+	tasks, err := app.TodoTaskStore.List(id)
+	if err != nil {
+		writeError(w, 500, err.Error())
+		return
+	}
+	if tasks == nil {
+		tasks = []*models.TodoTask{}
+	}
+	writeJSON(w, 200, map[string]any{"conversation": conv, "messages": msgs, "todo_tasks": tasks})
 }
 
 func chatDeleteConversation(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id string) {
@@ -141,7 +149,7 @@ func chatSendMessage(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id
 	}
 
 	systemPrompt := agent.BuildSystemPrompt(app.HostStore)
-	a := factory.NewAgent(systemPrompt)
+	a := factory.NewAgent(systemPrompt, id)
 	waiter := agent.NewConfirmationWaiter()
 	app.StoreChatWaiter(id, waiter)
 	defer app.RemoveChatWaiter(id)
