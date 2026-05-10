@@ -528,34 +528,47 @@
         <template v-if="activeTab === 'settings'">
           <!-- 只读视图 -->
           <template v-if="!settingsEditing">
-            <div class="detail-grid">
-              <div class="detail-field">
-                <div class="detail-label">监听地址</div>
-                <div class="detail-value">{{ settings.sse_addr || '—' }}</div>
+            <div class="edit-card">
+              <div class="edit-card-title">MCP Server</div>
+              <div class="detail-grid">
+                <div class="detail-field">
+                  <div class="detail-label">监听地址</div>
+                  <div class="detail-value">{{ settings.sse_addr || '—' }}</div>
+                </div>
+                <div class="detail-field">
+                  <div class="detail-label">Base URL</div>
+                  <div class="detail-value">{{ settings.sse_base_url || '—' }}</div>
+                </div>
               </div>
-              <div class="detail-field">
-                <div class="detail-label">Base URL</div>
-                <div class="detail-value">{{ settings.sse_base_url || '—' }}</div>
+            </div>
+            <div class="edit-card">
+              <div class="edit-card-title">SSH 默认配置</div>
+              <div class="detail-grid">
+                <div class="detail-field">
+                  <div class="detail-label">命令超时（秒）</div>
+                  <div class="detail-value">{{ settings.ssh_default_timeout_seconds }}</div>
+                </div>
+                <div class="detail-field">
+                  <div class="detail-label">连接池 TTL（秒）</div>
+                  <div class="detail-value">{{ settings.ssh_pool_ttl_seconds }}</div>
+                </div>
+                <div class="detail-field">
+                  <div class="detail-label">最大连接数</div>
+                  <div class="detail-value">{{ settings.ssh_max_pool_size }}</div>
+                </div>
+                <div class="detail-field">
+                  <div class="detail-label">直连地址（No Proxy）</div>
+                  <div class="detail-value">{{ settings.ssh_no_proxy || '—' }}</div>
+                </div>
               </div>
-              <div class="detail-field">
-                <div class="detail-label">命令超时（秒）</div>
-                <div class="detail-value">{{ settings.ssh_default_timeout_seconds }}</div>
-              </div>
-              <div class="detail-field">
-                <div class="detail-label">连接池 TTL（秒）</div>
-                <div class="detail-value">{{ settings.ssh_pool_ttl_seconds }}</div>
-              </div>
-              <div class="detail-field">
-                <div class="detail-label">最大连接数</div>
-                <div class="detail-value">{{ settings.ssh_max_pool_size }}</div>
-              </div>
-              <div class="detail-field">
-                <div class="detail-label">直连地址（No Proxy）</div>
-                <div class="detail-value">{{ settings.ssh_no_proxy || '—' }}</div>
-              </div>
-              <div class="detail-field">
-                <div class="detail-label">日志级别</div>
-                <div class="detail-value">{{ logLevel || '—' }}</div>
+            </div>
+            <div class="edit-card">
+              <div class="edit-card-title">日志</div>
+              <div class="detail-grid">
+                <div class="detail-field">
+                  <div class="detail-label">日志级别</div>
+                  <div class="detail-value">{{ logLevel || '—' }}</div>
+                </div>
               </div>
             </div>
           </template>
