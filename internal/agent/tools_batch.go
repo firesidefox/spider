@@ -69,7 +69,7 @@ func (t *BatchExecuteTool) Execute(ctx context.Context, input map[string]any) (*
 
 	intent, _ := input["intent"].(string)
 	if intent == "" && risk != RiskL1 {
-		log.Printf("WARNING: RunCommandBatch called without intent field (risk=%s)", riskStr)
+		log.Printf("WARNING: RunCommandBatch called without intent field (risk=%s)", risk)
 	}
 
 	var hostList []*models.Host
