@@ -18,10 +18,17 @@ const (
 	RiskL4 = permission.L4Destroy
 )
 
+// InjectMessage is an extra message injected into conversation history after a tool result.
+// Not saved to msgStore — ephemeral context only.
+type InjectMessage struct {
+	Content string
+}
+
 type ToolResult struct {
-	Content   string    `json:"content"`
-	IsError   bool      `json:"is_error"`
-	RiskLevel RiskLevel `json:"risk_level"`
+	Content     string          `json:"content"`
+	IsError     bool            `json:"is_error"`
+	RiskLevel   RiskLevel       `json:"risk_level"`
+	NewMessages []InjectMessage `json:"-"`
 }
 
 type Tool interface {
