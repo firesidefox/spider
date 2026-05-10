@@ -51,11 +51,6 @@ func (t *ExecuteCLITool) Execute(ctx context.Context, input map[string]any) (*To
 	hostID, _ := input["host_id"].(string)
 	command, _ := input["command"].(string)
 	riskStr, _ := input["risk_level"].(string)
-	intent, _ := input["intent"].(string)
-	if intent == "" {
-		log.Printf("WARNING: RunCommand called without intent field (host=%s)", hostID)
-	}
-
 	if hostID == "" || command == "" {
 		return &ToolResult{Content: "missing required fields: host_id, command", IsError: true, RiskLevel: RiskL2}, nil
 	}
@@ -63,6 +58,11 @@ func (t *ExecuteCLITool) Execute(ctx context.Context, input map[string]any) (*To
 	risk := RiskL2
 	if riskStr != "" {
 		risk = permission.ParseRiskLevel(riskStr)
+	}
+
+	intent, _ := input["intent"].(string)
+	if intent == "" && risk != RiskL1 {
+		log.Printf("WARNING: RunCommand called without intent field (host=%s, risk=%s)", hostID, riskStr)
 	}
 
 	h, err := t.hosts.GetByIDOrName(hostID)
