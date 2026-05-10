@@ -35,7 +35,7 @@ func (e *SkillEntry) Body() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	_, body, err := parseSkillFrontmatter(string(data))
+	_, body, err := ParseSkillFrontmatter(string(data))
 	if err != nil {
 		return "", err
 	}
@@ -52,8 +52,8 @@ func NewSkillManager(dir string) *SkillManager {
 	return &SkillManager{dir: dir}
 }
 
-// parseSkillFrontmatter splits YAML frontmatter from body and validates required fields.
-func parseSkillFrontmatter(content string) (skillFrontmatter, string, error) {
+// ParseSkillFrontmatter splits YAML frontmatter from body and validates required fields.
+func ParseSkillFrontmatter(content string) (skillFrontmatter, string, error) {
 	if !strings.HasPrefix(content, "---") {
 		return skillFrontmatter{}, "", fmt.Errorf("missing frontmatter: file must start with ---")
 	}
@@ -96,7 +96,7 @@ func (sm *SkillManager) LoadSkills() ([]SkillEntry, error) {
 			entries = append(entries, SkillEntry{Name: rel, Status: "error", Error: readErr.Error()})
 			return nil
 		}
-		meta, _, parseErr := parseSkillFrontmatter(string(data))
+		meta, _, parseErr := ParseSkillFrontmatter(string(data))
 		if parseErr != nil {
 			entries = append(entries, SkillEntry{Name: rel, Status: "error", Error: parseErr.Error()})
 			return nil

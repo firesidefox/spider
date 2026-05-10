@@ -2,17 +2,19 @@ package api
 
 import (
 	"io"
-	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
+
+	"github.com/spiderai/spider/internal/agent"
 )
 
 type skillInfo struct {
-	Name   string `json:"name"`
-	Source string `json:"source"`
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	Status      string `json:"status"`
+	Error       string `json:"error,omitempty"`
 }
 
 func isValidSkillName(name string) bool {
@@ -34,30 +36,20 @@ func isValidSkillName(name string) bool {
 
 func listSkillsHandler(dataDir string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		base := filepath.Join(dataDir, "skills")
-		var skills []skillInfo
-		err := filepath.WalkDir(base, func(path string, d fs.DirEntry, err error) error {
-			if err != nil {
-				if os.IsNotExist(err) {
-					return filepath.SkipAll
-				}
-				return err
-			}
-			if d.IsDir() || d.Name() != "SKILL.md" {
-				return nil
-			}
-			dir := filepath.Dir(path)
-			rel, _ := filepath.Rel(base, dir)
-			skills = append(skills, skillInfo{Name: rel, Source: "custom"})
-			return nil
-		})
-		if err != nil && !os.IsNotExist(err) {
+		sm := agent.NewSkillManager(filepath.Join(dataDir, "skills"))
+		entries, err := sm.LoadSkills()
+		if err != nil {
 			writeError(w, http.StatusInternalServerError, "failed to read skills dir")
 			return
 		}
-		sort.Slice(skills, func(i, j int) bool { return skills[i].Name < skills[j].Name })
-		if skills == nil {
-			skills = []skillInfo{}
+		skills := make([]skillInfo, len(entries))
+		for i, e := range entries {
+			skills[i] = skillInfo{
+				Name:        e.Name,
+				Description: e.Description,
+				Status:      e.Status,
+				Error:       e.Error,
+			}
 		}
 		writeJSON(w, http.StatusOK, skills)
 	}
@@ -75,6 +67,10 @@ func uploadSkillHandler(dataDir string) http.HandlerFunc {
 			writeError(w, http.StatusBadRequest, "failed to read body")
 			return
 		}
+		if _, _, err := agent.ParseSkillFrontmatter(string(body)); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid SKILL.md: "+err.Error())
+			return
+		}
 		dir := filepath.Join(dataDir, "skills", name)
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			writeError(w, http.StatusInternalServerError, "failed to create skill dir")
@@ -84,7 +80,7 @@ func uploadSkillHandler(dataDir string) http.HandlerFunc {
 			writeError(w, http.StatusInternalServerError, "failed to write SKILL.md")
 			return
 		}
-		writeJSON(w, http.StatusOK, skillInfo{Name: name, Source: "custom"})
+		writeJSON(w, http.StatusOK, skillInfo{Name: name, Status: "ok"})
 	}
 }
 

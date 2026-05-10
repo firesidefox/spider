@@ -11,7 +11,7 @@ import (
 
 func TestParseSkillFrontmatter_Valid(t *testing.T) {
 	content := "---\ndescription: Use when deploying the app.\n---\n\n# Body"
-	meta, body, err := parseSkillFrontmatter(content)
+	meta, body, err := ParseSkillFrontmatter(content)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -25,7 +25,7 @@ func TestParseSkillFrontmatter_Valid(t *testing.T) {
 
 func TestParseSkillFrontmatter_MissingDescription(t *testing.T) {
 	content := "---\n---\n\n# Body"
-	_, _, err := parseSkillFrontmatter(content)
+	_, _, err := ParseSkillFrontmatter(content)
 	if err == nil {
 		t.Fatal("expected error for missing description")
 	}
@@ -37,7 +37,7 @@ func TestParseSkillFrontmatter_DescriptionTooLong(t *testing.T) {
 		desc += "a"
 	}
 	content := "---\ndescription: " + desc + "\n---\n\n# Body"
-	_, _, err := parseSkillFrontmatter(content)
+	_, _, err := ParseSkillFrontmatter(content)
 	if err == nil {
 		t.Fatal("expected error for description > 250 chars")
 	}
@@ -47,7 +47,7 @@ func TestParseSkillFrontmatter_DescriptionTooLong_Unicode(t *testing.T) {
 	// 251 Chinese characters = 251 runes but 753 bytes
 	desc := strings.Repeat("中", 251)
 	content := "---\ndescription: " + desc + "\n---\n\n# Body"
-	_, _, err := parseSkillFrontmatter(content)
+	_, _, err := ParseSkillFrontmatter(content)
 	if err == nil {
 		t.Fatal("expected error for description > 250 runes")
 	}
@@ -55,7 +55,7 @@ func TestParseSkillFrontmatter_DescriptionTooLong_Unicode(t *testing.T) {
 
 func TestParseSkillFrontmatter_NoFrontmatter(t *testing.T) {
 	content := "# Just a body"
-	_, _, err := parseSkillFrontmatter(content)
+	_, _, err := ParseSkillFrontmatter(content)
 	if err == nil {
 		t.Fatal("expected error for missing frontmatter")
 	}
