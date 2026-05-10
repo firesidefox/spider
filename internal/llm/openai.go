@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/spiderai/spider/internal/logger"
 )
 
 type OpenAIClient struct {
@@ -36,6 +38,10 @@ func NewOpenAIClient(apiKey, model, baseURL string) *OpenAIClient {
 }
 
 func (c *OpenAIClient) ChatStream(ctx context.Context, req *ChatRequest) (<-chan StreamEvent, error) {
+	log := logger.FromContext(ctx).With().Str("module", "llm").Logger()
+	log.Debug().Str("model", c.model).Int("msgs", len(req.Messages)).Msg("llm stream start")
+	start := time.Now()
+
 	msgs := c.buildMessages(req)
 
 	body := map[string]any{
@@ -72,20 +78,26 @@ func (c *OpenAIClient) ChatStream(ctx context.Context, req *ChatRequest) (<-chan
 
 	resp, err := c.http.Do(httpReq)
 	if err != nil {
+		log.Error().Err(err).Str("model", c.model).Msg("llm stream error")
 		return nil, fmt.Errorf("http request: %w", err)
 	}
 	if resp.StatusCode != 200 {
 		defer resp.Body.Close()
 		errBody, _ := io.ReadAll(resp.Body)
+		log.Error().Str("model", c.model).Int("status", resp.StatusCode).Msg("llm stream api error")
 		return nil, fmt.Errorf("openai API error %d: %s", resp.StatusCode, string(errBody))
 	}
 
+	log.Debug().Str("model", c.model).Int64("ttfb_ms", time.Since(start).Milliseconds()).Msg("llm stream connected")
 	ch := make(chan StreamEvent, 32)
 	go c.readSSE(resp.Body, ch)
 	return ch, nil
 }
 
 func (c *OpenAIClient) Chat(ctx context.Context, req *ChatRequest) (string, error) {
+	log := logger.FromContext(ctx).With().Str("module", "llm").Logger()
+	log.Debug().Str("model", c.model).Int("msgs", len(req.Messages)).Msg("llm chat start")
+	start := time.Now()
 	msgs := c.buildMessages(req)
 
 	maxTokens := req.MaxTokens
@@ -133,6 +145,7 @@ func (c *OpenAIClient) Chat(ctx context.Context, req *ChatRequest) (string, erro
 	if len(result.Choices) == 0 {
 		return "", fmt.Errorf("empty choices in response")
 	}
+	log.Debug().Str("model", c.model).Int64("duration_ms", time.Since(start).Milliseconds()).Msg("llm chat done")
 	return result.Choices[0].Message.Content, nil
 }
 
@@ -163,6 +176,10 @@ type openaiChunk struct {
 		Delta        openaiDelta `json:"delta"`
 		FinishReason string      `json:"finish_reason"`
 	} `json:"choices"`
+	Usage *struct {
+		PromptTokens     int `json:"prompt_tokens"`
+		CompletionTokens int `json:"completion_tokens"`
+	} `json:"usage"`
 }
 
 func (c *OpenAIClient) buildMessages(req *ChatRequest) []map[string]any {
@@ -201,7 +218,16 @@ func (c *OpenAIClient) readSSE(body io.ReadCloser, ch chan<- StreamEvent) {
 		}
 
 		var chunk openaiChunk
-		if err := json.Unmarshal([]byte(data), &chunk); err != nil || len(chunk.Choices) == 0 {
+		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
+			continue
+		}
+		if chunk.Usage != nil {
+			ch <- StreamEvent{Type: "usage", Usage: &Usage{
+				InputTokens:  chunk.Usage.PromptTokens,
+				OutputTokens: chunk.Usage.CompletionTokens,
+			}}
+		}
+		if len(chunk.Choices) == 0 {
 			continue
 		}
 		delta := chunk.Choices[0].Delta

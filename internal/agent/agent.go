@@ -162,6 +162,8 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 		toolDefs := a.registry.Definitions()
 
 		for turn := 0; turn < a.maxTurns; turn++ {
+			turnStart := time.Now()
+			log.Debug().Int("turn", turn).Int("history", len(history)).Msg("turn start")
 			stream, err := a.llmClient.ChatStream(ctx, &llm.ChatRequest{
 				System:    a.systemPrompt,
 				Messages:  history,
@@ -190,6 +192,7 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 			var assistantText string
 			var toolCalls []llm.ToolCall
 			var currentToolInput string
+			var usage llm.Usage
 
 			finishToolInput := func() {
 				if len(toolCalls) > 0 && currentToolInput != "" {
@@ -212,6 +215,15 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 					toolCalls = append(toolCalls, *ev.ToolCall)
 				case "tool_input_delta":
 					currentToolInput += ev.Text
+				case "usage":
+					if ev.Usage != nil {
+						if ev.Usage.InputTokens > 0 {
+							usage.InputTokens = ev.Usage.InputTokens
+						}
+						if ev.Usage.OutputTokens > 0 {
+							usage.OutputTokens = ev.Usage.OutputTokens
+						}
+					}
 				case "message_stop":
 					finishToolInput()
 				}
@@ -221,6 +233,7 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 				if assistantText != "" {
 					a.msgStore.Save(conversationID, "assistant", assistantText, "")
 				}
+				log.Debug().Int("turn", turn).Int64("duration_ms", time.Since(turnStart).Milliseconds()).Int("input_tokens", usage.InputTokens).Int("output_tokens", usage.OutputTokens).Msg("turn done")
 				log.Info().Int("turn", turn).Msg("agent done")
 				events <- Event{Type: EventDone}
 				return
@@ -297,6 +310,7 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 
 			tcJSON, _ := json.Marshal(tcRecords)
 			a.msgStore.Save(conversationID, "assistant", assistantText, string(tcJSON))
+			log.Debug().Int("turn", turn).Int64("duration_ms", time.Since(turnStart).Milliseconds()).Int("input_tokens", usage.InputTokens).Int("output_tokens", usage.OutputTokens).Int("tools", len(tcRecords)).Msg("turn done")
 		}
 
 		events <- Event{Type: EventError, Content: map[string]any{"error": "max turns exceeded"}}

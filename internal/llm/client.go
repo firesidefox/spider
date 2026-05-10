@@ -29,10 +29,16 @@ type ToolCall struct {
 	Input map[string]any `json:"input"`
 }
 
+type Usage struct {
+	InputTokens  int `json:"input_tokens"`
+	OutputTokens int `json:"output_tokens"`
+}
+
 type StreamEvent struct {
 	Type     string    `json:"type"`
 	Text     string    `json:"text,omitempty"`
 	ToolCall *ToolCall `json:"tool_call,omitempty"`
+	Usage    *Usage    `json:"usage,omitempty"`
 }
 
 type ChatRequest struct {

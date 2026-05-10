@@ -84,6 +84,9 @@ func (c *ClaudeClient) ChatStream(ctx context.Context, req *ChatRequest) (<-chan
 }
 
 func (c *ClaudeClient) Chat(ctx context.Context, req *ChatRequest) (string, error) {
+	log := logger.FromContext(ctx).With().Str("module", "llm").Logger()
+	log.Debug().Str("model", c.model).Int("msgs", len(req.Messages)).Msg("llm chat start")
+	start := time.Now()
 	maxTokens := req.MaxTokens
 	if maxTokens == 0 {
 		maxTokens = 4096
@@ -130,6 +133,7 @@ func (c *ClaudeClient) Chat(ctx context.Context, req *ChatRequest) (string, erro
 	if len(result.Content) == 0 {
 		return "", fmt.Errorf("empty response content")
 	}
+	log.Debug().Str("model", c.model).Int64("duration_ms", time.Since(start).Milliseconds()).Msg("llm chat done")
 	return result.Content[0].Text, nil
 }
 
@@ -211,6 +215,21 @@ func (c *ClaudeClient) readSSE(body io.ReadCloser, ch chan<- StreamEvent) {
 				ch <- StreamEvent{
 					Type:     "tool_start",
 					ToolCall: &ToolCall{ID: id, Name: name},
+				}
+			}
+		case "message_delta":
+			usage, _ := raw["usage"].(map[string]any)
+			if usage != nil {
+				out, _ := usage["output_tokens"].(float64)
+				ch <- StreamEvent{Type: "usage", Usage: &Usage{OutputTokens: int(out)}}
+			}
+		case "message_start":
+			msg, _ := raw["message"].(map[string]any)
+			if msg != nil {
+				u, _ := msg["usage"].(map[string]any)
+				if u != nil {
+					in, _ := u["input_tokens"].(float64)
+					ch <- StreamEvent{Type: "usage", Usage: &Usage{InputTokens: int(in)}}
 				}
 			}
 		case "message_stop":
