@@ -50,7 +50,7 @@ func (m *mockSummaryStore) Upsert(_ string, upToMessageID string, chunks []strin
 // makeAltMessages builds alternating user/assistant messages with the given content.
 func makeAltMessages(pairs int, content string) []*models.Message {
 	msgs := make([]*models.Message, 0, pairs*2)
-	for i := 0; i < pairs; i++ {
+	for i := range pairs {
 		msgs = append(msgs,
 			&models.Message{ID: fmt.Sprintf("u%d", i+1), Role: "user", Content: content},
 			&models.Message{ID: fmt.Sprintf("a%d", i+1), Role: "assistant", Content: content},
