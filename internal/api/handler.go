@@ -528,7 +528,7 @@ func NewRouter(app *mcppkg.App) http.Handler {
 		case http.MethodGet:
 			getLogLevel(w, r)
 		case http.MethodPut:
-			setLogLevel(w, r)
+			setLogLevel(app, w, r)
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}

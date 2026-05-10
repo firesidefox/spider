@@ -102,7 +102,7 @@ func getLogLevel(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"level": logger.CurrentLevel()})
 }
 
-func setLogLevel(w http.ResponseWriter, r *http.Request) {
+func setLogLevel(app *mcppkg.App, w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Level string `json:"level"`
 	}
@@ -115,6 +115,11 @@ func setLogLevel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	logger.SetLevel(req.Level)
+	app.Config.Log.Level = req.Level
+	if err := saveConfig(app); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	logger.FromContext(r.Context()).Info().Str("level", req.Level).Msg("log level changed")
 	writeJSON(w, http.StatusOK, map[string]string{"level": req.Level})
 }
