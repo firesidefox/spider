@@ -2,6 +2,7 @@ package logger_test
 
 import (
 	"bytes"
+	"context"
 	"testing"
 
 	"github.com/rs/zerolog"
@@ -27,4 +28,14 @@ func TestSetLevel(t *testing.T) {
 		t.Errorf("expected debug level after SetLevel")
 	}
 	logger.SetLevel("info") // reset
+}
+
+func TestFromContext(t *testing.T) {
+	logger.Init(logger.Config{Level: "info", Format: "json"})
+	ctx := context.Background()
+	_ = logger.FromContext(ctx) // returns global logger, no panic
+
+	enriched := logger.Global().With().Str("req_id", "abc").Logger()
+	ctx2 := logger.WithContext(ctx, enriched)
+	_ = logger.FromContext(ctx2)
 }
