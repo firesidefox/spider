@@ -12,10 +12,8 @@ import (
 	"github.com/spiderai/spider/internal/store"
 )
 
-// ErrCannotAdvanceBoundary 边界无法推进（消息不足 recent_turns 轮）
 var ErrCannotAdvanceBoundary = errors.New("cannot advance compaction boundary: not enough turns")
 
-// summaryStorer is the minimal interface Compactor needs from SummaryStore.
 type summaryStorer interface {
 	Get(conversationID string) (*store.ConversationSummary, error)
 	Upsert(conversationID, upToMessageID string, chunks []string) error
@@ -60,7 +58,7 @@ func (c *Compactor) BuildHistory(ctx context.Context, conversationID string) ([]
 		return nil, fmt.Errorf("get summary: %w", err)
 	}
 
-	boundaryID := ""
+	var boundaryID string
 	var existingChunks []string
 	if summary != nil {
 		boundaryID = summary.UpToMessageID
@@ -100,7 +98,7 @@ func (c *Compactor) BuildHistory(ctx context.Context, conversationID string) ([]
 		return nil, fmt.Errorf("summarize: %w", err)
 	}
 
-	chunks := append(existingChunks, newDelta)
+	chunks := append(existingChunks[:len(existingChunks):len(existingChunks)], newDelta)
 
 	// 7. chunks 超限则整体压缩
 	if estimateChunksTokens(chunks) > c.cfg.MaxSummaryTokens {
@@ -128,7 +126,6 @@ func (c *Compactor) resolveThreshold() int {
 }
 
 // findBoundaryByTurns 从尾部数 n 个 role=user 消息，返回第 n 个 user 消息的索引。
-// 返回值是保留原文的起点（该 user 消息本身包含在 recent 中）。
 // 若消息不足 n 轮，返回 0（调用方应返回 ErrCannotAdvanceBoundary）。
 func findBoundaryByTurns(msgs []*models.Message, n int) int {
 	count := 0
@@ -143,7 +140,6 @@ func findBoundaryByTurns(msgs []*models.Message, n int) int {
 	return 0
 }
 
-// injectSummary 拼接 user+assistant 摘要对 + 近期原文消息
 func injectSummary(chunks []string, recent []*models.Message) []llm.Message {
 	var history []llm.Message
 	if len(chunks) > 0 {
@@ -156,7 +152,6 @@ func injectSummary(chunks []string, recent []*models.Message) []llm.Message {
 	return history
 }
 
-// estimateChunksTokens 对所有 chunk 字符串估算 token 总数
 func estimateChunksTokens(chunks []string) int {
 	total := 0
 	for _, c := range chunks {
@@ -165,7 +160,6 @@ func estimateChunksTokens(chunks []string) int {
 	return total
 }
 
-// toLLMMessages 将 models.Message 转为 llm.Message
 func toLLMMessages(msgs []*models.Message) []llm.Message {
 	out := make([]llm.Message, 0, len(msgs))
 	for _, m := range msgs {

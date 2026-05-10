@@ -36,13 +36,7 @@ func NewOpenAIClient(apiKey, model, baseURL string) *OpenAIClient {
 }
 
 func (c *OpenAIClient) ChatStream(ctx context.Context, req *ChatRequest) (<-chan StreamEvent, error) {
-	msgs := make([]map[string]any, 0, len(req.Messages)+1)
-	if req.System != "" {
-		msgs = append(msgs, map[string]any{"role": "system", "content": req.System})
-	}
-	for _, m := range req.Messages {
-		msgs = append(msgs, map[string]any{"role": string(m.Role), "content": m.Content})
-	}
+	msgs := c.buildMessages(req)
 
 	body := map[string]any{
 		"model":      c.model,
@@ -74,8 +68,7 @@ func (c *OpenAIClient) ChatStream(ctx context.Context, req *ChatRequest) (<-chan
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+c.apiKey)
+	c.setHeaders(httpReq)
 
 	resp, err := c.http.Do(httpReq)
 	if err != nil {
@@ -93,13 +86,7 @@ func (c *OpenAIClient) ChatStream(ctx context.Context, req *ChatRequest) (<-chan
 }
 
 func (c *OpenAIClient) Chat(ctx context.Context, req *ChatRequest) (string, error) {
-	msgs := make([]map[string]any, 0, len(req.Messages)+1)
-	if req.System != "" {
-		msgs = append(msgs, map[string]any{"role": "system", "content": req.System})
-	}
-	for _, m := range req.Messages {
-		msgs = append(msgs, map[string]any{"role": string(m.Role), "content": m.Content})
-	}
+	msgs := c.buildMessages(req)
 
 	maxTokens := req.MaxTokens
 	if maxTokens == 0 {
@@ -121,8 +108,7 @@ func (c *OpenAIClient) Chat(ctx context.Context, req *ChatRequest) (string, erro
 	if err != nil {
 		return "", fmt.Errorf("create request: %w", err)
 	}
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+c.apiKey)
+	c.setHeaders(httpReq)
 
 	resp, err := c.http.Do(httpReq)
 	if err != nil {
@@ -177,6 +163,22 @@ type openaiChunk struct {
 		Delta        openaiDelta `json:"delta"`
 		FinishReason string      `json:"finish_reason"`
 	} `json:"choices"`
+}
+
+func (c *OpenAIClient) buildMessages(req *ChatRequest) []map[string]any {
+	msgs := make([]map[string]any, 0, len(req.Messages)+1)
+	if req.System != "" {
+		msgs = append(msgs, map[string]any{"role": "system", "content": req.System})
+	}
+	for _, m := range req.Messages {
+		msgs = append(msgs, map[string]any{"role": string(m.Role), "content": m.Content})
+	}
+	return msgs
+}
+
+func (c *OpenAIClient) setHeaders(req *http.Request) {
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+c.apiKey)
 }
 
 func (c *OpenAIClient) readSSE(body io.ReadCloser, ch chan<- StreamEvent) {

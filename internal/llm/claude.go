@@ -57,9 +57,7 @@ func (c *ClaudeClient) ChatStream(ctx context.Context, req *ChatRequest) (<-chan
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("x-api-key", c.apiKey)
-	httpReq.Header.Set("anthropic-version", "2023-06-01")
+	c.setHeaders(httpReq)
 
 	resp, err := c.http.Do(httpReq)
 	if err != nil {
@@ -100,9 +98,7 @@ func (c *ClaudeClient) Chat(ctx context.Context, req *ChatRequest) (string, erro
 	if err != nil {
 		return "", fmt.Errorf("create request: %w", err)
 	}
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("x-api-key", c.apiKey)
-	httpReq.Header.Set("anthropic-version", "2023-06-01")
+	c.setHeaders(httpReq)
 
 	resp, err := c.http.Do(httpReq)
 	if err != nil {
@@ -143,9 +139,7 @@ func (c *ClaudeClient) CountTokens(ctx context.Context, msgs []Message) (int, er
 	if err != nil {
 		return 0, fmt.Errorf("create request: %w", err)
 	}
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("x-api-key", c.apiKey)
-	httpReq.Header.Set("anthropic-version", "2023-06-01")
+	c.setHeaders(httpReq)
 
 	resp, err := c.http.Do(httpReq)
 	if err != nil {
@@ -164,6 +158,12 @@ func (c *ClaudeClient) CountTokens(ctx context.Context, msgs []Message) (int, er
 		return 0, fmt.Errorf("decode response: %w", err)
 	}
 	return result.InputTokens, nil
+}
+
+func (c *ClaudeClient) setHeaders(req *http.Request) {
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("x-api-key", c.apiKey)
+	req.Header.Set("anthropic-version", "2023-06-01")
 }
 
 func (c *ClaudeClient) readSSE(body io.ReadCloser, ch chan<- StreamEvent) {
