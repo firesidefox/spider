@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	authmw "github.com/spiderai/spider/internal/auth"
+	"github.com/spiderai/spider/internal/logger"
 	"github.com/spiderai/spider/internal/models"
 	mcppkg "github.com/spiderai/spider/internal/mcp"
 )
@@ -521,6 +522,18 @@ func NewRouter(app *mcppkg.App) http.Handler {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	})
 
+	// log-level endpoint (admin only)
+	mux.Handle("/api/v1/log-level", adminOnly(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			getLogLevel(w, r)
+		case http.MethodPut:
+			setLogLevel(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})))
+
 	// Auth middleware wraps the inner mux; login/logout are exposed without auth.
 	authMW := authmw.AuthMiddleware(
 		app.Config.Auth.Enabled,
@@ -533,7 +546,7 @@ func NewRouter(app *mcppkg.App) http.Handler {
 	outer.HandleFunc("POST /api/v1/auth/login", loginHandler(app))
 	outer.HandleFunc("POST /api/v1/auth/logout", logoutHandler(app))
 	outer.Handle("/", authMW(mux))
-	return outer
+	return logger.Middleware()(outer)
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
