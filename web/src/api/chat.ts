@@ -140,3 +140,20 @@ export async function cancelConversation(id: string): Promise<void> {
     headers: authHeaders(),
   })
 }
+
+export async function exportConversation(id: string, format: 'md' | 'json'): Promise<void> {
+  const res = await fetch(`/api/v1/chat/conversations/${id}/export?format=${format}`, {
+    headers: authHeaders(),
+  })
+  if (!res.ok) throw new Error((await res.json()).error)
+  const blob = await res.blob()
+  const disposition = res.headers.get('Content-Disposition') || ''
+  const match = disposition.match(/filename="([^"]+)"/)
+  const filename = match ? match[1] : `conversation.${format}`
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
