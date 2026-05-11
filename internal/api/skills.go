@@ -15,6 +15,7 @@ type skillInfo struct {
 	Description string `json:"description,omitempty"`
 	Status      string `json:"status"`
 	Error       string `json:"error,omitempty"`
+	Source      string `json:"source"`
 }
 
 func isValidSkillName(name string) bool {
@@ -49,13 +50,47 @@ func listSkillsHandler(dataDir string) http.HandlerFunc {
 				Description: e.Description,
 				Status:      e.Status,
 				Error:       e.Error,
+				Source:      e.Source,
 			}
 		}
 		writeJSON(w, http.StatusOK, skills)
 	}
 }
 
-func uploadSkillHandler(dataDir string) http.HandlerFunc {
+func getSkillBySourceHandler(dataDir string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		source := r.PathValue("source")
+		name := r.PathValue("name")
+		if source != "builtin" && source != "custom" {
+			writeError(w, http.StatusBadRequest, "source must be builtin or custom")
+			return
+		}
+		if !isValidSkillName(name) {
+			writeError(w, http.StatusBadRequest, "invalid skill name")
+			return
+		}
+		var dir string
+		if source == "builtin" {
+			dir = filepath.Join(dataDir, "skills_builtin")
+		} else {
+			dir = filepath.Join(dataDir, "skills")
+		}
+		mdPath := filepath.Join(dir, filepath.FromSlash(name), "SKILL.md")
+		data, err := os.ReadFile(mdPath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				writeError(w, http.StatusNotFound, "skill not found")
+				return
+			}
+			writeError(w, http.StatusInternalServerError, "failed to read skill")
+			return
+		}
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.Write(data)
+	}
+}
+
+func uploadCustomSkillHandler(dataDir string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		name := r.PathValue("name")
 		if !isValidSkillName(name) {
@@ -80,11 +115,11 @@ func uploadSkillHandler(dataDir string) http.HandlerFunc {
 			writeError(w, http.StatusInternalServerError, "failed to write SKILL.md")
 			return
 		}
-		writeJSON(w, http.StatusOK, skillInfo{Name: name, Status: "ok"})
+		writeJSON(w, http.StatusOK, skillInfo{Name: name, Status: "ok", Source: "custom"})
 	}
 }
 
-func deleteSkillHandler(dataDir string) http.HandlerFunc {
+func deleteCustomSkillHandler(dataDir string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		name := r.PathValue("name")
 		if !isValidSkillName(name) {
@@ -101,27 +136,5 @@ func deleteSkillHandler(dataDir string) http.HandlerFunc {
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
-	}
-}
-
-func getSkillHandler(dataDir string) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		name := r.PathValue("name")
-		if !isValidSkillName(name) {
-			writeError(w, http.StatusBadRequest, "invalid skill name")
-			return
-		}
-		mdPath := filepath.Join(dataDir, "skills", filepath.FromSlash(name), "SKILL.md")
-		data, err := os.ReadFile(mdPath)
-		if err != nil {
-			if os.IsNotExist(err) {
-				writeError(w, http.StatusNotFound, "skill not found")
-				return
-			}
-			writeError(w, http.StatusInternalServerError, "failed to read skill")
-			return
-		}
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		w.Write(data)
 	}
 }
