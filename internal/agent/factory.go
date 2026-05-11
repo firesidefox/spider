@@ -123,34 +123,25 @@ const toolBehaviorPrompt = `
 
 **When to use:** Call these freely at the start of any task to understand the environment.
 
-<exemple>
+<example>
 User: Check disk usage on all web servers.
 Assistant: Calls ListDevices to find web servers before running any commands.
-<reasoning>
-Need to know which hosts exist before targeting them. Read-only — no cost to calling early.
-</reasoning>
-</exemple>
+</example>
 
 ### VerifyTool (read-only, has retry semantics)
 
 **When to use:** After a deployment or config change, to poll until a service is ready.
 **When NOT to use:** Don't use for a one-shot check — use RunCommand instead. VerifyTool retries on failure, adding latency when you just need a single result.
 
-<exemple>
+<example>
 User: Restart nginx and confirm it's up.
 Assistant: Calls RunCommand to restart, then VerifyTool to poll until nginx responds.
-<reasoning>
-VerifyTool's retry loop is the right tool for "wait until ready" — not for "check once".
-</reasoning>
-</exemple>
+</example>
 
-<exemple>
+<example>
 User: Is port 80 open on web-01?
 Assistant: Calls RunCommand with "ss -tlnp | grep :80". Does NOT use VerifyTool.
-<reasoning>
-One-shot check. VerifyTool would retry unnecessarily if the port is closed.
-</reasoning>
-</exemple>
+</example>
 
 ### RunCommand / RunCommandBatch (has side effects)
 
@@ -160,29 +151,15 @@ One-shot check. VerifyTool would retry unnecessarily if the port is closed.
 
 **When NOT to use:** Do not run state-changing commands before the user has confirmed the plan.
 
-<exemple>
+<example>
 User: Clean up logs older than 30 days on all app servers.
 Assistant: First calls RunCommandBatch with "find /var/log -mtime +30" to preview what would be deleted. Confirms with user. Then runs the delete command.
-<reasoning>
-Destructive operation. Preview first, act second. The find command is read-only and safe in Explore phase.
-</reasoning>
-</exemple>
+</example>
 
-<exemple>
-User: What processes are using the most memory on db-01?
-Assistant: Calls RunCommand with "ps aux --sort=-%mem | head -10". No confirmation needed.
-<reasoning>
-Read-only command. Safe to run immediately in Explore phase.
-</reasoning>
-</exemple>
-
-<exemple>
+<example>
 User: Restart the database service.
 Assistant: Confirms the target host and service name, then calls RunCommand with "systemctl restart postgresql".
-<reasoning>
-State-changing command. Confirm scope before acting — wrong host would be disruptive.
-</reasoning>
-</exemple>
+</example>
 
 ### CallAPI (GET: read-only; POST/PUT/DELETE: has side effects)
 
@@ -190,39 +167,23 @@ State-changing command. Confirm scope before acting — wrong host would be disr
 - GET: use freely in Explore phase
 - POST/PUT/DELETE: only in Act phase after confirming intent
 
-**When NOT to use:** Don't use REST API for read-only queries when RunCommand would work — unless the device only exposes an API.
-
-<exemple>
-User: Get the current config from the router API.
-Assistant: Calls CallAPI with GET. No confirmation needed.
-<reasoning>
-GET is read-only. Safe to call in Explore phase.
-</reasoning>
-</exemple>
-
-<exemple>
+<example>
 User: Push a new ACL rule via the firewall API.
 Assistant: Shows the request body to the user, confirms, then calls CallAPI with POST.
-<reasoning>
-POST modifies state. Confirm the payload before sending — wrong ACL could block traffic.
-</reasoning>
-</exemple>
+</example>
 
 ### Intent Field (RunCommand / RunCommandBatch / CallAPI)
 
-Always set the intent field when calling RunCommand, RunCommandBatch, or CallAPI. This field is shown to the user in the UI so they understand what you are doing.
+Always set the intent field. This field is shown to the user in the UI.
 
 **Rules:**
 - Write the goal only — do not include device names (the UI adds those automatically)
 - Keep it short: 10 Chinese characters or fewer is ideal
-- Use plain language the user can read at a glance
 
 <example>
 Good: "重启 nginx 使配置生效"
 Good: "清理 30 天前的日志"
-Good: "推送新 ACL 规则"
 Bad: "在 local110 和 local201 上重启 nginx" — device names belong in host_ids, not intent
-Bad: "execute the restart command" — too vague, not user-facing language
 </example>`
 
 const todoTaskPrompt = `
