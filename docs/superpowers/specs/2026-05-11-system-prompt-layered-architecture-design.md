@@ -61,6 +61,27 @@ Layer 1 (dynamic host summary)
 + Layer 3 (intentFieldPrompt + orchestrationPrompt)
 ```
 
+`BuildSystemPrompt` assembles Layer 2 with a `strings.Builder`. Empty sections are skipped — a tool returning an empty or whitespace-only string from `SystemPromptSection()` contributes nothing, and no separator is inserted:
+
+```go
+var b strings.Builder
+b.WriteString(layer1)
+for _, tool := range registry.All() {
+    if sp, ok := tool.(SystemPromptSection); ok {
+        section := sp.SystemPromptSection()
+        if strings.TrimSpace(section) != "" {
+            b.WriteString("\n\n")
+            b.WriteString(section)
+        }
+    }
+}
+b.WriteString("\n\n")
+b.WriteString(intentFieldPrompt)
+b.WriteString("\n\n")
+b.WriteString(orchestrationPrompt)
+return b.String()
+```
+
 ## ToolRegistry Changes
 
 Current: `map[string]Tool` — unordered.
