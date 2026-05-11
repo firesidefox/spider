@@ -681,7 +681,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useAuth } from '../composables/useAuth'
 import { authHeaders } from '../api/auth'
 import { listTokens, createToken, deleteToken } from '../api/tokens'
@@ -693,13 +694,18 @@ import InstallPanel from './InstallPanel.vue'
 import SkillsPanel from './SkillsPanel.vue'
 
 const { currentUser, isAdmin } = useAuth()
+const route = useRoute()
+const router = useRouter()
 
 const roleLabel = computed(() => {
   const map: Record<string, string> = { admin: '管理员', operator: '操作员', viewer: '只读' }
   return map[currentUser.value?.role ?? ''] ?? currentUser.value?.role ?? '—'
 })
 
-const activeTab = ref<'info' | 'tokens' | 'ssh-keys' | 'logs' | 'users' | 'install' | 'skills' | 'agent' | 'kb' | 'settings'>('info')
+const activeTab = ref<'info' | 'tokens' | 'ssh-keys' | 'logs' | 'users' | 'install' | 'skills' | 'agent' | 'kb' | 'settings'>(
+  (route.query.tab as string) || 'info'
+)
+watch(activeTab, (tab) => router.replace({ query: { tab } }))
 const tabTitle = computed(() => ({
   info: '基本信息', tokens: '访问令牌', 'ssh-keys': 'SSH Keys', logs: '操作日志',
   users: '用户管理', install: '安装', agent: '智能体', kb: '知识库', settings: '偏好设置',
@@ -751,7 +757,16 @@ async function loadTokens() {
   tokens.value = await listTokens()
 }
 
-onMounted(() => { loadTokens() })
+onMounted(() => {
+  const tab = activeTab.value
+  if (tab === 'tokens') loadTokens()
+  else if (tab === 'ssh-keys') loadSSHKeys()
+  else if (tab === 'logs') loadLogs()
+  else if (tab === 'agent') { loadAgentSettings(); loadProviders() }
+  else if (tab === 'kb') loadRagConfig()
+  else if (tab === 'settings') loadSettings()
+  else loadTokens()
+})
 
 async function handleCreate() {
   formError.value = ''

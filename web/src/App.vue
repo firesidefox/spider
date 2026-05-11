@@ -1,6 +1,6 @@
 <template>
   <div class="app">
-    <header class="nav">
+    <header v-if="route.path !== '/login'" class="nav">
       <div class="nav-brand">🕷 Spider</div>
       <nav class="nav-links">
         <RouterLink to="/hosts" class="nav-item">主机管理</RouterLink>
@@ -46,11 +46,12 @@ function toggleTheme() {
 
 provide('isDark', () => isDark.value)
 
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { useAuth } from './composables/useAuth'
 import { logout } from './api/auth'
 
 const router = useRouter()
+const route = useRoute()
 const { currentUser, isAdmin, clearUser } = useAuth()
 
 const showUserMenu = ref(false)
