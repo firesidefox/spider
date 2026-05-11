@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strings"
 
 	"github.com/spiderai/spider/internal/models"
 	"github.com/spiderai/spider/internal/store"
@@ -88,6 +89,39 @@ func (s *Store) SearchByGroup(ctx context.Context, query string, groupID *int, t
 	} else {
 		rows, err = s.db.QueryContext(ctx, baseQ)
 	}
+	if err != nil {
+		return nil, fmt.Errorf("query documents: %w", err)
+	}
+	defer rows.Close()
+	return s.rankFromRows(rows, qvec, topK)
+}
+
+// SearchByGroups 在多个 group 中搜索，合并结果去重后按相似度排序。
+func (s *Store) SearchByGroups(ctx context.Context, query string, groupIDs []int, topK int) ([]*models.Document, error) {
+	if s.embedder == nil {
+		return nil, fmt.Errorf("embedder not configured")
+	}
+	if len(groupIDs) == 0 {
+		return s.SearchByGroup(ctx, query, nil, topK)
+	}
+	if len(groupIDs) == 1 {
+		return s.SearchByGroup(ctx, query, &groupIDs[0], topK)
+	}
+
+	qvec, err := s.embedder.Embed(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("embed query: %w", err)
+	}
+
+	placeholders := make([]string, len(groupIDs))
+	args := make([]any, len(groupIDs))
+	for i, gid := range groupIDs {
+		placeholders[i] = "?"
+		args[i] = gid
+	}
+	q := "SELECT id, vendor, tags, title, content, embedding, source_file, chunk_index, created_at, group_id FROM documents WHERE embedding IS NOT NULL AND group_id IN (" +
+		strings.Join(placeholders, ",") + ")"
+	rows, err := s.db.QueryContext(ctx, q, args...)
 	if err != nil {
 		return nil, fmt.Errorf("query documents: %w", err)
 	}

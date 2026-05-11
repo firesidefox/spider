@@ -87,6 +87,26 @@ func (s *DocumentStore) Delete(id int) error {
 	return err
 }
 
+func (s *DocumentStore) GetByID(id int) (*models.Document, error) {
+	row := s.db.QueryRow(
+		"SELECT id, vendor, tags, title, content, source_file, chunk_index, created_at, group_id FROM documents WHERE id = ?",
+		id,
+	)
+	var d models.Document
+	var tagsJSON string
+	err := row.Scan(&d.ID, &d.Vendor, &tagsJSON, &d.Title, &d.Content, &d.SourceFile, &d.ChunkIndex, &d.CreatedAt, &d.GroupID)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get document by id: %w", err)
+	}
+	if err := json.Unmarshal([]byte(tagsJSON), &d.Tags); err != nil {
+		d.Tags = []string{}
+	}
+	return &d, nil
+}
+
 // FindByTitle returns the first document matching groupID and title, or nil if not found.
 func (s *DocumentStore) FindByTitle(groupID int, title string) (*models.Document, error) {
 	row := s.db.QueryRow(
