@@ -4,24 +4,26 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"strings"
 )
 
 func SyncBuiltinSkills(dataDir string, fsys fs.FS) error {
+	sub, err := fs.Sub(fsys, "skills")
+	if err != nil {
+		return err
+	}
 	destBase := filepath.Join(dataDir, "skills_builtin")
-	return fs.WalkDir(fsys, "skills", func(path string, d fs.DirEntry, err error) error {
+	return fs.WalkDir(sub, ".", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 		if d.IsDir() {
 			return nil
 		}
-		rel := strings.TrimPrefix(path, "skills/")
-		dest := filepath.Join(destBase, filepath.FromSlash(rel))
+		dest := filepath.Join(destBase, filepath.FromSlash(path))
 		if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
 			return err
 		}
-		data, err := fs.ReadFile(fsys, path)
+		data, err := fs.ReadFile(sub, path)
 		if err != nil {
 			return err
 		}

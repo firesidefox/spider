@@ -120,7 +120,7 @@ func serve(cfgFile, addrOverride, dataDirOverride string, debug bool) error {
 		return fmt.Errorf("初始化数据目录失败: %w", err)
 	}
 	if err := agent.SyncBuiltinSkills(cfg.DataDir, builtinSkillsFS); err != nil {
-		return fmt.Errorf("sync builtin skills: %w", err)
+		return fmt.Errorf("同步内置 skills 失败: %w", err)
 	}
 
 	logFile := cfg.Log.File
