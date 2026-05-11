@@ -112,6 +112,15 @@ func (s *AccessFaceStore) Update(id string, req *models.UpdateAccessFaceRequest)
 	}
 	if req.RESTAuthType != nil {
 		cur.RESTAuthType = *req.RESTAuthType
+		switch cur.RESTAuthType {
+		case "bearer", "none":
+			cur.RESTUsername = ""
+			cur.HeaderName = ""
+		case "basic":
+			cur.HeaderName = ""
+		case "apikey":
+			cur.RESTUsername = ""
+		}
 	}
 	if req.RESTUsername != nil {
 		cur.RESTUsername = *req.RESTUsername
