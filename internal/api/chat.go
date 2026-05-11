@@ -149,7 +149,7 @@ func chatSendMessage(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id
 		factory.PermissionMode = permission.Mode(conv.PermissionMode)
 	}
 
-	systemPrompt := agent.BuildSystemPrompt(app.HostStore)
+	systemPrompt := factory.BuildSystemPrompt()
 	a := factory.NewAgent(systemPrompt, id)
 	waiter := agent.NewConfirmationWaiter()
 	app.StoreChatWaiter(id, waiter)

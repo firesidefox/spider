@@ -115,64 +115,7 @@ func (f *Factory) NewAgent(systemPrompt string, conversationID string) *Agent {
 	})
 }
 
-const toolBehaviorPrompt = `
-
-## Tool Usage Guidelines
-
-### ListDevices / GetDeviceInfo / SearchDocs (read-only, no side effects)
-
-**When to use:** Call these freely at the start of any task to understand the environment.
-
-<example>
-User: Check disk usage on all web servers.
-Assistant: Calls ListDevices to find web servers before running any commands.
-</example>
-
-### VerifyTool (read-only, has retry semantics)
-
-**When to use:** After a deployment or config change, to poll until a service is ready.
-**When NOT to use:** Don't use for a one-shot check — use RunCommand instead. VerifyTool retries on failure, adding latency when you just need a single result.
-
-<example>
-User: Restart nginx and confirm it's up.
-Assistant: Calls RunCommand to restart, then VerifyTool to poll until nginx responds.
-</example>
-
-<example>
-User: Is port 80 open on web-01?
-Assistant: Calls RunCommand with "ss -tlnp | grep :80". Does NOT use VerifyTool.
-</example>
-
-### RunCommand / RunCommandBatch (has side effects)
-
-**When to use:**
-- Explore phase: read-only commands (ls, cat, grep, ps, df, systemctl status) — use freely
-- Act phase: state-changing commands (rm, kill, systemctl restart, apt, chmod) — only after confirming intent
-
-**When NOT to use:** Do not run state-changing commands before the user has confirmed the plan.
-
-<example>
-User: Clean up logs older than 30 days on all app servers.
-Assistant: First calls RunCommandBatch with "find /var/log -mtime +30" to preview what would be deleted. Confirms with user. Then runs the delete command.
-</example>
-
-<example>
-User: Restart the database service.
-Assistant: Confirms the target host and service name, then calls RunCommand with "systemctl restart postgresql".
-</example>
-
-### CallAPI (GET: read-only; POST/PUT/DELETE: has side effects)
-
-**When to use:**
-- GET: use freely in Explore phase
-- POST/PUT/DELETE: only in Act phase after confirming intent
-
-<example>
-User: Push a new ACL rule via the firewall API.
-Assistant: Shows the request body to the user, confirms, then calls CallAPI with POST.
-</example>
-
-### Intent Field (RunCommand / RunCommandBatch / CallAPI)
+const intentFieldPrompt = `## Intent Field (RunCommand / RunCommandBatch / CallAPI)
 
 Always set the intent field. This field is shown to the user in the UI.
 
@@ -186,37 +129,7 @@ Good: "清理 30 天前的日志"
 Bad: "在 local110 和 local201 上重启 nginx" — device names belong in host_ids, not intent
 </example>`
 
-const todoTaskPrompt = `
-
-## Task Management (TodoTask tool)
-
-Use the TodoTask tool proactively to track progress on complex tasks.
-
-**When to use:**
-- Task requires 3 or more distinct steps
-- User provides multiple tasks to complete
-
-**When NOT to use:**
-- Single, straightforward task
-- Purely conversational or informational response
-
-**Rules:**
-- Mark a task in_progress BEFORE beginning work on it
-- Only ONE task in_progress at a time
-- Mark completed IMMEDIATELY after finishing — do not batch completions
-- Only mark completed when fully done; if blocked, keep in_progress and create a new task describing the blocker
-
-<example>
-User: Check disk usage on all web servers, clean up logs older than 30 days, and restart nginx if free space is below 20%.
-Assistant: Creates tasks: 1) Check disk usage 2) Clean up logs 3) Restart nginx if space < 20%
-</example>
-
-<example>
-User: What is the IP address of host web-01?
-Assistant: Calls GetDeviceInfo directly. No todo list.
-</example>`
-
-const complexTaskPrompt = `
+const orchestrationPrompt = `
 
 ## Complex Multi-Step Tasks
 
@@ -233,33 +146,75 @@ Assistant: Collects CPU, memory, and I/O metrics first. Then picks one optimizat
 
 **Verification:** After each Act step, verify before marking completed. If verification fails, keep in_progress and offer rollback if available.`
 
-// BuildSystemPrompt queries all hosts and builds a system prompt describing the environment.
-func BuildSystemPrompt(hosts *store.HostStore) string {
-	allHosts, err := hosts.List("")
+// BuildSystemPrompt builds a three-layer system prompt.
+// Layer 1: dynamic role + host summary
+// Layer 2: per-tool SystemPromptSection() collected from a temp registry
+// Layer 3: intentFieldPrompt + orchestrationPrompt
+func (f *Factory) BuildSystemPrompt() string {
+	// Layer 1
+	allHosts, err := f.Hosts.List("")
+	var layer1 string
 	if err != nil || len(allHosts) == 0 {
-		return "You are Spider, an intelligent network operations assistant. No hosts are currently registered." + toolBehaviorPrompt + todoTaskPrompt + complexTaskPrompt
-	}
-
-	vendorCount := make(map[string]int)
-	for _, h := range allHosts {
-		v := h.Vendor
-		if v == "" {
-			v = "unknown"
+		layer1 = "You are Spider, an intelligent network operations assistant. No hosts are currently registered."
+	} else {
+		vendorCount := make(map[string]int)
+		for _, h := range allHosts {
+			v := h.Vendor
+			if v == "" {
+				v = "unknown"
+			}
+			vendorCount[v]++
 		}
-		vendorCount[v]++
+		var parts []string
+		for vendor, count := range vendorCount {
+			parts = append(parts, fmt.Sprintf("%s(%d)", vendor, count))
+		}
+		layer1 = fmt.Sprintf(
+			"You are Spider, an intelligent network operations assistant. "+
+				"You manage %d network devices: %s. "+
+				"Use the available tools to execute CLI commands, verify configurations, "+
+				"and answer questions about the network infrastructure.",
+			len(allHosts),
+			strings.Join(parts, ", "),
+		)
 	}
 
-	var parts []string
-	for vendor, count := range vendorCount {
-		parts = append(parts, fmt.Sprintf("%s(%d)", vendor, count))
+	// Layer 2: collect tool sections
+	reg := f.buildRegistry("")
+	var b strings.Builder
+	b.WriteString(layer1)
+	for _, tool := range reg.All() {
+		if sp, ok := tool.(SystemPromptSection); ok {
+			section := sp.SystemPromptSection()
+			if strings.TrimSpace(section) != "" {
+				b.WriteString("\n\n")
+				b.WriteString(section)
+			}
+		}
 	}
 
-	return fmt.Sprintf(
-		"You are Spider, an intelligent network operations assistant. "+
-			"You manage %d network devices: %s. "+
-			"Use the available tools to execute CLI commands, verify configurations, "+
-			"and answer questions about the network infrastructure.",
-		len(allHosts),
-		strings.Join(parts, ", "),
-	) + toolBehaviorPrompt + todoTaskPrompt + complexTaskPrompt
+	// Layer 3
+	b.WriteString("\n\n")
+	b.WriteString(intentFieldPrompt)
+	b.WriteString("\n\n")
+	b.WriteString(orchestrationPrompt)
+	return b.String()
+}
+
+// buildRegistry creates a temporary registry to collect tool SystemPromptSections.
+func (f *Factory) buildRegistry(conversationID string) *ToolRegistry {
+	registry := NewToolRegistry()
+	registry.Register(NewListDevicesTool(f.Hosts))
+	registry.Register(NewGetDeviceInfoTool(f.Hosts))
+	registry.Register(NewExecuteCLITool(f.Hosts, f.AccessFaces, f.SSHPool, f.Logs, f.SSHKeys))
+	registry.Register(NewBatchExecuteTool(f.Hosts, f.AccessFaces, f.SSHPool, f.Logs, f.SSHKeys))
+	registry.Register(NewVerifyTool(f.Hosts, f.AccessFaces, f.SSHPool, f.SSHKeys))
+	registry.Register(NewCallRESTAPITool(f.AccessFaces))
+	if f.TodoTaskStore != nil {
+		registry.Register(NewTodoTaskTool(f.TodoTaskStore, f.SSEBroadcaster, conversationID))
+	}
+	if f.DataDir != "" {
+		registry.Register(NewInvokeSkillTool(filepath.Join(f.DataDir, "skills")))
+	}
+	return registry
 }
