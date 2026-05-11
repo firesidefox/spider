@@ -164,6 +164,39 @@ func strVal(input map[string]any, key string) string {
 	return v
 }
 
+const todoTaskPromptSection = `
+## Task Management (TodoTask tool)
+
+Use the TodoTask tool proactively to track progress on complex tasks.
+
+**When to use:**
+- Task requires 3 or more distinct steps
+- User provides multiple tasks to complete
+
+**When NOT to use:**
+- Single, straightforward task
+- Purely conversational or informational response
+
+**Rules:**
+- Mark a task in_progress BEFORE beginning work on it
+- Only ONE task in_progress at a time
+- Mark completed IMMEDIATELY after finishing — do not batch completions
+- Only mark completed when fully done; if blocked, keep in_progress and create a new task describing the blocker
+
+<example>
+User: Check disk usage on all web servers, clean up logs older than 30 days, and restart nginx if free space is below 20%.
+Assistant: Creates tasks: 1) Check disk usage 2) Clean up logs 3) Restart nginx if space < 20%
+</example>
+
+<example>
+User: What is the IP address of host web-01?
+Assistant: Calls GetDeviceInfo directly. No todo list.
+</example>`
+
+func (t *TodoTaskTool) SystemPromptSection() string {
+	return todoTaskPromptSection
+}
+
 func int64Slice(input map[string]any, key string) []int64 {
 	raw, ok := input[key].([]any)
 	if !ok {
