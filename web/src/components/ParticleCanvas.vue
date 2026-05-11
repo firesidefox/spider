@@ -60,7 +60,7 @@ function tick(ctx: CanvasRenderingContext2D, w: number, h: number) {
     if (p.y < 0 || p.y > h) p.vy *= -1
 
     ctx.beginPath()
-    ctx.arc(p.x, p.y, 2, 0, Math.PI * 2)
+    ctx.arc(p.x, p.y, 4, 0, Math.PI * 2)
     ctx.fillStyle = particleColor
     ctx.fill()
   }
