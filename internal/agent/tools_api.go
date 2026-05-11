@@ -39,8 +39,9 @@ func NewCallRESTAPITool(faces *store.AccessFaceStore) *CallRESTAPITool {
 	}
 }
 
-func (t *CallRESTAPITool) DefaultRiskLevel() RiskLevel { return RiskL2 }
-func (t *CallRESTAPITool) Name() string                { return "CallAPI" }
+func (t *CallRESTAPITool) DefaultRiskLevel() RiskLevel  { return RiskL2 }
+func (t *CallRESTAPITool) Name() string                 { return "CallAPI" }
+func (t *CallRESTAPITool) SystemPromptSection() string  { return callAPIPromptSection }
 
 func (t *CallRESTAPITool) Description() string {
 	return "Call a REST API endpoint on a gateway device. Has side effects for POST/PUT/DELETE methods. Use GET freely in Explore phase; use mutating methods only in Act phase after confirming intent. Always set `intent` to a short goal description for mutating calls."
