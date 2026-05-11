@@ -260,17 +260,30 @@
             </div>
           </template>
           <template v-if="faceForm.type === 'restapi'">
-            <div class="form-row"><label>Base URL</label><input v-model="faceForm.base_url" class="input" /></div>
-            <div class="form-row"><label>认证方式</label>
-              <select v-model="faceForm.rest_auth_type" class="input">
+            <div class="form-row">
+              <label>Base URL</label>
+              <input v-model="faceForm.base_url" class="input" placeholder="http://192.168.1.1:8080" />
+            </div>
+            <div class="form-row">
+              <label>认证方式</label>
+              <select v-model="faceForm.rest_auth_type" class="input" @change="onRestAuthTypeChange">
                 <option value="none">无</option>
                 <option value="bearer">Bearer Token</option>
                 <option value="basic">Basic</option>
                 <option value="apikey">API Key</option>
               </select>
             </div>
-            <div class="form-row"><label>用户名</label><input v-model="faceForm.rest_username" class="input" /></div>
-            <div class="form-row"><label>凭据</label><textarea v-model="faceForm.credential" class="input" rows="2" /></div>
+            <template v-if="faceForm.rest_auth_type === 'basic'">
+              <div class="form-row"><label>用户名</label><input v-model="faceForm.rest_username" class="input" /></div>
+              <div class="form-row"><label>密码</label><input v-model="faceForm.credential" class="input" type="password" autocomplete="new-password" /></div>
+            </template>
+            <template v-if="faceForm.rest_auth_type === 'bearer'">
+              <div class="form-row"><label>Token</label><input v-model="faceForm.credential" class="input" type="password" autocomplete="new-password" /></div>
+            </template>
+            <template v-if="faceForm.rest_auth_type === 'apikey'">
+              <div class="form-row"><label>Header Name</label><input v-model="faceForm.header_name" class="input" placeholder="X-API-Key" /></div>
+              <div class="form-row"><label>API Key</label><input v-model="faceForm.credential" class="input" type="password" autocomplete="new-password" /></div>
+            </template>
           </template>
           <div v-if="docGroups.length > 0" class="form-row">
             <label>知识来源</label>
@@ -479,6 +492,13 @@ function toggleFormKnowledgeSource(groupId: number) {
   const ks = faceForm.value.knowledge_sources
   const exists = ks.some(k => k.type === 'group' && k.id === groupId)
   faceForm.value.knowledge_sources = exists
+    ? ks.filter(k => !(k.type === 'group' && k.id === groupId))
+    : [...ks, { type: 'group', id: groupId }]
+}
+
+function onRestAuthTypeChange() {
+  // 无需前端清空；后端 Update 按 auth type 清空无关字段
+}
     ? ks.filter(k => !(k.type === 'group' && k.id === groupId))
     : [...ks, { type: 'group' as const, id: groupId }]
 }
