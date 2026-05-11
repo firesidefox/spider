@@ -75,6 +75,9 @@ watch(() => props.code, () => nextTick(syncScroll))
   user-select: none;
   background: var(--panel);
   border-right: 1px solid var(--border);
+  max-height: 5.1em;
+  overflow: hidden;
+  align-self: start;
 }
 
 .wl-text {
@@ -83,6 +86,10 @@ watch(() => props.code, () => nextTick(syncScroll))
   white-space: pre-wrap;
   word-break: break-all;
   min-height: 1.7em;
+  max-height: 5.1em;
+  overflow-y: auto;
+  overflow-x: hidden;
+  align-self: start;
 }
 
 .line-numbers {
@@ -120,7 +127,8 @@ watch(() => props.code, () => nextTick(syncScroll))
   overflow-x: auto;
   overflow-y: auto;
   max-height: 400px;
-  white-space: pre;
+  white-space: pre-wrap;
+  word-break: break-all;
   font-family: 'JetBrains Mono', 'SF Mono', Consolas, 'Courier New', monospace;
 }
 
@@ -135,7 +143,8 @@ watch(() => props.code, () => nextTick(syncScroll))
   background: transparent;
   border: none;
   overflow: auto;
-  max-height: 400px;
-  white-space: pre;
+  max-height: calc(3 * 1.7em + 28px);
+  white-space: pre-wrap;
+  word-break: break-all;
 }
 </style>
