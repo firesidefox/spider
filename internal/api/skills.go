@@ -36,7 +36,7 @@ func isValidSkillName(name string) bool {
 
 func listSkillsHandler(dataDir string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		sm := agent.NewSkillManager(filepath.Join(dataDir, "skills"))
+		sm := agent.NewSkillManager(dataDir)
 		entries, err := sm.LoadSkills()
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "failed to read skills dir")

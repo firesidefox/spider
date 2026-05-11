@@ -25,6 +25,7 @@ type SkillEntry struct {
 	Description string
 	Status      string // "ok" | "error"
 	Error       string
+	Source      string // "builtin" | "custom"
 	bodyPath    string
 }
 
@@ -44,12 +45,17 @@ func (e *SkillEntry) Body() (string, error) {
 
 // SkillManager scans the skills directory and provides skill metadata.
 type SkillManager struct {
-	dir string
+	builtinDir string
+	customDir  string
 }
 
-// NewSkillManager creates a SkillManager rooted at dir.
-func NewSkillManager(dir string) *SkillManager {
-	return &SkillManager{dir: dir}
+// NewSkillManager creates a SkillManager rooted at dataDir.
+// It scans both dataDir/skills_builtin/ and dataDir/skills/.
+func NewSkillManager(dataDir string) *SkillManager {
+	return &SkillManager{
+		builtinDir: filepath.Join(dataDir, "skills_builtin"),
+		customDir:  filepath.Join(dataDir, "skills"),
+	}
 }
 
 // ParseSkillFrontmatter splits YAML frontmatter from body and validates required fields.
@@ -75,11 +81,40 @@ func ParseSkillFrontmatter(content string) (skillFrontmatter, string, error) {
 	return meta, body, nil
 }
 
-// LoadSkills scans the skills directory and returns all skill entries.
-// Entries with parse errors have Status="error"; valid entries have Status="ok".
+// LoadSkills scans both builtin and custom skills directories.
+// Returns all entries sorted by name ascending, with custom before builtin for same name.
 func (sm *SkillManager) LoadSkills() ([]SkillEntry, error) {
 	var entries []SkillEntry
-	err := filepath.WalkDir(sm.dir, func(path string, d fs.DirEntry, err error) error {
+
+	// Load builtin skills
+	builtinEntries, err := sm.loadFromDir(sm.builtinDir, "builtin")
+	if err != nil {
+		return nil, err
+	}
+	entries = append(entries, builtinEntries...)
+
+	// Load custom skills
+	customEntries, err := sm.loadFromDir(sm.customDir, "custom")
+	if err != nil {
+		return nil, err
+	}
+	entries = append(entries, customEntries...)
+
+	// Sort: name ascending, same name → custom before builtin
+	sort.Slice(entries, func(i, j int) bool {
+		if entries[i].Name != entries[j].Name {
+			return entries[i].Name < entries[j].Name
+		}
+		return entries[i].Source == "custom" && entries[j].Source == "builtin"
+	})
+
+	return entries, nil
+}
+
+// loadFromDir scans a single directory and returns entries with the given source.
+func (sm *SkillManager) loadFromDir(dir, source string) ([]SkillEntry, error) {
+	var entries []SkillEntry
+	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			if os.IsNotExist(err) {
 				return filepath.SkipAll
@@ -89,52 +124,78 @@ func (sm *SkillManager) LoadSkills() ([]SkillEntry, error) {
 		if d.IsDir() || d.Name() != "SKILL.md" {
 			return nil
 		}
-		dir := filepath.Dir(path)
-		rel, _ := filepath.Rel(sm.dir, dir)
+		skillDir := filepath.Dir(path)
+		rel, _ := filepath.Rel(dir, skillDir)
 		data, readErr := os.ReadFile(path)
 		if readErr != nil {
-			entries = append(entries, SkillEntry{Name: rel, Status: "error", Error: readErr.Error()})
+			entries = append(entries, SkillEntry{
+				Name:   rel,
+				Status: "error",
+				Error:  readErr.Error(),
+				Source: source,
+			})
 			return nil
 		}
 		meta, _, parseErr := ParseSkillFrontmatter(string(data))
 		if parseErr != nil {
-			entries = append(entries, SkillEntry{Name: rel, Status: "error", Error: parseErr.Error()})
+			entries = append(entries, SkillEntry{
+				Name:   rel,
+				Status: "error",
+				Error:  parseErr.Error(),
+				Source: source,
+			})
 			return nil
 		}
 		entries = append(entries, SkillEntry{
-			Name: rel, Description: meta.Description,
-			Status: "ok", bodyPath: path,
+			Name:        rel,
+			Description: meta.Description,
+			Status:      "ok",
+			Source:      source,
+			bodyPath:    path,
 		})
 		return nil
 	})
 	if err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}
-	sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
 	return entries, nil
 }
 
 func (sm *SkillManager) ComputeHash() (string, error) {
-	if _, err := os.Stat(sm.dir); os.IsNotExist(err) {
+	builtinExists := true
+	customExists := true
+	if _, err := os.Stat(sm.builtinDir); os.IsNotExist(err) {
+		builtinExists = false
+	}
+	if _, err := os.Stat(sm.customDir); os.IsNotExist(err) {
+		customExists = false
+	}
+	if !builtinExists && !customExists {
 		return "", nil
 	}
+
 	var parts []string
-	err := filepath.WalkDir(sm.dir, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() || d.Name() != "SKILL.md" {
+	for _, dir := range []string{sm.builtinDir, sm.customDir} {
+		err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				if os.IsNotExist(err) {
+					return filepath.SkipAll
+				}
+				return err
+			}
+			if d.IsDir() || d.Name() != "SKILL.md" {
+				return nil
+			}
+			info, err := d.Info()
+			if err != nil {
+				return err
+			}
+			parts = append(parts, fmt.Sprintf("%s:%d\n", path, info.ModTime().UnixNano()))
 			return nil
-		}
-		info, err := d.Info()
+		})
 		if err != nil {
-			return err
+			return "", err
 		}
-		parts = append(parts, fmt.Sprintf("%s:%d\n", path, info.ModTime().UnixNano()))
-		return nil
-	})
-	if err != nil {
-		return "", err
 	}
 	sort.Strings(parts)
 	h := sha256.New()
@@ -145,12 +206,29 @@ func (sm *SkillManager) ComputeHash() (string, error) {
 }
 
 func (sm *SkillManager) RenderList(entries []SkillEntry) string {
+	// Collect ok entries. Custom (or untagged) entries shadow builtin entries of the same name.
+	seen := make(map[string]bool)
 	var ok []SkillEntry
 	for _, e := range entries {
-		if e.Status == "ok" {
+		if e.Status != "ok" {
+			continue
+		}
+		if e.Source != "builtin" {
+			seen[e.Name] = true
 			ok = append(ok, e)
 		}
 	}
+	for _, e := range entries {
+		if e.Status != "ok" {
+			continue
+		}
+		if e.Source == "builtin" && !seen[e.Name] {
+			ok = append(ok, e)
+		}
+	}
+	// Re-sort by name for stable output
+	sort.Slice(ok, func(i, j int) bool { return ok[i].Name < ok[j].Name })
+
 	if len(ok) == 0 {
 		return ""
 	}

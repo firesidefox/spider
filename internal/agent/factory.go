@@ -2,6 +2,7 @@ package agent
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/spiderai/spider/internal/config"
@@ -28,7 +29,7 @@ type Factory struct {
 	LLMModel       string
 	TodoTaskStore  *store.TodoTaskStore
 	SSEBroadcaster SSEBroadcaster
-	SkillsDir      string
+	DataDir        string
 }
 
 // NewFactory creates a Factory by reading the active provider from the DB.
@@ -87,8 +88,8 @@ func (f *Factory) NewAgent(systemPrompt string, conversationID string) *Agent {
 	if f.TodoTaskStore != nil {
 		registry.Register(NewTodoTaskTool(f.TodoTaskStore, f.SSEBroadcaster, conversationID))
 	}
-	if f.SkillsDir != "" {
-		registry.Register(NewInvokeSkillTool(f.SkillsDir))
+	if f.DataDir != "" {
+		registry.Register(NewInvokeSkillTool(filepath.Join(f.DataDir, "skills")))
 	}
 
 	hooks := NewHookChain()
@@ -110,7 +111,7 @@ func (f *Factory) NewAgent(systemPrompt string, conversationID string) *Agent {
 		SystemPrompt: systemPrompt,
 		MaxTurns:     15,
 		Compactor:    compactor,
-		SkillManager: NewSkillManager(f.SkillsDir),
+		SkillManager: NewSkillManager(f.DataDir),
 	})
 }
 

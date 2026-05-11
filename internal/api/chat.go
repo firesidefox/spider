@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"path/filepath"
 
 	"github.com/spiderai/spider/internal/agent"
 	authmw "github.com/spiderai/spider/internal/auth"
@@ -132,7 +131,7 @@ func chatSendMessage(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id
 		writeError(w, 503, "LLM not configured: "+err.Error())
 		return
 	}
-	factory.SkillsDir = filepath.Join(app.Config.DataDir, "skills")
+	factory.DataDir = app.Config.DataDir
 	var req struct {
 		Content string `json:"content"`
 	}

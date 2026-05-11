@@ -62,11 +62,12 @@ func TestParseSkillFrontmatter_NoFrontmatter(t *testing.T) {
 }
 
 func TestSkillManager_LoadSkills(t *testing.T) {
-	dir := t.TempDir()
-	writeSkillFile(t, dir, "deploy", "---\ndescription: Use when deploying.\n---\n# Deploy")
-	writeSkillFile(t, dir, "backup", "---\ndescription: Use when backing up.\n---\n# Backup")
+	dataDir := t.TempDir()
+	skillsDir := filepath.Join(dataDir, "skills")
+	writeSkillFile(t, skillsDir, "deploy", "---\ndescription: Use when deploying.\n---\n# Deploy")
+	writeSkillFile(t, skillsDir, "backup", "---\ndescription: Use when backing up.\n---\n# Backup")
 
-	sm := NewSkillManager(dir)
+	sm := NewSkillManager(dataDir)
 	skills, err := sm.LoadSkills()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -84,10 +85,11 @@ func TestSkillManager_LoadSkills(t *testing.T) {
 }
 
 func TestSkillEntry_Body(t *testing.T) {
-	dir := t.TempDir()
-	writeSkillFile(t, dir, "deploy", "---\ndescription: Use when deploying.\n---\n\n# Deploy Steps")
+	dataDir := t.TempDir()
+	skillsDir := filepath.Join(dataDir, "skills")
+	writeSkillFile(t, skillsDir, "deploy", "---\ndescription: Use when deploying.\n---\n\n# Deploy Steps")
 
-	sm := NewSkillManager(dir)
+	sm := NewSkillManager(dataDir)
 	skills, _ := sm.LoadSkills()
 	if len(skills) != 1 {
 		t.Fatalf("expected 1 skill")
@@ -102,10 +104,11 @@ func TestSkillEntry_Body(t *testing.T) {
 }
 
 func TestSkillManager_LoadSkills_ErrorEntry(t *testing.T) {
-	dir := t.TempDir()
-	writeSkillFile(t, dir, "broken", "not valid frontmatter")
+	dataDir := t.TempDir()
+	skillsDir := filepath.Join(dataDir, "skills")
+	writeSkillFile(t, skillsDir, "broken", "not valid frontmatter")
 
-	sm := NewSkillManager(dir)
+	sm := NewSkillManager(dataDir)
 	skills, err := sm.LoadSkills()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -122,8 +125,8 @@ func TestSkillManager_LoadSkills_ErrorEntry(t *testing.T) {
 }
 
 func TestSkillManager_LoadSkills_Empty(t *testing.T) {
-	dir := t.TempDir()
-	sm := NewSkillManager(dir)
+	dataDir := t.TempDir()
+	sm := NewSkillManager(dataDir)
 	skills, err := sm.LoadSkills()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -134,14 +137,15 @@ func TestSkillManager_LoadSkills_Empty(t *testing.T) {
 }
 
 func TestSkillManager_ComputeHash_Empty(t *testing.T) {
-	dir := t.TempDir()
-	sm := NewSkillManager(dir)
+	dataDir := t.TempDir()
+	sm := NewSkillManager(dataDir)
 	hash, err := sm.ComputeHash()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if hash == "" {
-		t.Error("expected non-empty hash for empty dir")
+	// Both subdirs don't exist → empty hash
+	if hash != "" {
+		t.Errorf("expected empty hash when no skill dirs exist, got %q", hash)
 	}
 }
 
@@ -152,17 +156,18 @@ func TestSkillManager_ComputeHash_NonExistentDir(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if hash != "" {
-		t.Errorf("expected empty hash for non-existent dir, got %q", hash)
+		t.Errorf("expected empty hash for non-existent dataDir, got %q", hash)
 	}
 }
 
 func TestSkillManager_ComputeHash_ChangesOnModify(t *testing.T) {
-	dir := t.TempDir()
-	writeSkillFile(t, dir, "deploy", "---\ndescription: Use when deploying.\n---\n# Deploy")
-	sm := NewSkillManager(dir)
+	dataDir := t.TempDir()
+	skillsDir := filepath.Join(dataDir, "skills")
+	writeSkillFile(t, skillsDir, "deploy", "---\ndescription: Use when deploying.\n---\n# Deploy")
+	sm := NewSkillManager(dataDir)
 	h1, _ := sm.ComputeHash()
 	time.Sleep(10 * time.Millisecond)
-	path := filepath.Join(dir, "deploy", "SKILL.md")
+	path := filepath.Join(skillsDir, "deploy", "SKILL.md")
 	os.Chtimes(path, time.Now(), time.Now())
 	h2, _ := sm.ComputeHash()
 	if h1 == h2 {
@@ -221,6 +226,74 @@ func TestSkillManager_RenderList_BudgetDegradation(t *testing.T) {
 	}
 	if list == "" {
 		t.Error("expected non-empty list even with budget pressure")
+	}
+}
+
+func TestSkillManager_LoadSkills_DualDirectory(t *testing.T) {
+	dataDir := t.TempDir()
+	builtinDir := filepath.Join(dataDir, "skills_builtin")
+	customDir := filepath.Join(dataDir, "skills")
+
+	// Write builtin skills
+	writeSkillFile(t, builtinDir, "deploy", "---\ndescription: Builtin deploy skill.\n---\n# Builtin Deploy")
+	writeSkillFile(t, builtinDir, "backup", "---\ndescription: Builtin backup skill.\n---\n# Builtin Backup")
+
+	// Write custom skills (including one that shadows builtin)
+	writeSkillFile(t, customDir, "deploy", "---\ndescription: Custom deploy skill.\n---\n# Custom Deploy")
+	writeSkillFile(t, customDir, "monitor", "---\ndescription: Custom monitor skill.\n---\n# Custom Monitor")
+
+	sm := NewSkillManager(dataDir)
+	skills, err := sm.LoadSkills()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Should have 4 entries: backup(builtin), deploy(builtin), deploy(custom), monitor(custom)
+	if len(skills) != 4 {
+		t.Fatalf("expected 4 skills, got %d", len(skills))
+	}
+
+	// Verify sorting: name ascending, same name → custom before builtin
+	expected := []struct{ name, source string }{
+		{"backup", "builtin"},
+		{"deploy", "custom"},
+		{"deploy", "builtin"},
+		{"monitor", "custom"},
+	}
+	for i, exp := range expected {
+		if skills[i].Name != exp.name {
+			t.Errorf("skills[%d].Name = %q, want %q", i, skills[i].Name, exp.name)
+		}
+		if skills[i].Source != exp.source {
+			t.Errorf("skills[%d].Source = %q, want %q", i, skills[i].Source, exp.source)
+		}
+	}
+}
+
+func TestSkillManager_RenderList_ShadowsBuiltin(t *testing.T) {
+	entries := []SkillEntry{
+		{Name: "backup", Description: "Builtin backup.", Status: "ok", Source: "builtin"},
+		{Name: "deploy", Description: "Custom deploy.", Status: "ok", Source: "custom"},
+		{Name: "deploy", Description: "Builtin deploy.", Status: "ok", Source: "builtin"},
+		{Name: "monitor", Description: "Custom monitor.", Status: "ok", Source: "custom"},
+	}
+	sm := NewSkillManager("")
+	list := sm.RenderList(entries)
+
+	// Should include custom deploy, not builtin deploy
+	if !strings.Contains(list, "- deploy: Custom deploy.") {
+		t.Error("missing custom deploy in rendered list")
+	}
+	if strings.Contains(list, "Builtin deploy") {
+		t.Error("builtin deploy should be shadowed by custom")
+	}
+
+	// Should include backup and monitor
+	if !strings.Contains(list, "- backup: Builtin backup.") {
+		t.Error("missing builtin backup in rendered list")
+	}
+	if !strings.Contains(list, "- monitor: Custom monitor.") {
+		t.Error("missing custom monitor in rendered list")
 	}
 }
 
