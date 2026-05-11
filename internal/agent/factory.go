@@ -117,9 +117,7 @@ Good: "清理 30 天前的日志"
 Bad: "在 local110 和 local201 上重启 nginx" — device names belong in host_ids, not intent
 </example>`
 
-const orchestrationPrompt = `
-
-## Complex Multi-Step Tasks
+const orchestrationPrompt = `## Complex Multi-Step Tasks
 
 **Explore → Plan → Confirm → Act → Verify**
 

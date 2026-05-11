@@ -164,8 +164,7 @@ func strVal(input map[string]any, key string) string {
 	return v
 }
 
-const todoTaskPromptSection = `
-## Task Management (TodoTask tool)
+const todoTaskPromptSection = `## Task Management (TodoTask tool)
 
 Use the TodoTask tool proactively to track progress on complex tasks.
 
