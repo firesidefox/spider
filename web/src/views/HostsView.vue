@@ -285,13 +285,27 @@
               <div class="form-row"><label>API Key</label><input v-model="faceForm.credential" class="input" type="password" autocomplete="new-password" /></div>
             </template>
           </template>
-          <div v-if="docGroups.length > 0" class="form-row">
+          <div class="form-row">
             <label>知识来源</label>
-            <div class="ks-checkboxes">
+            <div class="ks-mode-tabs">
+              <button type="button" class="btn btn-sm" :class="{ active: ksMode === 'global' }" @click="setKsMode('global')">全局</button>
+              <button type="button" class="btn btn-sm" :class="{ active: ksMode === 'group' }" @click="setKsMode('group')">文档组</button>
+              <button type="button" class="btn btn-sm" :class="{ active: ksMode === 'doc' }" @click="setKsMode('doc')">具体文档</button>
+            </div>
+            <div v-if="ksMode === 'group' && docGroups.length > 0" class="ks-checkboxes">
               <label v-for="g in docGroups" :key="g.id" class="checkbox-label">
-                <input type="checkbox" :value="g.id" :checked="faceForm.knowledge_sources.some(k => k.type==='group' && k.id===g.id)"
-                  @change="toggleFormKnowledgeSource(g.id)" />
+                <input type="checkbox"
+                  :checked="faceForm.knowledge_sources.some(k => k.type === 'group' && k.id === g.id)"
+                  @change="toggleKs('group', g.id)" />
                 {{ g.name }}
+              </label>
+            </div>
+            <div v-if="ksMode === 'doc' && allDocs.length > 0" class="ks-checkboxes">
+              <label v-for="d in allDocs" :key="d.id" class="checkbox-label">
+                <input type="checkbox"
+                  :checked="faceForm.knowledge_sources.some(k => k.type === 'doc' && k.id === d.id)"
+                  @change="toggleKs('doc', d.id)" />
+                {{ d.title || d.source_file }}
               </label>
             </div>
           </div>
@@ -315,7 +329,7 @@ import {
   type Host, type AccessFace, type Fingerprint, type Memory,
 } from '../api/hosts'
 import { listSSHKeys, type SafeSSHKey } from '../api/ssh-keys'
-import { listGroups, type DocumentGroup } from '../api/documents'
+import { listGroups, listDocuments, type DocumentGroup, type Document } from '../api/documents'
 
 const router = useRouter()
 const hosts = ref<Host[]>([])
@@ -339,6 +353,8 @@ const showAddFace = ref(false)
 const editFaceTarget = ref<AccessFace | null>(null)
 const sshKeys = ref<SafeSSHKey[]>([])
 const docGroups = ref<DocumentGroup[]>([])
+const ksMode = ref<'global' | 'group' | 'doc'>('global')
+const allDocs = ref<Document[]>([])
 
 const editingOverview = ref(false)
 const overviewSaving = ref(false)
@@ -496,6 +512,19 @@ function toggleFormKnowledgeSource(groupId: number) {
     : [...ks, { type: 'group', id: groupId }]
 }
 
+function setKsMode(mode: 'global' | 'group' | 'doc') {
+  ksMode.value = mode
+  faceForm.value.knowledge_sources = []
+}
+
+function toggleKs(type: 'group' | 'doc', id: number) {
+  const ks = faceForm.value.knowledge_sources
+  const exists = ks.some(k => k.type === type && k.id === id)
+  faceForm.value.knowledge_sources = exists
+    ? ks.filter(k => !(k.type === type && k.id === id))
+    : [...ks, { type, id }]
+}
+
 function onRestAuthTypeChange() {
   // 无需前端清空；后端 Update 按 auth type 清空无关字段
 }
@@ -547,12 +576,21 @@ function startEditFace(face: AccessFace) {
     header_name: face.header_name || '',
     knowledge_sources: face.knowledge_sources ? [...face.knowledge_sources] : [],
   }
+  const ks = face.knowledge_sources ?? []
+  if (ks.length === 0) {
+    ksMode.value = 'global'
+  } else if (ks[0].type === 'doc') {
+    ksMode.value = 'doc'
+  } else {
+    ksMode.value = 'group'
+  }
   showAddFace.value = true
 }
 
 function openAddFace() {
   faceForm.value = emptyFaceForm()
   editFaceTarget.value = null
+  ksMode.value = 'global'
   showAddFace.value = true
 }
 
@@ -597,13 +635,15 @@ function handleOutsideClick(e: MouseEvent) {
 onMounted(async () => {
   window.addEventListener('keydown', handleEsc)
   document.addEventListener('mousedown', handleOutsideClick)
-  const [, keys, groups] = await Promise.all([
+  const [, keys, groups, docs] = await Promise.all([
     load(),
     listSSHKeys().catch((): SafeSSHKey[] => []),
     listGroups().catch((): DocumentGroup[] => []),
+    listDocuments().catch((): Document[] => []),
   ])
   sshKeys.value = keys
   docGroups.value = groups
+  allDocs.value = docs
 })
 
 onUnmounted(() => {
@@ -745,4 +785,14 @@ onUnmounted(() => {
 .input { width: 100%; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 13px; box-sizing: border-box; }
 .input:focus { outline: none; border-color: var(--primary); }
 .tags { display: flex; gap: 6px; flex-wrap: wrap; }
+
+.ks-mode-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+.ks-mode-tabs .btn.active {
+  background: var(--accent);
+  color: #fff;
+}
 </style>
