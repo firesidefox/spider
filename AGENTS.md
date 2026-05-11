@@ -1,71 +1,71 @@
 <claude-mem-context>
 # Memory Context
 
-# [spider.ai] recent context, 2026-05-10 6:42pm GMT+8
+# [spider.ai] recent context, 2026-05-11 1:24pm GMT+8
 
 Legend: 🎯session 🔴bugfix 🟣feature 🔄refactor ✅change 🔵discovery ⚖️decision
 Format: ID TIME TYPE TITLE
 Fetch details: get_observations([IDs]) | Search: mem-search skill
 
-### May 10, 2026
-S1185 spider.ai — Context Compaction Feature: Phases 5 & 6 Implementation (继续 spec) (May 10 at 5:38 PM)
-2043 5:47p 🔴 mockMsgStore ListAfterMessage Stub Added to Fix Interface Mismatch
-2044 " 🟣 Phase 3 Compactor Core Logic Committed
-2045 5:48p 🟣 Phase 3 Compactor Implementation Completed and Committed
-2047 5:49p ✅ Phase 4 CompactionConfig Added to config.go
-2049 5:55p 🟣 Phase 4 Agent Integration Complete
-2050 " 🟣 Phase 5 Unit Tests for Compactor Logic
-2051 5:56p 🔄 Compactor Uses summaryStorer Interface Instead of Concrete *store.SummaryStore
-2053 " 🟣 Compactor Unit Tests Written in compactor_test.go
-2054 6:01p 🟣 Phase 5 Unit Tests — All 12 Tests Pass, Committed
-2055 6:02p 🔵 spider.ai llm.Client Interface — Actual Signature Differs from Test Mock
-2056 " 🟣 Phase 6 Integration Test File Created — compaction_integration_test.go
-2057 6:03p 🟣 Phase 6 Integration Tests — Infrastructure and First Two Tests Written
-2058 " 🟣 Phase 6 Integration Tests — 5 Test Functions Written in compaction_integration_test.go
-2059 6:04p 🟣 Phase 6 Integration Tests Complete — 7 Test Functions in compaction_integration_test.go
-2060 " ✅ Phase 6 Integration Tests — Build Verification Passed
-2061 6:06p 🟣 Phase 6 Integration Tests — All 7 Pass, Committed as 3e7e5e2
-2062 " 🟣 Phase 6 Integration Tests Complete — Committed a3986d2
-2063 " ✅ Full Build and Test Suite Green — All 11 Packages Pass
-S1193 spider.ai — Context Compaction Merged to Main (May 10 at 6:07 PM)
-2066 6:10p 🔵 Context Compaction — Full Implementation Structure Confirmed
-2067 " 🔵 Integration Test Hardcodes Local DB Path — CI Incompatible
-2069 6:11p 🔵 Code Quality Review — 8 Issues Found in Context Compaction Code
-2070 " 🔵 Efficiency Review — 4 Issues Found in Context Compaction Hot Path
-2071 6:12p 🔵 Code Review Findings — Quality, Efficiency, and Reuse Issues Identified
-2072 " 🔄 Extract HTTP Header Setup in ClaudeClient — Eliminate Duplication
-2074 6:19p ⚖️ spider.ai — Merge Directly to Main, No PR
-2076 " 🟣 spider.ai — Context Compaction Merged to Main
-S1194 spider.ai — Context Compaction Spec 继续推进中 (May 10 at 6:19 PM)
-2077 6:20p 🔵 spider.ai — Context Compaction Spec 继续推进中
-S1196 BatchExecuteTool confirmed not redundant — kept as distinct tool (May 10 at 6:20 PM)
-2080 6:22p 🔵 ExecuteCLITool vs BatchExecuteTool — not redundant, complementary
-2081 6:23p ⚖️ BatchExecuteTool confirmed not redundant — kept as distinct tool
-S1197 spider.ai Context Compaction — Full Implementation Code Review (May 10 at 6:23 PM)
-2082 " 🟣 spider.ai — Context Compaction Feature Implemented
-2083 " 🔵 spider.ai — Context Compaction Code Review: 5 Issues Found
-2084 6:26p 🔵 spider.ai Context Compaction — Full Implementation Code Review
-S1208 codex:review Skill Invoked on spider.ai Project (May 10 at 6:26 PM)
-2085 6:27p 🔴 spider.ai — Context Compaction: 4 Critical Bug Fixes Queued
-2086 6:28p 🔴 spider.ai — Context Compaction: 2 More Bugs Queued (Fix #5 and #6)
-2087 " 🔵 spider.ai — Context Compaction: 3 Minor Bugs and Test Coverage Gaps Identified
-2088 6:30p 🔴 spider.ai — Fix #1 Complete: ListAfterMessage Timestamp Precision
-2089 " 🔴 spider.ai — Fix #2 In Progress: findBoundaryByTurns Sentinel Ambiguity
-2090 " 🔴 spider.ai — Fix #3 Complete: Schema Migration Errors No Longer Silently Swallowed
-2091 6:31p 🔴 spider.ai — Fix #4 Complete: Factory.SummaryStore Nil Panic Guarded
-2092 6:32p 🔵 spider.ai — ClaudeClient.CountTokens Sends Empty System Field
-2093 " 🔴 spider.ai — Fix #5 Complete: CountTokens Fallback to EstimateTokens on Failure
-2095 6:34p 🔴 spider.ai — Fix #6 Complete: Integration Test Hardcoded Path Removed
-2096 " 🔴 spider.ai — Fix #7: EstimateTokens Short String Edge Case + Fix #8: summarize/consolidate Retry
-2099 6:35p 🟣 spider.ai — TestListAfterMessage_SameSecond Added to Verify rowid Fix
-2101 6:36p 🟣 spider.ai — 3 New Unit Tests Added to compactor_test.go
-2102 6:39p 🔵 codex:review Skill Invoked on spider.ai Project
-S1209 codex:review 不支持自定义 focus 文本 (May 10 at 6:39 PM)
-2103 " 🔵 spider.ai — Context Compaction Spec 继续推进中
-2104 6:40p 🔵 spider.ai — 18 files changed since base commit 0e279b0
-2105 " 🔵 codex:review 不支持自定义 focus 文本
-S1210 Adversarial Review Command Triggered on Session (May 10 at 6:40 PM)
-2106 6:41p 🔵 Adversarial Review Command Triggered on Session
-S1213 codex:status — 检查对抗性审查任务状态 (May 10 at 6:41 PM)
-S1211 对工作树差异进行对抗性审查（Adversarial Review） (May 10 at 6:41 PM)
+### May 11, 2026
+S1619 spider.ai System Prompt Updated — Complex Multi-Step Task Examples (May 11 at 12:46 PM)
+2861 12:52p 🟣 ParticleCanvas.vue merged to main — final commit f9b306a
+2863 12:53p 🟣 LoginView.vue — ParticleCanvas integrated as animated background layer
+2864 " 🔵 LoginView.vue integration spec review — all 7 requirements passed
+2865 12:54p 🟣 LoginView.vue merged to main — ParticleCanvas integration complete
+2866 12:55p ⚖️ Built-in + Custom Skills Architecture Plan Documented
+2867 12:56p 🔵 SkillManager Current Structure Analyzed for Dual-Directory Refactor
+2868 " ✅ Implementation of Built-in + Custom Skills Plan Commenced
+2869 " 🔴 LoginView.vue — isDark reactivity bug fixed with computed ref
+2870 " ✅ Built-in + Custom Skills Implementation Tasks Created
+2873 " ✅ Dual-Directory and Shadow Tests Added to skill_manager_test.go
+2872 " ✅ spider.ai frontend build successful — ParticleCanvas integration verified
+2874 12:58p 🟣 Source Field Added to SkillEntry Struct
+2875 " 🟣 LoadSkills Refactored for Dual-Directory Loading with Source Tagging
+2876 12:59p 🟣 RenderList Updated to Shadow Builtin Skills with Custom Overrides
+2877 " ✅ All Existing Tests Updated for dataDir Constructor Pattern
+2880 1:02p 🔵 Claude Code Built-in Skills Architecture — Full Inventory and Mechanism
+2881 " ✅ spider.ai — Factory.SkillsDir renamed to Factory.DataDir for dual-directory architecture
+2879 " 🔵 Memory Agent Continuation — No New Primary Session Activity
+2883 " ✅ spider.ai — All Factory.SkillsDir references migrated to Factory.DataDir
+2882 " 🔵 spider.ai web frontend build succeeds with chunk size warning
+2884 1:03p 🔴 spider.ai — Missing filepath import in agent factory
+2886 " 🟣 spider.ai — SkillManager dual-directory loading passes all tests and builds clean
+2885 " 🟣 spider.ai Go backend rebuilt and restarted successfully after filepath fix
+2887 " 🟣 spider.ai — All internal package tests pass after Task 1 refactor
+2888 1:04p 🟣 spider.ai — Task 1 committed: SkillManager dual-dir loading with Source field
+2889 " 🟣 spider.ai — ParticleCanvas particle radius increased to 4px, committed to main
+2890 1:05p ✅ spider.ai System Prompt Updated with Complex Multi-Step Task Examples
+2891 " 🔵 System Prompt Construction Lives in internal/agent/factory.go
+2892 " 🔵 BuildSystemPrompt Architecture — Dynamic Host Inventory + Static Behavior Sections
+2893 " 🔵 toolBehaviorPrompt Content — Tool Usage Guidelines with Explore/Act Phase Model
+2894 1:06p 🔵 spider.ai — Built-in + Custom Skills Implementation Plan (910 lines) reviewed
+2896 " ✅ spider.ai System Prompt Updated — Complex Multi-Step Task Examples
+S1620 spider.ai Agent — Complex Multi-Step Task Scenarios and System Prompt Update (May 11 at 1:06 PM)
+2895 " ✅ spider.ai — Task 1 implementation verified; Task 2-5 plan reviewed
+2897 1:07p 🟣 spider.ai Agent — Complex Multi-Step Task Workflow System Prompt
+2898 " ⚖️ spider.ai Agent — Complex Multi-Step Task Scenarios and System Prompt Update
+S1623 Add complexTaskPrompt to spider.ai agent factory — bilingual proposal for user review before writing to code (May 11 at 1:07 PM)
+S1624 用户询问是否可以简化某个提示词（prompt） (May 11 at 1:09 PM)
+S1621 Add complexTaskPrompt section to agent prompts — bilingual (English + Chinese) review of proposed content (May 11 at 1:09 PM)
+S1626 spider.ai Agent — Complex Multi-Step Task Capability Showcase + System Prompt Update (May 11 at 1:12 PM)
+2899 1:14p ⚖️ spider.ai Agent — Complex Multi-Step Task Capability Showcase + System Prompt Update
+S1628 精简 Complex Multi-Step Tasks 规则 — 参考 CC 风格，减少冗余示例 (May 11 at 1:14 PM)
+2901 " 🟣 SyncBuiltinSkills — embedded skills written to disk on startup
+S1630 用户询问如何只查看系统提示词（排除动态注入内容） (May 11 at 1:14 PM)
+S1627 用户询问对 Complex Multi-Step Tasks 规则的建议，参考 CC 风格精简 (May 11 at 1:14 PM)
+2900 1:17p 🔵 用户询问如何只查看系统提示词（排除动态注入内容）
+2902 1:20p 🔵 User Queried Status of Previous Task Thread
+2903 1:21p 🟣 SyncBuiltinSkills Implemented for spider.ai — Task Interrupted Before Commit
+2904 " 🔵 SyncBuiltinSkills — Full State Confirmed, Uncommitted
+2906 " 🟣 SyncBuiltinSkills committed to main — Task 2 complete
+2907 " 🔵 Codex made unrequested host ID validation improvements
+2905 " 🔵 SyncBuiltinSkills Tests Confirmed PASS — Full TDD Sequence Recovered from Session Log
+2908 1:22p 🔵 spider.ai built-in skills feature — commit history confirmed
+2910 " 🟣 Skills API updated — RESTful source-prefixed routes + Source field
+S1633 spider.ai — system prompt update plan written for BuildSystemPrompt in internal/agent/factory.go (May 11 at 1:22 PM)
+2913 1:23p ⚖️ spider.ai Agent System Prompt — Complex Multi-Step Task Scenarios
+2911 " 🟣 handler.go routes updated — source-prefixed skills API wired
+2912 " 🟣 Task 3 committed — RESTful skills API with source prefix
+2914 1:24p 🟣 spider.ai factory.go — System Prompt Refactor Plan Queued
 </claude-mem-context>
