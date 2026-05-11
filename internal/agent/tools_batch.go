@@ -28,14 +28,14 @@ func NewBatchExecuteTool(hosts *store.HostStore, faces *store.AccessFaceStore, s
 func (t *BatchExecuteTool) DefaultRiskLevel() RiskLevel { return RiskL2 }
 func (t *BatchExecuteTool) Name() string                  { return "RunCommandBatch" }
 func (t *BatchExecuteTool) Description() string {
-	return "Execute a CLI command on multiple hosts in parallel. Has side effects. Use only after confirming intent in Plan phase. Always set `intent` to a short goal description (e.g. \"重启 nginx 使配置生效\")."
+	return "Execute a CLI command on multiple hosts in parallel. Has side effects. Use only after confirming intent in Plan phase. Always set `intent` to a short goal description (e.g. \"重启 nginx 使配置生效\"). If you are unsure of host IDs, call ListHosts first — never guess host IDs."
 }
 
 func (t *BatchExecuteTool) InputSchema() map[string]any {
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
-			"host_ids":   map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "List of host IDs to target (use instead of tag)"},
+			"host_ids":   map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "Host IDs only (NOT names). Call ListHosts first if you don't have IDs."},
 			"tag":        map[string]any{"type": "string", "description": "Target all hosts with this tag (use instead of host_ids)"},
 			"command":    map[string]any{"type": "string", "description": "Shell command to execute on all target hosts"},
 			"risk_level": map[string]any{"type": "string", "enum": []string{"L1", "L2", "L3", "L4"}, "description": "Risk level. L1=read-only, L2=standard change, L3=destructive, L4=critical"},
@@ -80,14 +80,22 @@ func (t *BatchExecuteTool) Execute(ctx context.Context, input map[string]any) (*
 		}
 		hostList = hosts
 	} else if ids, ok := input["host_ids"].([]any); ok {
+		var notFound []string
 		for _, id := range ids {
 			if sid, ok := id.(string); ok {
 				h, err := t.hosts.GetByID(sid)
 				if err != nil {
-					return &ToolResult{Content: fmt.Sprintf("host %s not found: %v", sid, err), IsError: true, RiskLevel: risk}, nil
+					notFound = append(notFound, sid)
+				} else {
+					hostList = append(hostList, h)
 				}
-				hostList = append(hostList, h)
 			}
+		}
+		if len(notFound) > 0 && len(hostList) == 0 {
+			return &ToolResult{Content: fmt.Sprintf("hosts not found: %v\nhost_ids requires IDs, not names. Call ListHosts first and use the \"id\" field from the response.", notFound), IsError: true, RiskLevel: risk}, nil
+		}
+		if len(notFound) > 0 {
+			log.Printf("WARNING: RunCommandBatch skipping unknown host IDs: %v", notFound)
 		}
 	}
 	if len(hostList) == 0 {
@@ -138,3 +146,5 @@ func (t *BatchExecuteTool) Execute(ctx context.Context, input map[string]any) (*
 	out, _ := json.Marshal(results)
 	return &ToolResult{Content: string(out) + execNudge, RiskLevel: risk}, nil
 }
+
+func (t *BatchExecuteTool) SystemPromptSection() string { return runCommandPromptSection }

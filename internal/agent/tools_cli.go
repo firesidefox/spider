@@ -107,3 +107,25 @@ func (t *ExecuteCLITool) Execute(ctx context.Context, input map[string]any) (*To
 	}
 	return &ToolResult{Content: string(out) + execNudge, RiskLevel: risk}, nil
 }
+
+const runCommandPromptSection = `### RunCommand / RunCommandBatch (has side effects)
+
+**When to use:**
+- Explore phase: read-only commands (ls, cat, grep, ps, df, systemctl status) — use freely
+- Act phase: state-changing commands (rm, kill, systemctl restart, apt, chmod) — only after confirming intent
+
+**When NOT to use:** Do not run state-changing commands before the user has confirmed the plan.
+
+<example>
+User: Clean up logs older than 30 days on all app servers.
+Assistant: First calls RunCommandBatch with "find /var/log -mtime +30" to preview what would be deleted. Confirms with user. Then runs the delete command.
+</example>
+
+<example>
+User: Restart the database service.
+Assistant: Confirms the target host and service name, then calls RunCommand with "systemctl restart postgresql".
+</example>`
+
+func (t *ExecuteCLITool) SystemPromptSection() string {
+	return runCommandPromptSection
+}
