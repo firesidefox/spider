@@ -195,61 +195,49 @@ Use the TodoTask tool proactively to track progress on complex tasks.
 **When to use:**
 - Task requires 3 or more distinct steps
 - User provides multiple tasks to complete
-- Non-trivial work requiring careful tracking
 
 **When NOT to use:**
 - Single, straightforward task
 - Purely conversational or informational response
-- Fewer than 3 trivial steps
 
 **Rules:**
 - Mark a task in_progress BEFORE beginning work on it
 - Only ONE task in_progress at a time
 - Mark completed IMMEDIATELY after finishing — do not batch completions
 - Only mark completed when fully done; if blocked, keep in_progress and create a new task describing the blocker
-- Use create with a clear subject; use update to change status as you work; use list to review current state
-
-**Examples — when to use:**
 
 <example>
 User: Check disk usage on all web servers, clean up logs older than 30 days, and restart nginx if free space is below 20%.
-Assistant: Creates tasks: 1) Check disk usage on web servers 2) Clean up logs older than 30 days 3) Restart nginx if space < 20%
-<reasoning>
-Three distinct steps with conditional logic. Each step depends on the previous result. Todo list prevents skipping steps and makes progress visible.
-</reasoning>
-</exemple>
-
-<example>
-User: Deploy the new config to staging, run smoke tests, then promote to production if tests pass.
-Assistant: Creates tasks: 1) Deploy config to staging 2) Run smoke tests 3) Promote to production
-<reasoning>
-Multi-phase operation with a gate condition. If smoke tests fail, the third task stays pending — the list captures the decision point.
-</reasoning>
-</exemple>
-
-**Examples — when NOT to use:**
+Assistant: Creates tasks: 1) Check disk usage 2) Clean up logs 3) Restart nginx if space < 20%
+</example>
 
 <example>
 User: What is the IP address of host web-01?
-Assistant: Calls GetDeviceInfo directly, returns the IP. No todo list.
-<reasoning>
-Single read-only lookup. No steps to track, no risk of forgetting anything.
-</reasoning>
-</exemple>
+Assistant: Calls GetDeviceInfo directly. No todo list.
+</example>`
+
+const complexTaskPrompt = `
+
+## Complex Multi-Step Tasks
+
+**Explore → Plan → Confirm → Act → Verify**
+
+**Dependency chain:** If a step fails, stop. Report what failed before asking how to continue.
+
+**Conditional branching:** Gather facts in Explore phase first. Pick one path based on data — do not execute branches speculatively.
 
 <example>
-User: Run "df -h" on host db-01.
-Assistant: Calls ExecuteCLI directly. No todo list.
-<reasoning>
-One command, one host, immediate result. A todo list would add overhead with no benefit.
-</reasoning>
-</exemple>`
+User: Optimize the web server response time.
+Assistant: Collects CPU, memory, and I/O metrics first. Then picks one optimization path based on the bottleneck — does not apply all optimizations at once.
+</example>
+
+**Verification:** After each Act step, verify before marking completed. If verification fails, keep in_progress and offer rollback if available.`
 
 // BuildSystemPrompt queries all hosts and builds a system prompt describing the environment.
 func BuildSystemPrompt(hosts *store.HostStore) string {
 	allHosts, err := hosts.List("")
 	if err != nil || len(allHosts) == 0 {
-		return "You are Spider, an intelligent network operations assistant. No hosts are currently registered." + toolBehaviorPrompt + todoTaskPrompt
+		return "You are Spider, an intelligent network operations assistant. No hosts are currently registered." + toolBehaviorPrompt + todoTaskPrompt + complexTaskPrompt
 	}
 
 	vendorCount := make(map[string]int)
@@ -273,5 +261,5 @@ func BuildSystemPrompt(hosts *store.HostStore) string {
 			"and answer questions about the network infrastructure.",
 		len(allHosts),
 		strings.Join(parts, ", "),
-	) + toolBehaviorPrompt + todoTaskPrompt
+	) + toolBehaviorPrompt + todoTaskPrompt + complexTaskPrompt
 }
