@@ -16,12 +16,15 @@
         <div v-if="dragging" class="drop-hint">松手上传 .md 文件</div>
         <template v-else>
           <div
-            v-for="skill in skills" :key="skill.name"
+            v-for="skill in skills" :key="skill.source + ':' + skill.name"
             class="sp-row"
-            :class="{ selected: selected?.name === skill.name }"
+            :class="{ selected: selected?.name === skill.name && selected?.source === skill.source }"
             @click="selectSkill(skill)"
           >
-            <span class="sp-row-name">{{ skill.name }}</span>
+            <span class="sp-row-name">
+              <span v-if="skill.source === 'builtin'" class="sp-lock" title="内置 Skill，只读">🔒</span>
+              {{ skill.name }}
+            </span>
             <span class="badge" :class="skill.status === 'ok' ? 'badge-ok' : 'badge-err'"
               :title="skill.error || undefined">
               {{ skill.status === 'ok' ? 'ok' : 'error' }}
@@ -39,8 +42,17 @@
         <div class="sp-topbar">
           <span class="sp-detail-title">{{ selected.name }}</span>
           <div class="sp-topbar-right">
-            <button class="btn btn-sm btn-primary" @click="triggerUpload(selected.name)">上传新版本</button>
-            <button class="btn btn-sm btn-danger" @click="deleteSkill(selected.name)">删除</button>
+            <button class="btn btn-sm btn-secondary" @click="copySkill(selected)">复制</button>
+            <button
+              class="btn btn-sm btn-primary"
+              :disabled="selected.source === 'builtin'"
+              @click="selected.source === 'custom' && triggerUpload(selected.name)"
+            >上传新版本</button>
+            <button
+              class="btn btn-sm btn-danger"
+              :disabled="selected.source === 'builtin'"
+              @click="selected.source === 'custom' && deleteSkill(selected.name)"
+            >删除</button>
           </div>
         </div>
         <div class="sp-body">
@@ -60,6 +72,26 @@
       </div>
     </div>
 
+    <!-- 复制编辑器 -->
+    <div v-if="showCopyEditor" class="sp-copy-overlay" @click.self="showCopyEditor = false">
+      <div class="sp-copy-modal">
+        <div class="sp-copy-header">
+          <span>复制 "{{ copySourceName }}"</span>
+          <button class="btn btn-sm" @click="showCopyEditor = false">✕</button>
+        </div>
+        <div class="sp-copy-body">
+          <label class="sp-copy-label">新名称</label>
+          <input v-model="copyTargetName" class="sp-copy-input" placeholder="my-skill" />
+          <label class="sp-copy-label">内容</label>
+          <textarea v-model="copyContent" class="sp-copy-textarea" rows="16" />
+        </div>
+        <div class="sp-copy-footer">
+          <button class="btn btn-primary btn-sm" @click="saveCopy">保存为自定义</button>
+          <button class="btn btn-sm" @click="showCopyEditor = false">取消</button>
+        </div>
+      </div>
+    </div>
+
     <input ref="fileInput" type="file" accept=".md" style="display:none" @change="onFileChange" />
   </div>
 </template>
@@ -70,7 +102,7 @@ import CodeBlock from '../components/CodeBlock.vue'
 
 const encodeSkillName = (name: string) => name.split('/').map(encodeURIComponent).join('/')
 
-interface Skill { name: string; status: string; error?: string }
+interface Skill { name: string; status: string; error?: string; source: 'builtin' | 'custom' }
 type UploadStatus = { type: 'idle' } | { type: 'uploading'; name: string } | { type: 'success'; name: string } | { type: 'error'; msg: string }
 
 const skills = ref<Skill[]>([])
@@ -81,6 +113,10 @@ const dragging = ref(false)
 const status = ref<UploadStatus>({ type: 'idle' })
 const fileInput = ref<HTMLInputElement | null>(null)
 const uploadTarget = ref<string | null>(null)
+const showCopyEditor = ref(false)
+const copyContent = ref('')
+const copySourceName = ref('')
+const copyTargetName = ref('')
 
 const statusClass = computed(() => ({
   'sp-status--uploading': status.value.type === 'uploading',
@@ -106,7 +142,7 @@ async function selectSkill(skill: Skill) {
   loading.value = true
   rawContent.value = ''
   try {
-    const res = await fetch(`/api/v1/skills/${encodeSkillName(skill.name)}`)
+    const res = await fetch(`/api/v1/skills/${skill.source}/${encodeSkillName(skill.name)}`)
     if (res.ok) rawContent.value = await res.text()
   } finally {
     loading.value = false
@@ -128,13 +164,13 @@ async function uploadFile(file: File, name: string) {
   setStatus({ type: 'uploading', name })
   try {
     const content = await file.text()
-    const res = await fetch(`/api/v1/skills/${encodeSkillName(name)}`, {
+    const res = await fetch(`/api/v1/skills/custom/${encodeSkillName(name)}`, {
       method: 'PUT', headers: { 'Content-Type': 'text/plain' }, body: content,
     })
     if (res.ok) {
       setStatus({ type: 'success', name })
       await loadSkills()
-      if (selected.value?.name === name) await selectSkill(selected.value)
+      if (selected.value?.name === name && selected.value?.source === 'custom') await selectSkill(selected.value)
     } else {
       const body = await res.text().catch(() => '')
       let msg = '上传失败'
@@ -163,9 +199,32 @@ async function onDrop(e: DragEvent) {
 
 async function deleteSkill(name: string) {
   if (!confirm(`确认删除 Skill "${name}"？`)) return
-  await fetch(`/api/v1/skills/${encodeSkillName(name)}`, { method: 'DELETE' })
+  await fetch(`/api/v1/skills/custom/${encodeSkillName(name)}`, { method: 'DELETE' })
   if (selected.value?.name === name) selected.value = null
   await loadSkills()
+}
+
+async function copySkill(skill: Skill) {
+  loading.value = true
+  rawContent.value = ''
+  try {
+    const res = await fetch(`/api/v1/skills/${skill.source}/${encodeSkillName(skill.name)}`)
+    if (!res.ok) { setStatus({ type: 'error', msg: '复制失败' }); return }
+    const content = await res.text()
+    copyContent.value = content
+    copySourceName.value = skill.name
+    copyTargetName.value = skill.name
+    showCopyEditor.value = true
+  } finally {
+    loading.value = false
+  }
+}
+
+async function saveCopy() {
+  const name = copyTargetName.value.trim()
+  if (!name) { setStatus({ type: 'error', msg: '请输入 Skill 名称' }); return }
+  await uploadFile(new File([copyContent.value], `${name}.md`, { type: 'text/plain' }), name)
+  showCopyEditor.value = false
 }
 
 onMounted(() => { loadSkills() })
@@ -195,6 +254,7 @@ onMounted(() => { loadSkills() })
 .sp-row:hover { background: var(--row-hover); }
 .sp-row.selected { border-left-color: var(--primary); background: rgba(99,102,241,0.1); }
 .sp-row-name { font-size: 13px; font-weight: 500; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sp-lock { font-size: 11px; margin-right: 4px; }
 .sp-empty { color: var(--label); font-size: 13px; padding: 32px 16px; text-align: center; }
 .sp-status {
   font-size: 11px; color: var(--label); padding: 8px 16px;
@@ -228,4 +288,31 @@ onMounted(() => { loadSkills() })
 .sp-empty-state { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--muted); font-size: 14px; }
 .sp-empty-icon { color: var(--border); font-size: 40px; }
 
+.sp-copy-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.4);
+  display: flex; align-items: center; justify-content: center; z-index: 100;
+}
+.sp-copy-modal {
+  background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+  width: 560px; max-height: 80vh; display: flex; flex-direction: column;
+}
+.sp-copy-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 16px; border-bottom: 1px solid var(--border); font-weight: 600; font-size: 13px;
+}
+.sp-copy-body { padding: 16px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; }
+.sp-copy-label { font-size: 12px; color: var(--label); }
+.sp-copy-input {
+  width: 100%; padding: 6px 10px; border: 1px solid var(--border); border-radius: 4px;
+  background: var(--input-bg, var(--bg)); color: var(--text); font-size: 13px;
+}
+.sp-copy-textarea {
+  width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 4px;
+  background: var(--input-bg, var(--bg)); color: var(--text); font-size: 12px;
+  font-family: monospace; resize: vertical;
+}
+.sp-copy-footer {
+  display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--border);
+  justify-content: flex-end;
+}
 </style>
