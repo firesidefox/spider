@@ -243,7 +243,7 @@ func TestReadOnlyToolDescriptionsContainExploreHint(t *testing.T) {
 	tools := []Tool{
 		NewListDevicesTool(nil),
 		NewGetDeviceInfoTool(nil),
-		NewSearchDocsTool(nil),
+		NewSearchDocsTool(nil, nil),
 		NewVerifyTool(nil, nil, nil, nil),
 	}
 	for _, tool := range tools {

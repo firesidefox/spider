@@ -5,7 +5,7 @@ import (
 )
 
 func TestSearchDocsTool_Metadata(t *testing.T) {
-	tool := NewSearchDocsTool(nil)
+	tool := NewSearchDocsTool(nil, nil)
 
 	if tool.Name() != "SearchDocs" {
 		t.Errorf("got name %q, want %q", tool.Name(), "SearchDocs")
@@ -22,7 +22,7 @@ func TestSearchDocsTool_Metadata(t *testing.T) {
 	if !ok {
 		t.Fatal("schema properties missing")
 	}
-	for _, key := range []string{"query", "vendor", "cli_type"} {
+	for _, key := range []string{"query", "vendor", "group_ids", "doc_ids"} {
 		if _, ok := props[key]; !ok {
 			t.Errorf("schema missing property %q", key)
 		}
@@ -34,7 +34,7 @@ func TestSearchDocsTool_Metadata(t *testing.T) {
 }
 
 func TestSearchDocsTool_ImplementsTool(t *testing.T) {
-	var _ Tool = NewSearchDocsTool(nil)
+	var _ Tool = NewSearchDocsTool(nil, nil)
 }
 
 func TestCallRESTAPITool_Metadata(t *testing.T) {
