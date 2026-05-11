@@ -158,3 +158,20 @@ loop:
 	out, _ := json.Marshal(map[string]any{"status": "timeout", "checks": lastResults})
 	return &ToolResult{Content: string(out), IsError: true, RiskLevel: RiskL1}, nil
 }
+
+const verifyToolPromptSection = `### VerifyTool (read-only, has retry semantics)
+
+**When to use:** After a deployment or config change, to poll until a service is ready.
+**When NOT to use:** Don't use for a one-shot check — use RunCommand instead. VerifyTool retries on failure, adding latency when you just need a single result.
+
+<example>
+User: Restart nginx and confirm it's up.
+Assistant: Calls RunCommand to restart, then VerifyTool to poll until nginx responds.
+</example>
+
+<example>
+User: Is port 80 open on web-01?
+Assistant: Calls RunCommand with "ss -tlnp | grep :80". Does NOT use VerifyTool.
+</example>`
+
+func (t *VerifyTool) SystemPromptSection() string { return verifyToolPromptSection }
