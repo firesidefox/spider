@@ -702,9 +702,14 @@ const roleLabel = computed(() => {
   return map[currentUser.value?.role ?? ''] ?? currentUser.value?.role ?? '—'
 })
 
-const activeTab = ref<'info' | 'tokens' | 'ssh-keys' | 'logs' | 'users' | 'install' | 'skills' | 'agent' | 'kb' | 'settings'>(
-  (route.query.tab as string) || 'info'
-)
+const allowedTabs = computed(() => {
+  const base = ['info', 'tokens', 'ssh-keys', 'logs']
+  return isAdmin.value ? [...base, 'users', 'install', 'skills', 'agent', 'kb', 'settings'] : base
+})
+
+const queryTab = route.query.tab as string
+const initialTab = allowedTabs.value.includes(queryTab) ? queryTab : 'info'
+const activeTab = ref<'info' | 'tokens' | 'ssh-keys' | 'logs' | 'users' | 'install' | 'skills' | 'agent' | 'kb' | 'settings'>(initialTab)
 watch(activeTab, (tab) => router.replace({ query: { tab } }))
 const tabTitle = computed(() => ({
   info: '基本信息', tokens: '访问令牌', 'ssh-keys': 'SSH Keys', logs: '操作日志',

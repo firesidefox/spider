@@ -3,6 +3,8 @@ web/node_modules/**
 /spider
 .playwright-mcp/
 .claude/settings.local.json
+.claude/worktrees/
+.gocache/
 .spider/
 cmd/spider/dist/
 .worktrees/
