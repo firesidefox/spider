@@ -1,5 +1,6 @@
 <template>
   <div class="login-page">
+    <ParticleCanvas :isDark="isDarkValue" class="particle-bg" />
     <div class="login-card">
       <div class="login-brand">🕷 Spider</div>
       <h2>登录</h2>
@@ -22,10 +23,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, inject, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { login, setStoredToken } from '../api/auth'
 import { useAuth } from '../composables/useAuth'
+import ParticleCanvas from '../components/ParticleCanvas.vue'
+
+const isDark = inject<() => boolean>('isDark', () => false)
+const isDarkValue = computed(() => isDark())
 
 const router = useRouter()
 const { setUser } = useAuth()
@@ -53,11 +58,21 @@ async function handleLogin() {
 
 <style scoped>
 .login-page {
+  position: relative;
+  overflow: hidden;
   min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
   background: var(--bg);
+}
+.particle-bg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
 }
 .login-card {
   background: var(--card-bg);
@@ -66,6 +81,8 @@ async function handleLogin() {
   padding: 36px 40px;
   width: 380px;
   box-shadow: var(--card-shadow);
+  position: relative;
+  z-index: 1;
 }
 .login-brand {
   font-size: 22px;
