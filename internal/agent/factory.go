@@ -9,6 +9,7 @@ import (
 	"github.com/spiderai/spider/internal/llm"
 	"github.com/spiderai/spider/internal/logger"
 	"github.com/spiderai/spider/internal/permission"
+	"github.com/spiderai/spider/internal/rag"
 	"github.com/spiderai/spider/internal/ssh"
 	"github.com/spiderai/spider/internal/store"
 )
@@ -30,6 +31,8 @@ type Factory struct {
 	TodoTaskStore  *store.TodoTaskStore
 	SSEBroadcaster SSEBroadcaster
 	DataDir        string
+	DocStore       *store.DocumentStore
+	RagStore       *rag.Store
 }
 
 // NewFactory creates a Factory by reading the active provider from the DB.
@@ -196,6 +199,7 @@ func (f *Factory) buildRegistry(conversationID string) *ToolRegistry {
 	registry.Register(NewBatchExecuteTool(f.Hosts, f.AccessFaces, f.SSHPool, f.Logs, f.SSHKeys))
 	registry.Register(NewVerifyTool(f.Hosts, f.AccessFaces, f.SSHPool, f.SSHKeys))
 	registry.Register(NewCallRESTAPITool(f.AccessFaces))
+	registry.Register(NewSearchDocsTool(f.RagStore, f.DocStore))
 	if f.TodoTaskStore != nil {
 		registry.Register(NewTodoTaskTool(f.TodoTaskStore, f.SSEBroadcaster, conversationID))
 	}
