@@ -33,6 +33,19 @@ func (t *ListDevicesTool) InputSchema() map[string]any {
 	}
 }
 
+const listDevicesPromptSection = `## ListDevices / GetDeviceInfo / SearchDocs (read-only, no side effects)
+
+**When to use:** Call these freely at the start of any task to understand the environment.
+
+<example>
+User: Check disk usage on all web servers.
+Assistant: Calls ListDevices to find web servers before running any commands.
+</example>`
+
+func (t *ListDevicesTool) SystemPromptSection() string {
+	return listDevicesPromptSection
+}
+
 func (t *ListDevicesTool) Execute(_ context.Context, input map[string]any) (*ToolResult, error) {
 	tag, _ := input["tag"].(string)
 	hosts, err := t.hosts.List(tag)
