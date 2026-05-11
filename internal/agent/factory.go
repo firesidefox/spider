@@ -78,19 +78,7 @@ func NewFactory(
 // NewAgent creates a new Agent with all tools registered.
 func (f *Factory) NewAgent(systemPrompt string, conversationID string) *Agent {
 	logger.Global().Info().Str("model", f.LLMModel).Str("conv_id", conversationID).Msg("agent factory: creating agent")
-	registry := NewToolRegistry()
-	registry.Register(NewListDevicesTool(f.Hosts))
-	registry.Register(NewGetDeviceInfoTool(f.Hosts))
-	registry.Register(NewExecuteCLITool(f.Hosts, f.AccessFaces, f.SSHPool, f.Logs, f.SSHKeys))
-	registry.Register(NewBatchExecuteTool(f.Hosts, f.AccessFaces, f.SSHPool, f.Logs, f.SSHKeys))
-	registry.Register(NewVerifyTool(f.Hosts, f.AccessFaces, f.SSHPool, f.SSHKeys))
-	registry.Register(NewCallRESTAPITool(f.AccessFaces))
-	if f.TodoTaskStore != nil {
-		registry.Register(NewTodoTaskTool(f.TodoTaskStore, f.SSEBroadcaster, conversationID))
-	}
-	if f.DataDir != "" {
-		registry.Register(NewInvokeSkillTool(filepath.Join(f.DataDir, "skills")))
-	}
+	registry := f.buildRegistry(conversationID)
 
 	hooks := NewHookChain()
 	if f.Enforcer != nil {
