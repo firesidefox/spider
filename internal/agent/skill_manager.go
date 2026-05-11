@@ -58,6 +58,14 @@ func NewSkillManager(dataDir string) *SkillManager {
 	}
 }
 
+// SourceDir returns the directory for the given source ("builtin" or "custom").
+func (sm *SkillManager) SourceDir(source string) string {
+	if source == "builtin" {
+		return sm.builtinDir
+	}
+	return sm.customDir
+}
+
 // ParseSkillFrontmatter splits YAML frontmatter from body and validates required fields.
 func ParseSkillFrontmatter(content string) (skillFrontmatter, string, error) {
 	if !strings.HasPrefix(content, "---") {
@@ -206,28 +214,17 @@ func (sm *SkillManager) ComputeHash() (string, error) {
 }
 
 func (sm *SkillManager) RenderList(entries []SkillEntry) string {
-	// Collect ok entries. Custom (or untagged) entries shadow builtin entries of the same name.
+	// Entries are sorted custom-before-builtin for same name.
+	// Single pass: first occurrence of each name wins (custom shadows builtin).
 	seen := make(map[string]bool)
 	var ok []SkillEntry
 	for _, e := range entries {
-		if e.Status != "ok" {
+		if e.Status != "ok" || seen[e.Name] {
 			continue
 		}
-		if e.Source != "builtin" {
-			seen[e.Name] = true
-			ok = append(ok, e)
-		}
+		seen[e.Name] = true
+		ok = append(ok, e)
 	}
-	for _, e := range entries {
-		if e.Status != "ok" {
-			continue
-		}
-		if e.Source == "builtin" && !seen[e.Name] {
-			ok = append(ok, e)
-		}
-	}
-	// Re-sort by name for stable output
-	sort.Slice(ok, func(i, j int) bool { return ok[i].Name < ok[j].Name })
 
 	if len(ok) == 0 {
 		return ""

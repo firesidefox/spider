@@ -46,12 +46,12 @@
             <button
               class="btn btn-sm btn-primary"
               :disabled="selected.source === 'builtin'"
-              @click="selected.source === 'custom' && triggerUpload(selected.name)"
+              @click="triggerUpload(selected.name)"
             >上传新版本</button>
             <button
               class="btn btn-sm btn-danger"
               :disabled="selected.source === 'builtin'"
-              @click="selected.source === 'custom' && deleteSkill(selected.name)"
+              @click="deleteSkill(selected.name)"
             >删除</button>
           </div>
         </div>
@@ -205,13 +205,19 @@ async function deleteSkill(name: string) {
 }
 
 async function copySkill(skill: Skill) {
+  const isSelected = selected.value?.name === skill.name && selected.value?.source === skill.source
+  if (isSelected && rawContent.value) {
+    copyContent.value = rawContent.value
+    copySourceName.value = skill.name
+    copyTargetName.value = skill.name
+    showCopyEditor.value = true
+    return
+  }
   loading.value = true
-  rawContent.value = ''
   try {
     const res = await fetch(`/api/v1/skills/${skill.source}/${encodeSkillName(skill.name)}`)
     if (!res.ok) { setStatus({ type: 'error', msg: '复制失败' }); return }
-    const content = await res.text()
-    copyContent.value = content
+    copyContent.value = await res.text()
     copySourceName.value = skill.name
     copyTargetName.value = skill.name
     showCopyEditor.value = true

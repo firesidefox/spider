@@ -69,13 +69,8 @@ func getSkillBySourceHandler(dataDir string) http.HandlerFunc {
 			writeError(w, http.StatusBadRequest, "invalid skill name")
 			return
 		}
-		var dir string
-		if source == "builtin" {
-			dir = filepath.Join(dataDir, "skills_builtin")
-		} else {
-			dir = filepath.Join(dataDir, "skills")
-		}
-		mdPath := filepath.Join(dir, filepath.FromSlash(name), "SKILL.md")
+		sm := agent.NewSkillManager(dataDir)
+		mdPath := filepath.Join(sm.SourceDir(source), filepath.FromSlash(name), "SKILL.md")
 		data, err := os.ReadFile(mdPath)
 		if err != nil {
 			if os.IsNotExist(err) {
