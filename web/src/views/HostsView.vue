@@ -144,7 +144,7 @@
                           />
                           {{ g.name }}
                         </label>
-                        <div v-if="docGroups.length === 0" class="ks-empty">暂无文档组</div>
+                        <div v-if="!docGroups || docGroups.length === 0" class="ks-empty">暂无文档组</div>
                       </div>
                     </div>
                   </div>
@@ -292,7 +292,7 @@
               <button type="button" class="btn btn-sm" :class="{ active: ksMode === 'group' }" @click="setKsMode('group')">文档组</button>
               <button type="button" class="btn btn-sm" :class="{ active: ksMode === 'doc' }" @click="setKsMode('doc')">具体文档</button>
             </div>
-            <div v-if="ksMode === 'group' && docGroups.length > 0" class="ks-checkboxes">
+            <div v-if="ksMode === 'group' && docGroups && docGroups.length > 0" class="ks-checkboxes">
               <label v-for="g in docGroups" :key="g.id" class="checkbox-label">
                 <input type="checkbox"
                   :checked="faceForm.knowledge_sources.some(k => k.type === 'group' && k.id === g.id)"
@@ -300,7 +300,7 @@
                 {{ g.name }}
               </label>
             </div>
-            <div v-if="ksMode === 'doc' && allDocs.length > 0" class="ks-checkboxes">
+            <div v-if="ksMode === 'doc' && allDocs && allDocs.length > 0" class="ks-checkboxes">
               <label v-for="d in allDocs" :key="d.id" class="checkbox-label">
                 <input type="checkbox"
                   :checked="faceForm.knowledge_sources.some(k => k.type === 'doc' && k.id === d.id)"
@@ -527,9 +527,6 @@ function toggleKs(type: 'group' | 'doc', id: number) {
 
 function onRestAuthTypeChange() {
   // 无需前端清空；后端 Update 按 auth type 清空无关字段
-}
-    ? ks.filter(k => !(k.type === 'group' && k.id === groupId))
-    : [...ks, { type: 'group' as const, id: groupId }]
 }
 
 async function submitFace() {
