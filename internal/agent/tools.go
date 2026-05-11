@@ -7,8 +7,6 @@ import (
 	"github.com/spiderai/spider/internal/permission"
 )
 
-// RiskLevel is an alias for permission.RiskLevel, unifying the agent tool
-// risk system with the L1-L4 permission levels.
 type RiskLevel = permission.RiskLevel
 
 const (
@@ -18,8 +16,6 @@ const (
 	RiskL4 = permission.L4Destroy
 )
 
-// InjectMessage is an extra message injected into conversation history after a tool result.
-// Not saved to msgStore — ephemeral context only.
 type InjectMessage struct {
 	Content string
 }
@@ -39,21 +35,37 @@ type Tool interface {
 	Execute(ctx context.Context, input map[string]any) (*ToolResult, error)
 }
 
+// SystemPromptSection is implemented by tools that contribute behavior
+// guidance to the system prompt. BuildSystemPrompt collects sections from
+// all registered tools in registration order and appends them as Layer 2.
+type SystemPromptSection interface {
+	SystemPromptSection() string
+}
+
 type ToolRegistry struct {
-	tools map[string]Tool
+	tools []Tool
+	index map[string]int
 }
 
 func NewToolRegistry() *ToolRegistry {
-	return &ToolRegistry{tools: make(map[string]Tool)}
+	return &ToolRegistry{index: make(map[string]int)}
 }
 
 func (r *ToolRegistry) Register(t Tool) {
-	r.tools[t.Name()] = t
+	r.index[t.Name()] = len(r.tools)
+	r.tools = append(r.tools, t)
 }
 
 func (r *ToolRegistry) Get(name string) (Tool, bool) {
-	t, ok := r.tools[name]
-	return t, ok
+	i, ok := r.index[name]
+	if !ok {
+		return nil, false
+	}
+	return r.tools[i], true
+}
+
+func (r *ToolRegistry) All() []Tool {
+	return r.tools
 }
 
 func (r *ToolRegistry) Definitions() []llm.ToolDef {
