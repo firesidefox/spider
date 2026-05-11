@@ -26,20 +26,21 @@
           <div class="nav-row" :class="{ selected: activeTab === 'users' }" @click="activeTab = 'users'">
             <span class="nav-icon">👥</span><span class="nav-label">用户管理</span>
           </div>
-          <div class="nav-row" :class="{ selected: activeTab === 'install' }" @click="activeTab = 'install'">
-            <span class="nav-icon">📦</span><span class="nav-label">安装</span>
+          <div class="nav-row" :class="{ selected: activeTab === 'settings' }" @click="activeTab = 'settings'; loadSettings()">
+            <span class="nav-icon">⚙️</span><span class="nav-label">偏好设置</span>
           </div>
-          <div class="nav-row" :class="{ selected: activeTab === 'skills' }" @click="activeTab = 'skills'">
-            <span class="nav-icon">🧩</span><span class="nav-label">Skills</span>
-          </div>
+          <div class="nav-section-label">Agent</div>
           <div class="nav-row" :class="{ selected: activeTab === 'agent' }" @click="activeTab = 'agent'; loadAgentSettings(); loadProviders()">
             <span class="nav-icon">🧠</span><span class="nav-label">智能体</span>
           </div>
           <div class="nav-row" :class="{ selected: activeTab === 'kb' }" @click="activeTab = 'kb'; loadRagConfig()">
             <span class="nav-icon">📚</span><span class="nav-label">知识库</span>
           </div>
-          <div class="nav-row" :class="{ selected: activeTab === 'settings' }" @click="activeTab = 'settings'; loadSettings()">
-            <span class="nav-icon">⚙️</span><span class="nav-label">偏好设置</span>
+          <div class="nav-row" :class="{ selected: activeTab === 'skills' }" @click="activeTab = 'skills'">
+            <span class="nav-icon">🧩</span><span class="nav-label">Skills</span>
+          </div>
+          <div class="nav-row" :class="{ selected: activeTab === 'install' }" @click="activeTab = 'install'">
+            <span class="nav-icon">📦</span><span class="nav-label">安装</span>
           </div>
         </template>
       </nav>
