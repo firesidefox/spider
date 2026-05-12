@@ -314,5 +314,49 @@ func migrate(db *sql.DB) error {
 	)`); err != nil {
 		return err
 	}
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS topologies (
+		id         TEXT PRIMARY KEY,
+		name       TEXT UNIQUE NOT NULL,
+		notes      TEXT NOT NULL DEFAULT '',
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL
+	)`); err != nil {
+		return err
+	}
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS topology_groups (
+		id          TEXT PRIMARY KEY,
+		topology_id TEXT NOT NULL REFERENCES topologies(id) ON DELETE CASCADE,
+		name        TEXT NOT NULL,
+		color       TEXT NOT NULL DEFAULT '#3b82f6',
+		sort_order  INTEGER NOT NULL DEFAULT 0,
+		created_at  DATETIME NOT NULL
+	)`); err != nil {
+		return err
+	}
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS topology_nodes (
+		id          TEXT PRIMARY KEY,
+		topology_id TEXT NOT NULL REFERENCES topologies(id) ON DELETE CASCADE,
+		group_id    TEXT NOT NULL REFERENCES topology_groups(id) ON DELETE CASCADE,
+		name        TEXT NOT NULL,
+		role        TEXT NOT NULL DEFAULT '',
+		host_id     TEXT REFERENCES hosts(id) ON DELETE SET NULL,
+		notes       TEXT NOT NULL DEFAULT '',
+		created_at  DATETIME NOT NULL,
+		updated_at  DATETIME NOT NULL
+	)`); err != nil {
+		return err
+	}
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS topology_edges (
+		id          TEXT PRIMARY KEY,
+		topology_id TEXT NOT NULL REFERENCES topologies(id) ON DELETE CASCADE,
+		from_node   TEXT NOT NULL REFERENCES topology_nodes(id) ON DELETE CASCADE,
+		to_node     TEXT NOT NULL REFERENCES topology_nodes(id) ON DELETE CASCADE,
+		created_at  DATETIME NOT NULL
+	)`); err != nil {
+		return err
+	}
+	if _, err := db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_topology_edges_unique ON topology_edges(from_node, to_node)`); err != nil {
+		return err
+	}
 	return nil
 }

@@ -522,6 +522,134 @@ func NewRouter(app *mcppkg.App) http.Handler {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	})
 
+	// Topology routes
+	mux.HandleFunc("/api/v1/topologies", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			listTopologies(app, w, r)
+		case http.MethodPost:
+			operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				createTopology(app, w, r)
+			})).ServeHTTP(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+	mux.HandleFunc("/api/v1/topologies/", func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		if strings.HasSuffix(path, "/import") {
+			topoID := idFromTopoPath(strings.TrimSuffix(path, "/import"))
+			if r.Method == http.MethodPost {
+				operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					importTopologyYAML(app, w, r, topoID)
+				})).ServeHTTP(w, r)
+			} else {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			}
+			return
+		}
+		if i := strings.Index(path, "/groups/"); i != -1 {
+			gid := path[i+len("/groups/"):]
+			switch r.Method {
+			case http.MethodPut:
+				operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					updateTopoGroup(app, w, r, gid)
+				})).ServeHTTP(w, r)
+			case http.MethodDelete:
+				operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					deleteTopoGroup(app, w, r, gid)
+				})).ServeHTTP(w, r)
+			default:
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			}
+			return
+		}
+		if strings.HasSuffix(path, "/groups") {
+			topoID := idFromTopoPath(strings.TrimSuffix(path, "/groups"))
+			switch r.Method {
+			case http.MethodGet:
+				listTopoGroups(app, w, r, topoID)
+			case http.MethodPost:
+				operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					createTopoGroup(app, w, r, topoID)
+				})).ServeHTTP(w, r)
+			default:
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			}
+			return
+		}
+		if i := strings.Index(path, "/nodes/"); i != -1 {
+			nid := path[i+len("/nodes/"):]
+			switch r.Method {
+			case http.MethodPut:
+				operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					updateTopoNode(app, w, r, nid)
+				})).ServeHTTP(w, r)
+			case http.MethodDelete:
+				operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					deleteTopoNode(app, w, r, nid)
+				})).ServeHTTP(w, r)
+			default:
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			}
+			return
+		}
+		if strings.HasSuffix(path, "/nodes") {
+			topoID := idFromTopoPath(strings.TrimSuffix(path, "/nodes"))
+			switch r.Method {
+			case http.MethodGet:
+				listTopoNodes(app, w, r, topoID)
+			case http.MethodPost:
+				operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					createTopoNode(app, w, r, topoID)
+				})).ServeHTTP(w, r)
+			default:
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			}
+			return
+		}
+		if i := strings.Index(path, "/edges/"); i != -1 {
+			eid := path[i+len("/edges/"):]
+			if r.Method == http.MethodDelete {
+				operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					deleteTopoEdge(app, w, r, eid)
+				})).ServeHTTP(w, r)
+			} else {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			}
+			return
+		}
+		if strings.HasSuffix(path, "/edges") {
+			topoID := idFromTopoPath(strings.TrimSuffix(path, "/edges"))
+			switch r.Method {
+			case http.MethodGet:
+				listTopoEdges(app, w, r, topoID)
+			case http.MethodPost:
+				operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					createTopoEdge(app, w, r, topoID)
+				})).ServeHTTP(w, r)
+			default:
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			}
+			return
+		}
+		id := idFromTopoPath(path)
+		switch r.Method {
+		case http.MethodGet:
+			getTopology(app, w, r, id)
+		case http.MethodPut:
+			operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				updateTopology(app, w, r, id)
+			})).ServeHTTP(w, r)
+		case http.MethodDelete:
+			operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				deleteTopology(app, w, r, id)
+			})).ServeHTTP(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
 	// log-level endpoint (admin only)
 	mux.Handle("/api/v1/log-level", adminOnly(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
