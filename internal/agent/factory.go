@@ -29,6 +29,7 @@ type Factory struct {
 	CompactionCfg  config.CompactionConfig
 	LLMModel       string
 	TodoTaskStore  *store.TodoTaskStore
+	TopologyStore  *store.TopologyStore
 	SSEBroadcaster SSEBroadcaster
 	DataDir        string
 	DocStore       *store.DocumentStore
@@ -202,6 +203,9 @@ func (f *Factory) buildRegistry(conversationID string) *ToolRegistry {
 	registry.Register(NewSearchDocsTool(f.RagStore, f.DocStore))
 	if f.TodoTaskStore != nil {
 		registry.Register(NewTodoTaskTool(f.TodoTaskStore, f.SSEBroadcaster, conversationID))
+	}
+	if f.TopologyStore != nil {
+		registry.Register(NewGetTopologyTool(f.TopologyStore))
 	}
 	if f.DataDir != "" {
 		registry.Register(NewInvokeSkillTool(filepath.Join(f.DataDir, "skills")))

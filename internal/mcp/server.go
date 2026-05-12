@@ -87,6 +87,7 @@ func (a *App) NewAgentFactory() (*agent.Factory, error) {
 	f.SummaryStore = store.NewSummaryStore(a.DB)
 	f.CompactionCfg = a.Config.Agent.Compaction
 	f.TodoTaskStore = a.TodoTaskStore
+	f.TopologyStore = a.TopologyStore
 	f.SSEBroadcaster = a
 	f.DocStore = a.DocStore
 	if rs, err := a.GetOrBuildRagStore(); err == nil {
