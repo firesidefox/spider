@@ -17,6 +17,7 @@ const router = createRouter({
     { path: '/users',    component: () => import('./views/UsersView.vue') },
     { path: '/profile',  component: () => import('./views/ProfileView.vue') },
     { path: '/knowledge', component: () => import('./views/KnowledgeView.vue') },
+    { path: '/topology',  component: () => import('./views/TopologyView.vue') },
   ],
 })
 
