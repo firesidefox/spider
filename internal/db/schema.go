@@ -355,5 +355,8 @@ func migrate(db *sql.DB) error {
 	)`); err != nil {
 		return err
 	}
+	if _, err := db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_topology_edges_unique ON topology_edges(from_node, to_node)`); err != nil {
+		return err
+	}
 	return nil
 }

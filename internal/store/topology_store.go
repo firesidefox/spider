@@ -74,8 +74,14 @@ func (s *TopologyStore) Update(id string, req *models.UpdateTopologyRequest) (*m
 }
 
 func (s *TopologyStore) Delete(id string) error {
-	_, err := s.db.Exec(`DELETE FROM topologies WHERE id = ?`, id)
-	return err
+	res, err := s.db.Exec(`DELETE FROM topologies WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 func (s *TopologyStore) ListGroups(topologyID string) ([]*models.TopologyGroup, error) {
@@ -135,8 +141,14 @@ func (s *TopologyStore) UpdateGroup(id string, req *models.UpdateGroupRequest) (
 }
 
 func (s *TopologyStore) DeleteGroup(id string) error {
-	_, err := s.db.Exec(`DELETE FROM topology_groups WHERE id = ?`, id)
-	return err
+	res, err := s.db.Exec(`DELETE FROM topology_groups WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 func (s *TopologyStore) ListNodes(topologyID string) ([]*models.TopologyNode, error) {
@@ -217,8 +229,14 @@ func (s *TopologyStore) UpdateNode(id string, req *models.UpdateNodeRequest) (*m
 }
 
 func (s *TopologyStore) DeleteNode(id string) error {
-	_, err := s.db.Exec(`DELETE FROM topology_nodes WHERE id = ?`, id)
-	return err
+	res, err := s.db.Exec(`DELETE FROM topology_nodes WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 func (s *TopologyStore) ListEdges(topologyID string) ([]*models.TopologyEdge, error) {
@@ -259,8 +277,14 @@ func (s *TopologyStore) CreateEdge(topologyID string, req *models.CreateEdgeRequ
 }
 
 func (s *TopologyStore) DeleteEdge(id string) error {
-	_, err := s.db.Exec(`DELETE FROM topology_edges WHERE id = ?`, id)
-	return err
+	res, err := s.db.Exec(`DELETE FROM topology_edges WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 func (s *TopologyStore) GetFull(topologyID string) (*models.TopologyFull, error) {

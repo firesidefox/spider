@@ -67,7 +67,11 @@ func updateTopology(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id 
 
 func deleteTopology(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id string) {
 	if err := app.TopologyStore.Delete(id); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		if errors.Is(err, store.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "topology not found")
+		} else {
+			writeError(w, http.StatusInternalServerError, err.Error())
+		}
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -115,7 +119,11 @@ func updateTopoGroup(app *mcppkg.App, w http.ResponseWriter, r *http.Request, gi
 
 func deleteTopoGroup(app *mcppkg.App, w http.ResponseWriter, r *http.Request, gid string) {
 	if err := app.TopologyStore.DeleteGroup(gid); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		if errors.Is(err, store.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "group not found")
+		} else {
+			writeError(w, http.StatusInternalServerError, err.Error())
+		}
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -163,7 +171,11 @@ func updateTopoNode(app *mcppkg.App, w http.ResponseWriter, r *http.Request, nid
 
 func deleteTopoNode(app *mcppkg.App, w http.ResponseWriter, r *http.Request, nid string) {
 	if err := app.TopologyStore.DeleteNode(nid); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		if errors.Is(err, store.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "node not found")
+		} else {
+			writeError(w, http.StatusInternalServerError, err.Error())
+		}
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -197,7 +209,11 @@ func createTopoEdge(app *mcppkg.App, w http.ResponseWriter, r *http.Request, top
 
 func deleteTopoEdge(app *mcppkg.App, w http.ResponseWriter, r *http.Request, eid string) {
 	if err := app.TopologyStore.DeleteEdge(eid); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		if errors.Is(err, store.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "edge not found")
+		} else {
+			writeError(w, http.StatusInternalServerError, err.Error())
+		}
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -238,7 +254,11 @@ func importTopologyYAML(app *mcppkg.App, w http.ResponseWriter, r *http.Request,
 		writeError(w, http.StatusNotFound, "topology not found")
 		return
 	}
-	existingGroups, _ := app.TopologyStore.ListGroups(topoID)
+	existingGroups, err := app.TopologyStore.ListGroups(topoID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "list groups: "+err.Error())
+		return
+	}
 	groupByName := map[string]*models.TopologyGroup{}
 	for _, g := range existingGroups {
 		groupByName[g.Name] = g
@@ -257,7 +277,11 @@ func importTopologyYAML(app *mcppkg.App, w http.ResponseWriter, r *http.Request,
 			groupByName[layer.Name] = g
 		}
 	}
-	existingNodes, _ := app.TopologyStore.ListNodes(topoID)
+	existingNodes, err := app.TopologyStore.ListNodes(topoID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "list nodes: "+err.Error())
+		return
+	}
 	nodeByName := map[string]*models.TopologyNode{}
 	for _, n := range existingNodes {
 		nodeByName[n.Name] = n
@@ -284,7 +308,11 @@ func importTopologyYAML(app *mcppkg.App, w http.ResponseWriter, r *http.Request,
 			nodeByName[dev.Name] = n
 		}
 	}
-	existingEdges, _ := app.TopologyStore.ListEdges(topoID)
+	existingEdges, err := app.TopologyStore.ListEdges(topoID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "list edges: "+err.Error())
+		return
+	}
 	edgeKey := func(from, to string) string { return from + "->" + to }
 	edgeExists := map[string]bool{}
 	for _, e := range existingEdges {
@@ -302,9 +330,12 @@ func importTopologyYAML(app *mcppkg.App, w http.ResponseWriter, r *http.Request,
 			}
 			key := edgeKey(fromNode.ID, toNode.ID)
 			if !edgeExists[key] {
-				_, _ = app.TopologyStore.CreateEdge(topoID, &models.CreateEdgeRequest{
+				if _, err := app.TopologyStore.CreateEdge(topoID, &models.CreateEdgeRequest{
 					FromNode: fromNode.ID, ToNode: toNode.ID,
-				})
+				}); err != nil {
+					writeError(w, http.StatusInternalServerError, "create edge: "+err.Error())
+					return
+				}
 				edgeExists[key] = true
 			}
 		}
