@@ -22,6 +22,8 @@ const callAPIPromptSection = `### CallAPI (GET: read-only; POST/PUT/DELETE: has 
 - GET: use freely in Explore phase
 - POST/PUT/DELETE: only in Act phase after confirming intent
 
+**When NOT to use:** Do not call mutating methods before the user has confirmed the plan.
+
 <example>
 User: Push a new ACL rule via the firewall API.
 Assistant: Shows the request body to the user, confirms, then calls CallAPI with POST.

@@ -3,16 +3,19 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"log"
 
+	"github.com/spiderai/spider/internal/models"
 	"github.com/spiderai/spider/internal/store"
 )
 
 type ListDevicesTool struct {
 	hosts *store.HostStore
+	faces *store.AccessFaceStore
 }
 
-func NewListDevicesTool(hosts *store.HostStore) *ListDevicesTool {
-	return &ListDevicesTool{hosts: hosts}
+func NewListDevicesTool(hosts *store.HostStore, faces *store.AccessFaceStore) *ListDevicesTool {
+	return &ListDevicesTool{hosts: hosts, faces: faces}
 }
 
 func (t *ListDevicesTool) DefaultRiskLevel() RiskLevel { return RiskL1 }
@@ -33,13 +36,13 @@ func (t *ListDevicesTool) InputSchema() map[string]any {
 	}
 }
 
-const listDevicesPromptSection = `## ListDevices / GetDeviceInfo / SearchDocs (read-only, no side effects)
+const listDevicesPromptSection = `## ListHosts / SearchDocs (read-only, no side effects)
 
 **When to use:** Call these freely at the start of any task to understand the environment.
 
 <example>
 User: Check disk usage on all web servers.
-Assistant: Calls ListDevices to find web servers before running any commands.
+Assistant: Calls ListHosts to find web servers before running any commands.
 </example>`
 
 func (t *ListDevicesTool) SystemPromptSection() string {
@@ -57,18 +60,36 @@ func (t *ListDevicesTool) Execute(_ context.Context, input map[string]any) (*Too
 	}
 
 	type deviceSummary struct {
-		ID     string   `json:"id"`
-		Name   string   `json:"name"`
-		IP     string   `json:"ip"`
-		Vendor string   `json:"vendor,omitempty"`
-		Tags   []string `json:"tags,omitempty"`
+		ID          string                   `json:"id"`
+		Name        string                   `json:"name"`
+		IP          string                   `json:"ip"`
+		Vendor      string                   `json:"vendor,omitempty"`
+		Tags        []string                 `json:"tags,omitempty"`
+		AccessFaces []models.AccessFaceType  `json:"access_faces"`
+	}
+
+	hostIDs := make([]string, len(hosts))
+	for i, h := range hosts {
+		hostIDs[i] = h.ID
+	}
+	var faceMap map[string][]models.AccessFaceType
+	if t.faces != nil {
+		var err error
+		faceMap, err = t.faces.FaceTypesByHostIDs(hostIDs)
+		if err != nil {
+			log.Printf("WARNING: FaceTypesByHostIDs failed: %v", err)
+		}
 	}
 
 	devices := make([]deviceSummary, len(hosts))
 	for i, h := range hosts {
+		ft := faceMap[h.ID]
+		if ft == nil {
+			ft = []models.AccessFaceType{}
+		}
 		devices[i] = deviceSummary{
 			ID: h.ID, Name: h.Name, IP: h.IP,
-			Vendor: h.Vendor, Tags: h.Tags,
+			Vendor: h.Vendor, Tags: h.Tags, AccessFaces: ft,
 		}
 	}
 

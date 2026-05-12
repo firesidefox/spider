@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -78,8 +79,35 @@ func (s *AccessFaceStore) ListByHost(hostID string) ([]*models.AccessFace, error
 	return out, nil
 }
 
+func (s *AccessFaceStore) FaceTypesByHostIDs(hostIDs []string) (map[string][]models.AccessFaceType, error) {
+	result := make(map[string][]models.AccessFaceType, len(hostIDs))
+	if len(hostIDs) == 0 {
+		return result, nil
+	}
+	placeholders := strings.Repeat("?,", len(hostIDs))
+	placeholders = placeholders[:len(placeholders)-1]
+	args := make([]any, len(hostIDs))
+	for i, id := range hostIDs {
+		args[i] = id
+	}
+	rows, err := s.db.Query(`SELECT host_id, type FROM access_faces WHERE host_id IN (`+placeholders+`)`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var hostID string
+		var faceType models.AccessFaceType
+		if err := rows.Scan(&hostID, &faceType); err != nil {
+			return nil, err
+		}
+		result[hostID] = append(result[hostID], faceType)
+	}
+	return result, rows.Err()
+}
+
 func (s *AccessFaceStore) GetSSHFaceForHost(hostID string) (*models.AccessFace, error) {
-	row := s.db.QueryRow(`SELECT `+accessFaceCols+` FROM access_faces WHERE host_id=? AND type='ssh' ORDER BY created_at LIMIT 1`, hostID)
+	row := s.db.QueryRow(`SELECT `+accessFaceCols+` FROM access_faces WHERE host_id=? AND type=? ORDER BY created_at LIMIT 1`, hostID, models.FaceSSH)
 	return scanAccessFace(row)
 }
 

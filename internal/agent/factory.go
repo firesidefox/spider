@@ -187,14 +187,14 @@ func (f *Factory) BuildSystemPrompt() string {
 	b.WriteString(intentFieldPrompt)
 	b.WriteString("\n\n")
 	b.WriteString(orchestrationPrompt)
+	b.WriteString("\n\n## Language\n\nAlways respond in Chinese (Simplified). Use English only for technical terms, command output, and code.")
 	return b.String()
 }
 
 // buildRegistry creates a temporary registry to collect tool SystemPromptSections.
 func (f *Factory) buildRegistry(conversationID string) *ToolRegistry {
 	registry := NewToolRegistry()
-	registry.Register(NewListDevicesTool(f.Hosts))
-	registry.Register(NewGetDeviceInfoTool(f.Hosts))
+	registry.Register(NewListDevicesTool(f.Hosts, f.AccessFaces))
 	registry.Register(NewExecuteCLITool(f.Hosts, f.AccessFaces, f.SSHPool, f.Logs, f.SSHKeys))
 	registry.Register(NewBatchExecuteTool(f.Hosts, f.AccessFaces, f.SSHPool, f.Logs, f.SSHKeys))
 	registry.Register(NewVerifyTool(f.Hosts, f.AccessFaces, f.SSHPool, f.SSHKeys))

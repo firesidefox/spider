@@ -181,6 +181,27 @@ const fileInputRef = ref<HTMLInputElement | null>(null)
 const renameInputRef = ref<HTMLInputElement | null>(null)
 const pendingFiles = ref<File[]>([])
 
+function chunkText(text: string, maxChars = 3000): string[] {
+  const paragraphs = text.split(/\n\n+/)
+  const chunks: string[] = []
+  let current = ''
+  for (const para of paragraphs) {
+    if (para.length > maxChars) {
+      if (current) { chunks.push(current.trim()); current = '' }
+      for (let i = 0; i < para.length; i += maxChars - 200) {
+        chunks.push(para.slice(i, i + maxChars).trim())
+      }
+    } else if (current.length + para.length + 2 > maxChars) {
+      chunks.push(current.trim())
+      current = para
+    } else {
+      current = current ? current + '\n\n' + para : para
+    }
+  }
+  if (current.trim()) chunks.push(current.trim())
+  return chunks.filter(c => c.length > 0)
+}
+
 async function readFileContent(file: File): Promise<{ content: string; pages: string[] }> {
   if (file.name.toLowerCase().endsWith('.pdf')) {
     const pdfjsLib = await import('pdfjs-dist')
@@ -339,7 +360,10 @@ async function doIngest() {
             .map(({ p, i }) => ingestDocument({ vendor: form.value.vendor, content: p, source_file: file.name, chunk_index: i, group_id: ingestGroupId.value }))
         )
       } else {
-        await ingestDocument({ vendor: form.value.vendor, content, source_file: file.name, chunk_index: 0, group_id: ingestGroupId.value })
+        const chunks = chunkText(content)
+        await Promise.all(
+          chunks.map((c, i) => ingestDocument({ vendor: form.value.vendor, content: c, source_file: file.name, chunk_index: i, group_id: ingestGroupId.value }))
+        )
       }
     }
     showIngest.value = false

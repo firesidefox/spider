@@ -156,7 +156,7 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 				a.lastSkillHash = currentHash
 			}
 		}
-		a.msgStore.Save(conversationID, "user", finalUserMessage, "")
+		a.msgStore.Save(conversationID, "user", userMessage, "")
 
 		var history []llm.Message
 		var err error
@@ -173,6 +173,11 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 				return
 			}
 			history = toLLMMessages(stored)
+		}
+
+		// Replace last message with skill-injected version for LLM only
+		if finalUserMessage != userMessage && len(history) > 0 {
+			history[len(history)-1].Content = finalUserMessage
 		}
 
 		toolDefs := a.registry.Definitions()
