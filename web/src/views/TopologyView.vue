@@ -16,22 +16,19 @@
         {{ t.name }}
       </div>
       <div v-if="topologies.length === 0" class="topo-empty">暂无拓扑</div>
-
-      <!-- Create topology dialog -->
-      <div v-if="showCreate" class="topo-dialog-overlay" @click.self="showCreate = false">
-        <div class="topo-dialog">
-          <div class="topo-dialog-title">新建拓扑</div>
-          <input v-model="newName" class="topo-input" placeholder="拓扑名称" @keyup.enter="doCreate" />
-          <div class="topo-dialog-actions">
-            <button class="topo-btn-secondary" @click="showCreate = false">取消</button>
-            <button class="topo-btn-primary" @click="doCreate">创建</button>
-          </div>
-        </div>
-      </div>
     </aside>
 
-    <!-- Center: canvas -->
+    <!-- Center: canvas + toolbar -->
     <div class="topo-canvas-wrap">
+      <div v-if="activeTopo" class="topo-toolbar">
+        <span class="topo-toolbar-name">{{ activeTopo.name }}</span>
+        <div class="topo-toolbar-sep"></div>
+        <button class="topo-btn-sm" @click="openAddGroup">＋ 添加分组</button>
+        <button class="topo-btn-sm" @click="openAddNode">＋ 添加节点</button>
+        <button class="topo-btn-sm" @click="showImportYaml = true">⬆ 导入 YAML</button>
+        <div style="flex:1"></div>
+        <button class="topo-btn-sm topo-btn-danger" @click="doDeleteTopo">删除拓扑</button>
+      </div>
       <div v-if="loadError" class="topo-canvas-error">{{ loadError }}</div>
       <div v-else-if="!activeTopo" class="topo-canvas-empty">选择或创建一个拓扑</div>
       <div v-else ref="cyContainer" class="topo-cy"></div>
@@ -51,8 +48,129 @@
         <div class="topo-detail-section">下游</div>
         <div v-for="n in downstreamNodes" :key="n.id" class="topo-detail-neighbor">{{ n.host_name || n.name }}</div>
         <div v-if="downstreamNodes.length === 0" class="topo-detail-empty">无</div>
+        <div class="topo-detail-actions">
+          <button class="topo-btn-sm" @click="openEditNode">编辑</button>
+          <button class="topo-btn-sm topo-btn-danger" @click="doDeleteNode">删除</button>
+        </div>
       </template>
     </aside>
+
+    <!-- ── Modal: 新建拓扑 ── -->
+    <div v-if="showCreate" class="topo-dialog-overlay" @click.self="showCreate = false">
+      <div class="topo-dialog">
+        <div class="topo-dialog-title">新建拓扑</div>
+        <input v-model="newName" class="topo-input" placeholder="拓扑名称" @keyup.enter="doCreate" />
+        <div class="topo-dialog-actions">
+          <button class="topo-btn-secondary" @click="showCreate = false">取消</button>
+          <button class="topo-btn-primary" @click="doCreate">创建</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Modal: 添加分组 ── -->
+    <div v-if="showAddGroup" class="topo-dialog-overlay" @click.self="showAddGroup = false">
+      <div class="topo-dialog">
+        <div class="topo-dialog-title">添加分组</div>
+        <div class="topo-form-row">
+          <label class="topo-form-label">分组名称</label>
+          <input v-model="groupForm.name" class="topo-input" placeholder="例：核心层、接入层" />
+        </div>
+        <div class="topo-form-row">
+          <label class="topo-form-label">颜色</label>
+          <div class="topo-color-row">
+            <div
+              v-for="c in colorPresets"
+              :key="c"
+              class="topo-color-swatch"
+              :class="{ selected: groupForm.color === c }"
+              :style="{ background: c }"
+              @click="groupForm.color = c"
+            ></div>
+            <input type="color" class="topo-input topo-color-input" v-model="groupForm.color" />
+          </div>
+        </div>
+        <div v-if="dialogError" class="topo-dialog-error">{{ dialogError }}</div>
+        <div class="topo-dialog-actions">
+          <button class="topo-btn-secondary" @click="showAddGroup = false">取消</button>
+          <button class="topo-btn-primary" :disabled="saving" @click="doAddGroup">创建分组</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Modal: 添加/编辑节点 ── -->
+    <div v-if="showNodeForm" class="topo-dialog-overlay" @click.self="showNodeForm = false">
+      <div class="topo-dialog topo-dialog-wide">
+        <div class="topo-dialog-title">{{ editingNode ? '编辑节点' : '添加节点' }}</div>
+        <div class="topo-form-row">
+          <label class="topo-form-label">节点名称</label>
+          <input v-model="nodeForm.name" class="topo-input" placeholder="例：sw-core-01" />
+        </div>
+        <div class="topo-form-row">
+          <label class="topo-form-label">角色</label>
+          <input v-model="nodeForm.role" class="topo-input" placeholder="例：switch、router、server（可选）" />
+        </div>
+        <div class="topo-form-row">
+          <label class="topo-form-label">所属分组</label>
+          <select v-model="nodeForm.group_id" class="topo-input">
+            <option value="">— 选择分组 —</option>
+            <option v-for="g in activeTopo?.groups" :key="g.id" :value="g.id">{{ g.name }}</option>
+          </select>
+        </div>
+        <div class="topo-form-row">
+          <label class="topo-form-label">绑定主机 <span class="topo-form-opt">（可选）</span></label>
+          <select v-model="nodeForm.host_id" class="topo-input">
+            <option value="">— 不绑定 —</option>
+            <option v-for="h in hosts" :key="h.id" :value="h.id">{{ h.name }} ({{ h.ip }})</option>
+          </select>
+          <span class="topo-form-hint">绑定后节点显示主机名和 IP，可通过智能运维直接操作</span>
+        </div>
+        <div v-if="dialogError" class="topo-dialog-error">{{ dialogError }}</div>
+        <div class="topo-dialog-actions">
+          <button class="topo-btn-secondary" @click="showNodeForm = false">取消</button>
+          <button class="topo-btn-primary" :disabled="saving" @click="doSaveNode">{{ editingNode ? '保存' : '创建节点' }}</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Modal: 导入 YAML ── -->
+    <div v-if="showImportYaml" class="topo-dialog-overlay" @click.self="showImportYaml = false">
+      <div class="topo-dialog topo-dialog-wide">
+        <div class="topo-dialog-title">导入 YAML</div>
+        <div class="topo-tab-bar">
+          <div class="topo-tab" :class="{ active: yamlTab === 0 }" @click="yamlTab = 0">粘贴 YAML</div>
+          <div class="topo-tab" :class="{ active: yamlTab === 1 }" @click="yamlTab = 1">格式说明</div>
+        </div>
+        <div v-if="yamlTab === 0">
+          <textarea v-model="yamlText" class="topo-input topo-textarea" placeholder="粘贴拓扑 YAML…"></textarea>
+          <div class="topo-form-hint">导入为增量操作：已存在的同名分组/节点不会重复创建，边也会自动去重。</div>
+        </div>
+        <div v-else class="topo-yaml-doc">
+          <pre class="topo-yaml-example">name: &lt;拓扑名称&gt;          # 可选，不影响导入目标
+
+layers:                    # 分组列表
+  - name: 核心层
+    color: "#3b82f6"       # 十六进制颜色，可选
+
+devices:                   # 节点列表
+  - name: sw-core-01       # 节点名称（唯一键）
+    layer: 核心层           # 必须匹配 layers 中的 name
+    role: switch            # 角色，可选
+    ip: 10.0.0.1            # 用于自动匹配已有主机，可选
+    upstream:               # 上游节点名称列表，可选
+      - internet-gw</pre>
+          <div class="topo-form-hint" style="margin-top:10px">
+            • <code>ip</code> 字段会与主机管理中的 IP 自动匹配并绑定主机<br>
+            • <code>upstream</code> 定义有向边（上游 → 当前节点）<br>
+            • 重复导入安全，不会产生重复数据
+          </div>
+        </div>
+        <div v-if="dialogError" class="topo-dialog-error">{{ dialogError }}</div>
+        <div class="topo-dialog-actions">
+          <button class="topo-btn-secondary" @click="showImportYaml = false">取消</button>
+          <button class="topo-btn-primary" :disabled="saving || yamlTab === 1" @click="doImportYaml">导入</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -61,7 +179,12 @@ import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import cytoscape from 'cytoscape'
 import dagre from 'cytoscape-dagre'
 import type { TopologyFull, Topology, TopologyNode } from '../api/topology'
-import { listTopologies, getTopologyFull, createTopology } from '../api/topology'
+import {
+  listTopologies, getTopologyFull, createTopology, deleteTopology,
+  createGroup, createNode, updateNode, deleteNode, importYAML,
+} from '../api/topology'
+import type { Host } from '../api/hosts'
+import { listHosts } from '../api/hosts'
 
 cytoscape.use(dagre)
 
@@ -69,10 +192,32 @@ const topologies = ref<Topology[]>([])
 const activeTopo = ref<TopologyFull | null>(null)
 const activeNode = ref<TopologyNode | null>(null)
 const cyContainer = ref<HTMLElement | null>(null)
-const showCreate = ref(false)
-const newName = ref('')
 const loadError = ref('')
 let cy: cytoscape.Core | null = null
+
+// new-topo dialog
+const showCreate = ref(false)
+const newName = ref('')
+
+// shared dialog state
+const saving = ref(false)
+const dialogError = ref('')
+
+// add-group modal
+const showAddGroup = ref(false)
+const colorPresets = ['#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#ef4444', '#ec4899', '#06b6d4']
+const groupForm = ref({ name: '', color: '#3b82f6' })
+
+// add/edit node modal
+const showNodeForm = ref(false)
+const editingNode = ref<TopologyNode | null>(null)
+const nodeForm = ref({ name: '', role: '', group_id: '', host_id: '' })
+const hosts = ref<Host[]>([])
+
+// import YAML modal
+const showImportYaml = ref(false)
+const yamlTab = ref(0)
+const yamlText = ref('')
 
 onBeforeUnmount(() => { if (cy) { cy.destroy(); cy = null } })
 
@@ -103,6 +248,122 @@ async function doCreate() {
     await selectTopo(t)
   } catch (e: any) {
     loadError.value = e.message ?? 'Failed to create topology'
+  }
+}
+
+async function doDeleteTopo() {
+  if (!activeTopo.value) return
+  if (!confirm(`确认删除拓扑「${activeTopo.value.name}」？此操作不可撤销。`)) return
+  try {
+    await deleteTopology(activeTopo.value.id)
+    topologies.value = topologies.value.filter(t => t.id !== activeTopo.value!.id)
+    activeTopo.value = null
+    activeNode.value = null
+    if (cy) { cy.destroy(); cy = null }
+  } catch (e: any) {
+    loadError.value = e.message ?? 'Failed to delete topology'
+  }
+}
+
+function openAddGroup() {
+  groupForm.value = { name: '', color: '#3b82f6' }
+  dialogError.value = ''
+  showAddGroup.value = true
+}
+
+async function doAddGroup() {
+  if (!activeTopo.value || !groupForm.value.name.trim()) return
+  saving.value = true
+  dialogError.value = ''
+  try {
+    const g = await createGroup(activeTopo.value.id, groupForm.value.name.trim(), groupForm.value.color)
+    activeTopo.value.groups.push(g)
+    showAddGroup.value = false
+  } catch (e: any) {
+    dialogError.value = e.message ?? 'Failed to create group'
+  } finally {
+    saving.value = false
+  }
+}
+
+async function openAddNode() {
+  nodeForm.value = { name: '', role: '', group_id: '', host_id: '' }
+  editingNode.value = null
+  dialogError.value = ''
+  if (hosts.value.length === 0) hosts.value = await listHosts()
+  showNodeForm.value = true
+}
+
+function openEditNode() {
+  if (!activeNode.value) return
+  nodeForm.value = {
+    name: activeNode.value.name,
+    role: activeNode.value.role,
+    group_id: activeNode.value.group_id,
+    host_id: activeNode.value.host_id ?? '',
+  }
+  editingNode.value = activeNode.value
+  dialogError.value = ''
+  showNodeForm.value = true
+}
+
+async function doSaveNode() {
+  if (!activeTopo.value || !nodeForm.value.name.trim() || !nodeForm.value.group_id) return
+  saving.value = true
+  dialogError.value = ''
+  try {
+    const req = {
+      group_id: nodeForm.value.group_id,
+      name: nodeForm.value.name.trim(),
+      role: nodeForm.value.role,
+      host_id: nodeForm.value.host_id || undefined,
+    }
+    if (editingNode.value) {
+      await updateNode(activeTopo.value.id, editingNode.value.id, req)
+    } else {
+      await createNode(activeTopo.value.id, req)
+    }
+    showNodeForm.value = false
+    activeTopo.value = await getTopologyFull(activeTopo.value.id)
+    activeNode.value = null
+    await nextTick()
+    renderGraph()
+  } catch (e: any) {
+    dialogError.value = e.message ?? 'Failed to save node'
+  } finally {
+    saving.value = false
+  }
+}
+
+async function doDeleteNode() {
+  if (!activeTopo.value || !activeNode.value) return
+  if (!confirm(`确认删除节点「${activeNode.value.name}」？`)) return
+  try {
+    await deleteNode(activeTopo.value.id, activeNode.value.id)
+    activeTopo.value = await getTopologyFull(activeTopo.value.id)
+    activeNode.value = null
+    await nextTick()
+    renderGraph()
+  } catch (e: any) {
+    loadError.value = e.message ?? 'Failed to delete node'
+  }
+}
+
+async function doImportYaml() {
+  if (!activeTopo.value || !yamlText.value.trim()) return
+  saving.value = true
+  dialogError.value = ''
+  try {
+    activeTopo.value = await importYAML(activeTopo.value.id, yamlText.value)
+    showImportYaml.value = false
+    yamlText.value = ''
+    activeNode.value = null
+    await nextTick()
+    renderGraph()
+  } catch (e: any) {
+    dialogError.value = e.message ?? 'Import failed'
+  } finally {
+    saving.value = false
   }
 }
 
@@ -232,10 +493,7 @@ function renderGraph() {
 .topo-item.active { background: var(--surface); color: var(--text); }
 .topo-empty { padding: 12px; font-size: 12px; color: var(--label); text-align: center; }
 
-.topo-canvas-wrap { flex: 1; min-width: 0; position: relative; }
-.topo-canvas-empty { display: flex; align-items: center; justify-content: center; height: 100%; color: var(--label); font-size: 14px; }
-.topo-canvas-error { display: flex; align-items: center; justify-content: center; height: 100%; color: var(--red); font-size: 14px; }
-.topo-cy { width: 100%; height: 100%; }
+.topo-canvas-wrap { flex: 1; min-width: 0; position: relative; display: flex; flex-direction: column; }
 
 .topo-detail {
   width: 0; overflow: hidden; transition: width .2s; border-left: 1px solid var(--border);
@@ -275,4 +533,44 @@ function renderGraph() {
   padding: 6px 14px; font-size: 13px; cursor: pointer;
 }
 .topo-btn-secondary:hover { border-color: var(--text-sub); color: var(--text); }
+
+.topo-canvas-wrap { flex: 1; min-width: 0; position: relative; display: flex; flex-direction: column; }
+.topo-toolbar {
+  display: flex; align-items: center; gap: 8px; padding: 8px 14px;
+  border-bottom: 1px solid var(--border); background: var(--surface); flex-shrink: 0;
+}
+.topo-toolbar-name { font-size: 13px; font-weight: 600; color: var(--text); margin-right: 4px; }
+.topo-toolbar-sep { width: 1px; height: 20px; background: var(--border); margin: 0 4px; }
+.topo-btn-sm {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 6px;
+  padding: 4px 10px; font-size: 12px; font-weight: 500; color: var(--text-sub); cursor: pointer;
+  white-space: nowrap;
+}
+.topo-btn-sm:hover { background: var(--hover); color: var(--text); }
+.topo-btn-danger { color: var(--red); border-color: rgba(248,113,113,.3); background: none; }
+.topo-btn-danger:hover { background: rgba(248,113,113,.08); border-color: var(--red); }
+.topo-detail-actions { display: flex; gap: 6px; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); }
+.topo-dialog-wide { min-width: 400px; }
+.topo-dialog-error { font-size: 12px; color: var(--red); }
+.topo-form-row { display: flex; flex-direction: column; gap: 4px; }
+.topo-form-label { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.topo-form-opt { font-weight: 400; text-transform: none; color: var(--label); }
+.topo-form-hint { font-size: 11px; color: var(--muted); line-height: 1.5; }
+.topo-form-hint code { background: var(--input-bg); border: 1px solid var(--border); border-radius: 3px; padding: 1px 4px; }
+.topo-color-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.topo-color-swatch {
+  width: 24px; height: 24px; border-radius: 4px; border: 2px solid transparent; cursor: pointer;
+}
+.topo-color-swatch.selected { border-color: #fff; }
+.topo-color-input { width: 36px; height: 28px; padding: 2px; cursor: pointer; }
+.topo-tab-bar { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 12px; }
+.topo-tab { padding: 5px 12px; font-size: 13px; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.topo-tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+.topo-textarea { resize: vertical; min-height: 160px; font-family: 'SF Mono', Consolas, monospace; font-size: 12px; line-height: 1.6; width: 100%; }
+.topo-yaml-example {
+  background: var(--input-bg); border: 1px solid var(--border); border-radius: 6px;
+  padding: 10px 12px; font-family: 'SF Mono', Consolas, monospace; font-size: 11px;
+  color: var(--muted); line-height: 1.7; white-space: pre; overflow-x: auto;
+}
+.topo-yaml-doc { display: flex; flex-direction: column; gap: 8px; }
 </style>
