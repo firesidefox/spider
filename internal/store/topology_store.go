@@ -178,13 +178,25 @@ func (s *TopologyStore) ListNodes(topologyID string) ([]*models.TopologyNode, er
 }
 
 func (s *TopologyStore) CreateNode(topologyID string, req *models.CreateNodeRequest) (*models.TopologyNode, error) {
+	// Verify group belongs to this topology
+	var ownerID string
+	err := s.db.QueryRow(`SELECT topology_id FROM topology_groups WHERE id = ?`, req.GroupID).Scan(&ownerID)
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("group not found")
+	}
+	if err != nil {
+		return nil, err
+	}
+	if ownerID != topologyID {
+		return nil, fmt.Errorf("group does not belong to this topology")
+	}
 	id := uuid.New().String()
 	now := time.Now().UTC()
 	var hostID *string
 	if req.HostID != "" {
 		hostID = &req.HostID
 	}
-	_, err := s.db.Exec(
+	_, err = s.db.Exec(
 		`INSERT INTO topology_nodes (id, topology_id, group_id, name, role, host_id, notes, created_at, updated_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		id, topologyID, req.GroupID, req.Name, req.Role, hostID, req.Notes, now, now,
@@ -260,9 +272,21 @@ func (s *TopologyStore) ListEdges(topologyID string) ([]*models.TopologyEdge, er
 }
 
 func (s *TopologyStore) CreateEdge(topologyID string, req *models.CreateEdgeRequest) (*models.TopologyEdge, error) {
+	// Verify both endpoints belong to this topology
+	var count int
+	err := s.db.QueryRow(
+		`SELECT COUNT(*) FROM topology_nodes WHERE topology_id = ? AND id IN (?, ?)`,
+		topologyID, req.FromNode, req.ToNode,
+	).Scan(&count)
+	if err != nil {
+		return nil, err
+	}
+	if count != 2 {
+		return nil, fmt.Errorf("edge endpoints must both belong to this topology")
+	}
 	id := uuid.New().String()
 	now := time.Now().UTC()
-	_, err := s.db.Exec(
+	_, err = s.db.Exec(
 		`INSERT INTO topology_edges (id, topology_id, from_node, to_node, created_at) VALUES (?, ?, ?, ?, ?)`,
 		id, topologyID, req.FromNode, req.ToNode, now,
 	)
