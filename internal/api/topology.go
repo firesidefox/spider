@@ -234,8 +234,7 @@ func importTopologyYAML(app *mcppkg.App, w http.ResponseWriter, r *http.Request,
 		writeError(w, http.StatusBadRequest, "invalid YAML: "+err.Error())
 		return
 	}
-	topo, err := app.TopologyStore.GetByID(topoID)
-	if err != nil {
+	if _, err := app.TopologyStore.GetByID(topoID); err != nil {
 		writeError(w, http.StatusNotFound, "topology not found")
 		return
 	}
@@ -315,6 +314,5 @@ func importTopologyYAML(app *mcppkg.App, w http.ResponseWriter, r *http.Request,
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	_ = topo
 	writeJSON(w, http.StatusOK, full)
 }

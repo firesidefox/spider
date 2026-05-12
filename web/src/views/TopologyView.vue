@@ -45,18 +45,18 @@
         <div class="topo-detail-row"><span class="topo-detail-label">角色</span><span>{{ activeNode.role || '—' }}</span></div>
         <div class="topo-detail-row"><span class="topo-detail-label">分组</span><span>{{ groupName(activeNode.group_id) }}</span></div>
         <div class="topo-detail-section">上游</div>
-        <div v-for="n in upstreamOf(activeNode.id)" :key="n.id" class="topo-detail-neighbor">{{ n.host_name || n.name }}</div>
-        <div v-if="upstreamOf(activeNode.id).length === 0" class="topo-detail-empty">无</div>
+        <div v-for="n in upstreamNodes" :key="n.id" class="topo-detail-neighbor">{{ n.host_name || n.name }}</div>
+        <div v-if="upstreamNodes.length === 0" class="topo-detail-empty">无</div>
         <div class="topo-detail-section">下游</div>
-        <div v-for="n in downstreamOf(activeNode.id)" :key="n.id" class="topo-detail-neighbor">{{ n.host_name || n.name }}</div>
-        <div v-if="downstreamOf(activeNode.id).length === 0" class="topo-detail-empty">无</div>
+        <div v-for="n in downstreamNodes" :key="n.id" class="topo-detail-neighbor">{{ n.host_name || n.name }}</div>
+        <div v-if="downstreamNodes.length === 0" class="topo-detail-empty">无</div>
       </template>
     </aside>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import cytoscape from 'cytoscape'
 import dagre from 'cytoscape-dagre'
 import type { TopologyFull, Topology, TopologyNode } from '../api/topology'
@@ -71,6 +71,8 @@ const cyContainer = ref<HTMLElement | null>(null)
 const showCreate = ref(false)
 const newName = ref('')
 let cy: cytoscape.Core | null = null
+
+onBeforeUnmount(() => { if (cy) { cy.destroy(); cy = null } })
 
 onMounted(async () => {
   topologies.value = await listTopologies()
@@ -113,6 +115,9 @@ function downstreamOf(nodeID: string): TopologyNode[] {
   const toIDs = activeTopo.value.edges.filter(e => e.from_node === nodeID).map(e => e.to_node)
   return activeTopo.value.nodes.filter(n => toIDs.includes(n.id))
 }
+
+const upstreamNodes = computed(() => activeNode.value ? upstreamOf(activeNode.value.id) : [])
+const downstreamNodes = computed(() => activeNode.value ? downstreamOf(activeNode.value.id) : [])
 
 function renderGraph() {
   if (!cyContainer.value || !activeTopo.value) return
