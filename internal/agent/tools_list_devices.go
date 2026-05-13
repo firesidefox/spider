@@ -36,13 +36,18 @@ func (t *ListDevicesTool) InputSchema() map[string]any {
 	}
 }
 
-const listDevicesPromptSection = `## ListHosts / SearchDocs (read-only, no side effects)
+const listDevicesPromptSection = `## ListHosts
 
-**When to use:** Call these freely at the start of any task to understand the environment.
+**When to use:** Call at the start of any task that targets specific hosts — find the host ID and access face before running commands or API calls.
 
 <example>
 User: Check disk usage on all web servers.
-Assistant: Calls ListHosts to find web servers before running any commands.
+Assistant: Calls ListHosts to find host IDs and access faces, then SearchDocs for the correct command, then RunCommand via SSH.
+</example>
+
+<example>
+User: Push a new ACL rule via the firewall API.
+Assistant: Calls ListHosts to find the gateway host and API access face, then SearchDocs for the endpoint, then CallAPI.
 </example>`
 
 func (t *ListDevicesTool) SystemPromptSection() string {
