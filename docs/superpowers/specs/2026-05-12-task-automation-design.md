@@ -254,18 +254,22 @@ type NotifyChannel struct {
 ## 执行
 
 1. 调度器触发，创建 `TaskRun` 记录（status: running）
-2. 启动 headless Agent：
+2. **过滤无效 Host ID**：
+   - 查询 `SELECT id FROM hosts WHERE id IN (task.host_ids)` 得到有效 ID 列表
+   - 若全部无效 → 更新 `TaskRun.Status = failed`，`RawOutput = "all hosts invalid: [...]"`，跳过后续步骤
+   - 若部分无效 → 在 `RawOutput` 开头记录 "skipped invalid hosts: [...]"，继续执行有效 ID
+3. 启动 headless Agent：
    - 无对话历史
-   - System prompt 包含：任务目标 + 任务类型 + 目标设备信息
+   - System prompt 包含：任务目标 + 任务类型 + 有效目标设备信息
    - 可使用全部 Agent 工具（SSH、CLI、ListHosts 等）
-3. Agent 自主完成多步骤执行
-4. 执行完成，原始输出写入 `TaskRun.RawOutput`（前端展示截断至 10KB，完整内容保留在 DB）
-5. 轻量 LLM 调用分析输出（使用系统默认 provider）：
+4. Agent 自主完成多步骤执行
+5. 执行完成，原始输出写入 `TaskRun.RawOutput`（前端展示截断至 10KB，完整内容保留在 DB）
+6. 轻量 LLM 调用分析输出（使用系统默认 provider）：
    - 生成执行摘要，写入 `TaskRun.Summary`
    - 若 `NotifyMode = "anomaly"`：LLM 判断是否异常；异常则 `TaskRun.Alerted = true`
-6. 更新 `TaskRun.Status` 为 success / failed
+7. 更新 `TaskRun.Status` 为 success / failed
    - 若 status = failed：`TaskRun.Alerted = true`
-7. 按 `NotifyMode` 发送通知（需有 NotifyChannel）：
+8. 按 `NotifyMode` 发送通知（需有 NotifyChannel）：
    - `"failure"` 且 status = failed → 发中断原因
    - `"complete"` → 发摘要
    - `"anomaly"` 且 `TaskRun.Alerted = true` → 发摘要
