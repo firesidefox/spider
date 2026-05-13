@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/robfig/cron/v3"
 	"github.com/spiderai/spider/internal/models"
 	"github.com/spiderai/spider/internal/store"
 )
@@ -87,11 +88,18 @@ func (t *CreateTaskTool) Execute(_ context.Context, input map[string]any) (*Tool
 		timeoutMinutes = 30
 	}
 
+	schedule := strVal(input, "schedule")
+	if schedule != "" {
+		if _, err := cron.ParseStandard(schedule); err != nil {
+			return &ToolResult{Content: fmt.Sprintf("invalid cron expression %q: %v", schedule, err), IsError: true, RiskLevel: RiskL2}, nil
+		}
+	}
+
 	task := &models.Task{
 		Name:             name,
 		Goal:             goal,
 		HostIDs:          hostIDs,
-		Schedule:         strVal(input, "schedule"),
+		Schedule:         schedule,
 		NotifyMode:       models.NotifyMode(notifyMode),
 		RunRetentionDays: runRetentionDays,
 		TimeoutMinutes:   timeoutMinutes,

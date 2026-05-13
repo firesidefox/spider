@@ -237,9 +237,16 @@ func serve(cfgFile, addrOverride, dataDirOverride string, debug bool) error {
 	if app.AgentFactory != nil {
 		exec := scheduler.NewExecutor(taskStore, taskRunStore, hs, app.AgentFactory, notifyChannelStore)
 		app.Executor = exec
+		// Mark any runs left in 'running' state from a previous crash as failed.
+		if n, err := taskRunStore.MarkStaleRunsFailed(2 * time.Hour); err != nil {
+			logger.Global().Warn().Err(err).Msg("startup sweep for stale task runs failed")
+		} else if n > 0 {
+			logger.Global().Info().Int64("count", n).Msg("marked stale task runs as failed")
+		}
 		sched := scheduler.NewScheduler(taskStore, taskRunStore, exec)
 		sched.Start(shutdownCtx)
 		defer sched.Stop()
+		defer exec.Stop()
 	}
 
 	mcpHandler := mcppkg.NewHTTPHandler(app)

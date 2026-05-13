@@ -357,6 +357,9 @@ func migrate(db *sql.DB) error {
 	)`); err != nil {
 		return err
 	}
-	db.Exec("ALTER TABLE notify_channels ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1")
+	if _, err := db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_task_runs_one_running ON task_runs(task_id) WHERE status='running'`); err != nil {
+		return err
+	}
+	// Remove redundant ALTER TABLE — enabled column is declared in CREATE TABLE above.
 	return nil
 }

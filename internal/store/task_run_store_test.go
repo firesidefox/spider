@@ -183,12 +183,12 @@ func TestTaskRunStore_ListByTaskID(t *testing.T) {
 		t.Fatalf("failed to create task: %v", err)
 	}
 
-	// Create multiple task runs
+	// Create multiple task runs (completed so unique-running index doesn't block)
 	for i := 0; i < 3; i++ {
 		taskRun := &models.TaskRun{
 			TaskID:    createdTask.ID,
 			StartedAt: time.Now().Add(time.Duration(i) * time.Second),
-			Status:    models.TaskRunStatusRunning,
+			Status:    models.TaskRunStatusCompleted,
 		}
 		_, err := store.Create(taskRun)
 		if err != nil {
@@ -346,12 +346,12 @@ func TestTaskRunStore_ListByTaskID_Pagination(t *testing.T) {
 		t.Fatalf("failed to create task: %v", err)
 	}
 
-	// Create 5 task runs
+	// Create 5 task runs (completed so unique-running index doesn't block)
 	for i := 0; i < 5; i++ {
 		taskRun := &models.TaskRun{
 			TaskID:    createdTask.ID,
 			StartedAt: time.Now().Add(time.Duration(i) * time.Second),
-			Status:    models.TaskRunStatusRunning,
+			Status:    models.TaskRunStatusCompleted,
 		}
 		_, err := store.Create(taskRun)
 		if err != nil {

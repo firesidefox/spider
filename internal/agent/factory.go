@@ -107,6 +107,30 @@ func (f *Factory) NewAgent(systemPrompt string, conversationID string) *Agent {
 	})
 }
 
+// NewHeadlessAgent creates an Agent that discards all messages (no DB writes).
+// Used for automated task runs that don't need conversation history.
+func (f *Factory) NewHeadlessAgent(systemPrompt string, conversationID string) *Agent {
+	logger.Global().Info().Str("model", f.LLMModel).Str("conv_id", conversationID).Msg("agent factory: creating headless agent")
+	registry := f.buildRegistry(conversationID)
+
+	hooks := NewHookChain()
+	if f.Enforcer != nil {
+		hooks.AddBefore(PermissionHook(f.Enforcer, f.PermissionMode))
+	} else {
+		hooks.AddBefore(DefaultRiskHook())
+	}
+
+	return NewAgent(AgentConfig{
+		LLMClient:    f.LLMClient,
+		Registry:     registry,
+		Hooks:        hooks,
+		MsgStore:     noopMessageStorer{},
+		SystemPrompt: systemPrompt,
+		MaxTurns:     15,
+		SkillManager: NewSkillManager(f.DataDir),
+	})
+}
+
 const intentFieldPrompt = `## Intent Field (RunCommand / RunCommandBatch / CallAPI)
 
 Always set the intent field. This field is shown to the user in the UI.

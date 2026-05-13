@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/spiderai/spider/internal/agent"
@@ -26,6 +27,7 @@ type Executor struct {
 	agentFactory       *agent.Factory
 	notifyChannelStore *store.NotifyChannelStore
 	llmClient          llm.Client
+	wg                 sync.WaitGroup
 }
 
 // NewExecutor creates a new Executor.
@@ -75,8 +77,17 @@ func (e *Executor) Execute(ctx context.Context, taskID string) (*models.TaskRun,
 		return nil, fmt.Errorf("failed to create task run: %w", err)
 	}
 
-	go e.executeAsync(context.Background(), task, created)
+	e.wg.Add(1)
+	go func() {
+		defer e.wg.Done()
+		e.executeAsync(context.Background(), task, created)
+	}()
 	return created, nil
+}
+
+// Stop waits for all in-flight task runs to finish.
+func (e *Executor) Stop() {
+	e.wg.Wait()
 }
 
 func (e *Executor) executeAsync(ctx context.Context, task *models.Task, run *models.TaskRun) {
@@ -115,7 +126,7 @@ func (e *Executor) executeAsync(ctx context.Context, task *models.Task, run *mod
 	)
 
 	convID := "task-run-" + run.ID
-	ag := e.agentFactory.NewAgent(systemPrompt, convID)
+	ag := e.agentFactory.NewHeadlessAgent(systemPrompt, convID)
 	events, err := ag.Run(execCtx, convID, task.Goal, nil)
 	if err != nil {
 		now := time.Now()
@@ -216,8 +227,10 @@ func (e *Executor) generateSummary(ctx context.Context, output string) string {
 	if e.llmClient == nil {
 		return truncate(output, 200)
 	}
+	llmCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
 	prompt := fmt.Sprintf("Summarize this task execution output in 2-3 sentences:\n\n%s", truncate(output, 4000))
-	resp, err := e.llmClient.Chat(ctx, &llm.ChatRequest{
+	resp, err := e.llmClient.Chat(llmCtx, &llm.ChatRequest{
 		Messages:  []llm.Message{{Role: llm.RoleUser, Content: prompt}},
 		MaxTokens: 256,
 	})
@@ -233,11 +246,13 @@ func (e *Executor) detectAnomaly(ctx context.Context, output string) bool {
 	if e.llmClient == nil {
 		return false
 	}
+	llmCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
 	prompt := fmt.Sprintf(
 		"Does this task output indicate an anomaly (errors, failures, unexpected values)? Reply YES or NO only.\n\n%s",
 		truncate(output, 4000),
 	)
-	resp, err := e.llmClient.Chat(ctx, &llm.ChatRequest{
+	resp, err := e.llmClient.Chat(llmCtx, &llm.ChatRequest{
 		Messages:  []llm.Message{{Role: llm.RoleUser, Content: prompt}},
 		MaxTokens: 8,
 	})

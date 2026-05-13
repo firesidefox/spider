@@ -66,6 +66,9 @@ func listTaskRuns(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id st
 			limit = n
 		}
 	}
+	if limit > 200 {
+		limit = 200
+	}
 	if v := r.URL.Query().Get("offset"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
 			offset = n

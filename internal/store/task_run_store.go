@@ -174,6 +174,22 @@ func (s *TaskRunStore) ListByTaskID(taskID string, limit, offset int) ([]*models
 	return taskRuns, nil
 }
 
+// MarkStaleRunsFailed marks all running task runs older than olderThan as failed.
+// Called on startup to clean up runs orphaned by a previous crash.
+func (s *TaskRunStore) MarkStaleRunsFailed(olderThan time.Duration) (int64, error) {
+	cutoff := time.Now().Add(-olderThan)
+	res, err := s.db.Exec(
+		`UPDATE task_runs SET status='failed', finished_at=?, raw_output=raw_output||?
+		 WHERE status='running' AND started_at < ?`,
+		time.Now().UTC(), "\n[interrupted: process restarted]", cutoff,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("failed to mark stale runs failed: %w", err)
+	}
+	n, _ := res.RowsAffected()
+	return n, nil
+}
+
 // DeleteOldRuns deletes task runs for a task started before the given time.
 // Returns the number of rows deleted.
 func (s *TaskRunStore) DeleteOldRuns(taskID string, before time.Time) (int64, error) {
