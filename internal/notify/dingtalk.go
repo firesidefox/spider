@@ -10,9 +10,12 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"time"
 )
+
+var httpClient = &http.Client{Timeout: 10 * time.Second}
 
 // dingTalkSender sends messages to a DingTalk group robot webhook.
 type dingTalkSender struct {
@@ -50,7 +53,7 @@ func (d *dingTalkSender) Send(ctx context.Context, msg string) error {
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("send request: %w", err)
 	}
@@ -69,5 +72,5 @@ func (d *dingTalkSender) signedURL(base string) string {
 	mac := hmac.New(sha256.New, []byte(d.secret))
 	mac.Write([]byte(strToSign))
 	sign := base64.StdEncoding.EncodeToString(mac.Sum(nil))
-	return fmt.Sprintf("%s&timestamp=%s&sign=%s", base, ts, sign)
+	return fmt.Sprintf("%s&timestamp=%s&sign=%s", base, ts, url.QueryEscape(sign))
 }

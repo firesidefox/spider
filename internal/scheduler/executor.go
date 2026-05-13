@@ -186,6 +186,9 @@ func (e *Executor) sendNotifications(ctx context.Context, task *models.Task, run
 	}
 	msg := notify.FormatMessage(task, run)
 	for _, ch := range channels {
+		if !ch.Enabled {
+			continue
+		}
 		sender, err := notify.NewSender(ch)
 		if err != nil {
 			logger.Global().Warn().Err(err).Int64("channel_id", ch.ID).Msg("skip unsupported channel")

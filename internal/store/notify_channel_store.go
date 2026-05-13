@@ -75,17 +75,13 @@ func (s *NotifyChannelStore) Update(id int64, name string, typ models.NotifyChan
 		return nil, fmt.Errorf("encrypt config: %w", err)
 	}
 	now := time.Now().UTC()
-	_, err = s.db.Exec(
+	if _, err = s.db.Exec(
 		`UPDATE notify_channels SET name=?, type=?, encrypted_config=?, updated_at=? WHERE id=?`,
 		name, string(typ), enc, now, id,
-	)
-	if err != nil {
-		return nil, err
+	); err != nil {
+		return nil, fmt.Errorf("failed to update notify channel %d: %w", id, err)
 	}
-	return &models.NotifyChannel{
-		ID: id, Name: name, Type: typ, Config: cfg,
-		UpdatedAt: now,
-	}, nil
+	return s.GetByID(id)
 }
 
 // Delete removes a notify channel by ID.
