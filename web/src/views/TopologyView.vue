@@ -23,7 +23,6 @@
       <div v-if="activeTopo" class="topo-toolbar">
         <span class="topo-toolbar-name">{{ activeTopo.name }}</span>
         <div class="topo-toolbar-sep"></div>
-        <button class="topo-btn-sm" @click="openAddGroup">＋ 添加分组</button>
         <button class="topo-btn-sm" @click="openAddNode">＋ 添加节点</button>
         <button class="topo-btn-sm" @click="showImportYaml = true">⬆ 导入 YAML</button>
         <div style="flex:1"></div>
@@ -41,7 +40,7 @@
         <div v-if="activeNode.host_name" class="topo-detail-sub">{{ activeNode.name }}</div>
         <div class="topo-detail-row"><span class="topo-detail-label">IP</span><span>{{ activeNode.ip || '—' }}</span></div>
         <div class="topo-detail-row"><span class="topo-detail-label">角色</span><span>{{ activeNode.role || '—' }}</span></div>
-        <div class="topo-detail-row"><span class="topo-detail-label">分组</span><span>{{ groupName(activeNode.group_id) }}</span></div>
+        <div class="topo-detail-row"><span class="topo-detail-label">层</span><span>{{ activeNode.layer || '—' }}</span></div>
         <div class="topo-detail-section">上游</div>
         <div v-for="n in upstreamNodes" :key="n.id" class="topo-detail-neighbor">{{ n.host_name || n.name }}</div>
         <div v-if="upstreamNodes.length === 0" class="topo-detail-empty">无</div>
@@ -67,36 +66,6 @@
       </div>
     </div>
 
-    <!-- ── Modal: 添加分组 ── -->
-    <div v-if="showAddGroup" class="topo-dialog-overlay" @click.self="showAddGroup = false">
-      <div class="topo-dialog">
-        <div class="topo-dialog-title">添加分组</div>
-        <div class="topo-form-row">
-          <label class="topo-form-label">分组名称</label>
-          <input v-model="groupForm.name" class="topo-input" placeholder="例：核心层、接入层" />
-        </div>
-        <div class="topo-form-row">
-          <label class="topo-form-label">颜色</label>
-          <div class="topo-color-row">
-            <div
-              v-for="c in colorPresets"
-              :key="c"
-              class="topo-color-swatch"
-              :class="{ selected: groupForm.color === c }"
-              :style="{ background: c }"
-              @click="groupForm.color = c"
-            ></div>
-            <input type="color" class="topo-input topo-color-input" v-model="groupForm.color" />
-          </div>
-        </div>
-        <div v-if="dialogError" class="topo-dialog-error">{{ dialogError }}</div>
-        <div class="topo-dialog-actions">
-          <button class="topo-btn-secondary" @click="showAddGroup = false">取消</button>
-          <button class="topo-btn-primary" :disabled="saving" @click="doAddGroup">创建分组</button>
-        </div>
-      </div>
-    </div>
-
     <!-- ── Modal: 添加/编辑节点 ── -->
     <div v-if="showNodeForm" class="topo-dialog-overlay" @click.self="showNodeForm = false">
       <div class="topo-dialog topo-dialog-wide">
@@ -110,11 +79,8 @@
           <input v-model="nodeForm.role" class="topo-input" placeholder="例：switch、router、server（可选）" />
         </div>
         <div class="topo-form-row">
-          <label class="topo-form-label">所属分组</label>
-          <select v-model="nodeForm.group_id" class="topo-input">
-            <option value="">— 选择分组 —</option>
-            <option v-for="g in activeTopo?.groups" :key="g.id" :value="g.id">{{ g.name }}</option>
-          </select>
+          <label class="topo-form-label">层</label>
+          <input v-model="nodeForm.layer" class="topo-input" placeholder="例：核心层、接入层（可选）" />
         </div>
         <div class="topo-form-row">
           <label class="topo-form-label">绑定主机 <span class="topo-form-opt">（可选）</span></label>
@@ -142,23 +108,20 @@
         </div>
         <div v-if="yamlTab === 0">
           <textarea v-model="yamlText" class="topo-input topo-textarea" placeholder="粘贴拓扑 YAML…"></textarea>
-          <div class="topo-form-hint">导入为增量操作：已存在的同名分组/节点不会重复创建，边也会自动去重。</div>
+          <div class="topo-form-hint">导入为增量操作：已存在的同名节点不会重复创建，边也会自动去重。</div>
         </div>
         <div v-else class="topo-yaml-doc">
           <pre class="topo-yaml-example">name: &lt;拓扑名称&gt;          # 可选，不影响导入目标
 
-layers:                    # 分组列表
-  - name: 核心层
-    color: "#3b82f6"       # 十六进制颜色，可选
-
 devices:                   # 节点列表
   - name: sw-core-01       # 节点名称（唯一键）
-    layer: 核心层           # 必须匹配 layers 中的 name
+    layer: 核心层           # 层名称，相同名称颜色相同，可选
     role: switch            # 角色，可选
     ip: 10.0.0.1            # 用于自动匹配已有主机，可选
     upstream:               # 上游节点名称列表，可选
       - internet-gw</pre>
           <div class="topo-form-hint" style="margin-top:10px">
+            • <code>layer</code> 相同名称自动分配相同颜色，无需预先创建<br>
             • <code>ip</code> 字段会与主机管理中的 IP 自动匹配并绑定主机<br>
             • <code>upstream</code> 定义有向边（上游 → 当前节点）<br>
             • 重复导入安全，不会产生重复数据
@@ -181,7 +144,7 @@ import dagre from 'cytoscape-dagre'
 import type { TopologyFull, Topology, TopologyNode } from '../api/topology'
 import {
   listTopologies, getTopologyFull, createTopology, deleteTopology,
-  createGroup, createNode, updateNode, deleteNode, importYAML,
+  createNode, updateNode, deleteNode, importYAML,
 } from '../api/topology'
 import type { Host } from '../api/hosts'
 import { listHosts } from '../api/hosts'
@@ -203,15 +166,9 @@ const newName = ref('')
 const saving = ref(false)
 const dialogError = ref('')
 
-// add-group modal
-const showAddGroup = ref(false)
-const colorPresets = ['#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#ef4444', '#ec4899', '#06b6d4']
-const groupForm = ref({ name: '', color: '#3b82f6' })
-
-// add/edit node modal
 const showNodeForm = ref(false)
 const editingNode = ref<TopologyNode | null>(null)
-const nodeForm = ref({ name: '', role: '', group_id: '', host_id: '' })
+const nodeForm = ref({ name: '', role: '', layer: '', host_id: '' })
 const hosts = ref<Host[]>([])
 
 // import YAML modal
@@ -265,29 +222,8 @@ async function doDeleteTopo() {
   }
 }
 
-function openAddGroup() {
-  groupForm.value = { name: '', color: '#3b82f6' }
-  dialogError.value = ''
-  showAddGroup.value = true
-}
-
-async function doAddGroup() {
-  if (!activeTopo.value || !groupForm.value.name.trim()) return
-  saving.value = true
-  dialogError.value = ''
-  try {
-    const g = await createGroup(activeTopo.value.id, groupForm.value.name.trim(), groupForm.value.color)
-    activeTopo.value.groups.push(g)
-    showAddGroup.value = false
-  } catch (e: any) {
-    dialogError.value = e.message ?? 'Failed to create group'
-  } finally {
-    saving.value = false
-  }
-}
-
 async function openAddNode() {
-  nodeForm.value = { name: '', role: '', group_id: '', host_id: '' }
+  nodeForm.value = { name: '', role: '', layer: '', host_id: '' }
   editingNode.value = null
   dialogError.value = ''
   if (hosts.value.length === 0) hosts.value = await listHosts()
@@ -299,7 +235,7 @@ function openEditNode() {
   nodeForm.value = {
     name: activeNode.value.name,
     role: activeNode.value.role,
-    group_id: activeNode.value.group_id,
+    layer: activeNode.value.layer,
     host_id: activeNode.value.host_id ?? '',
   }
   editingNode.value = activeNode.value
@@ -308,12 +244,12 @@ function openEditNode() {
 }
 
 async function doSaveNode() {
-  if (!activeTopo.value || !nodeForm.value.name.trim() || !nodeForm.value.group_id) return
+  if (!activeTopo.value || !nodeForm.value.name.trim()) return
   saving.value = true
   dialogError.value = ''
   try {
     const req = {
-      group_id: nodeForm.value.group_id,
+      layer: nodeForm.value.layer,
       name: nodeForm.value.name.trim(),
       role: nodeForm.value.role,
       host_id: nodeForm.value.host_id || undefined,
@@ -367,13 +303,12 @@ async function doImportYaml() {
   }
 }
 
-function groupColor(groupID: string): string {
-  const g = activeTopo.value?.groups.find(g => g.id === groupID)
-  return g?.color ?? '#3b82f6'
-}
-
-function groupName(groupID: string): string {
-  return activeTopo.value?.groups.find(g => g.id === groupID)?.name ?? ''
+function layerColor(layer: string): string {
+  if (!layer) return '#374151'
+  const palette = ['#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#ef4444', '#ec4899', '#06b6d4', '#f97316']
+  let h = 0
+  for (let i = 0; i < layer.length; i++) h = (h * 31 + layer.charCodeAt(i)) >>> 0
+  return palette[h % palette.length]
 }
 
 function upstreamOf(nodeID: string): TopologyNode[] {
@@ -399,7 +334,7 @@ function renderGraph() {
   const elements: cytoscape.ElementDefinition[] = []
 
   for (const node of topo.nodes) {
-    const color = groupColor(node.group_id)
+    const color = layerColor(node.layer)
     const bound = !!node.host_id
     const label = (node.host_name || node.name).length > 10
       ? (node.host_name || node.name).slice(0, 10) + '…'
@@ -411,7 +346,7 @@ function renderGraph() {
 
   for (const edge of topo.edges) {
     const fromNode = topo.nodes.find(n => n.id === edge.from_node)
-    const color = fromNode ? groupColor(fromNode.group_id) : '#1f2937'
+    const color = fromNode ? layerColor(fromNode.layer) : '#1f2937'
     const bound = !!fromNode?.host_id
     elements.push({
       data: { id: edge.id, source: edge.from_node, target: edge.to_node, color, bound },
@@ -557,12 +492,6 @@ function renderGraph() {
 .topo-form-opt { font-weight: 400; text-transform: none; color: var(--label); }
 .topo-form-hint { font-size: 11px; color: var(--muted); line-height: 1.5; }
 .topo-form-hint code { background: var(--input-bg); border: 1px solid var(--border); border-radius: 3px; padding: 1px 4px; }
-.topo-color-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
-.topo-color-swatch {
-  width: 24px; height: 24px; border-radius: 4px; border: 2px solid transparent; cursor: pointer;
-}
-.topo-color-swatch.selected { border-color: #fff; }
-.topo-color-input { width: 36px; height: 28px; padding: 2px; cursor: pointer; }
 .topo-tab-bar { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 12px; }
 .topo-tab { padding: 5px 12px; font-size: 13px; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; }
 .topo-tab.active { color: var(--primary); border-bottom-color: var(--primary); }

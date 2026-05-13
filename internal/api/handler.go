@@ -548,36 +548,6 @@ func NewRouter(app *mcppkg.App) http.Handler {
 			}
 			return
 		}
-		if i := strings.Index(path, "/groups/"); i != -1 {
-			gid := path[i+len("/groups/"):]
-			switch r.Method {
-			case http.MethodPut:
-				operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					updateTopoGroup(app, w, r, gid)
-				})).ServeHTTP(w, r)
-			case http.MethodDelete:
-				operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					deleteTopoGroup(app, w, r, gid)
-				})).ServeHTTP(w, r)
-			default:
-				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			}
-			return
-		}
-		if strings.HasSuffix(path, "/groups") {
-			topoID := idFromTopoPath(strings.TrimSuffix(path, "/groups"))
-			switch r.Method {
-			case http.MethodGet:
-				listTopoGroups(app, w, r, topoID)
-			case http.MethodPost:
-				operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					createTopoGroup(app, w, r, topoID)
-				})).ServeHTTP(w, r)
-			default:
-				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			}
-			return
-		}
 		if i := strings.Index(path, "/nodes/"); i != -1 {
 			nid := path[i+len("/nodes/"):]
 			switch r.Method {

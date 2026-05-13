@@ -8,19 +8,10 @@ export interface Topology {
   updated_at: string
 }
 
-export interface TopologyGroup {
-  id: string
-  topology_id: string
-  name: string
-  color: string
-  sort_order: number
-  created_at: string
-}
-
 export interface TopologyNode {
   id: string
   topology_id: string
-  group_id: string
+  layer: string
   name: string
   role: string
   host_id?: string
@@ -40,7 +31,6 @@ export interface TopologyEdge {
 }
 
 export interface TopologyFull extends Topology {
-  groups: TopologyGroup[]
   nodes: TopologyNode[]
   edges: TopologyEdge[]
 }
@@ -74,19 +64,9 @@ export async function deleteTopology(id: string): Promise<void> {
   if (!r.ok) throw new Error(await r.text())
 }
 
-export async function createGroup(topoID: string, name: string, color: string): Promise<TopologyGroup> {
-  const r = await fetch(`${BASE}/${topoID}/groups`, {
-    method: 'POST',
-    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, color }),
-  })
-  if (!r.ok) throw new Error(await r.text())
-  return r.json()
-}
-
 export async function createNode(
   topoID: string,
-  req: { group_id: string; name: string; role?: string; host_id?: string }
+  req: { layer: string; name: string; role?: string; host_id?: string }
 ): Promise<TopologyNode> {
   const r = await fetch(`${BASE}/${topoID}/nodes`, {
     method: 'POST',
@@ -100,7 +80,7 @@ export async function createNode(
 export async function updateNode(
   topoID: string,
   nodeID: string,
-  req: { group_id: string; name: string; role?: string; host_id?: string; notes?: string }
+  req: { layer: string; name: string; role?: string; host_id?: string; notes?: string }
 ): Promise<TopologyNode> {
   const r = await fetch(`${BASE}/${topoID}/nodes/${nodeID}`, {
     method: 'PUT',

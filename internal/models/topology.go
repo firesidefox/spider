@@ -10,19 +10,10 @@ type Topology struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
-type TopologyGroup struct {
-	ID         string    `json:"id"`
-	TopologyID string    `json:"topology_id"`
-	Name       string    `json:"name"`
-	Color      string    `json:"color"`
-	SortOrder  int       `json:"sort_order"`
-	CreatedAt  time.Time `json:"created_at"`
-}
-
 type TopologyNode struct {
 	ID         string    `json:"id"`
 	TopologyID string    `json:"topology_id"`
-	GroupID    string    `json:"group_id"`
+	Layer      string    `json:"layer"`
 	Name       string    `json:"name"`
 	Role       string    `json:"role"`
 	HostID     string    `json:"host_id,omitempty"`
@@ -43,9 +34,8 @@ type TopologyEdge struct {
 
 type TopologyFull struct {
 	Topology
-	Groups []*TopologyGroup `json:"groups"`
-	Nodes  []*TopologyNode  `json:"nodes"`
-	Edges  []*TopologyEdge  `json:"edges"`
+	Nodes []*TopologyNode `json:"nodes"`
+	Edges []*TopologyEdge `json:"edges"`
 }
 
 type CreateTopologyRequest struct {
@@ -58,32 +48,20 @@ type UpdateTopologyRequest struct {
 	Notes string `json:"notes"`
 }
 
-type CreateGroupRequest struct {
-	Name      string `json:"name"`
-	Color     string `json:"color"`
-	SortOrder int    `json:"sort_order"`
-}
-
-type UpdateGroupRequest struct {
-	Name      string `json:"name"`
-	Color     string `json:"color"`
-	SortOrder int    `json:"sort_order"`
-}
-
 type CreateNodeRequest struct {
-	GroupID string `json:"group_id"`
-	Name    string `json:"name"`
-	Role    string `json:"role"`
-	HostID  string `json:"host_id"`
-	Notes   string `json:"notes"`
+	Layer  string `json:"layer"`
+	Name   string `json:"name"`
+	Role   string `json:"role"`
+	HostID string `json:"host_id"`
+	Notes  string `json:"notes"`
 }
 
 type UpdateNodeRequest struct {
-	GroupID string `json:"group_id"`
-	Name    string `json:"name"`
-	Role    string `json:"role"`
-	HostID  string `json:"host_id"`
-	Notes   string `json:"notes"`
+	Layer  string `json:"layer"`
+	Name   string `json:"name"`
+	Role   string `json:"role"`
+	HostID string `json:"host_id"`
+	Notes  string `json:"notes"`
 }
 
 type CreateEdgeRequest struct {

@@ -84,76 +84,9 @@ func (s *TopologyStore) Delete(id string) error {
 	return nil
 }
 
-func (s *TopologyStore) ListGroups(topologyID string) ([]*models.TopologyGroup, error) {
-	rows, err := s.db.Query(
-		`SELECT id, topology_id, name, color, sort_order, created_at FROM topology_groups WHERE topology_id = ? ORDER BY sort_order, name`,
-		topologyID,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var list []*models.TopologyGroup
-	for rows.Next() {
-		var g models.TopologyGroup
-		if err := rows.Scan(&g.ID, &g.TopologyID, &g.Name, &g.Color, &g.SortOrder, &g.CreatedAt); err != nil {
-			return nil, err
-		}
-		list = append(list, &g)
-	}
-	return list, nil
-}
-
-func (s *TopologyStore) CreateGroup(topologyID string, req *models.CreateGroupRequest) (*models.TopologyGroup, error) {
-	id := uuid.New().String()
-	now := time.Now().UTC()
-	color := req.Color
-	if color == "" {
-		color = "#3b82f6"
-	}
-	_, err := s.db.Exec(
-		`INSERT INTO topology_groups (id, topology_id, name, color, sort_order, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
-		id, topologyID, req.Name, color, req.SortOrder, now,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("create group: %w", err)
-	}
-	var g models.TopologyGroup
-	err = s.db.QueryRow(
-		`SELECT id, topology_id, name, color, sort_order, created_at FROM topology_groups WHERE id = ?`, id,
-	).Scan(&g.ID, &g.TopologyID, &g.Name, &g.Color, &g.SortOrder, &g.CreatedAt)
-	return &g, err
-}
-
-func (s *TopologyStore) UpdateGroup(id string, req *models.UpdateGroupRequest) (*models.TopologyGroup, error) {
-	_, err := s.db.Exec(
-		`UPDATE topology_groups SET name = ?, color = ?, sort_order = ? WHERE id = ?`,
-		req.Name, req.Color, req.SortOrder, id,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("update group: %w", err)
-	}
-	var g models.TopologyGroup
-	err = s.db.QueryRow(
-		`SELECT id, topology_id, name, color, sort_order, created_at FROM topology_groups WHERE id = ?`, id,
-	).Scan(&g.ID, &g.TopologyID, &g.Name, &g.Color, &g.SortOrder, &g.CreatedAt)
-	return &g, err
-}
-
-func (s *TopologyStore) DeleteGroup(id string) error {
-	res, err := s.db.Exec(`DELETE FROM topology_groups WHERE id = ?`, id)
-	if err != nil {
-		return err
-	}
-	if n, _ := res.RowsAffected(); n == 0 {
-		return ErrNotFound
-	}
-	return nil
-}
-
 func (s *TopologyStore) ListNodes(topologyID string) ([]*models.TopologyNode, error) {
 	rows, err := s.db.Query(
-		`SELECT n.id, n.topology_id, n.group_id, n.name, n.role,
+		`SELECT n.id, n.topology_id, n.layer, n.name, n.role,
 		        COALESCE(n.host_id,''), n.notes, n.created_at, n.updated_at,
 		        COALESCE(h.name,''), COALESCE(h.ip,'')
 		 FROM topology_nodes n
@@ -168,7 +101,7 @@ func (s *TopologyStore) ListNodes(topologyID string) ([]*models.TopologyNode, er
 	var list []*models.TopologyNode
 	for rows.Next() {
 		var n models.TopologyNode
-		if err := rows.Scan(&n.ID, &n.TopologyID, &n.GroupID, &n.Name, &n.Role,
+		if err := rows.Scan(&n.ID, &n.TopologyID, &n.Layer, &n.Name, &n.Role,
 			&n.HostID, &n.Notes, &n.CreatedAt, &n.UpdatedAt, &n.HostName, &n.IP); err != nil {
 			return nil, err
 		}
@@ -178,42 +111,29 @@ func (s *TopologyStore) ListNodes(topologyID string) ([]*models.TopologyNode, er
 }
 
 func (s *TopologyStore) CreateNode(topologyID string, req *models.CreateNodeRequest) (*models.TopologyNode, error) {
-	// Verify group belongs to this topology
-	var ownerID string
-	err := s.db.QueryRow(`SELECT topology_id FROM topology_groups WHERE id = ?`, req.GroupID).Scan(&ownerID)
-	if err == sql.ErrNoRows {
-		return nil, fmt.Errorf("group not found")
-	}
-	if err != nil {
-		return nil, err
-	}
-	if ownerID != topologyID {
-		return nil, fmt.Errorf("group does not belong to this topology")
-	}
 	id := uuid.New().String()
 	now := time.Now().UTC()
 	var hostID *string
 	if req.HostID != "" {
 		hostID = &req.HostID
 	}
-	_, err = s.db.Exec(
-		`INSERT INTO topology_nodes (id, topology_id, group_id, name, role, host_id, notes, created_at, updated_at)
+	_, err := s.db.Exec(
+		`INSERT INTO topology_nodes (id, topology_id, layer, name, role, host_id, notes, created_at, updated_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		id, topologyID, req.GroupID, req.Name, req.Role, hostID, req.Notes, now, now,
+		id, topologyID, req.Layer, req.Name, req.Role, hostID, req.Notes, now, now,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("create node: %w", err)
 	}
-	nodes, err := s.ListNodes(topologyID)
-	if err != nil {
-		return nil, err
-	}
-	for _, n := range nodes {
-		if n.ID == id {
-			return n, nil
-		}
-	}
-	return nil, ErrNotFound
+	var n models.TopologyNode
+	err = s.db.QueryRow(
+		`SELECT n.id, n.topology_id, n.layer, n.name, n.role,
+		        COALESCE(n.host_id,''), n.notes, n.created_at, n.updated_at,
+		        COALESCE(h.name,''), COALESCE(h.ip,'')
+		 FROM topology_nodes n LEFT JOIN hosts h ON h.id = n.host_id WHERE n.id = ?`, id,
+	).Scan(&n.ID, &n.TopologyID, &n.Layer, &n.Name, &n.Role,
+		&n.HostID, &n.Notes, &n.CreatedAt, &n.UpdatedAt, &n.HostName, &n.IP)
+	return &n, err
 }
 
 func (s *TopologyStore) UpdateNode(id string, req *models.UpdateNodeRequest) (*models.TopologyNode, error) {
@@ -223,19 +143,19 @@ func (s *TopologyStore) UpdateNode(id string, req *models.UpdateNodeRequest) (*m
 		hostID = &req.HostID
 	}
 	_, err := s.db.Exec(
-		`UPDATE topology_nodes SET group_id=?, name=?, role=?, host_id=?, notes=?, updated_at=? WHERE id=?`,
-		req.GroupID, req.Name, req.Role, hostID, req.Notes, now, id,
+		`UPDATE topology_nodes SET layer=?, name=?, role=?, host_id=?, notes=?, updated_at=? WHERE id=?`,
+		req.Layer, req.Name, req.Role, hostID, req.Notes, now, id,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("update node: %w", err)
 	}
 	var n models.TopologyNode
 	err = s.db.QueryRow(
-		`SELECT n.id, n.topology_id, n.group_id, n.name, n.role,
+		`SELECT n.id, n.topology_id, n.layer, n.name, n.role,
 		        COALESCE(n.host_id,''), n.notes, n.created_at, n.updated_at,
 		        COALESCE(h.name,''), COALESCE(h.ip,'')
 		 FROM topology_nodes n LEFT JOIN hosts h ON h.id = n.host_id WHERE n.id = ?`, id,
-	).Scan(&n.ID, &n.TopologyID, &n.GroupID, &n.Name, &n.Role,
+	).Scan(&n.ID, &n.TopologyID, &n.Layer, &n.Name, &n.Role,
 		&n.HostID, &n.Notes, &n.CreatedAt, &n.UpdatedAt, &n.HostName, &n.IP)
 	return &n, err
 }
@@ -316,10 +236,6 @@ func (s *TopologyStore) GetFull(topologyID string) (*models.TopologyFull, error)
 	if err != nil {
 		return nil, err
 	}
-	groups, err := s.ListGroups(topologyID)
-	if err != nil {
-		return nil, err
-	}
 	nodes, err := s.ListNodes(topologyID)
 	if err != nil {
 		return nil, err
@@ -327,9 +243,6 @@ func (s *TopologyStore) GetFull(topologyID string) (*models.TopologyFull, error)
 	edges, err := s.ListEdges(topologyID)
 	if err != nil {
 		return nil, err
-	}
-	if groups == nil {
-		groups = []*models.TopologyGroup{}
 	}
 	if nodes == nil {
 		nodes = []*models.TopologyNode{}
@@ -339,7 +252,6 @@ func (s *TopologyStore) GetFull(topologyID string) (*models.TopologyFull, error)
 	}
 	return &models.TopologyFull{
 		Topology: *topo,
-		Groups:   groups,
 		Nodes:    nodes,
 		Edges:    edges,
 	}, nil

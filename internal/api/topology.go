@@ -77,58 +77,6 @@ func deleteTopology(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id 
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func listTopoGroups(app *mcppkg.App, w http.ResponseWriter, r *http.Request, topoID string) {
-	list, err := app.TopologyStore.ListGroups(topoID)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	if list == nil {
-		list = []*models.TopologyGroup{}
-	}
-	writeJSON(w, http.StatusOK, list)
-}
-
-func createTopoGroup(app *mcppkg.App, w http.ResponseWriter, r *http.Request, topoID string) {
-	var req models.CreateGroupRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
-		return
-	}
-	g, err := app.TopologyStore.CreateGroup(topoID, &req)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	writeJSON(w, http.StatusCreated, g)
-}
-
-func updateTopoGroup(app *mcppkg.App, w http.ResponseWriter, r *http.Request, gid string) {
-	var req models.UpdateGroupRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
-		return
-	}
-	g, err := app.TopologyStore.UpdateGroup(gid, &req)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	writeJSON(w, http.StatusOK, g)
-}
-
-func deleteTopoGroup(app *mcppkg.App, w http.ResponseWriter, r *http.Request, gid string) {
-	if err := app.TopologyStore.DeleteGroup(gid); err != nil {
-		if errors.Is(err, store.ErrNotFound) {
-			writeError(w, http.StatusNotFound, "group not found")
-		} else {
-			writeError(w, http.StatusInternalServerError, err.Error())
-		}
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
-}
-
 func listTopoNodes(app *mcppkg.App, w http.ResponseWriter, r *http.Request, topoID string) {
 	list, err := app.TopologyStore.ListNodes(topoID)
 	if err != nil {
@@ -254,29 +202,6 @@ func importTopologyYAML(app *mcppkg.App, w http.ResponseWriter, r *http.Request,
 		writeError(w, http.StatusNotFound, "topology not found")
 		return
 	}
-	existingGroups, err := app.TopologyStore.ListGroups(topoID)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "list groups: "+err.Error())
-		return
-	}
-	groupByName := map[string]*models.TopologyGroup{}
-	for _, g := range existingGroups {
-		groupByName[g.Name] = g
-	}
-	for _, layer := range payload.Layers {
-		if _, ok := groupByName[layer.Name]; !ok {
-			color := layer.Color
-			if color == "" {
-				color = "#3b82f6"
-			}
-			g, err := app.TopologyStore.CreateGroup(topoID, &models.CreateGroupRequest{Name: layer.Name, Color: color})
-			if err != nil {
-				writeError(w, http.StatusInternalServerError, "create group: "+err.Error())
-				return
-			}
-			groupByName[layer.Name] = g
-		}
-	}
 	existingNodes, err := app.TopologyStore.ListNodes(topoID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "list nodes: "+err.Error())
@@ -292,14 +217,9 @@ func importTopologyYAML(app *mcppkg.App, w http.ResponseWriter, r *http.Request,
 		hostByIP[h.IP] = h.ID
 	}
 	for _, dev := range payload.Devices {
-		grp, ok := groupByName[dev.Layer]
-		if !ok {
-			writeError(w, http.StatusBadRequest, "unknown layer: "+dev.Layer)
-			return
-		}
 		if _, exists := nodeByName[dev.Name]; !exists {
 			n, err := app.TopologyStore.CreateNode(topoID, &models.CreateNodeRequest{
-				GroupID: grp.ID, Name: dev.Name, Role: dev.Role, HostID: hostByIP[dev.IP],
+				Layer: dev.Layer, Name: dev.Name, Role: dev.Role, HostID: hostByIP[dev.IP],
 			})
 			if err != nil {
 				writeError(w, http.StatusInternalServerError, "create node: "+err.Error())
