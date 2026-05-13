@@ -48,6 +48,7 @@ type App struct {
 	TodoTaskStore  *store.TodoTaskStore
 	TaskStore      *store.TaskStore
 	TaskRunStore   *store.TaskRunStore
+	NotifyChannelStore *store.NotifyChannelStore
 	AgentFactory   *agent.Factory // nil if LLM not configured
 	Executor       *scheduler.Executor
 

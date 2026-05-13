@@ -524,7 +524,7 @@ func NewRouter(app *mcppkg.App) http.Handler {
 	})
 
 	// Task automation API
-	executor := scheduler.NewExecutor(app.TaskStore, app.TaskRunStore, app.HostStore, app.AgentFactory)
+	executor := scheduler.NewExecutor(app.TaskStore, app.TaskRunStore, app.HostStore, app.AgentFactory, app.NotifyChannelStore)
 	mux.HandleFunc("/api/v1/tasks", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:

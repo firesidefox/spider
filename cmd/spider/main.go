@@ -214,8 +214,10 @@ func serve(cfgFile, addrOverride, dataDirOverride string, debug bool) error {
 
 	taskStore := store.NewTaskStore(database)
 	taskRunStore := store.NewTaskRunStore(database)
+	notifyChannelStore := store.NewNotifyChannelStore(database, cm)
 	app.TaskStore = taskStore
 	app.TaskRunStore = taskRunStore
+	app.NotifyChannelStore = notifyChannelStore
 
 	agentFactory, err := agent.NewFactory(
 		ps, hs, afs, pool, ks, ls, app.MsgStore,
@@ -233,7 +235,7 @@ func serve(cfgFile, addrOverride, dataDirOverride string, debug bool) error {
 	}
 
 	if app.AgentFactory != nil {
-		exec := scheduler.NewExecutor(taskStore, taskRunStore, hs, app.AgentFactory)
+		exec := scheduler.NewExecutor(taskStore, taskRunStore, hs, app.AgentFactory, notifyChannelStore)
 		app.Executor = exec
 		sched := scheduler.NewScheduler(taskStore, taskRunStore, exec)
 		sched.Start(shutdownCtx)
