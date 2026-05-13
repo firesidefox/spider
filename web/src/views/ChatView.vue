@@ -10,11 +10,12 @@ import {
   sendMessage, subscribeConversation, createConversation, listConversations,
   getConversation, deleteConversation, confirmAction, cancelConversation,
   getActiveModel, setActiveModel, updateTitle, exportConversation,
-  type Conversation, type ChatMessage as ChatMsg, type ChatEvent, type TodoTask,
+  type Conversation, type ChatMessage as ChatMsg, type ChatEvent, type Todo,
 } from '../api/chat'
 import { listHosts, type SafeHost } from '../api/hosts'
 import { authHeaders } from '../api/auth'
 import { listGroups, listDocumentsByGroup, type DocumentGroup, type Document as KbDocument } from '../api/documents'
+import { updateAgentStatus } from '../composables/useAgentStatus'
 
 const route = useRoute()
 const router = useRouter()
@@ -28,6 +29,11 @@ interface DisplayMessage {
 }
 
 const conversations = ref<Conversation[]>([])
+
+function getConvTitle(convId: string): string {
+  return conversations.value.find(c => c.id === convId)?.title || convId.slice(0, 8)
+}
+
 const showExportMenu = ref(false)
 
 async function doExport(format: 'md' | 'json') {
@@ -107,15 +113,15 @@ async function pollUntilIdle(convId: string) {
 const inputText = ref('')
 const isStreaming = ref(false)
 
-const todoTasksMap = ref<Record<string, Map<number, TodoTask>>>({})
-const sortedTasks = computed(() => Array.from((todoTasksMap.value[activeConvId.value ?? ''] ?? new Map<number, TodoTask>()).values()).sort((a, b) => a.id - b.id))
+const todoTasksMap = ref<Record<string, Map<number, Todo>>>({})
+const sortedTasks = computed(() => Array.from((todoTasksMap.value[activeConvId.value ?? ''] ?? new Map<number, Todo>()).values()).sort((a, b) => a.id - b.id))
 const completedCount = computed(() => sortedTasks.value.filter(t => t.status === 'completed').length)
-function taskIcon(t: TodoTask) {
+function taskIcon(t: Todo) {
   if (t.status === 'completed') return '✓'
   if (t.status === 'in_progress') return '●'
   return '○'
 }
-function taskClass(t: TodoTask) { return `todo-${t.status}` }
+function taskClass(t: Todo) { return `todo-${t.status}` }
 const messagesRef = ref<HTMLElement | null>(null)
 const devices = ref<DeviceStatus[]>([])
 let abortCtrl: AbortController | null = null
@@ -228,7 +234,7 @@ async function selectConversation(id: string) {
   clearPollTimer(id)
   const data = await getConversation(id)
   activeConvId.value = id
-  const taskMap = new Map<number, TodoTask>()
+  const taskMap = new Map<number, Todo>()
   for (const t of data.todo_tasks ?? []) taskMap.set(t.id, t)
   todoTasksMap.value[id] = taskMap
   localStorage.setItem('spider-last-conv', id)
@@ -326,6 +332,7 @@ function handleConvEvent(convId: string, event: ChatEvent) {
       } else {
         blocks.push({ type: 'text', content: event.content?.text || '' })
       }
+      updateAgentStatus({ conversationId: convId, title: getConvTitle(convId), phase: 'thinking' })
       break
     }
     case 'tool_start':
@@ -335,6 +342,7 @@ function handleConvEvent(convId: string, event: ChatEvent) {
         input: event.content?.input,
         hostNames: event.content?.host_names,
       }})
+      updateAgentStatus({ conversationId: convId, title: getConvTitle(convId), phase: 'tool', toolName: event.content?.name || 'unknown', toolInput: event.content?.input ? JSON.stringify(event.content.input) : undefined })
       break
     case 'tool_result': {
       const idx = blocks.findIndex(b => b.type === 'tool' && b.call.id === event.content?.id)
@@ -357,6 +365,7 @@ function handleConvEvent(convId: string, event: ChatEvent) {
         input: event.content?.input || {},
         riskLevel: event.content?.risk_level || 'moderate',
       }
+      updateAgentStatus({ conversationId: convId, title: getConvTitle(convId), phase: 'confirm', toolName: event.content?.tool || '', toolInput: event.content?.input ? JSON.stringify(event.content.input) : undefined })
       break
     case 'error': {
       const errText = `\n\n**Error:** ${event.content?.error || 'unknown error'}`
@@ -379,10 +388,11 @@ function handleConvEvent(convId: string, event: ChatEvent) {
         isStreaming.value = false
         nextTick(() => scrollToBottom())
       }
+      updateAgentStatus({ conversationId: convId, title: getConvTitle(convId), phase: 'done' })
       loadConversations()
       break
-    case 'todotask_update': {
-      const task = event.content as TodoTask
+    case 'todo_update': {
+      const task = event.content as Todo
       if (!todoTasksMap.value[convId]) todoTasksMap.value[convId] = new Map()
       todoTasksMap.value[convId].set(task.id, task)
       todoTasksMap.value[convId] = todoTasksMap.value[convId]
