@@ -2,6 +2,7 @@ package store
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -22,7 +23,7 @@ func NewNotifyChannelStore(db *sql.DB, cm *crypto.Manager) *NotifyChannelStore {
 }
 
 // Create inserts a new notify channel. cfg is a JSON string encrypted before storage.
-func (s *NotifyChannelStore) Create(name string, typ models.NotifyChannelType, cfg string) (*models.NotifyChannel, error) {
+func (s *NotifyChannelStore) Create(name string, typ models.NotifyChannelType, cfg string, enabled bool) (*models.NotifyChannel, error) {
 	if typ == "" {
 		return nil, fmt.Errorf("notify channel type is required")
 	}
@@ -33,17 +34,21 @@ func (s *NotifyChannelStore) Create(name string, typ models.NotifyChannelType, c
 	if err != nil {
 		return nil, fmt.Errorf("encrypt config: %w", err)
 	}
+	enabledInt := 0
+	if enabled {
+		enabledInt = 1
+	}
 	now := time.Now().UTC()
 	res, err := s.db.Exec(
 		`INSERT INTO notify_channels (name, type, encrypted_config, enabled, created_at, updated_at) VALUES (?,?,?,?,?,?)`,
-		name, string(typ), enc, 1, now, now,
+		name, string(typ), enc, enabledInt, now, now,
 	)
 	if err != nil {
 		return nil, err
 	}
 	id, _ := res.LastInsertId()
 	return &models.NotifyChannel{
-		ID: id, Name: name, Type: typ, Enabled: true, Config: cfg,
+		ID: id, Name: name, Type: typ, Enabled: enabled, Config: cfg,
 		CreatedAt: now, UpdatedAt: now,
 	}, nil
 }
@@ -75,20 +80,29 @@ func (s *NotifyChannelStore) Update(id int64, name string, typ models.NotifyChan
 		return nil, fmt.Errorf("encrypt config: %w", err)
 	}
 	now := time.Now().UTC()
-	if _, err = s.db.Exec(
+	res, err := s.db.Exec(
 		`UPDATE notify_channels SET name=?, type=?, encrypted_config=?, updated_at=? WHERE id=?`,
 		name, string(typ), enc, now, id,
-	); err != nil {
+	)
+	if err != nil {
 		return nil, fmt.Errorf("failed to update notify channel %d: %w", id, err)
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return nil, ErrNotFound
 	}
 	return s.GetByID(id)
 }
 
 // Delete removes a notify channel by ID.
 func (s *NotifyChannelStore) Delete(id int64) error {
-	_, err := s.db.Exec(`DELETE FROM notify_channels WHERE id=?`, id)
+	res, err := s.db.Exec(`DELETE FROM notify_channels WHERE id=?`, id)
 	if err != nil {
 		return fmt.Errorf("failed to delete notify channel %d: %w", id, err)
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return ErrNotFound
 	}
 	return nil
 }
@@ -98,7 +112,14 @@ func (s *NotifyChannelStore) GetByID(id int64) (*models.NotifyChannel, error) {
 	row := s.db.QueryRow(
 		`SELECT id, name, type, encrypted_config, enabled, created_at, updated_at FROM notify_channels WHERE id=?`, id,
 	)
-	return scanNotifyChannel(row, s.crypto)
+	ch, err := scanNotifyChannel(row, s.crypto)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get notify channel %d: %w", id, err)
+	}
+	return ch, nil
 }
 
 type notifyChannelScanner interface {

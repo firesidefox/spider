@@ -20,13 +20,12 @@ var ErrAlreadyRunning = errors.New("task is already running")
 
 // Executor runs tasks headlessly using the agent.
 type Executor struct {
-	taskStore           *store.TaskStore
-	taskRunStore        *store.TaskRunStore
-	hostStore           *store.HostStore
-	agentFactory        *agent.Factory
-	notifyChannelStore  *store.NotifyChannelStore
-	llmClient           llm.Client
-	llmModel            string
+	taskStore          *store.TaskStore
+	taskRunStore       *store.TaskRunStore
+	hostStore          *store.HostStore
+	agentFactory       *agent.Factory
+	notifyChannelStore *store.NotifyChannelStore
+	llmClient          llm.Client
 }
 
 // NewExecutor creates a new Executor.
@@ -46,7 +45,6 @@ func NewExecutor(
 	}
 	if agentFactory != nil {
 		e.llmClient = agentFactory.LLMClient
-		e.llmModel = agentFactory.LLMModel
 	}
 	return e
 }

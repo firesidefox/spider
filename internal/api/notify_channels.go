@@ -36,7 +36,11 @@ func createNotifyChannel(app *mcppkg.App, w http.ResponseWriter, r *http.Request
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	ch, err := app.NotifyChannelStore.Create(req.Name, req.Type, req.Config)
+	enabled := true
+	if req.Enabled != nil {
+		enabled = *req.Enabled
+	}
+	ch, err := app.NotifyChannelStore.Create(req.Name, req.Type, req.Config, enabled)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -57,6 +61,10 @@ func updateNotifyChannel(app *mcppkg.App, w http.ResponseWriter, r *http.Request
 		return
 	}
 	ch, err := app.NotifyChannelStore.Update(id, req.Name, req.Type, req.Config)
+	if errors.Is(err, store.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "notify channel not found")
+		return
+	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

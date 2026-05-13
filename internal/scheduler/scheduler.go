@@ -119,12 +119,15 @@ func (s *Scheduler) runCleanup(ctx context.Context) {
 	for {
 		now := time.Now()
 		next := time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, now.Location())
+		timer := time.NewTimer(time.Until(next))
 		select {
 		case <-s.stopCh:
+			timer.Stop()
 			return
 		case <-ctx.Done():
+			timer.Stop()
 			return
-		case <-time.After(time.Until(next)):
+		case <-timer.C:
 			s.cleanupOldRuns()
 		}
 	}
