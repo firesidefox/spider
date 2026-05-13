@@ -43,6 +43,7 @@ type AccessFace struct {
 	EncryptedPass    string               `json:"-"`
 	SSHKeyID         string               `json:"ssh_key_id,omitempty"`
 	SSHLegacy        bool                 `json:"ssh_legacy,omitempty"`
+	SSHLoginInput    string               `json:"ssh_login_input,omitempty"`
 	BaseURL          string               `json:"base_url,omitempty"`
 	RESTAuthType     RESTAuthType         `json:"rest_auth_type,omitempty"`
 	RESTUsername     string               `json:"rest_username,omitempty"`
@@ -125,6 +126,7 @@ type AddAccessFaceRequest struct {
 	Passphrase       string               `json:"passphrase"`
 	SSHKeyID         string               `json:"ssh_key_id"`
 	SSHLegacy        bool                 `json:"ssh_legacy"`
+	SSHLoginInput    string               `json:"ssh_login_input"`
 	BaseURL          string               `json:"base_url"`
 	RESTAuthType     RESTAuthType         `json:"rest_auth_type"`
 	RESTUsername     string               `json:"rest_username"`
@@ -141,6 +143,7 @@ type UpdateAccessFaceRequest struct {
 	Passphrase       *string              `json:"passphrase"`
 	SSHKeyID         *string              `json:"ssh_key_id"`
 	SSHLegacy        *bool                `json:"ssh_legacy"`
+	SSHLoginInput    *string              `json:"ssh_login_input"`
 	BaseURL          *string              `json:"base_url"`
 	RESTAuthType     *RESTAuthType        `json:"rest_auth_type"`
 	RESTUsername     *string              `json:"rest_username"`
