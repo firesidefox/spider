@@ -2,11 +2,15 @@ package agent
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -24,9 +28,11 @@ const callAPIPromptSection = `### CallAPI (GET: read-only; POST/PUT/DELETE: has 
 
 **When NOT to use:** Do not call mutating methods before the user has confirmed the plan.
 
+**SearchDocs first:** Before calling any API endpoint, search the knowledge base for the correct endpoint path, required parameters, and expected response format.
+
 <example>
 User: Push a new ACL rule via the firewall API.
-Assistant: Shows the request body to the user, confirms, then calls CallAPI with POST.
+Assistant: Calls SearchDocs for ACL API reference, then shows the request body to the user, confirms, then calls CallAPI with POST.
 </example>`
 
 type CallRESTAPITool struct {
@@ -114,6 +120,17 @@ func (t *CallRESTAPITool) Execute(ctx context.Context, input map[string]any) (*T
 				req.SetBasicAuth(face.RESTUsername, cred)
 			case models.RESTAuthAPIKey:
 				req.Header.Set(face.HeaderName, cred)
+			case models.RESTAuthHMACAKSK:
+				ts := time.Now().Unix()
+				sig := hmacSign(cred, method, req.URL.RequestURI(), ts, face.HMACAlgo)
+				req.Header.Set("X-Auth-AccessKey", face.RESTUsername)
+				req.Header.Set("X-Auth-Timestamp", strconv.FormatInt(ts, 10))
+				algo := face.HMACAlgo
+				if algo == "" {
+					algo = "HMAC-SHA256"
+				}
+				req.Header.Set("X-Auth-Algo", algo)
+				req.Header.Set("X-Auth-Signature", sig)
 			}
 		}
 	}
@@ -144,4 +161,20 @@ func (t *CallRESTAPITool) Execute(ctx context.Context, input map[string]any) (*T
 		nudge = apiMutateNudge
 	}
 	return &ToolResult{Content: string(out) + nudge, RiskLevel: RiskL2}, nil
+}
+
+func hmacSign(sk, method, path string, ts int64, algo string) string {
+	raw := method + "\n" + strconv.FormatInt(ts, 10) + "\n" + path
+	var mac []byte
+	switch algo {
+	case "HMAC-SM3":
+		// SM3 not in stdlib; fall back to SHA256 with a log warning
+		log.Printf("WARNING: HMAC-SM3 not supported, falling back to HMAC-SHA256")
+		fallthrough
+	default:
+		h := hmac.New(sha256.New, []byte(sk))
+		h.Write([]byte(raw))
+		mac = h.Sum(nil)
+	}
+	return base64.StdEncoding.EncodeToString(mac)
 }
