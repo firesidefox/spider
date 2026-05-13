@@ -20,10 +20,11 @@ const (
 type RESTAuthType string
 
 const (
-	RESTAuthBearer RESTAuthType = "bearer"
-	RESTAuthBasic  RESTAuthType = "basic"
-	RESTAuthAPIKey RESTAuthType = "apikey"
-	RESTAuthNone   RESTAuthType = "none"
+	RESTAuthBearer    RESTAuthType = "bearer"
+	RESTAuthBasic     RESTAuthType = "basic"
+	RESTAuthAPIKey    RESTAuthType = "apikey"
+	RESTAuthNone      RESTAuthType = "none"
+	RESTAuthHMACAKSK  RESTAuthType = "hmac_aksk"
 )
 
 type KnowledgeSourceRef struct {
@@ -48,6 +49,7 @@ type AccessFace struct {
 	RESTAuthType     RESTAuthType         `json:"rest_auth_type,omitempty"`
 	RESTUsername     string               `json:"rest_username,omitempty"`
 	HeaderName       string               `json:"header_name,omitempty"`
+	HMACAlgo         string               `json:"hmac_algo,omitempty"`
 	KnowledgeSources []KnowledgeSourceRef `json:"knowledge_sources"`
 	CreatedAt        time.Time            `json:"created_at"`
 	UpdatedAt        time.Time            `json:"updated_at"`
@@ -131,6 +133,7 @@ type AddAccessFaceRequest struct {
 	RESTAuthType     RESTAuthType         `json:"rest_auth_type"`
 	RESTUsername     string               `json:"rest_username"`
 	HeaderName       string               `json:"header_name"`
+	HMACAlgo         string               `json:"hmac_algo"`
 	KnowledgeSources []KnowledgeSourceRef `json:"knowledge_sources"`
 }
 
@@ -148,6 +151,7 @@ type UpdateAccessFaceRequest struct {
 	RESTAuthType     *RESTAuthType        `json:"rest_auth_type"`
 	RESTUsername     *string              `json:"rest_username"`
 	HeaderName       *string              `json:"header_name"`
+	HMACAlgo         *string              `json:"hmac_algo"`
 	KnowledgeSources []KnowledgeSourceRef `json:"knowledge_sources"`
 }
 
