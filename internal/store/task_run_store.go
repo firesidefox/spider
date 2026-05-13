@@ -173,3 +173,16 @@ func (s *TaskRunStore) ListByTaskID(taskID string, limit, offset int) ([]*models
 
 	return taskRuns, nil
 }
+
+// DeleteOldRuns deletes task runs for a task started before the given time.
+// Returns the number of rows deleted.
+func (s *TaskRunStore) DeleteOldRuns(taskID string, before time.Time) (int64, error) {
+	res, err := s.db.Exec(
+		`DELETE FROM task_runs WHERE task_id = ? AND started_at < ?`, taskID, before,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("failed to delete old runs for task %s: %w", taskID, err)
+	}
+	n, _ := res.RowsAffected()
+	return n, nil
+}

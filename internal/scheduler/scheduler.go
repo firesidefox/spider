@@ -36,8 +36,9 @@ func NewScheduler(
 
 // Start begins the scheduler loop in a background goroutine.
 func (s *Scheduler) Start(ctx context.Context) {
-	s.wg.Add(1)
+	s.wg.Add(2)
 	go s.run(ctx)
+	go s.runCleanup(ctx)
 }
 
 // Stop signals the scheduler to stop and waits for it to exit.
@@ -109,5 +110,45 @@ func (s *Scheduler) tryTrigger(task *models.Task) {
 	// context.Background: task executions outlive the scheduler's own lifecycle.
 	if _, err := s.executor.Execute(context.Background(), task.ID); err != nil {
 		logger.Global().Error().Err(err).Str("task_id", task.ID).Msg("scheduler: failed to trigger task")
+	}
+}
+
+// runCleanup fires at midnight daily to purge old task runs.
+func (s *Scheduler) runCleanup(ctx context.Context) {
+	defer s.wg.Done()
+	for {
+		now := time.Now()
+		next := time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, now.Location())
+		select {
+		case <-s.stopCh:
+			return
+		case <-ctx.Done():
+			return
+		case <-time.After(time.Until(next)):
+			s.cleanupOldRuns()
+		}
+	}
+}
+
+// cleanupOldRuns deletes task runs older than each task's RunRetentionDays.
+func (s *Scheduler) cleanupOldRuns() {
+	tasks, err := s.taskStore.List()
+	if err != nil {
+		logger.Global().Error().Err(err).Msg("scheduler: cleanup: failed to list tasks")
+		return
+	}
+	for _, task := range tasks {
+		if task.RunRetentionDays <= 0 {
+			continue
+		}
+		before := time.Now().AddDate(0, 0, -task.RunRetentionDays)
+		n, err := s.taskRunStore.DeleteOldRuns(task.ID, before)
+		if err != nil {
+			logger.Global().Error().Err(err).Str("task_id", task.ID).Msg("scheduler: cleanup: failed to delete old runs")
+			continue
+		}
+		if n > 0 {
+			logger.Global().Info().Str("task_id", task.ID).Int64("deleted", n).Msg("scheduler: cleanup: deleted old runs")
+		}
 	}
 }
