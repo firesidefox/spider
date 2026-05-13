@@ -225,6 +225,10 @@ type NotifyChannel struct {
    - 若用户提到通知渠道（钉钉 webhook、邮箱等），Agent 可先调用 `CreateNotifyChannel` 创建全局渠道
 3. Agent 向用户展示提取结果，等待确认
 4. 用户确认后，Agent 调用 `CreateTask` 工具保存（所有字段已确定）
+5. **Cron 表达式验证**：
+   - 后端收到 CreateTask 请求后用 `cron.Parse()` 验证 schedule 字段
+   - 非法表达式 → 返回 400 错误 + 具体错误信息（如 "invalid cron: expected 5 fields, got 3"）
+   - Agent 工具调用失败，LLM 看到错误后重新生成合法表达式
 
 ---
 
