@@ -58,13 +58,14 @@ func deleteDocument(app *mcppkg.App, w http.ResponseWriter, r *http.Request, idS
 
 func ingestDocument(app *mcppkg.App, w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Vendor     string   `json:"vendor"`
-		Tags       []string `json:"tags"`
-		Title      string   `json:"title"`
-		Content    string   `json:"content"`
-		SourceFile string   `json:"source_file"`
-		ChunkIndex int      `json:"chunk_index"`
-		GroupID    *int     `json:"group_id"`
+		Vendor       string   `json:"vendor"`
+		Tags         []string `json:"tags"`
+		Title        string   `json:"title"`
+		Content      string   `json:"content"`
+		SourceFile   string   `json:"source_file"`
+		ChunkIndex   int      `json:"chunk_index"`
+		GroupID      *int     `json:"group_id"`
+		UseEmbedding *bool    `json:"use_embedding"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid json")
@@ -74,14 +75,22 @@ func ingestDocument(app *mcppkg.App, w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "content is required")
 		return
 	}
-	rs, err := ragStore(app)
-	if err != nil {
-		writeError(w, http.StatusServiceUnavailable, "embedding unavailable: "+err.Error())
-		return
-	}
-	if err := rs.Ingest(r.Context(), req.Vendor, req.Tags, req.Title, req.Content, req.SourceFile, req.ChunkIndex, req.GroupID); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
+	useEmbed := req.UseEmbedding == nil || *req.UseEmbedding
+	if useEmbed {
+		rs, err := ragStore(app)
+		if err != nil {
+			writeError(w, http.StatusServiceUnavailable, "embedding unavailable: "+err.Error())
+			return
+		}
+		if err := rs.Ingest(r.Context(), req.Vendor, req.Tags, req.Title, req.Content, req.SourceFile, req.ChunkIndex, req.GroupID); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	} else {
+		if err := app.DocStore.Save(req.Vendor, req.Tags, req.Title, req.Content, nil, req.SourceFile, req.ChunkIndex, req.GroupID); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
 	}
 	w.WriteHeader(http.StatusCreated)
 }
