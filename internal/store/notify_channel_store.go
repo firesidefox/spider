@@ -23,21 +23,27 @@ func NewNotifyChannelStore(db *sql.DB, cm *crypto.Manager) *NotifyChannelStore {
 
 // Create inserts a new notify channel. cfg is a JSON string encrypted before storage.
 func (s *NotifyChannelStore) Create(name string, typ models.NotifyChannelType, cfg string) (*models.NotifyChannel, error) {
+	if typ == "" {
+		return nil, fmt.Errorf("notify channel type is required")
+	}
+	if name == "" {
+		return nil, fmt.Errorf("notify channel name is required")
+	}
 	enc, err := s.crypto.Encrypt(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("encrypt config: %w", err)
 	}
 	now := time.Now().UTC()
 	res, err := s.db.Exec(
-		`INSERT INTO notify_channels (name, type, encrypted_config, created_at, updated_at) VALUES (?,?,?,?,?)`,
-		name, string(typ), enc, now, now,
+		`INSERT INTO notify_channels (name, type, encrypted_config, enabled, created_at, updated_at) VALUES (?,?,?,?,?,?)`,
+		name, string(typ), enc, 1, now, now,
 	)
 	if err != nil {
 		return nil, err
 	}
 	id, _ := res.LastInsertId()
 	return &models.NotifyChannel{
-		ID: id, Name: name, Type: typ, Config: cfg,
+		ID: id, Name: name, Type: typ, Enabled: true, Config: cfg,
 		CreatedAt: now, UpdatedAt: now,
 	}, nil
 }
@@ -45,10 +51,10 @@ func (s *NotifyChannelStore) Create(name string, typ models.NotifyChannelType, c
 // List returns all notify channels with decrypted config.
 func (s *NotifyChannelStore) List() ([]*models.NotifyChannel, error) {
 	rows, err := s.db.Query(
-		`SELECT id, name, type, encrypted_config, created_at, updated_at FROM notify_channels ORDER BY id`,
+		`SELECT id, name, type, encrypted_config, enabled, created_at, updated_at FROM notify_channels ORDER BY id`,
 	)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to query notify channels: %w", err)
 	}
 	defer rows.Close()
 	var out []*models.NotifyChannel
@@ -85,13 +91,16 @@ func (s *NotifyChannelStore) Update(id int64, name string, typ models.NotifyChan
 // Delete removes a notify channel by ID.
 func (s *NotifyChannelStore) Delete(id int64) error {
 	_, err := s.db.Exec(`DELETE FROM notify_channels WHERE id=?`, id)
-	return err
+	if err != nil {
+		return fmt.Errorf("failed to delete notify channel %d: %w", id, err)
+	}
+	return nil
 }
 
 // GetByID returns a single channel with decrypted config.
 func (s *NotifyChannelStore) GetByID(id int64) (*models.NotifyChannel, error) {
 	row := s.db.QueryRow(
-		`SELECT id, name, type, encrypted_config, created_at, updated_at FROM notify_channels WHERE id=?`, id,
+		`SELECT id, name, type, encrypted_config, enabled, created_at, updated_at FROM notify_channels WHERE id=?`, id,
 	)
 	return scanNotifyChannel(row, s.crypto)
 }
@@ -104,10 +113,12 @@ func scanNotifyChannel(sc notifyChannelScanner, cm *crypto.Manager) (*models.Not
 	var ch models.NotifyChannel
 	var encCfg string
 	var typ string
-	if err := sc.Scan(&ch.ID, &ch.Name, &typ, &encCfg, &ch.CreatedAt, &ch.UpdatedAt); err != nil {
+	var enabled int
+	if err := sc.Scan(&ch.ID, &ch.Name, &typ, &encCfg, &enabled, &ch.CreatedAt, &ch.UpdatedAt); err != nil {
 		return nil, err
 	}
 	ch.Type = models.NotifyChannelType(typ)
+	ch.Enabled = enabled != 0
 	plain, err := cm.Decrypt(encCfg)
 	if err != nil {
 		return nil, fmt.Errorf("decrypt config: %w", err)

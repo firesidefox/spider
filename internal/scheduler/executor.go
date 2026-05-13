@@ -86,6 +86,7 @@ func (e *Executor) executeAsync(ctx context.Context, task *models.Task, run *mod
 		if err := e.taskRunStore.Update(run); err != nil {
 			log.Error().Err(err).Msg("failed to update task run")
 		}
+		e.sendNotifications(context.Background(), task, run)
 		return
 	}
 
@@ -119,6 +120,7 @@ func (e *Executor) executeAsync(ctx context.Context, task *models.Task, run *mod
 		if uerr := e.taskRunStore.Update(run); uerr != nil {
 			log.Error().Err(uerr).Msg("failed to update task run")
 		}
+		e.sendNotifications(context.Background(), task, run)
 		return
 	}
 

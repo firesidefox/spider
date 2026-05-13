@@ -351,10 +351,12 @@ func migrate(db *sql.DB) error {
 		name              TEXT NOT NULL,
 		type              TEXT NOT NULL DEFAULT 'dingtalk',
 		encrypted_config  TEXT NOT NULL DEFAULT '',
+		enabled           INTEGER NOT NULL DEFAULT 1,
 		created_at        DATETIME NOT NULL,
 		updated_at        DATETIME NOT NULL
 	)`); err != nil {
 		return err
 	}
+	db.Exec("ALTER TABLE notify_channels ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1")
 	return nil
 }
