@@ -28,13 +28,16 @@ ChatView.vue               ← calls updateAgentStatus() on EventSource events
 interface AgentStatus {
   conversationId: string
   title: string
-  phase: 'thinking' | 'tool' | 'confirm' | 'done' | 'idle'
+  phase: 'thinking' | 'tool' | 'confirm' | 'done'
   toolName?: string    // from tool_start event
   toolInput?: string   // truncated to ~40 chars
+  updatedAt: number    // Date.now(), used for ordering
 }
 ```
 
-Module-level `ref<AgentStatus>` — shared across all component imports, no provide/inject needed.
+Module-level `ref<Map<string, AgentStatus>>` — keyed by `conversationId`. Max 3 entries; when a 4th arrives, evict the oldest `done` entry first, then oldest by `updatedAt`.
+
+Footer hidden when map is empty.
 
 ## Event Mapping
 
@@ -45,25 +48,29 @@ Module-level `ref<AgentStatus>` — shared across all component imports, no prov
 | `confirm_required` | `confirm` | `对话名 · 等待确认 · bash: cmd` |
 | `done` | `done` | `对话名 · 完成` → idle after 3s |
 
-## Idle Transitions
+## Entry Lifecycle
 
-Status goes `idle` (footer hidden) only when:
-1. `done` event received + 3 seconds elapsed
-2. User clicks the status bar (navigates to the conversation)
+An entry is added to the map when a conversation starts streaming. It is removed when:
+1. `done` event received + 3 seconds elapsed (auto-remove)
+2. User clicks the entry in the status bar (navigates to conversation, then remove)
 
-Navigating away from ChatView does NOT clear the status — agent keeps running in background.
+Navigating away from ChatView does NOT remove the entry — agent keeps running in background.
 
 ## UI
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│ header (nav)                                                │
-├─────────────────────────────────────────────────────────────┤
-│ main (router-view)                                          │
-├─────────────────────────────────────────────────────────────┤
-│ ● 排查 nginx 502 错误 · bash: systemctl status nginx  → │  ← 28px footer
-└─────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│ header (nav)                                                     │
+├──────────────────────────────────────────────────────────────────┤
+│ main (router-view)                                               │
+├──────────────────────────────────────────────────────────────────┤
+│ ● 排查 nginx 502 · bash: systemctl status nginx  →  ● 部署前端 · 思考中  → │  ← 28px, scrollable
+└──────────────────────────────────────────────────────────────────┘
 ```
+
+**Ordering:** Current route's conversation always first. Others ordered by `updatedAt` descending.
+
+**Layout:** Single row, `overflow-x: auto`, `scrollbar-width: none` (hidden scrollbar). Items separated by `|` divider. Max 3 items.
 
 **Dot colors:**
 - Purple pulsing — `thinking` / `tool`
@@ -72,9 +79,9 @@ Navigating away from ChatView does NOT clear the status — agent keeps running 
 
 **Tool detail:** `toolName: truncate(toolInput, 40)` in monospace, dimmed.
 
-**Click:** navigates to `/chat?id={conversationId}`.
+**Click item:** navigates to `/chat?id={conversationId}`, removes entry from map.
 
-**Idle:** `v-if="status.phase !== 'idle'"` — footer element removed from DOM, no height.
+**Footer hidden:** when map is empty (`v-if="statuses.size > 0"`).
 
 ## Files to Change
 
@@ -88,5 +95,4 @@ Navigating away from ChatView does NOT clear the status — agent keeps running 
 ## Out of Scope
 
 - Exec command status (separate feature)
-- Multiple concurrent conversations
 - Persistent status across page reload
