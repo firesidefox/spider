@@ -86,7 +86,40 @@ func NewClientWithCredential(face *models.AccessFace, credential, passphrase str
 		return nil, fmt.Errorf("SSH 连接 %s 失败: %w", addr, err)
 	}
 	logger.Global().Info().Str("host", face.IP).Msg("ssh connected")
-	return &Client{conn: conn, face: face}, nil
+	c := &Client{conn: conn, face: face}
+	if err := sendLoginInput(conn, face.SSHLoginInput); err != nil {
+		conn.Close()
+		return nil, err
+	}
+	return c, nil
+}
+
+func sendLoginInput(conn *gossh.Client, input string) error {
+	if input == "" {
+		return nil
+	}
+	session, err := conn.NewSession()
+	if err != nil {
+		return fmt.Errorf("sendLoginInput: create session: %w", err)
+	}
+	defer session.Close()
+
+	modes := gossh.TerminalModes{gossh.ECHO: 0}
+	if err := session.RequestPty("xterm", 24, 80, modes); err != nil {
+		return fmt.Errorf("sendLoginInput: request pty: %w", err)
+	}
+	stdin, err := session.StdinPipe()
+	if err != nil {
+		return fmt.Errorf("sendLoginInput: stdin pipe: %w", err)
+	}
+	if err := session.Shell(); err != nil {
+		return fmt.Errorf("sendLoginInput: start shell: %w", err)
+	}
+	if _, err := fmt.Fprintln(stdin, input); err != nil {
+		return fmt.Errorf("sendLoginInput: write input: %w", err)
+	}
+	time.Sleep(500 * time.Millisecond)
+	return nil
 }
 
 // buildAuthMethods 根据认证类型构建 SSH 认证方法列表。
