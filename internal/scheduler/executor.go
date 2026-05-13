@@ -152,7 +152,7 @@ func (e *Executor) executeAsync(ctx context.Context, task *models.Task, run *mod
 		run.Alerted = true
 	} else {
 		run.Status = models.TaskRunStatusCompleted
-		if e.detectAnomaly(ctx, run.RawOutput) {
+		if task.NotifyMode == models.NotifyAnomaly && e.detectAnomaly(ctx, run.RawOutput) {
 			run.Alerted = true
 		}
 	}
