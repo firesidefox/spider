@@ -34,7 +34,12 @@ func (t *SearchDocsTool) SystemPromptSection() string {
 
 **Rules:**
 - SearchDocs comes before RunCommand in Explore phase. Do not run a command without first checking if relevant docs exist.
-- Query with operation intent, not just keywords (e.g., "huawei 查看内存占用" not "memory").`
+- Query with operation intent, not just keywords (e.g., "huawei 查看内存占用" not "memory").
+
+**For full-text documents (no embedding):**
+1. Call SearchDocs with catalog=true and group_id to list available documents (ID + title).
+2. Pick relevant documents by ID.
+3. Call SearchDocs with doc_ids=[...] to fetch full content.`
 }
 
 func (t *SearchDocsTool) InputSchema() map[string]any {
