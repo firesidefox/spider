@@ -237,7 +237,18 @@ type NotifyChannel struct {
 
 `TriggerType` 字段不需要，从 `schedule` 是否为空推断。
 
-调度器：进程内 goroutine，每分钟轮询 DB，找到到期 active Task 启动执行。行锁防止多实例重复执行。
+调度器：进程内 goroutine，每分钟轮询 DB，找到到期 active Task 启动执行。
+
+**多实例互斥（行锁）：**
+```sql
+BEGIN;
+SELECT * FROM tasks WHERE id = ? AND status = 'active' FOR UPDATE NOWAIT;
+-- 拿到锁 → 检查 cron 是否到期 → 创建 TaskRun
+COMMIT;
+```
+- 使用 `SELECT FOR UPDATE NOWAIT`（SQLite 3.37+）
+- 其他实例拿不到锁时立即返回，跳过本次调度
+- 锁超时依赖 SQLite 的 `busy_timeout`（默认 5s）
 
 ### 并发执行策略
 
