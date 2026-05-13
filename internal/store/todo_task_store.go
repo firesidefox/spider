@@ -13,16 +13,16 @@ import (
 	"github.com/spiderai/spider/internal/models"
 )
 
-type TodoTaskStore struct {
+type TodoStore struct {
 	db *sql.DB
 	mu sync.Mutex
 }
 
-func NewTodoTaskStore(db *sql.DB) *TodoTaskStore {
-	return &TodoTaskStore{db: db}
+func NewTodoStore(db *sql.DB) *TodoStore {
+	return &TodoStore{db: db}
 }
 
-func (s *TodoTaskStore) Create(task *models.TodoTask) error {
+func (s *TodoStore) Create(task *models.Todo) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -48,7 +48,7 @@ func (s *TodoTaskStore) Create(task *models.TodoTask) error {
 	return nil
 }
 
-func (s *TodoTaskStore) Update(conversationID string, id int64, subject, description, status, owner string, blockedBy []int64) (*models.TodoTask, error) {
+func (s *TodoStore) Update(conversationID string, id int64, subject, description, status, owner string, blockedBy []int64) (*models.Todo, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -87,7 +87,7 @@ func (s *TodoTaskStore) Update(conversationID string, id int64, subject, descrip
 		return nil, err
 	}
 
-	var t models.TodoTask
+	var t models.Todo
 	var blockedByJSON string
 	err = s.db.QueryRow(
 		`SELECT id, conversation_id, subject, description, status, owner, blocked_by, created_at, updated_at
@@ -102,7 +102,7 @@ func (s *TodoTaskStore) Update(conversationID string, id int64, subject, descrip
 	return &t, nil
 }
 
-func (s *TodoTaskStore) List(conversationID string) ([]*models.TodoTask, error) {
+func (s *TodoStore) List(conversationID string) ([]*models.Todo, error) {
 	rows, err := s.db.Query(
 		`SELECT id, conversation_id, subject, description, status, owner, blocked_by, created_at, updated_at
 		 FROM todo_tasks WHERE conversation_id = ? AND status != 'deleted' ORDER BY id ASC`,
@@ -113,9 +113,9 @@ func (s *TodoTaskStore) List(conversationID string) ([]*models.TodoTask, error) 
 	}
 	defer rows.Close()
 
-	var tasks []*models.TodoTask
+	var tasks []*models.Todo
 	for rows.Next() {
-		var t models.TodoTask
+		var t models.Todo
 		var blockedByJSON string
 		if err := rows.Scan(&t.ID, &t.ConversationID, &t.Subject, &t.Description,
 			&t.Status, &t.Owner, &blockedByJSON, &t.CreatedAt, &t.UpdatedAt); err != nil {
@@ -131,8 +131,8 @@ func (s *TodoTaskStore) List(conversationID string) ([]*models.TodoTask, error) 
 	return tasks, nil
 }
 
-func (s *TodoTaskStore) Get(id int64) (*models.TodoTask, error) {
-	var t models.TodoTask
+func (s *TodoStore) Get(id int64) (*models.Todo, error) {
+	var t models.Todo
 	var blockedByJSON string
 	err := s.db.QueryRow(
 		`SELECT id, conversation_id, subject, description, status, owner, blocked_by, created_at, updated_at

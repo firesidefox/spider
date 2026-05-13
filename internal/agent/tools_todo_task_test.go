@@ -25,7 +25,7 @@ func (m *mockBroadcaster) BroadcastSSE(_ string, data []byte) {
 	m.broadcasts = append(m.broadcasts, data)
 }
 
-func newTestTodoTool(t *testing.T) (*TodoTaskTool, *mockBroadcaster) {
+func newTestTodoTool(t *testing.T) (*TodoTool, *mockBroadcaster) {
 	t.Helper()
 	database, err := db.Open(t.TempDir())
 	if err != nil {
@@ -33,10 +33,10 @@ func newTestTodoTool(t *testing.T) (*TodoTaskTool, *mockBroadcaster) {
 	}
 	t.Cleanup(func() { database.Close() })
 	bc := &mockBroadcaster{}
-	return NewTodoTaskTool(store.NewTodoTaskStore(database), bc, "conv-1"), bc
+	return NewTodoTool(store.NewTodoStore(database), bc, "conv-1"), bc
 }
 
-func TestTodoTaskTool_Create(t *testing.T) {
+func TestTodoTool_Create(t *testing.T) {
 	tool, bc := newTestTodoTool(t)
 	res, err := tool.Execute(context.Background(), map[string]any{"action": "create", "subject": "check device"})
 	if err != nil || res.IsError {
@@ -55,7 +55,7 @@ func TestTodoTaskTool_Create(t *testing.T) {
 	}
 }
 
-func TestTodoTaskTool_CreateMissingSubject(t *testing.T) {
+func TestTodoTool_CreateMissingSubject(t *testing.T) {
 	tool, _ := newTestTodoTool(t)
 	res, _ := tool.Execute(context.Background(), map[string]any{"action": "create"})
 	if !res.IsError {
@@ -63,7 +63,7 @@ func TestTodoTaskTool_CreateMissingSubject(t *testing.T) {
 	}
 }
 
-func TestTodoTaskTool_Update(t *testing.T) {
+func TestTodoTool_Update(t *testing.T) {
 	tool, bc := newTestTodoTool(t)
 	res, _ := tool.Execute(context.Background(), map[string]any{"action": "create", "subject": "task1"})
 	var created map[string]any
@@ -84,7 +84,7 @@ func TestTodoTaskTool_Update(t *testing.T) {
 	}
 }
 
-func TestTodoTaskTool_UpdateEmptyFields(t *testing.T) {
+func TestTodoTool_UpdateEmptyFields(t *testing.T) {
 	tool, _ := newTestTodoTool(t)
 	res, _ := tool.Execute(context.Background(), map[string]any{"action": "update", "task_id": float64(1)})
 	if !res.IsError {
@@ -92,7 +92,7 @@ func TestTodoTaskTool_UpdateEmptyFields(t *testing.T) {
 	}
 }
 
-func TestTodoTaskTool_UpdateMissingTaskID(t *testing.T) {
+func TestTodoTool_UpdateMissingTaskID(t *testing.T) {
 	tool, _ := newTestTodoTool(t)
 	res, _ := tool.Execute(context.Background(), map[string]any{"action": "update", "status": "completed"})
 	if !res.IsError {
@@ -100,7 +100,7 @@ func TestTodoTaskTool_UpdateMissingTaskID(t *testing.T) {
 	}
 }
 
-func TestTodoTaskTool_List(t *testing.T) {
+func TestTodoTool_List(t *testing.T) {
 	tool, _ := newTestTodoTool(t)
 	tool.Execute(context.Background(), map[string]any{"action": "create", "subject": "t1"})
 	tool.Execute(context.Background(), map[string]any{"action": "create", "subject": "t2"})
@@ -116,7 +116,7 @@ func TestTodoTaskTool_List(t *testing.T) {
 	}
 }
 
-func TestTodoTaskTool_UnknownAction(t *testing.T) {
+func TestTodoTool_UnknownAction(t *testing.T) {
 	tool, _ := newTestTodoTool(t)
 	res, _ := tool.Execute(context.Background(), map[string]any{"action": "delete"})
 	if !res.IsError {

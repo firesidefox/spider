@@ -62,13 +62,13 @@ func chatGetConversation(app *mcppkg.App, w http.ResponseWriter, r *http.Request
 		writeError(w, 500, err.Error())
 		return
 	}
-	tasks, err := app.TodoTaskStore.List(id)
+	tasks, err := app.TodoStore.List(id)
 	if err != nil {
 		writeError(w, 500, err.Error())
 		return
 	}
 	if tasks == nil {
-		tasks = []*models.TodoTask{}
+		tasks = []*models.Todo{}
 	}
 	writeJSON(w, 200, map[string]any{"conversation": conv, "messages": msgs, "todo_tasks": tasks})
 }

@@ -20,11 +20,11 @@ export interface ChatMessage {
 }
 
 export interface ChatEvent {
-  type: 'text_delta' | 'tool_start' | 'tool_result' | 'confirm_required' | 'error' | 'done' | 'message' | 'todotask_update'
+  type: 'text_delta' | 'tool_start' | 'tool_result' | 'confirm_required' | 'error' | 'done' | 'message' | 'todo_update'
   content?: Record<string, any>
 }
 
-export interface TodoTask {
+export interface Todo {
   id: number; conversation_id: string; subject: string
   description?: string; status: string; owner?: string
   blocked_by?: number[]; created_at: string; updated_at: string
@@ -46,7 +46,7 @@ export async function listConversations(): Promise<Conversation[]> {
   return res.json()
 }
 
-export async function getConversation(id: string): Promise<{ conversation: Conversation; messages: ChatMessage[]; todo_tasks: TodoTask[] }> {
+export async function getConversation(id: string): Promise<{ conversation: Conversation; messages: ChatMessage[]; todo_tasks: Todo[] }> {
   const res = await fetch(`/api/v1/chat/conversations/${id}`, { headers: authHeaders() })
   if (!res.ok) throw new Error((await res.json()).error)
   return res.json()

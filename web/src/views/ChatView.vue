@@ -349,6 +349,7 @@ function handleConvEvent(convId: string, event: ChatEvent) {
       setStatus('thinking')
       break
     }
+    case 'tool_start':  // fallthrough
       blocks.push({ type: 'tool', call: {
         id: event.content?.id || `t-${Date.now()}`,
         name: event.content?.name || 'unknown',
@@ -442,6 +443,9 @@ async function send() {
   }
 
   inputText.value = ''
+  nextTick(() => {
+    if (textareaRef.value) textareaRef.value.style.height = 'auto'
+  })
 
   if (!activeConvId.value) {
     await createNewConversation()
@@ -585,9 +589,15 @@ function getKbItemLabel(item: DocumentGroup | KbDocument): string {
   return (item as any).name ?? (item as KbDocument).title
 }
 
+function autoResizeTextarea(el: HTMLTextAreaElement) {
+  el.style.height = 'auto'
+  el.style.height = el.scrollHeight + 'px'
+}
+
 async function onTextareaInput() {
   const el = textareaRef.value
   if (!el) return
+  autoResizeTextarea(el)
   const pos = el.selectionStart
   const before = el.value.slice(0, pos)
 
@@ -946,7 +956,7 @@ onUnmounted(() => {
 
 .chat-input { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--border); background: var(--panel); }
 .input-wrapper { flex: 1; position: relative; display: flex; flex-direction: column; }
-.input-wrapper textarea { background: var(--input-bg); border: 1px solid var(--border); color: var(--text); padding: 8px 12px; border-radius: 6px; font-family: 'SF Mono', monospace; font-size: 13px; resize: none; outline: none; width: 100%; box-sizing: border-box; }
+.input-wrapper textarea { background: var(--input-bg); border: 1px solid var(--border); color: var(--text); padding: 8px 12px; border-radius: 6px; font-family: 'SF Mono', monospace; font-size: 13px; resize: none; outline: none; width: 100%; box-sizing: border-box; min-height: 36px; max-height: 200px; overflow-y: auto; line-height: 1.5; }
 .input-wrapper textarea:focus { border-color: var(--primary); }
 .kb-dropdown {
   position: absolute; bottom: 100%; left: 0; right: 0; margin-bottom: 4px;

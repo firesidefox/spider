@@ -6,10 +6,10 @@ import (
 	"github.com/spiderai/spider/internal/models"
 )
 
-func TestTodoTaskStore_CreateAndList(t *testing.T) {
-	s := NewTodoTaskStore(setupTestDB(t))
+func TestTodoStore_CreateAndList(t *testing.T) {
+	s := NewTodoStore(setupTestDB(t))
 
-	task := &models.TodoTask{ConversationID: "conv-1", Subject: "check device", Status: "pending"}
+	task := &models.Todo{ConversationID: "conv-1", Subject: "check device", Status: "pending"}
 	if err := s.Create(task); err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -26,10 +26,10 @@ func TestTodoTaskStore_CreateAndList(t *testing.T) {
 	}
 }
 
-func TestTodoTaskStore_Update(t *testing.T) {
-	s := NewTodoTaskStore(setupTestDB(t))
+func TestTodoStore_Update(t *testing.T) {
+	s := NewTodoStore(setupTestDB(t))
 
-	task := &models.TodoTask{ConversationID: "conv-1", Subject: "task1", Status: "pending"}
+	task := &models.Todo{ConversationID: "conv-1", Subject: "task1", Status: "pending"}
 	s.Create(task)
 
 	got, err := s.Update("conv-1", task.ID, "", "", "in_progress", "", nil)
@@ -41,10 +41,10 @@ func TestTodoTaskStore_Update(t *testing.T) {
 	}
 }
 
-func TestTodoTaskStore_ListExcludesDeleted(t *testing.T) {
-	s := NewTodoTaskStore(setupTestDB(t))
+func TestTodoStore_ListExcludesDeleted(t *testing.T) {
+	s := NewTodoStore(setupTestDB(t))
 
-	task := &models.TodoTask{ConversationID: "conv-1", Subject: "task1", Status: "pending"}
+	task := &models.Todo{ConversationID: "conv-1", Subject: "task1", Status: "pending"}
 	s.Create(task)
 	s.Update("conv-1", task.ID, "", "", "deleted", "", nil)
 
@@ -54,11 +54,11 @@ func TestTodoTaskStore_ListExcludesDeleted(t *testing.T) {
 	}
 }
 
-func TestTodoTaskStore_BlockedBy(t *testing.T) {
-	s := NewTodoTaskStore(setupTestDB(t))
+func TestTodoStore_BlockedBy(t *testing.T) {
+	s := NewTodoStore(setupTestDB(t))
 
-	t1 := &models.TodoTask{ConversationID: "conv-1", Subject: "t1", Status: "pending"}
-	t2 := &models.TodoTask{ConversationID: "conv-1", Subject: "t2", Status: "pending"}
+	t1 := &models.Todo{ConversationID: "conv-1", Subject: "t1", Status: "pending"}
+	t2 := &models.Todo{ConversationID: "conv-1", Subject: "t2", Status: "pending"}
 	s.Create(t1)
 	s.Create(t2)
 
@@ -70,13 +70,13 @@ func TestTodoTaskStore_BlockedBy(t *testing.T) {
 	}
 }
 
-func TestTodoTaskStore_ConcurrentWrites(t *testing.T) {
-	s := NewTodoTaskStore(setupTestDB(t))
+func TestTodoStore_ConcurrentWrites(t *testing.T) {
+	s := NewTodoStore(setupTestDB(t))
 
 	done := make(chan error, 5)
 	for i := 0; i < 5; i++ {
 		go func(i int) {
-			task := &models.TodoTask{ConversationID: "conv-1", Subject: "task", Status: "pending"}
+			task := &models.Todo{ConversationID: "conv-1", Subject: "task", Status: "pending"}
 			done <- s.Create(task)
 		}(i)
 	}

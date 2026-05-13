@@ -44,7 +44,7 @@ type App struct {
 	MemoryStore      *store.MemoryStore
 	ProviderStore  *store.ProviderStore
 	RagConfigStore *store.RagConfigStore
-	TodoTaskStore  *store.TodoTaskStore
+	TodoStore      *store.TodoStore
 	TopologyStore  *store.TopologyStore
 	AgentFactory   *agent.Factory // nil if LLM not configured
 
@@ -86,7 +86,7 @@ func (a *App) NewAgentFactory() (*agent.Factory, error) {
 	f.PermissionMode = a.PermissionMode
 	f.SummaryStore = store.NewSummaryStore(a.DB)
 	f.CompactionCfg = a.Config.Agent.Compaction
-	f.TodoTaskStore = a.TodoTaskStore
+	f.TodoStore = a.TodoStore
 	f.TopologyStore = a.TopologyStore
 	f.SSEBroadcaster = a
 	f.DocStore = a.DocStore

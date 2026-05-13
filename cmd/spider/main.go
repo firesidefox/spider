@@ -201,7 +201,7 @@ func serve(cfgFile, addrOverride, dataDirOverride string, debug bool) error {
 	ps := store.NewProviderStore(database, cm)
 	app.ProviderStore = ps
 	app.RagConfigStore = store.NewRagConfigStore(database, cm)
-	app.TodoTaskStore = store.NewTodoTaskStore(database)
+	app.TodoStore = store.NewTodoStore(database)
 	app.TopologyStore = store.NewTopologyStore(database)
 
 	app.Classifier = permission.NewClassifier(nil)

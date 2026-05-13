@@ -2,7 +2,7 @@ package models
 
 import "time"
 
-type TodoTask struct {
+type Todo struct {
 	ID             int64     `json:"id"`
 	ConversationID string    `json:"conversation_id"`
 	Subject        string    `json:"subject"`

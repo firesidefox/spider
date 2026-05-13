@@ -12,24 +12,24 @@ type SSEBroadcaster interface {
 	BroadcastSSE(conversationID string, data []byte)
 }
 
-type TodoTaskTool struct {
-	store          *store.TodoTaskStore
+type TodoTool struct {
+	store          *store.TodoStore
 	broadcaster    SSEBroadcaster
 	conversationID string
 }
 
-func NewTodoTaskTool(s *store.TodoTaskStore, broadcaster SSEBroadcaster, conversationID string) *TodoTaskTool {
-	return &TodoTaskTool{store: s, broadcaster: broadcaster, conversationID: conversationID}
+func NewTodoTool(s *store.TodoStore, broadcaster SSEBroadcaster, conversationID string) *TodoTool {
+	return &TodoTool{store: s, broadcaster: broadcaster, conversationID: conversationID}
 }
 
-func (t *TodoTaskTool) Name() string        { return "TodoTask" }
-func (t *TodoTaskTool) DefaultRiskLevel() RiskLevel { return RiskL1 }
+func (t *TodoTool) Name() string                    { return "Todo" }
+func (t *TodoTool) DefaultRiskLevel() RiskLevel     { return RiskL1 }
 
-func (t *TodoTaskTool) Description() string {
+func (t *TodoTool) Description() string {
 	return "Update the todo task list for the current conversation. Use proactively to track progress on complex tasks. Actions: create (required: subject), update (required: task_id + at least one field), list. Status values: pending, in_progress, completed, deleted."
 }
 
-func (t *TodoTaskTool) InputSchema() map[string]any {
+func (t *TodoTool) InputSchema() map[string]any {
 	return map[string]any{
 		"type":     "object",
 		"required": []string{"action"},
@@ -45,7 +45,7 @@ func (t *TodoTaskTool) InputSchema() map[string]any {
 	}
 }
 
-func (t *TodoTaskTool) Execute(_ context.Context, input map[string]any) (*ToolResult, error) {
+func (t *TodoTool) Execute(_ context.Context, input map[string]any) (*ToolResult, error) {
 	action, _ := input["action"].(string)
 	switch action {
 	case "create":
@@ -59,12 +59,12 @@ func (t *TodoTaskTool) Execute(_ context.Context, input map[string]any) (*ToolRe
 	}
 }
 
-func (t *TodoTaskTool) execCreate(input map[string]any) (*ToolResult, error) {
+func (t *TodoTool) execCreate(input map[string]any) (*ToolResult, error) {
 	subject, _ := input["subject"].(string)
 	if subject == "" {
 		return &ToolResult{Content: "create requires subject", IsError: true, RiskLevel: RiskL1}, nil
 	}
-	task := &models.TodoTask{
+	task := &models.Todo{
 		ConversationID: t.conversationID,
 		Subject:        subject,
 		Description:    strVal(input, "description"),
@@ -80,7 +80,7 @@ func (t *TodoTaskTool) execCreate(input map[string]any) (*ToolResult, error) {
 	return &ToolResult{Content: string(out) + todoNudge(false), RiskLevel: RiskL1}, nil
 }
 
-func (t *TodoTaskTool) execUpdate(input map[string]any) (*ToolResult, error) {
+func (t *TodoTool) execUpdate(input map[string]any) (*ToolResult, error) {
 	taskIDFloat, ok := input["task_id"].(float64)
 	if !ok {
 		return &ToolResult{Content: "update requires task_id", IsError: true, RiskLevel: RiskL1}, nil
@@ -114,27 +114,27 @@ func (t *TodoTaskTool) execUpdate(input map[string]any) (*ToolResult, error) {
 	return &ToolResult{Content: string(out) + todoNudge(allDone), RiskLevel: RiskL1}, nil
 }
 
-func (t *TodoTaskTool) execList() (*ToolResult, error) {
+func (t *TodoTool) execList() (*ToolResult, error) {
 	tasks, err := t.store.List(t.conversationID)
 	if err != nil {
 		return &ToolResult{Content: "list failed: " + err.Error(), IsError: true, RiskLevel: RiskL1}, nil
 	}
 	if tasks == nil {
-		tasks = []*models.TodoTask{}
+		tasks = []*models.Todo{}
 	}
 	out, _ := json.Marshal(tasks)
 	return &ToolResult{Content: string(out), RiskLevel: RiskL1}, nil
 }
 
-func (t *TodoTaskTool) broadcast(task *models.TodoTask) {
+func (t *TodoTool) broadcast(task *models.Todo) {
 	if t.broadcaster == nil {
 		return
 	}
-	payload, _ := json.Marshal(map[string]any{"type": "todotask_update", "content": task})
+	payload, _ := json.Marshal(map[string]any{"type": "todo_update", "content": task})
 	t.broadcaster.BroadcastSSE(t.conversationID, payload)
 }
 
-func (t *TodoTaskTool) allTasksDone() bool {
+func (t *TodoTool) allTasksDone() bool {
 	tasks, err := t.store.List(t.conversationID)
 	if err != nil || len(tasks) == 0 {
 		return false
@@ -147,7 +147,7 @@ func (t *TodoTaskTool) allTasksDone() bool {
 	return true
 }
 
-const todoBaseNudge = "\n\nTodo list updated. Continue using the TodoTask tool to track remaining work — mark each task in_progress before starting and completed immediately when done."
+const todoBaseNudge = "\n\nTodo list updated. Continue using the Todo tool to track remaining work — mark each task in_progress before starting and completed immediately when done."
 const todoAllDoneNudge = "\n\nAll tasks are complete. Before finishing, verify your work by producing a concrete artifact (test output, build log, or command result) that confirms the changes are correct. Do not self-assess — let the output speak."
 const execNudge = "\n\nCommand executed. Update your todo list if this completes a task, then verify the result before proceeding to the next step."
 const apiMutateNudge = "\n\nAPI call completed. Check status_code in the response. Update your todo list if this completes a task."
@@ -164,9 +164,9 @@ func strVal(input map[string]any, key string) string {
 	return v
 }
 
-const todoTaskPromptSection = `## Task Management (TodoTask tool)
+const todoPromptSection = `## Task Management (Todo tool)
 
-Use the TodoTask tool proactively to track progress on complex tasks.
+Use the Todo tool proactively to track progress on complex tasks.
 
 **When to use:**
 - Task requires 3 or more distinct steps
@@ -192,8 +192,8 @@ User: What is the IP address of host web-01?
 Assistant: Calls ListHosts directly. No todo list.
 </example>`
 
-func (t *TodoTaskTool) SystemPromptSection() string {
-	return todoTaskPromptSection
+func (t *TodoTool) SystemPromptSection() string {
+	return todoPromptSection
 }
 
 func int64Slice(input map[string]any, key string) []int64 {
