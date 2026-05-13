@@ -84,8 +84,16 @@ func (s *Scheduler) isDue(task *models.Task) bool {
 		logger.Global().Warn().Err(err).Str("task_id", task.ID).Msg("scheduler: invalid cron schedule")
 		return false
 	}
-	next := sched.Next(task.UpdatedAt)
-	return time.Now().After(next)
+	lastRun, err := s.taskRunStore.LastStartedAt(task.ID)
+	if err != nil {
+		logger.Global().Error().Err(err).Str("task_id", task.ID).Msg("scheduler: failed to get last run time")
+		return false
+	}
+	base := task.CreatedAt
+	if lastRun != nil {
+		base = *lastRun
+	}
+	return time.Now().After(sched.Next(base))
 }
 
 func (s *Scheduler) tryTrigger(task *models.Task) {

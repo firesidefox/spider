@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/spiderai/spider/internal/models"
@@ -118,6 +119,21 @@ func (s *TaskRunStore) HasRunning(taskID string) (bool, error) {
 		return false, fmt.Errorf("failed to check running task runs for %s: %w", taskID, err)
 	}
 	return count > 0, nil
+}
+
+// LastStartedAt returns the started_at of the most recent run for a task, or nil if no runs exist.
+func (s *TaskRunStore) LastStartedAt(taskID string) (*time.Time, error) {
+	var t time.Time
+	err := s.db.QueryRow(
+		`SELECT started_at FROM task_runs WHERE task_id = ? ORDER BY started_at DESC LIMIT 1`, taskID,
+	).Scan(&t)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to query last started_at for task %s: %w", taskID, err)
+	}
+	return &t, nil
 }
 
 // ListByTaskID retrieves task runs for a given task ID with pagination, ordered by started_at DESC (newest first).
