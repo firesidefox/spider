@@ -1,0 +1,104 @@
+package scheduler
+
+import (
+	"context"
+	"sync"
+	"time"
+
+	"github.com/robfig/cron/v3"
+	"github.com/spiderai/spider/internal/logger"
+	"github.com/spiderai/spider/internal/models"
+	"github.com/spiderai/spider/internal/store"
+)
+
+// Scheduler polls for due cron tasks every minute and triggers execution.
+type Scheduler struct {
+	taskStore    *store.TaskStore
+	taskRunStore *store.TaskRunStore
+	executor     *Executor
+	stopCh       chan struct{}
+	wg           sync.WaitGroup
+}
+
+// NewScheduler creates a new Scheduler.
+func NewScheduler(
+	taskStore *store.TaskStore,
+	taskRunStore *store.TaskRunStore,
+	executor *Executor,
+) *Scheduler {
+	return &Scheduler{
+		taskStore:    taskStore,
+		taskRunStore: taskRunStore,
+		executor:     executor,
+		stopCh:       make(chan struct{}),
+	}
+}
+
+// Start begins the scheduler loop in a background goroutine.
+func (s *Scheduler) Start(ctx context.Context) {
+	s.wg.Add(1)
+	go s.run(ctx)
+}
+
+// Stop signals the scheduler to stop and waits for it to exit.
+func (s *Scheduler) Stop() {
+	close(s.stopCh)
+	s.wg.Wait()
+}
+
+func (s *Scheduler) run(ctx context.Context) {
+	defer s.wg.Done()
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-s.stopCh:
+			return
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			s.tick()
+		}
+	}
+}
+
+func (s *Scheduler) tick() {
+	tasks, err := s.taskStore.List()
+	if err != nil {
+		logger.Global().Error().Err(err).Msg("scheduler: failed to list tasks")
+		return
+	}
+	for _, task := range tasks {
+		if task.Status != models.TaskStatusActive || task.Schedule == "" {
+			continue
+		}
+		if s.isDue(task) {
+			s.tryTrigger(task)
+		}
+	}
+}
+
+func (s *Scheduler) isDue(task *models.Task) bool {
+	sched, err := cron.ParseStandard(task.Schedule)
+	if err != nil {
+		logger.Global().Warn().Err(err).Str("task_id", task.ID).Msg("scheduler: invalid cron schedule")
+		return false
+	}
+	next := sched.Next(task.UpdatedAt)
+	return time.Now().After(next)
+}
+
+func (s *Scheduler) tryTrigger(task *models.Task) {
+	hasRunning, err := s.taskRunStore.HasRunning(task.ID)
+	if err != nil {
+		logger.Global().Error().Err(err).Str("task_id", task.ID).Msg("scheduler: failed to check running")
+		return
+	}
+	if hasRunning {
+		logger.Global().Info().Str("task_id", task.ID).Msg("scheduler: skipped, previous run still running")
+		return
+	}
+	if _, err := s.executor.Execute(context.Background(), task.ID); err != nil {
+		logger.Global().Error().Err(err).Str("task_id", task.ID).Msg("scheduler: failed to trigger task")
+	}
+}

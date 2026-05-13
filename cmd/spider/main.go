@@ -19,6 +19,7 @@ import (
 	"github.com/spiderai/spider/internal/logger"
 	mcppkg "github.com/spiderai/spider/internal/mcp"
 	"github.com/spiderai/spider/internal/permission"
+	"github.com/spiderai/spider/internal/scheduler"
 	sshpkg "github.com/spiderai/spider/internal/ssh"
 
 	"github.com/spiderai/spider/internal/config"
@@ -211,6 +212,11 @@ func serve(cfgFile, addrOverride, dataDirOverride string, debug bool) error {
 	app.ApprovalManager = permission.NewApprovalManager()
 	app.PermissionMode = permission.Mode(cfg.Agent.PermissionMode)
 
+	taskStore := store.NewTaskStore(database)
+	taskRunStore := store.NewTaskRunStore(database)
+	app.TaskStore = taskStore
+	app.TaskRunStore = taskRunStore
+
 	agentFactory, err := agent.NewFactory(
 		ps, hs, afs, pool, ks, ls, app.MsgStore,
 	)
@@ -221,7 +227,17 @@ func serve(cfgFile, addrOverride, dataDirOverride string, debug bool) error {
 		agentFactory.PermissionMode = app.PermissionMode
 		agentFactory.SummaryStore = store.NewSummaryStore(database)
 		agentFactory.CompactionCfg = cfg.Agent.Compaction
+		agentFactory.TodoTaskStore = app.TodoTaskStore
+		agentFactory.TaskStore = taskStore
 		app.AgentFactory = agentFactory
+	}
+
+	if app.AgentFactory != nil {
+		exec := scheduler.NewExecutor(taskStore, taskRunStore, hs, app.AgentFactory)
+		app.Executor = exec
+		sched := scheduler.NewScheduler(taskStore, taskRunStore, exec)
+		sched.Start(shutdownCtx)
+		defer sched.Stop()
 	}
 
 	mcpHandler := mcppkg.NewHTTPHandler(app)
