@@ -37,10 +37,12 @@ func (s *AccessFaceStore) Add(hostID string, req *models.AddAccessFaceRequest) (
 	_, err = s.db.Exec(`INSERT INTO access_faces
 		(id,host_id,type,ip,port,username,auth_type,
 		 encrypted_credential,encrypted_passphrase,ssh_key_id,ssh_legacy,
+		 ssh_login_input,
 		 base_url,rest_auth_type,rest_username,header_name,knowledge_sources,created_at,updated_at)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		id, hostID, req.Type, req.IP, req.Port, req.Username, req.SSHAuthType,
 		encCred, encPass, req.SSHKeyID, req.SSHLegacy,
+		req.SSHLoginInput,
 		req.BaseURL, req.RESTAuthType, req.RESTUsername, req.HeaderName, string(ksJSON), now, now)
 	if err != nil {
 		return nil, err
@@ -135,6 +137,9 @@ func (s *AccessFaceStore) Update(id string, req *models.UpdateAccessFaceRequest)
 	if req.SSHLegacy != nil {
 		cur.SSHLegacy = *req.SSHLegacy
 	}
+	if req.SSHLoginInput != nil {
+		cur.SSHLoginInput = *req.SSHLoginInput
+	}
 	if req.BaseURL != nil {
 		cur.BaseURL = *req.BaseURL
 	}
@@ -177,11 +182,12 @@ func (s *AccessFaceStore) Update(id string, req *models.UpdateAccessFaceRequest)
 	_, err = s.db.Exec(`UPDATE access_faces SET
 		ip=?,port=?,username=?,auth_type=?,
 		encrypted_credential=?,encrypted_passphrase=?,
-		ssh_key_id=?,ssh_legacy=?,base_url=?,rest_auth_type=?,rest_username=?,
+		ssh_key_id=?,ssh_legacy=?,ssh_login_input=?,
+		base_url=?,rest_auth_type=?,rest_username=?,
 		header_name=?,knowledge_sources=?,updated_at=?
 		WHERE id=?`,
 		cur.IP, cur.Port, cur.Username, cur.SSHAuthType,
-		encCred, encPass, cur.SSHKeyID, cur.SSHLegacy,
+		encCred, encPass, cur.SSHKeyID, cur.SSHLegacy, cur.SSHLoginInput,
 		cur.BaseURL, cur.RESTAuthType, cur.RESTUsername, cur.HeaderName, string(ksJSON), now, id)
 	if err != nil {
 		return nil, err
@@ -216,6 +222,7 @@ func (s *AccessFaceStore) DecryptCredential(f *models.AccessFace) (cred, pass st
 
 const accessFaceCols = `id,host_id,type,ip,port,username,auth_type,` +
 	`encrypted_credential,encrypted_passphrase,ssh_key_id,ssh_legacy,` +
+	`ssh_login_input,` +
 	`base_url,rest_auth_type,rest_username,header_name,knowledge_sources,created_at,updated_at`
 
 type accessFaceScanner interface {
@@ -231,6 +238,7 @@ func scanAccessFace(s accessFaceScanner) (*models.AccessFace, error) {
 		&f.Username, &f.SSHAuthType,
 		&f.EncryptedCred, &f.EncryptedPass,
 		&f.SSHKeyID, &sshLegacy,
+		&f.SSHLoginInput,
 		&f.BaseURL, &f.RESTAuthType, &f.RESTUsername, &f.HeaderName,
 		&ksJSON, &f.CreatedAt, &f.UpdatedAt,
 	)
