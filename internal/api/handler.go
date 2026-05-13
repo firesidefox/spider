@@ -537,8 +537,25 @@ func NewRouter(app *mcppkg.App) http.Handler {
 		}
 	})
 	mux.HandleFunc("/api/v1/notify-channels/", func(w http.ResponseWriter, r *http.Request) {
-		idStr := r.URL.Path[len("/api/v1/notify-channels/"):]
-		id := parseChannelID(idStr)
+		rest := r.URL.Path[len("/api/v1/notify-channels/"):]
+		// Handle /api/v1/notify-channels/{id}/enabled
+		if strings.HasSuffix(rest, "/enabled") {
+			idStr := strings.TrimSuffix(rest, "/enabled")
+			id := parseChannelID(idStr)
+			if id < 0 {
+				http.NotFound(w, r)
+				return
+			}
+			if r.Method == http.MethodPatch {
+				operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					toggleNotifyChannelEnabled(app, w, r, id)
+				})).ServeHTTP(w, r)
+			} else {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			}
+			return
+		}
+		id := parseChannelID(rest)
 		if id < 0 {
 			http.NotFound(w, r)
 			return

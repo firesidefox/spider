@@ -120,7 +120,28 @@ func (s *NotifyChannelStore) Delete(id int64) error {
 	return nil
 }
 
-// GetByID returns a single channel with decrypted config.
+// ToggleEnabled sets the enabled flag for a channel without touching other fields.
+func (s *NotifyChannelStore) ToggleEnabled(id int64, enabled bool) (*models.NotifyChannel, error) {
+	enabledInt := 0
+	if enabled {
+		enabledInt = 1
+	}
+	now := time.Now().UTC()
+	res, err := s.db.Exec(
+		`UPDATE notify_channels SET enabled=?, updated_at=? WHERE id=?`,
+		enabledInt, now, id,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to toggle notify channel %d: %w", id, err)
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return nil, ErrNotFound
+	}
+	return s.GetByID(id)
+}
+
+
 func (s *NotifyChannelStore) GetByID(id int64) (*models.NotifyChannel, error) {
 	row := s.db.QueryRow(
 		`SELECT id, name, type, encrypted_config, enabled, created_at, updated_at FROM notify_channels WHERE id=?`, id,

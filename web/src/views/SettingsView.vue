@@ -103,7 +103,7 @@ import { ref, onMounted } from 'vue'
 import {
   listNotifyChannels,
   createNotifyChannel,
-  updateNotifyChannel,
+  toggleNotifyChannel,
   deleteNotifyChannel,
   type NotifyChannel,
 } from '../api/notify-channels'
@@ -148,7 +148,7 @@ function formatDate(s: string): string {
 async function toggleEnabled(ch: NotifyChannel) {
   toggling.value = ch.id
   try {
-    const updated = await updateNotifyChannel(ch.id, { enabled: !ch.enabled })
+    const updated = await toggleNotifyChannel(ch.id, !ch.enabled)
     const idx = channels.value.findIndex(c => c.id === ch.id)
     if (idx !== -1) channels.value[idx] = updated
   } catch (e: unknown) {

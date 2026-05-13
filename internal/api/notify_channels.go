@@ -49,6 +49,7 @@ func createNotifyChannel(app *mcppkg.App, w http.ResponseWriter, r *http.Request
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	ch.Config = ""
 	writeJSON(w, http.StatusCreated, ch)
 }
 
@@ -74,6 +75,30 @@ func updateNotifyChannel(app *mcppkg.App, w http.ResponseWriter, r *http.Request
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	ch.Config = ""
+	writeJSON(w, http.StatusOK, ch)
+}
+
+type toggleEnabledRequest struct {
+	Enabled bool `json:"enabled"`
+}
+
+func toggleNotifyChannelEnabled(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id int64) {
+	var req toggleEnabledRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	ch, err := app.NotifyChannelStore.ToggleEnabled(id, req.Enabled)
+	if errors.Is(err, store.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "notify channel not found")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	ch.Config = ""
 	writeJSON(w, http.StatusOK, ch)
 }
 

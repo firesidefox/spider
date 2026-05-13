@@ -44,6 +44,16 @@ export async function updateNotifyChannel(id: number, data: Partial<{
   return res.json()
 }
 
+export async function toggleNotifyChannel(id: number, enabled: boolean): Promise<NotifyChannel> {
+  const res = await fetch(`/api/v1/notify-channels/${id}/enabled`, {
+    method: 'PATCH',
+    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ enabled }),
+  })
+  if (!res.ok) throw new Error(await res.text())
+  return res.json()
+}
+
 export async function deleteNotifyChannel(id: number): Promise<void> {
   const res = await fetch(`/api/v1/notify-channels/${id}`, {
     method: 'DELETE',
