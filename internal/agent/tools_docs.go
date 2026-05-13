@@ -58,7 +58,6 @@ func (t *SearchDocsTool) InputSchema() map[string]any {
 }
 
 func (t *SearchDocsTool) Execute(ctx context.Context, input map[string]any) (*ToolResult, error) {
-	// catalog branch: list titles in a group
 	if catalog, _ := input["catalog"].(bool); catalog {
 		if t.docStore == nil {
 			return &ToolResult{Content: "doc store unavailable", IsError: true, RiskLevel: RiskL1}, nil
