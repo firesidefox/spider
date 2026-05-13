@@ -28,7 +28,7 @@
         <RouterView />
       </KeepAlive>
     </main>
-
+    <AgentStatusBar v-if="route.path !== '/login'" />
   </div>
 </template>
 
@@ -50,6 +50,7 @@ provide('isDark', () => isDark.value)
 import { useRouter, useRoute } from 'vue-router'
 import { useAuth } from './composables/useAuth'
 import { logout } from './api/auth'
+import AgentStatusBar from './components/AgentStatusBar.vue'
 
 const router = useRouter()
 const route = useRoute()
