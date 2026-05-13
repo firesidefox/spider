@@ -1,0 +1,159 @@
+package scheduler
+
+import (
+	"context"
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/spiderai/spider/internal/agent"
+	"github.com/spiderai/spider/internal/logger"
+	"github.com/spiderai/spider/internal/models"
+	"github.com/spiderai/spider/internal/store"
+)
+
+// Executor runs tasks headlessly using the agent.
+type Executor struct {
+	taskStore    *store.TaskStore
+	taskRunStore *store.TaskRunStore
+	hostStore    *store.HostStore
+	agentFactory *agent.Factory
+}
+
+// NewExecutor creates a new Executor.
+func NewExecutor(
+	taskStore *store.TaskStore,
+	taskRunStore *store.TaskRunStore,
+	hostStore *store.HostStore,
+	agentFactory *agent.Factory,
+) *Executor {
+	return &Executor{
+		taskStore:    taskStore,
+		taskRunStore: taskRunStore,
+		hostStore:    hostStore,
+		agentFactory: agentFactory,
+	}
+}
+
+// Execute starts a task run asynchronously. Returns the created TaskRun immediately.
+// Returns error if task not found, already running, or run creation fails.
+func (e *Executor) Execute(ctx context.Context, taskID string) (*models.TaskRun, error) {
+	task, err := e.taskStore.Get(taskID)
+	if err != nil {
+		return nil, fmt.Errorf("task not found: %w", err)
+	}
+
+	runs, err := e.taskRunStore.ListByTaskID(taskID, 1, 0)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check running tasks: %w", err)
+	}
+	for _, r := range runs {
+		if r.Status == models.TaskRunStatusRunning {
+			return nil, fmt.Errorf("task is already running")
+		}
+	}
+
+	run := &models.TaskRun{
+		TaskID:    taskID,
+		StartedAt: time.Now(),
+		Status:    models.TaskRunStatusRunning,
+	}
+	created, err := e.taskRunStore.Create(run)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create task run: %w", err)
+	}
+
+	go e.executeAsync(ctx, task, created)
+	return created, nil
+}
+
+func (e *Executor) executeAsync(ctx context.Context, task *models.Task, run *models.TaskRun) {
+	log := logger.Global().With().Str("task_id", task.ID).Str("run_id", run.ID).Logger()
+
+	validHostIDs := e.filterValidHosts(task.HostIDs)
+	if len(validHostIDs) == 0 {
+		now := time.Now()
+		run.Status = models.TaskRunStatusFailed
+		run.RawOutput = fmt.Sprintf("all hosts invalid: %v", task.HostIDs)
+		run.Alerted = true
+		run.FinishedAt = &now
+		if err := e.taskRunStore.Update(run); err != nil {
+			log.Error().Err(err).Msg("failed to update task run")
+		}
+		return
+	}
+
+	execCtx := ctx
+	if task.TimeoutMinutes > 0 {
+		var cancel context.CancelFunc
+		execCtx, cancel = context.WithTimeout(ctx, time.Duration(task.TimeoutMinutes)*time.Minute)
+		defer cancel()
+	}
+
+	var hostLines []string
+	for _, id := range validHostIDs {
+		if host, err := e.hostStore.GetByID(id); err == nil {
+			hostLines = append(hostLines, fmt.Sprintf("- %s (%s)", host.Name, host.IP))
+		}
+	}
+	systemPrompt := fmt.Sprintf(
+		"You are executing an automated task.\n\nTask: %s\n\nTarget hosts:\n%s\n\nExecute the task and report results.",
+		task.Goal, strings.Join(hostLines, "\n"),
+	)
+
+	convID := "task-run-" + run.ID
+	ag := e.agentFactory.NewAgent(systemPrompt, convID)
+	events, err := ag.Run(execCtx, convID, task.Goal, nil)
+	if err != nil {
+		now := time.Now()
+		run.Status = models.TaskRunStatusFailed
+		run.RawOutput = fmt.Sprintf("agent start failed: %v", err)
+		run.Alerted = true
+		run.FinishedAt = &now
+		if uerr := e.taskRunStore.Update(run); uerr != nil {
+			log.Error().Err(uerr).Msg("failed to update task run")
+		}
+		return
+	}
+
+	var outputParts []string
+	timedOut := false
+	for ev := range events {
+		switch ev.Type {
+		case agent.EventTextDelta:
+			if s, ok := ev.Content["text"].(string); ok {
+				outputParts = append(outputParts, s)
+			}
+		case agent.EventError:
+			if execCtx.Err() != nil {
+				timedOut = true
+			}
+		}
+	}
+
+	now := time.Now()
+	run.RawOutput = strings.Join(outputParts, "")
+	run.FinishedAt = &now
+	if timedOut {
+		run.Status = models.TaskRunStatusFailed
+		run.RawOutput += fmt.Sprintf("\nexecution timeout after %dm", task.TimeoutMinutes)
+		run.Alerted = true
+	} else {
+		run.Status = models.TaskRunStatusCompleted
+	}
+	if err := e.taskRunStore.Update(run); err != nil {
+		log.Error().Err(err).Msg("failed to update task run")
+	}
+	log.Info().Str("status", string(run.Status)).Msg("task run complete")
+}
+
+// filterValidHosts returns only host IDs that exist in the host store.
+func (e *Executor) filterValidHosts(hostIDs []string) []string {
+	valid := make([]string, 0, len(hostIDs))
+	for _, id := range hostIDs {
+		if _, err := e.hostStore.GetByID(id); err == nil {
+			valid = append(valid, id)
+		}
+	}
+	return valid
+}

@@ -7,6 +7,7 @@ import (
 
 	mcppkg "github.com/spiderai/spider/internal/mcp"
 	"github.com/spiderai/spider/internal/models"
+	"github.com/spiderai/spider/internal/scheduler"
 	"github.com/spiderai/spider/internal/store"
 )
 
@@ -35,7 +36,7 @@ func getTask(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id string)
 	writeJSON(w, http.StatusOK, task)
 }
 
-func triggerTask(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id string) {
+func triggerTask(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id string, executor *scheduler.Executor) {
 	_, err := app.TaskStore.Get(id)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
@@ -45,7 +46,16 @@ func triggerTask(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id str
 		}
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"status": "triggered", "task_id": id})
+	run, err := executor.Execute(r.Context(), id)
+	if err != nil {
+		if err.Error() == "task is already running" {
+			writeError(w, http.StatusConflict, err.Error())
+			return
+		}
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]string{"run_id": run.ID, "status": "started"})
 }
 
 func listTaskRuns(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id string) {

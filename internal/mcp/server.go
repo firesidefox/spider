@@ -20,6 +20,7 @@ import (
 	"github.com/spiderai/spider/internal/logger"
 	"github.com/spiderai/spider/internal/permission"
 	"github.com/spiderai/spider/internal/rag"
+	"github.com/spiderai/spider/internal/scheduler"
 	sshpkg "github.com/spiderai/spider/internal/ssh"
 	"github.com/spiderai/spider/internal/store"
 )
@@ -48,6 +49,7 @@ type App struct {
 	TaskStore      *store.TaskStore
 	TaskRunStore   *store.TaskRunStore
 	AgentFactory   *agent.Factory // nil if LLM not configured
+	Executor       *scheduler.Executor
 
 	Classifier      *permission.Classifier
 	Enforcer        *permission.Enforcer

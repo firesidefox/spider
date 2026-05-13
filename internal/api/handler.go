@@ -10,6 +10,7 @@ import (
 	"github.com/spiderai/spider/internal/logger"
 	"github.com/spiderai/spider/internal/models"
 	mcppkg "github.com/spiderai/spider/internal/mcp"
+	"github.com/spiderai/spider/internal/scheduler"
 )
 
 // NewRouter 注册所有 /api/v1 路由，返回 http.Handler。
@@ -523,6 +524,7 @@ func NewRouter(app *mcppkg.App) http.Handler {
 	})
 
 	// Task automation API
+	executor := scheduler.NewExecutor(app.TaskStore, app.TaskRunStore, app.HostStore, app.AgentFactory)
 	mux.HandleFunc("/api/v1/tasks", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
@@ -547,7 +549,7 @@ func NewRouter(app *mcppkg.App) http.Handler {
 			}
 		case "trigger":
 			if r.Method == http.MethodPost {
-				triggerTask(app, w, r, id)
+				triggerTask(app, w, r, id, executor)
 				return
 			}
 		case "runs":
