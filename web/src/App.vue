@@ -10,6 +10,7 @@
         <RouterLink to="/tasks" class="nav-item">任务管理</RouterLink>
         <RouterLink to="/audit" class="nav-item">审计</RouterLink>
         <RouterLink to="/profile" class="nav-item">个人设置</RouterLink>
+        <RouterLink to="/settings" class="nav-item">设置</RouterLink>
       </nav>
       <div v-if="currentUser" class="nav-user">
         <div class="user-dropdown" @click.stop="showUserMenu = !showUserMenu">
