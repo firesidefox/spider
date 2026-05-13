@@ -251,6 +251,10 @@ async function selectConversation(id: string) {
     }
   }
 
+  if (data.conversation.status === 'processing') {
+    updateAgentStatus({ conversationId: id, title: data.conversation.title || id.slice(0, 8), phase: 'thinking' })
+  }
+
   if (!convSubscriptions.has(id)) {
     const lastEventId = data.messages.length - 1
     const unsub = subscribeConversation(id, (event) => handleConvEvent(id, event), lastEventId)
