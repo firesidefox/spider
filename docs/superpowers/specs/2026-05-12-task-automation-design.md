@@ -138,22 +138,34 @@ open → resolved
 
 ```go
 type Task struct {
-    ID             int64     `json:"id"`
-    Name           string    `json:"name"`              // 任务名称
-    Goal           string    `json:"goal"`              // 自然语言目标
-    HostIDs        []int64   `json:"host_ids"`          // 目标设备
-    Schedule       string    `json:"schedule"`          // cron 表达式，空 = manual only
-    AlertOnAnomaly bool      `json:"alert_on_anomaly"`  // 执行后是否判断异常并告警
-    Status         string    `json:"status"`            // "active" | "paused" | "archived"
-    CreatedAt      time.Time `json:"created_at"`
-    UpdatedAt      time.Time `json:"updated_at"`
-    SourceConvID   string    `json:"source_conv_id"`    // 创建来源对话
+    ID               int64     `json:"id"`
+    Name             string    `json:"name"`               // 任务名称
+    Goal             string    `json:"goal"`               // 自然语言目标
+    HostIDs          []int64   `json:"host_ids"`           // 目标设备
+    Schedule         string    `json:"schedule"`           // cron 表达式，空 = manual only
+    NotifyOnFailure  bool      `json:"notify_on_failure"`  // 执行失败时通知
+    NotifyOnComplete bool      `json:"notify_on_complete"` // 每次执行完成都发摘要
+    NotifyOnAnomaly  bool      `json:"notify_on_anomaly"`  // 仅 LLM 判断异常时发摘要
+    Status           string    `json:"status"`             // "active" | "paused" | "archived"
+    CreatedAt        time.Time `json:"created_at"`
+    UpdatedAt        time.Time `json:"updated_at"`
+    SourceConvID     string    `json:"source_conv_id"`     // 创建来源对话
 }
 ```
 
-`AlertOnAnomaly` 说明：
-- `false`：执行后只生成执行摘要；执行失败时写入 `TaskAlert`（summary 为失败原因），有 NotifyChannel 则推送
-- `true`：执行后 LLM 判断结果是否异常；异常则写入 `TaskAlert` 并推送；执行失败时同上
+通知逻辑（需有 NotifyChannel 才发送）：
+
+```
+if NotifyOnComplete → 每次执行完成都发摘要
+else if NotifyOnAnomaly → 仅 LLM 判断异常时发摘要
+
+if NotifyOnFailure → 执行失败时发中断原因（独立判断，与上面两条互不干扰）
+```
+
+说明：
+- `NotifyOnComplete` 和 `NotifyOnAnomaly` 可同时开启，同时开启等价于只开 `NotifyOnComplete`（每次都发，异常条件已被覆盖）
+- `NotifyOnAnomaly` 隐含"触发 LLM 异常判断"的语义——未开启时不做异常判断，节省 token
+- 三个均关闭 = 静默执行，只在前端任务页查看记录
 
 ### TaskRun（执行记录）
 
@@ -224,7 +236,9 @@ type NotifyChannel struct {
    - `goal`：自然语言目标
    - `host_ids`：涉及设备
    - `schedule`：cron 表达式（如 `0 2 * * 3`），无调度则为空
-   - `alert_on_anomaly`：是否需要异常告警（默认 false）
+   - `notify_on_failure`：执行失败是否通知（默认 false）
+   - `notify_on_complete`：每次完成是否发摘要（默认 false）
+   - `notify_on_anomaly`：仅异常时发摘要（默认 false）
 3. Agent 向用户展示提取结果，等待确认
 4. 用户确认后，Agent 调用 `CreateTask` 工具保存（所有字段已确定）
 
@@ -254,9 +268,12 @@ type NotifyChannel struct {
 4. 执行完成，原始输出写入 `TaskRun.RawOutput`（前端展示截断至 10KB，完整内容保留在 DB）
 5. 轻量 LLM 调用分析输出（使用系统默认 provider）：
    - 生成执行摘要，写入 `TaskRun.Summary`
-   - 若 `AlertOnAnomaly = true`：判断结果是否异常；异常则写入 `TaskAlert`，`TaskRun.Alerted = true`，有 NotifyChannel 则推送
+   - 若 `NotifyOnAnomaly = true`：LLM 判断是否异常；异常则写入 `TaskAlert`，`TaskRun.Alerted = true`
 6. 更新 `TaskRun.Status` 为 success / failed
-   - 若 status = failed：写入 `TaskAlert`（summary 为失败原因），`TaskRun.Alerted = true`，有 NotifyChannel 则推送；不依赖 `AlertOnAnomaly`
+7. 按通知逻辑发送（需有 NotifyChannel）：
+   - `NotifyOnComplete = true` → 发摘要
+   - `NotifyOnComplete = false && NotifyOnAnomaly = true && TaskRun.Alerted = true` → 发摘要
+   - `NotifyOnFailure = true && status = failed` → 发中断原因
 
 LLM 参与两个节点：创建时（Agent 提取信息）、执行后（分析报告，用系统默认 provider）。执行中不参与。
 
@@ -274,7 +291,9 @@ InputSchema（所有字段 Agent 调用前已确定）：
 - `goal` (string, required)
 - `host_ids` ([]int64, required)
 - `schedule` (string) — cron 表达式，空 = manual only
-- `alert_on_anomaly` (bool) — 默认 false
+- `notify_on_failure` (bool) — 默认 false
+- `notify_on_complete` (bool) — 默认 false
+- `notify_on_anomaly` (bool) — 默认 false
 
 ---
 
@@ -286,7 +305,7 @@ InputSchema（所有字段 Agent 调用前已确定）：
 
 **左侧：**
 - 顶部：标题"任务" + "新建"按钮
-- 任务列表：名称、调度摘要、状态徽章（活跃/暂停）、上次执行结果；`alert_on_anomaly = true` 的任务显示告警图标
+- 任务列表：名称、调度摘要、状态徽章（活跃/暂停）、上次执行结果；配置了任意通知项的任务显示通知图标
 
 **右侧顶部（配置摘要）：**
 - 任务名 + 状态徽章
@@ -301,7 +320,7 @@ InputSchema（所有字段 Agent 调用前已确定）：
 
 ### 新建/编辑
 
-弹窗表单，字段：名称、目标、设备（多选）、调度（cron 表达式）、发现异常时告警（开关）。
+弹窗表单，字段：名称、目标、设备（多选）、调度（cron 表达式）、通知配置（三个开关：执行失败时通知、每次完成发摘要、仅异常时发摘要）。
 
 ---
 
