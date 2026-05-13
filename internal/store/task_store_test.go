@@ -106,3 +106,85 @@ func TestTaskStore_List(t *testing.T) {
 		t.Errorf("expected 2 tasks, got %d", len(tasks))
 	}
 }
+
+func TestTaskStore_Get_NotFound(t *testing.T) {
+	database, err := db.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer database.Close()
+
+	store := NewTaskStore(database)
+
+	_, err = store.Get("non-existent-id")
+	if err != ErrNotFound {
+		t.Errorf("expected ErrNotFound, got %v", err)
+	}
+}
+
+func TestTaskStore_Create_EmptyName(t *testing.T) {
+	database, err := db.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer database.Close()
+
+	store := NewTaskStore(database)
+	task := &models.Task{
+		Name:    "",
+		Goal:    "test goal",
+		HostIDs: []string{"host-1"},
+		Status:  models.TaskStatusActive,
+	}
+
+	_, err = store.Create(task)
+	if err == nil {
+		t.Error("expected error for empty name, got nil")
+	}
+	if err.Error() != "task name cannot be empty" {
+		t.Errorf("expected 'task name cannot be empty', got %v", err)
+	}
+}
+
+func TestTaskStore_Create_EmptyHostIDs(t *testing.T) {
+	database, err := db.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer database.Close()
+
+	store := NewTaskStore(database)
+	task := &models.Task{
+		Name:    "test-task",
+		Goal:    "test goal",
+		HostIDs: []string{},
+		Status:  models.TaskStatusActive,
+	}
+
+	_, err = store.Create(task)
+	if err == nil {
+		t.Error("expected error for empty host IDs, got nil")
+	}
+	if err.Error() != "task must have at least one host" {
+		t.Errorf("expected 'task must have at least one host', got %v", err)
+	}
+}
+
+func TestTaskStore_List_Empty(t *testing.T) {
+	database, err := db.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer database.Close()
+
+	store := NewTaskStore(database)
+
+	tasks, err := store.List()
+	if err != nil {
+		t.Fatalf("List failed: %v", err)
+	}
+	if len(tasks) != 0 {
+		t.Errorf("expected 0 tasks, got %d", len(tasks))
+	}
+}
+
