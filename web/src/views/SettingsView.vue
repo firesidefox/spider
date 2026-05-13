@@ -37,9 +37,12 @@
                 <button class="btn btn-sm" @click="toggleEnabled(ch)" :disabled="toggling === ch.id">
                   {{ ch.enabled ? '禁用' : '启用' }}
                 </button>
-                <button class="btn btn-sm btn-danger" @click="confirmDelete(ch.id)" :disabled="deleting === ch.id">
-                  删除
-                </button>
+                <template v-if="pendingDeleteId === ch.id">
+                  <span style="font-size:13px;color:var(--text-sub)">确认删除?</span>
+                  <button class="btn btn-sm btn-danger" @click="doDelete(ch.id)" :disabled="deleting === ch.id">确认</button>
+                  <button class="btn btn-sm" @click="pendingDeleteId = null">取消</button>
+                </template>
+                <button v-else class="btn btn-sm btn-danger" @click="pendingDeleteId = ch.id">删除</button>
               </div>
             </td>
           </tr>
@@ -108,6 +111,7 @@ const channels = ref<NotifyChannel[]>([])
 const errMsg = ref('')
 const toggling = ref<number | null>(null)
 const deleting = ref<number | null>(null)
+const pendingDeleteId = ref<number | null>(null)
 
 const showAddModal = ref(false)
 const adding = ref(false)
@@ -148,12 +152,12 @@ async function toggleEnabled(ch: NotifyChannel) {
   }
 }
 
-async function confirmDelete(id: number) {
-  if (!confirm('确认删除该通知渠道？')) return
+async function doDelete(id: number) {
   deleting.value = id
   try {
     await deleteNotifyChannel(id)
     channels.value = channels.value.filter(c => c.id !== id)
+    pendingDeleteId.value = null
   } catch (e: unknown) {
     errMsg.value = e instanceof Error ? e.message : String(e)
   } finally {
