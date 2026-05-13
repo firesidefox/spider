@@ -25,6 +25,18 @@ func (t *SearchDocsTool) Description() string {
 	return "Search documentation for CLI commands, API references, and troubleshooting guides. Read-only. No side effects. Use freely in Explore phase."
 }
 
+func (t *SearchDocsTool) SystemPromptSection() string {
+	return `## SearchDocs — Knowledge Base
+
+**When to use:** Before running any command on a host, search the knowledge base first to find the correct CLI syntax, expected output, or known caveats for that host/vendor.
+
+**When NOT to use:** Skip only if the task is purely informational (e.g., listing hosts) and involves no command execution.
+
+**Rules:**
+- SearchDocs comes before RunCommand in Explore phase. Do not run a command without first checking if relevant docs exist.
+- Query with operation intent, not just keywords (e.g., "huawei 查看内存占用" not "memory").`
+}
+
 func (t *SearchDocsTool) InputSchema() map[string]any {
 	return map[string]any{
 		"type": "object",
@@ -33,12 +45,37 @@ func (t *SearchDocsTool) InputSchema() map[string]any {
 			"vendor":    map[string]any{"type": "string", "description": "Device vendor (e.g. huawei, cisco)"},
 			"group_ids": map[string]any{"type": "array", "items": map[string]any{"type": "integer"}, "description": "Search within these document groups. Get from face.knowledge_sources where type=group."},
 			"doc_ids":   map[string]any{"type": "array", "items": map[string]any{"type": "integer"}, "description": "Fetch full content of specific documents by IDs. Get from face.knowledge_sources where type=doc."},
+			"catalog":   map[string]any{"type": "boolean", "description": "List document titles in a group without fetching full content. Use with group_id to browse available documents before deciding which to read."},
+			"group_id":  map[string]any{"type": "integer", "description": "Group ID to list when catalog=true."},
 		},
 		"required": []string{"query"},
 	}
 }
 
 func (t *SearchDocsTool) Execute(ctx context.Context, input map[string]any) (*ToolResult, error) {
+	// catalog branch: list titles in a group
+	if catalog, _ := input["catalog"].(bool); catalog {
+		if t.docStore == nil {
+			return &ToolResult{Content: "doc store unavailable", IsError: true, RiskLevel: RiskL1}, nil
+		}
+		groupID := toInt(input["group_id"])
+		docs, err := t.docStore.ListByGroup(groupID)
+		if err != nil {
+			return &ToolResult{Content: fmt.Sprintf("list group: %v", err), IsError: true, RiskLevel: RiskL1}, nil
+		}
+		type entry struct {
+			ID         int    `json:"id"`
+			Title      string `json:"title"`
+			SourceFile string `json:"source_file"`
+		}
+		entries := make([]entry, len(docs))
+		for i, d := range docs {
+			entries[i] = entry{ID: d.ID, Title: d.Title, SourceFile: d.SourceFile}
+		}
+		b, _ := json.Marshal(entries)
+		return &ToolResult{Content: string(b), RiskLevel: RiskL1}, nil
+	}
+
 	query, _ := input["query"].(string)
 	if query == "" {
 		return &ToolResult{Content: "query is required", IsError: true, RiskLevel: RiskL1}, nil
