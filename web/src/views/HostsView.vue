@@ -124,6 +124,7 @@
                     <div v-if="f.type === 'ssh'" class="face-item"><label>认证方式</label><div class="value">{{ f.ssh_auth_type === 'password' ? '密码' : f.ssh_auth_type === 'key' ? 'SSH Key' : 'SSH Key + 密码' }}</div></div>
                     <div v-if="f.type === 'ssh' && f.ssh_key_id" class="face-item"><label>SSH Key</label><div class="value">{{ sshKeys.find(k => k.id === f.ssh_key_id)?.name || f.ssh_key_id }}</div></div>
                     <div v-if="f.type === 'ssh'" class="face-item"><label>兼容模式</label><div class="value">{{ f.ssh_legacy ? '是' : '否' }}</div></div>
+                    <div v-if="f.type === 'ssh' && f.ssh_login_input" class="face-item"><label>登录后输入</label><div class="value"><code>{{ f.ssh_login_input }}</code></div></div>
                     <div v-if="f.type === 'restapi'" class="face-item"><label>认证方式</label><div class="value">{{ f.rest_auth_type }}</div></div>
                     <div v-if="f.type === 'restapi' && f.rest_username" class="face-item"><label>用户名</label><div class="value">{{ f.rest_username }}</div></div>
                     <div v-if="f.type === 'restapi' && f.base_url" class="face-item" style="grid-column:1/-1"><label>Base URL</label><div class="value"><code>{{ f.base_url }}</code></div></div>
@@ -257,6 +258,10 @@
             <div class="form-row">
               <label>兼容模式</label>
               <label class="checkbox-label"><input type="checkbox" v-model="faceForm.ssh_legacy" /> 启用（旧版 SSH 算法）</label>
+            </div>
+            <div class="form-row">
+              <label>登录后输入（可选）</label>
+              <input v-model="faceForm.ssh_login_input" class="input" placeholder="/rsh" />
             </div>
           </template>
           <template v-if="faceForm.type === 'restapi'">
@@ -394,7 +399,7 @@ async function saveOverview() {
 const emptyForm = () => ({ name: '', ip: '', notes: '', vendor: '', product_name: '', product_version: '', tagsStr: '' })
 const form = ref(emptyForm())
 
-const emptyFaceForm = () => ({ type: 'ssh' as 'ssh' | 'restapi', ip: activeHost.value?.ip ?? '', port: 22, username: '', ssh_auth_type: 'password', credential: '', passphrase: '', ssh_key_id: '', ssh_legacy: false, base_url: '', rest_auth_type: 'none', rest_username: '', header_name: '', knowledge_sources: [] as Array<{type:'group'|'doc';id:number}> })
+const emptyFaceForm = () => ({ type: 'ssh' as 'ssh' | 'restapi', ip: activeHost.value?.ip ?? '', port: 22, username: '', ssh_auth_type: 'password', credential: '', passphrase: '', ssh_key_id: '', ssh_legacy: false, ssh_login_input: '', base_url: '', rest_auth_type: 'none', rest_username: '', header_name: '', knowledge_sources: [] as Array<{type:'group'|'doc';id:number}> })
 const faceForm = ref(emptyFaceForm())
 
 const allTags = computed(() => {
@@ -539,6 +544,7 @@ async function submitFace() {
     req.passphrase = faceForm.value.passphrase || undefined
     req.ssh_key_id = faceForm.value.ssh_key_id || undefined
     req.ssh_legacy = faceForm.value.ssh_legacy
+    req.ssh_login_input = faceForm.value.ssh_login_input || undefined
   } else {
     req.base_url = faceForm.value.base_url || undefined
     req.rest_auth_type = faceForm.value.rest_auth_type
@@ -567,6 +573,7 @@ function startEditFace(face: AccessFace) {
     passphrase: '',
     ssh_key_id: face.ssh_key_id || '',
     ssh_legacy: face.ssh_legacy || false,
+    ssh_login_input: face.ssh_login_input || '',
     base_url: face.base_url || '',
     rest_auth_type: face.rest_auth_type || 'none',
     rest_username: face.rest_username || '',

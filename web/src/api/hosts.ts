@@ -26,6 +26,7 @@ export interface AccessFace {
   ssh_auth_type?: 'password' | 'key' | 'key_password'
   ssh_key_id?: string
   ssh_legacy?: boolean
+  ssh_login_input?: string
   base_url?: string
   rest_auth_type?: 'bearer' | 'basic' | 'apikey' | 'none'
   rest_username?: string
@@ -83,6 +84,7 @@ export interface AddAccessFaceRequest {
   passphrase?: string
   ssh_key_id?: string
   ssh_legacy?: boolean
+  ssh_login_input?: string
   base_url?: string
   rest_auth_type?: string
   rest_username?: string
