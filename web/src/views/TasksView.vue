@@ -14,12 +14,13 @@
         >
           <div class="task-row-name">{{ t.name }}</div>
           <div class="task-row-meta">
-            <span :class="taskStatusBadge(t.status)" class="badge">{{ t.status }}</span>
+            <span :class="taskStatusBadge(t.status)">{{ t.status }}</span>
             <span class="task-row-schedule">{{ t.schedule || '手动' }}</span>
           </div>
         </div>
-        <div v-if="tasks.length === 0 && !loading" class="sidebar-empty">暂无任务</div>
+        <div v-if="tasks.length === 0 && !loading && !listError" class="sidebar-empty">暂无任务</div>
         <div v-if="loading" class="sidebar-empty">加载中...</div>
+        <div v-if="listError" class="err" style="padding: 12px 16px; font-size: 13px;">{{ listError }}</div>
       </div>
     </aside>
 
@@ -49,7 +50,7 @@
               <span><strong>通知：</strong>{{ activeTask.notify_mode }}</span>
               <span><strong>超时：</strong>{{ activeTask.timeout_minutes }} 分钟</span>
               <span><strong>状态：</strong>
-                <span :class="taskStatusBadge(activeTask.status)" class="badge">{{ activeTask.status }}</span>
+                <span :class="taskStatusBadge(activeTask.status)">{{ activeTask.status }}</span>
               </span>
             </div>
           </div>
@@ -98,6 +99,7 @@ import { listTasks, triggerTask, listTaskRuns, type Task, type TaskRun } from '.
 
 const tasks = ref<Task[]>([])
 const loading = ref(false)
+const listError = ref('')
 const activeTask = ref<Task | null>(null)
 
 const runs = ref<TaskRun[]>([])
@@ -109,14 +111,14 @@ const RUNS_LIMIT = 20
 
 const triggering = ref(false)
 const triggerMsg = ref('')
-const triggerMsgClass = ref('ok')
+const triggerMsgClass = ref<'ok' | 'err'>('ok')
 
 onMounted(async () => {
   loading.value = true
   try {
     tasks.value = await listTasks()
-  } catch {
-    // list stays empty
+  } catch (e: unknown) {
+    listError.value = e instanceof Error ? e.message : '加载失败'
   } finally {
     loading.value = false
   }
@@ -141,8 +143,8 @@ async function fetchRuns(reset: boolean) {
     else runs.value = [...runs.value, ...batch]
     hasMoreRuns.value = batch.length === RUNS_LIMIT
     runsOffset.value += batch.length
-  } catch (e: any) {
-    runsError.value = e.message || '加载失败'
+  } catch (e: unknown) {
+    runsError.value = e instanceof Error ? e.message : '加载失败'
   } finally {
     runsLoading.value = false
   }
@@ -161,17 +163,16 @@ async function doTrigger() {
     triggerMsgClass.value = 'ok'
     triggerMsg.value = '已触发'
     await fetchRuns(true)
-  } catch (e: any) {
+  } catch (e: unknown) {
     triggerMsgClass.value = 'err'
-    triggerMsg.value = e.message || '触发失败'
+    triggerMsg.value = e instanceof Error ? e.message : '触发失败'
   } finally {
     triggering.value = false
   }
 }
 
 function taskStatusBadge(status: string): string {
-  if (status === 'active') return 'badge-ok'
-  return 'badge'
+  return status === 'active' ? 'badge badge-ok' : 'badge'
 }
 
 function runStatusBadge(status: string): string {
