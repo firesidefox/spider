@@ -15,9 +15,10 @@ const (
 type NotifyMode string
 
 const (
-	NotifyNone    NotifyMode = "none"
-	NotifyOnError NotifyMode = "on_error"
-	NotifyAlways  NotifyMode = "always"
+	NotifyNone     NotifyMode = "none"
+	NotifyFailure  NotifyMode = "failure"
+	NotifyComplete NotifyMode = "complete"
+	NotifyAnomaly  NotifyMode = "anomaly"
 )
 
 // TaskRunStatus represents the execution state of a task run.

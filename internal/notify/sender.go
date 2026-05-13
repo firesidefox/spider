@@ -3,6 +3,7 @@ package notify
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/spiderai/spider/internal/models"
@@ -18,12 +19,14 @@ type Sender interface {
 func NewSender(ch *models.NotifyChannel) (Sender, error) {
 	switch ch.Type {
 	case models.NotifyChannelDingTalk:
-		webhookURL, ok := ch.Config["webhook_url"]
-		if !ok || webhookURL == "" {
+		var cfg models.DingTalkConfig
+		if err := json.Unmarshal([]byte(ch.Config), &cfg); err != nil {
+			return nil, fmt.Errorf("failed to parse dingtalk config: %w", err)
+		}
+		if cfg.WebhookURL == "" {
 			return nil, fmt.Errorf("dingtalk channel %d missing webhook_url", ch.ID)
 		}
-		secret := ch.Config["secret"] // optional
-		return &dingTalkSender{webhookURL: webhookURL, secret: secret}, nil
+		return &dingTalkSender{webhookURL: cfg.WebhookURL, secret: cfg.Secret}, nil
 	default:
 		return nil, fmt.Errorf("unsupported channel type: %s", ch.Type)
 	}

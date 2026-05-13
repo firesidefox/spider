@@ -165,8 +165,17 @@ func (e *Executor) sendNotifications(ctx context.Context, task *models.Task, run
 	if e.notifyChannelStore == nil || task.NotifyMode == models.NotifyNone || task.NotifyMode == "" {
 		return
 	}
-	if task.NotifyMode == models.NotifyOnError && run.Status != models.TaskRunStatusFailed {
-		return
+	switch task.NotifyMode {
+	case models.NotifyFailure:
+		if run.Status != models.TaskRunStatusFailed {
+			return
+		}
+	case models.NotifyAnomaly:
+		if !run.Alerted {
+			return
+		}
+	case models.NotifyComplete:
+		// always send
 	}
 	channels, err := e.notifyChannelStore.List()
 	if err != nil {

@@ -15,7 +15,7 @@ type NotifyChannel struct {
 	ID        int64             `json:"id"`
 	Name      string            `json:"name"`
 	Type      NotifyChannelType `json:"type"`
-	Config    map[string]string `json:"config,omitempty"` // decrypted, only populated on read
+	Config    string `json:"config,omitempty"` // JSON blob, decrypted at read time
 	CreatedAt time.Time         `json:"created_at"`
 	UpdatedAt time.Time         `json:"updated_at"`
 }

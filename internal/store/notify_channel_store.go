@@ -2,7 +2,6 @@ package store
 
 import (
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"time"
 
@@ -22,13 +21,9 @@ func NewNotifyChannelStore(db *sql.DB, cm *crypto.Manager) *NotifyChannelStore {
 	return &NotifyChannelStore{db: db, crypto: cm}
 }
 
-// Create inserts a new notify channel. cfg is encrypted before storage.
-func (s *NotifyChannelStore) Create(name string, typ models.NotifyChannelType, cfg map[string]string) (*models.NotifyChannel, error) {
-	raw, err := json.Marshal(cfg)
-	if err != nil {
-		return nil, fmt.Errorf("marshal config: %w", err)
-	}
-	enc, err := s.crypto.Encrypt(string(raw))
+// Create inserts a new notify channel. cfg is a JSON string encrypted before storage.
+func (s *NotifyChannelStore) Create(name string, typ models.NotifyChannelType, cfg string) (*models.NotifyChannel, error) {
+	enc, err := s.crypto.Encrypt(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("encrypt config: %w", err)
 	}
@@ -67,13 +62,9 @@ func (s *NotifyChannelStore) List() ([]*models.NotifyChannel, error) {
 	return out, rows.Err()
 }
 
-// Update replaces name, type, and config for the given channel.
-func (s *NotifyChannelStore) Update(id int64, name string, typ models.NotifyChannelType, cfg map[string]string) (*models.NotifyChannel, error) {
-	raw, err := json.Marshal(cfg)
-	if err != nil {
-		return nil, fmt.Errorf("marshal config: %w", err)
-	}
-	enc, err := s.crypto.Encrypt(string(raw))
+// Update replaces name, type, and config for the given channel. cfg is a JSON string.
+func (s *NotifyChannelStore) Update(id int64, name string, typ models.NotifyChannelType, cfg string) (*models.NotifyChannel, error) {
+	enc, err := s.crypto.Encrypt(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("encrypt config: %w", err)
 	}
@@ -121,8 +112,6 @@ func scanNotifyChannel(sc notifyChannelScanner, cm *crypto.Manager) (*models.Not
 	if err != nil {
 		return nil, fmt.Errorf("decrypt config: %w", err)
 	}
-	if err := json.Unmarshal([]byte(plain), &ch.Config); err != nil {
-		return nil, fmt.Errorf("unmarshal config: %w", err)
-	}
+	ch.Config = plain
 	return &ch, nil
 }
