@@ -379,12 +379,12 @@ InputSchema：
 
 **右侧顶部（配置摘要）：**
 - 任务名 + 状态徽章
-- 操作按钮：立即执行 / 编辑 / 暂停
+- 操作按钮：立即执行（已有 running TaskRun 时禁用）/ 编辑 / 暂停
 - 目标（goal）
 - 调度、设备、通知模式、创建来源对话
 
 **右侧主体（执行记录）：**
-- 按时间倒序列表
+- 按时间倒序列表，分页加载（每页 20 条）
 - 每条记录：时间、耗时、状态图标；`Alerted = true` 的记录显示标注
 - 可展开：LLM 摘要 + 原始输出（monospace）
 
@@ -404,7 +404,7 @@ InputSchema：
 | PUT | `/api/tasks/:id` | 更新 |
 | DELETE | `/api/tasks/:id` | 删除 |
 | POST | `/api/tasks/:id/trigger` | 手动触发 |
-| GET | `/api/tasks/:id/runs` | 执行记录 |
+| GET | `/api/tasks/:id/runs?limit=20&offset=0` | 执行记录（分页，默认 limit=20） |
 | GET | `/api/tasks/:id/runs/:run_id` | 单次执行详情 |
 | GET | `/api/notify-channels` | 通知渠道列表 |
 | POST | `/api/notify-channels` | 创建通知渠道 |
