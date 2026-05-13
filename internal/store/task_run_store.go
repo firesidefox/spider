@@ -121,7 +121,7 @@ func (s *TaskRunStore) ListByTaskID(taskID string, limit, offset int) ([]*models
 	}
 	defer rows.Close()
 
-	var taskRuns []*models.TaskRun
+	taskRuns := make([]*models.TaskRun, 0)
 	for rows.Next() {
 		var taskRun models.TaskRun
 		var finishedAt sql.NullTime

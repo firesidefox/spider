@@ -85,6 +85,8 @@ func TestTaskRunStore_Create_EmptyStatus(t *testing.T) {
 
 	store := NewTaskRunStore(database)
 
+	// "task-123" is intentionally fake — this test exercises the in-memory
+	// Status guard (checked before any DB insert), so a real task ID is not needed.
 	taskRun := &models.TaskRun{
 		TaskID:    "task-123",
 		StartedAt: time.Now(),
