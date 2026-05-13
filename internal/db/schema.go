@@ -270,6 +270,7 @@ func migrate(db *sql.DB) error {
 	// New hosts columns
 	db.Exec("ALTER TABLE hosts ADD COLUMN notes TEXT NOT NULL DEFAULT ''")
 	db.Exec("ALTER TABLE access_faces ADD COLUMN ssh_login_input TEXT NOT NULL DEFAULT ''")
+	db.Exec("ALTER TABLE access_faces ADD COLUMN hmac_algo TEXT NOT NULL DEFAULT ''")
 	db.Exec("ALTER TABLE hosts ADD COLUMN product_name TEXT NOT NULL DEFAULT ''")
 	db.Exec("ALTER TABLE hosts ADD COLUMN product_version TEXT NOT NULL DEFAULT ''")
 	// Data migration: seed one SSH access_face per existing host.
