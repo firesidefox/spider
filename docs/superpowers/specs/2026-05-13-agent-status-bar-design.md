@@ -35,7 +35,7 @@ interface AgentStatus {
 }
 ```
 
-Module-level `ref<Map<string, AgentStatus>>` — keyed by `conversationId`. Max 3 entries; when a 4th arrives, evict the oldest `done` entry first, then oldest by `updatedAt`.
+Module-level `ref<Map<string, AgentStatus>>` — keyed by `conversationId`. No hard cap on entries.
 
 Footer hidden when map is empty.
 
@@ -64,13 +64,16 @@ Navigating away from ChatView does NOT remove the entry — agent keeps running 
 ├──────────────────────────────────────────────────────────────────┤
 │ main (router-view)                                               │
 ├──────────────────────────────────────────────────────────────────┤
-│ ● 排查 nginx 502 · bash: systemctl status nginx  →  ● 部署前端 · 思考中  → │  ← 28px, scrollable
+│ ● 排查 nginx 502 · bash: systemctl status nginx           →  │ ← current conv, row 1
+│ ● 部署前端 · 思考中                                         →  │ ← row 2
+│ ● 数据库迁移 · 等待确认 · bash: migrate.sh                 →  │ ← row 3
+│ ↕ scroll for more                                               │ ← if >3
 └──────────────────────────────────────────────────────────────────┘
 ```
 
 **Ordering:** Current route's conversation always first. Others ordered by `updatedAt` descending.
 
-**Layout:** Single row, `overflow-x: auto`, `scrollbar-width: none` (hidden scrollbar). Items separated by `|` divider. Max 3 items.
+**Layout:** Each conversation gets its own 28px row. Max visible height = 3 rows (84px). If more than 3 active conversations, container scrolls vertically (`overflow-y: auto`). No hard cap on entry count.
 
 **Dot colors:**
 - Purple pulsing — `thinking` / `tool`
@@ -82,6 +85,8 @@ Navigating away from ChatView does NOT remove the entry — agent keeps running 
 **Click item:** navigates to `/chat?id={conversationId}`, removes entry from map.
 
 **Footer hidden:** when map is empty (`v-if="statuses.size > 0"`).
+
+**Footer height:** `min-height: 28px`, `max-height: 84px` (3 rows), `overflow-y: auto`.
 
 ## Files to Change
 
