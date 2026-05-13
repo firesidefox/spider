@@ -1,0 +1,103 @@
+package agent
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/spiderai/spider/internal/models"
+	"github.com/spiderai/spider/internal/store"
+)
+
+// CreateTaskTool saves a confirmed automated task to the database.
+type CreateTaskTool struct {
+	taskStore *store.TaskStore
+}
+
+// NewCreateTaskTool creates a new CreateTaskTool.
+func NewCreateTaskTool(taskStore *store.TaskStore) *CreateTaskTool {
+	return &CreateTaskTool{taskStore: taskStore}
+}
+
+// Name returns the tool name.
+func (t *CreateTaskTool) Name() string { return "CreateTask" }
+
+// DefaultRiskLevel returns L2 because this tool writes to the database.
+func (t *CreateTaskTool) DefaultRiskLevel() RiskLevel { return RiskL2 }
+
+// Description returns the tool description.
+func (t *CreateTaskTool) Description() string {
+	return "Save a confirmed automated task. Has side effects. Call only after user has confirmed all fields."
+}
+
+// Execute creates the task and returns a confirmation string.
+func (t *CreateTaskTool) Execute(_ context.Context, input map[string]any) (*ToolResult, error) {
+	name, _ := input["name"].(string)
+	goal, _ := input["goal"].(string)
+
+	var hostIDs []string
+	if raw, ok := input["host_ids"].([]any); ok {
+		for _, v := range raw {
+			if s, ok := v.(string); ok {
+				hostIDs = append(hostIDs, s)
+			}
+		}
+	}
+
+	notifyMode, _ := input["notify_mode"].(string)
+	if notifyMode == "" {
+		notifyMode = string(models.NotifyNone)
+	}
+
+	runRetentionDays := intVal(input, "run_retention_days")
+	if runRetentionDays == 0 {
+		runRetentionDays = 30
+	}
+	timeoutMinutes := intVal(input, "timeout_minutes")
+	if timeoutMinutes == 0 {
+		timeoutMinutes = 30
+	}
+
+	task := &models.Task{
+		Name:             name,
+		Goal:             goal,
+		HostIDs:          hostIDs,
+		Schedule:         strVal(input, "schedule"),
+		NotifyMode:       models.NotifyMode(notifyMode),
+		RunRetentionDays: runRetentionDays,
+		TimeoutMinutes:   timeoutMinutes,
+		Status:           models.TaskStatusActive,
+	}
+
+	created, err := t.taskStore.Create(task)
+	if err != nil {
+		return &ToolResult{Content: fmt.Sprintf("failed to create task: %v", err), IsError: true, RiskLevel: RiskL2}, nil
+	}
+	return &ToolResult{
+		Content:   fmt.Sprintf("Task created: ID=%s, Name=%s", created.ID, created.Name),
+		RiskLevel: RiskL2,
+	}, nil
+}
+
+// InputSchema returns the JSON schema for the tool input.
+func (t *CreateTaskTool) InputSchema() map[string]any {
+	return map[string]any{
+		"type":     "object",
+		"required": []string{"name", "goal", "host_ids"},
+		"properties": map[string]any{
+			"name":               map[string]any{"type": "string", "description": "Task name"},
+			"goal":               map[string]any{"type": "string", "description": "Natural language goal"},
+			"host_ids":           map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "Target device IDs"},
+			"schedule":           map[string]any{"type": "string", "description": "Cron expression (empty = manual only)"},
+			"notify_mode":        map[string]any{"type": "string", "description": "none|on_error|always"},
+			"run_retention_days": map[string]any{"type": "integer", "description": "TaskRun retention days, default 30"},
+			"timeout_minutes":    map[string]any{"type": "integer", "description": "Execution timeout minutes, default 30"},
+		},
+	}
+}
+
+func intVal(input map[string]any, key string) int {
+	if f, ok := input[key].(float64); ok {
+		return int(f)
+	}
+	return 0
+}

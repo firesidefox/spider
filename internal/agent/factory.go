@@ -33,6 +33,7 @@ type Factory struct {
 	DataDir        string
 	DocStore       *store.DocumentStore
 	RagStore       *rag.Store
+	TaskStore      *store.TaskStore
 }
 
 // NewFactory creates a Factory by reading the active provider from the DB.
@@ -202,6 +203,9 @@ func (f *Factory) buildRegistry(conversationID string) *ToolRegistry {
 	registry.Register(NewSearchDocsTool(f.RagStore, f.DocStore))
 	if f.TodoTaskStore != nil {
 		registry.Register(NewTodoTaskTool(f.TodoTaskStore, f.SSEBroadcaster, conversationID))
+	}
+	if f.TaskStore != nil {
+		registry.Register(NewCreateTaskTool(f.TaskStore))
 	}
 	if f.DataDir != "" {
 		registry.Register(NewInvokeSkillTool(filepath.Join(f.DataDir, "skills")))
