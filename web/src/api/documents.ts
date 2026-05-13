@@ -24,6 +24,7 @@ export interface IngestRequest {
   source_file: string
   chunk_index: number
   group_id?: number | null
+  use_embedding?: boolean
 }
 
 export async function listDocumentsByGroup(groupId: number): Promise<Document[]> {

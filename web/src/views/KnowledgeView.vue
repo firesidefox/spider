@@ -157,6 +157,12 @@
             <option v-for="g in groups" :key="g.id" :value="g.id">{{ g.name }}</option>
           </select>
         </div>
+        <div class="form-row">
+          <label>
+            <input type="checkbox" v-model="form.useEmbedding" />
+            使用 Embedding（语义搜索，需配置 Embedding 模型）
+          </label>
+        </div>
         <div v-if="ingestErr" class="err" style="margin-bottom:8px">{{ ingestErr }}</div>
         <div class="modal-footer">
           <button class="btn" @click="showIngest = false">取消</button>
@@ -251,7 +257,7 @@ const editingGroupId = ref<number | null>(null)
 const editingGroupName = ref('')
 let dragDoc: Document | null = null
 
-const emptyForm = () => ({ vendor: '' })
+const emptyForm = () => ({ vendor: '', useEmbedding: true })
 const form = ref(emptyForm())
 
 let loadTimer: ReturnType<typeof setTimeout> | null = null
@@ -357,12 +363,12 @@ async function doIngest() {
           pages
             .map((p, i) => ({ p, i }))
             .filter(({ p }) => p.trim())
-            .map(({ p, i }) => ingestDocument({ vendor: form.value.vendor, content: p, source_file: file.name, chunk_index: i, group_id: ingestGroupId.value }))
+            .map(({ p, i }) => ingestDocument({ vendor: form.value.vendor, content: p, source_file: file.name, chunk_index: i, group_id: ingestGroupId.value, use_embedding: form.value.useEmbedding }))
         )
       } else {
         const chunks = chunkText(content)
         await Promise.all(
-          chunks.map((c, i) => ingestDocument({ vendor: form.value.vendor, content: c, source_file: file.name, chunk_index: i, group_id: ingestGroupId.value }))
+          chunks.map((c, i) => ingestDocument({ vendor: form.value.vendor, content: c, source_file: file.name, chunk_index: i, group_id: ingestGroupId.value, use_embedding: form.value.useEmbedding }))
         )
       }
     }
