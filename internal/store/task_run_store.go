@@ -73,13 +73,49 @@ func (s *TaskRunStore) Get(id string) (*models.TaskRun, error) {
 	return &taskRun, nil
 }
 
-// ListByTaskID retrieves all task runs for a given task ID, ordered by started_at DESC (newest first).
-func (s *TaskRunStore) ListByTaskID(taskID string) ([]*models.TaskRun, error) {
+// Update updates mutable fields of an existing task run.
+// Updates: finished_at, status, raw_output, summary, alerted.
+// Does NOT update: id, task_id, started_at (immutable).
+// Returns ErrNotFound if the task run does not exist.
+func (s *TaskRunStore) Update(run *models.TaskRun) error {
+	if run.ID == "" {
+		return errors.New("id cannot be empty")
+	}
+
+	var finishedAt interface{}
+	if run.FinishedAt != nil {
+		finishedAt = *run.FinishedAt
+	}
+
+	result, err := s.db.Exec(`
+		UPDATE task_runs
+		SET finished_at = ?, status = ?, raw_output = ?, summary = ?, alerted = ?
+		WHERE id = ?
+	`, finishedAt, run.Status, run.RawOutput, run.Summary, run.Alerted, run.ID)
+	if err != nil {
+		return fmt.Errorf("failed to update task run %s: %w", run.ID, err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to check rows affected for task run %s: %w", run.ID, err)
+	}
+
+	if rowsAffected == 0 {
+		return ErrNotFound
+	}
+
+	return nil
+}
+
+// ListByTaskID retrieves task runs for a given task ID with pagination, ordered by started_at DESC (newest first).
+func (s *TaskRunStore) ListByTaskID(taskID string, limit, offset int) ([]*models.TaskRun, error) {
 	rows, err := s.db.Query(`
 		SELECT id, task_id, started_at, finished_at, status, raw_output, summary, alerted
 		FROM task_runs WHERE task_id = ?
 		ORDER BY started_at DESC
-	`, taskID)
+		LIMIT ? OFFSET ?
+	`, taskID, limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query task runs for task %s: %w", taskID, err)
 	}
