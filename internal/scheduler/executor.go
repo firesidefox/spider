@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/spiderai/spider/internal/agent"
+	"github.com/spiderai/spider/internal/llm"
 	"github.com/spiderai/spider/internal/logger"
 	"github.com/spiderai/spider/internal/models"
 	"github.com/spiderai/spider/internal/notify"
@@ -24,6 +25,8 @@ type Executor struct {
 	hostStore           *store.HostStore
 	agentFactory        *agent.Factory
 	notifyChannelStore  *store.NotifyChannelStore
+	llmClient           llm.Client
+	llmModel            string
 }
 
 // NewExecutor creates a new Executor.
@@ -34,13 +37,18 @@ func NewExecutor(
 	agentFactory *agent.Factory,
 	notifyChannelStore *store.NotifyChannelStore,
 ) *Executor {
-	return &Executor{
+	e := &Executor{
 		taskStore:          taskStore,
 		taskRunStore:       taskRunStore,
 		hostStore:          hostStore,
 		agentFactory:       agentFactory,
 		notifyChannelStore: notifyChannelStore,
 	}
+	if agentFactory != nil {
+		e.llmClient = agentFactory.LLMClient
+		e.llmModel = agentFactory.LLMModel
+	}
+	return e
 }
 
 // Execute starts a task run asynchronously. Returns the created TaskRun immediately.
@@ -136,6 +144,7 @@ func (e *Executor) executeAsync(ctx context.Context, task *models.Task, run *mod
 
 	now := time.Now()
 	run.RawOutput = strings.Join(outputParts, "")
+	run.Summary = e.generateSummary(ctx, run.RawOutput)
 	run.FinishedAt = &now
 	if timedOut {
 		run.Status = models.TaskRunStatusFailed
@@ -143,6 +152,9 @@ func (e *Executor) executeAsync(ctx context.Context, task *models.Task, run *mod
 		run.Alerted = true
 	} else {
 		run.Status = models.TaskRunStatusCompleted
+		if e.detectAnomaly(ctx, run.RawOutput) {
+			run.Alerted = true
+		}
 	}
 	if err := e.taskRunStore.Update(run); err != nil {
 		log.Error().Err(err).Msg("failed to update task run")
@@ -198,4 +210,50 @@ func (e *Executor) sendNotifications(ctx context.Context, task *models.Task, run
 			logger.Global().Error().Err(err).Int64("channel_id", ch.ID).Msg("notification send failed")
 		}
 	}
+}
+
+// generateSummary produces a short summary of the task output using the LLM.
+// Falls back to a truncated raw output if the LLM is unavailable.
+func (e *Executor) generateSummary(ctx context.Context, output string) string {
+	if e.llmClient == nil {
+		return truncate(output, 200)
+	}
+	prompt := fmt.Sprintf("Summarize this task execution output in 2-3 sentences:\n\n%s", truncate(output, 4000))
+	resp, err := e.llmClient.Chat(ctx, &llm.ChatRequest{
+		Messages:  []llm.Message{{Role: llm.RoleUser, Content: prompt}},
+		MaxTokens: 256,
+	})
+	if err != nil {
+		logger.Global().Error().Err(err).Msg("failed to generate summary")
+		return truncate(output, 200)
+	}
+	return resp
+}
+
+// detectAnomaly returns true if the LLM judges the output to indicate an error or failure.
+func (e *Executor) detectAnomaly(ctx context.Context, output string) bool {
+	if e.llmClient == nil {
+		return false
+	}
+	prompt := fmt.Sprintf(
+		"Does this task output indicate an anomaly (errors, failures, unexpected values)? Reply YES or NO only.\n\n%s",
+		truncate(output, 4000),
+	)
+	resp, err := e.llmClient.Chat(ctx, &llm.ChatRequest{
+		Messages:  []llm.Message{{Role: llm.RoleUser, Content: prompt}},
+		MaxTokens: 8,
+	})
+	if err != nil {
+		logger.Global().Error().Err(err).Msg("failed to detect anomaly")
+		return false
+	}
+	return strings.Contains(strings.ToUpper(resp), "YES")
+}
+
+// truncate returns s truncated to maxLen characters, appending "..." if truncated.
+func truncate(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "..."
 }
