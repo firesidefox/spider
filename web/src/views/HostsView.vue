@@ -118,14 +118,20 @@
                       <span class="badge" :class="f.type === 'ssh' ? 'badge-ssh' : 'badge-rest'">{{ f.type === 'ssh' ? 'SSH' : 'REST API' }}</span>
                       <span class="face-addr code">{{ f.type === 'ssh' ? `${f.username}@${f.ip}:${f.port}` : f.base_url || `${f.ip}:${f.port}` }}</span>
                     </div>
-                    <button class="edit-link" @click="startEditFace(f)">编辑</button>
+                    <div class="face-actions">
+                      <button class="edit-link" @click="startEditFace(f)">编辑</button>
+                      <button class="edit-link danger-link" @click="removeFace(f)">删除</button>
+                    </div>
                   </div>
                   <div class="face-body">
                     <div v-if="f.type === 'ssh'" class="face-item"><label>认证方式</label><div class="value">{{ f.ssh_auth_type === 'password' ? '密码' : f.ssh_auth_type === 'key' ? 'SSH Key' : 'SSH Key + 密码' }}</div></div>
                     <div v-if="f.type === 'ssh' && f.ssh_key_id" class="face-item"><label>SSH Key</label><div class="value">{{ sshKeys.find(k => k.id === f.ssh_key_id)?.name || f.ssh_key_id }}</div></div>
                     <div v-if="f.type === 'ssh'" class="face-item"><label>兼容模式</label><div class="value">{{ f.ssh_legacy ? '是' : '否' }}</div></div>
                     <div v-if="f.type === 'ssh' && f.ssh_login_input" class="face-item"><label>登录后输入</label><div class="value"><code>{{ f.ssh_login_input }}</code></div></div>
-                    <div v-if="f.type === 'restapi'" class="face-item"><label>认证方式</label><div class="value">{{ f.rest_auth_type }}</div></div>
+                    <div v-if="f.type === 'restapi'" class="face-item">
+                      <label>认证方式</label>
+                      <div class="value">{{ f.rest_auth_type === 'hmac_aksk' ? `HMAC AK/SK (${f.hmac_algo || 'HMAC-SHA256'})` : f.rest_auth_type }}</div>
+                    </div>
                     <div v-if="f.type === 'restapi' && f.rest_username" class="face-item"><label>用户名</label><div class="value">{{ f.rest_username }}</div></div>
                     <div v-if="f.type === 'restapi' && f.base_url" class="face-item" style="grid-column:1/-1"><label>Base URL</label><div class="value"><code>{{ f.base_url }}</code></div></div>
                   </div>
@@ -276,6 +282,7 @@
                 <option value="bearer">Bearer Token</option>
                 <option value="basic">Basic</option>
                 <option value="apikey">API Key</option>
+                <option value="hmac_aksk">HMAC AK/SK</option>
               </select>
             </div>
             <template v-if="faceForm.rest_auth_type === 'basic'">
@@ -288,6 +295,17 @@
             <template v-if="faceForm.rest_auth_type === 'apikey'">
               <div class="form-row"><label>Header Name</label><input v-model="faceForm.header_name" class="input" placeholder="X-API-Key" /></div>
               <div class="form-row"><label>API Key</label><input v-model="faceForm.credential" class="input" type="password" autocomplete="new-password" /></div>
+            </template>
+            <template v-if="faceForm.rest_auth_type === 'hmac_aksk'">
+              <div class="form-row"><label>Access Key (AK)</label><input v-model="faceForm.rest_username" class="input" placeholder="QMZ0ZENmYvwDJTz7..." /></div>
+              <div class="form-row"><label>Secret Key (SK)</label><input v-model="faceForm.credential" class="input" type="password" autocomplete="new-password" /></div>
+              <div class="form-row">
+                <label>签名算法</label>
+                <select v-model="faceForm.hmac_algo" class="input">
+                  <option value="HMAC-SHA256">HMAC-SHA256</option>
+                  <option value="HMAC-SM3">HMAC-SM3</option>
+                </select>
+              </div>
             </template>
           </template>
           <div class="form-row">
@@ -399,7 +417,7 @@ async function saveOverview() {
 const emptyForm = () => ({ name: '', ip: '', notes: '', vendor: '', product_name: '', product_version: '', tagsStr: '' })
 const form = ref(emptyForm())
 
-const emptyFaceForm = () => ({ type: 'ssh' as 'ssh' | 'restapi', ip: activeHost.value?.ip ?? '', port: 22, username: '', ssh_auth_type: 'password', credential: '', passphrase: '', ssh_key_id: '', ssh_legacy: false, ssh_login_input: '', base_url: '', rest_auth_type: 'none', rest_username: '', header_name: '', knowledge_sources: [] as Array<{type:'group'|'doc';id:number}> })
+const emptyFaceForm = () => ({ type: 'ssh' as 'ssh' | 'restapi', ip: activeHost.value?.ip ?? '', port: 22, username: '', ssh_auth_type: 'password', credential: '', passphrase: '', ssh_key_id: '', ssh_legacy: false, ssh_login_input: '', base_url: '', rest_auth_type: 'none', rest_username: '', header_name: '', hmac_algo: 'HMAC-SHA256', knowledge_sources: [] as Array<{type:'group'|'doc';id:number}> })
 const faceForm = ref(emptyFaceForm())
 
 const allTags = computed(() => {
@@ -551,6 +569,7 @@ async function submitFace() {
     req.rest_username = faceForm.value.rest_username || undefined
     req.credential = faceForm.value.credential || undefined
     req.header_name = faceForm.value.header_name || undefined
+    req.hmac_algo = faceForm.value.hmac_algo || undefined
   }
   if (editFaceTarget.value) {
     await updateAccessFace(activeHost.value.id, editFaceTarget.value.id, req as Parameters<typeof updateAccessFace>[2])
@@ -578,6 +597,7 @@ function startEditFace(face: AccessFace) {
     rest_auth_type: face.rest_auth_type || 'none',
     rest_username: face.rest_username || '',
     header_name: face.header_name || '',
+    hmac_algo: face.hmac_algo || 'HMAC-SHA256',
     knowledge_sources: face.knowledge_sources ? [...face.knowledge_sources] : [],
   }
   const ks = face.knowledge_sources ?? []
@@ -699,6 +719,7 @@ onUnmounted(() => {
 .section-body { padding: 16px; }
 .edit-link { font-size: 12px; color: var(--primary); cursor: pointer; background: none; border: none; padding: 0; }
 .edit-link:hover { text-decoration: underline; }
+.danger-link { color: var(--danger, #e53e3e); }
 
 .info-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
 .info-item label { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; display: block; margin-bottom: 5px; }

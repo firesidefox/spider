@@ -28,9 +28,10 @@ export interface AccessFace {
   ssh_legacy?: boolean
   ssh_login_input?: string
   base_url?: string
-  rest_auth_type?: 'bearer' | 'basic' | 'apikey' | 'none'
+  rest_auth_type?: 'bearer' | 'basic' | 'apikey' | 'hmac_aksk' | 'none'
   rest_username?: string
   header_name?: string
+  hmac_algo?: string
   knowledge_sources: Array<{ type: 'group' | 'doc'; id: number }>
   created_at: string
   updated_at: string
@@ -89,6 +90,7 @@ export interface AddAccessFaceRequest {
   rest_auth_type?: string
   rest_username?: string
   header_name?: string
+  hmac_algo?: string
   knowledge_sources?: Array<{ type: 'group' | 'doc'; id: number }>
 }
 
