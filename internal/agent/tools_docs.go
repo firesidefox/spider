@@ -53,7 +53,7 @@ func (t *SearchDocsTool) InputSchema() map[string]any {
 			"catalog":   map[string]any{"type": "boolean", "description": "List document titles in a group without fetching full content. Use with group_id to browse available documents before deciding which to read."},
 			"group_id":  map[string]any{"type": "integer", "description": "Group ID to list when catalog=true."},
 		},
-		"required": []string{"query"},
+		"required": []string{},
 	}
 }
 

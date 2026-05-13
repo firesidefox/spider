@@ -34,8 +34,8 @@ func TestSearchDocsTool_Metadata(t *testing.T) {
 		}
 	}
 	req, _ := schema["required"].([]string)
-	if len(req) != 1 || req[0] != "query" {
-		t.Errorf("required = %v, want [query]", req)
+	if len(req) != 0 {
+		t.Errorf("required = %v, want []", req)
 	}
 }
 
