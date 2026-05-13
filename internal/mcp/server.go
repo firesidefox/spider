@@ -45,6 +45,8 @@ type App struct {
 	ProviderStore  *store.ProviderStore
 	RagConfigStore *store.RagConfigStore
 	TodoTaskStore  *store.TodoTaskStore
+	TaskStore      *store.TaskStore
+	TaskRunStore   *store.TaskRunStore
 	AgentFactory   *agent.Factory // nil if LLM not configured
 
 	Classifier      *permission.Classifier

@@ -522,6 +522,43 @@ func NewRouter(app *mcppkg.App) http.Handler {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	})
 
+	// Task automation API
+	mux.HandleFunc("/api/v1/tasks", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			listTasks(app, w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+	mux.HandleFunc("/api/v1/tasks/", func(w http.ResponseWriter, r *http.Request) {
+		rest := r.URL.Path[len("/api/v1/tasks/"):]
+		id := rest
+		sub := ""
+		if idx := indexOf(rest, '/'); idx >= 0 {
+			id = rest[:idx]
+			sub = rest[idx+1:]
+		}
+		switch sub {
+		case "":
+			if r.Method == http.MethodGet {
+				getTask(app, w, r, id)
+				return
+			}
+		case "trigger":
+			if r.Method == http.MethodPost {
+				triggerTask(app, w, r, id)
+				return
+			}
+		case "runs":
+			if r.Method == http.MethodGet {
+				listTaskRuns(app, w, r, id)
+				return
+			}
+		}
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	})
+
 	// log-level endpoint (admin only)
 	mux.Handle("/api/v1/log-level", adminOnly(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
