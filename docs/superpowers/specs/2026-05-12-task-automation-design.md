@@ -65,7 +65,7 @@ User ──── 配置 ────► NotifyChannel
 |------|------|----------|
 | Task | 意图 + 调度配置，持久化 | active / paused / archived |
 | TaskRun | 单次执行快照，只增不改（除状态更新） | running → success / failed |
-| TaskAlert | 异常事件记录 | open → resolved |
+| TaskAlert | 异常事件记录（执行失败 或 LLM 判断异常） | open → resolved |
 | NotifyChannel | 通知渠道配置，与 Task 解耦 | 独立管理 |
 
 ### 角色与用例
@@ -88,8 +88,8 @@ User ──── 配置 ────► NotifyChannel
  │                            RunHeadless
  │                            LLM 分析
  │                            → TaskRun
- │                            → TaskAlert（条件）
- │                            → 通知（条件）
+ │                            → TaskAlert（执行失败 或 异常告警）
+ │                            → 推送通知（有 NotifyChannel 则发）
  │
  ├─ 查看执行记录
  ├─ 处理告警（resolve）
@@ -152,8 +152,8 @@ type Task struct {
 ```
 
 `AlertOnAnomaly` 说明：
-- `false`：执行后只生成执行摘要；执行失败时发送失败通知
-- `true`：执行后 LLM 判断结果是否异常；异常则写入 `TaskAlert` 并发送通知；执行失败时同样发送失败通知
+- `false`：执行后只生成执行摘要；执行失败时写入 `TaskAlert`（summary 为失败原因），有 NotifyChannel 则推送
+- `true`：执行后 LLM 判断结果是否异常；异常则写入 `TaskAlert` 并推送；执行失败时同上
 
 ### TaskRun（执行记录）
 
@@ -254,9 +254,9 @@ type NotifyChannel struct {
 4. 执行完成，原始输出写入 `TaskRun.RawOutput`（前端展示截断至 10KB，完整内容保留在 DB）
 5. 轻量 LLM 调用分析输出（使用系统默认 provider）：
    - 生成执行摘要，写入 `TaskRun.Summary`
-   - 若 `AlertOnAnomaly = true`：判断结果是否异常；异常则写入 `TaskAlert`，`TaskRun.Alerted = true`，并按用户配置的 `NotifyChannel` 发送通知
+   - 若 `AlertOnAnomaly = true`：判断结果是否异常；异常则写入 `TaskAlert`，`TaskRun.Alerted = true`，有 NotifyChannel 则推送
 6. 更新 `TaskRun.Status` 为 success / failed
-   - 若 status = failed：无论 `AlertOnAnomaly` 是否开启，均按用户配置的 `NotifyChannel` 发送执行失败通知
+   - 若 status = failed：写入 `TaskAlert`（summary 为失败原因），`TaskRun.Alerted = true`，有 NotifyChannel 则推送；不依赖 `AlertOnAnomaly`
 
 LLM 参与两个节点：创建时（Agent 提取信息）、执行后（分析报告，用系统默认 provider）。执行中不参与。
 
