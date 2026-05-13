@@ -133,3 +133,21 @@ func TestSearchDocsTool_Catalog(t *testing.T) {
 		}
 	}
 }
+
+func TestSearchDocsTool_Catalog_MissingGroupID(t *testing.T) {
+	database := openTestDB(t)
+	ds := store.NewDocumentStore(database)
+	tool := NewSearchDocsTool(nil, ds)
+	result, err := tool.Execute(context.Background(), map[string]any{
+		"catalog": true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.IsError {
+		t.Error("expected error when group_id missing")
+	}
+	if result.Content != "group_id is required when catalog=true" {
+		t.Errorf("unexpected message: %s", result.Content)
+	}
+}

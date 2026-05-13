@@ -59,6 +59,9 @@ func (t *SearchDocsTool) Execute(ctx context.Context, input map[string]any) (*To
 			return &ToolResult{Content: "doc store unavailable", IsError: true, RiskLevel: RiskL1}, nil
 		}
 		groupID := toInt(input["group_id"])
+		if groupID == 0 {
+			return &ToolResult{Content: "group_id is required when catalog=true", IsError: true, RiskLevel: RiskL1}, nil
+		}
 		docs, err := t.docStore.ListByGroup(groupID)
 		if err != nil {
 			return &ToolResult{Content: fmt.Sprintf("list group: %v", err), IsError: true, RiskLevel: RiskL1}, nil
