@@ -108,6 +108,18 @@ func (s *TaskRunStore) Update(run *models.TaskRun) error {
 	return nil
 }
 
+// HasRunning reports whether the task has any run currently in running status.
+func (s *TaskRunStore) HasRunning(taskID string) (bool, error) {
+	var count int
+	err := s.db.QueryRow(
+		`SELECT COUNT(*) FROM task_runs WHERE task_id = ? AND status = 'running'`, taskID,
+	).Scan(&count)
+	if err != nil {
+		return false, fmt.Errorf("failed to check running task runs for %s: %w", taskID, err)
+	}
+	return count > 0, nil
+}
+
 // ListByTaskID retrieves task runs for a given task ID with pagination, ordered by started_at DESC (newest first).
 func (s *TaskRunStore) ListByTaskID(taskID string, limit, offset int) ([]*models.TaskRun, error) {
 	rows, err := s.db.Query(`

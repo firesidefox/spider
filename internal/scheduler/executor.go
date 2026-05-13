@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -11,6 +12,9 @@ import (
 	"github.com/spiderai/spider/internal/models"
 	"github.com/spiderai/spider/internal/store"
 )
+
+// ErrAlreadyRunning is returned when a task already has a running TaskRun.
+var ErrAlreadyRunning = errors.New("task is already running")
 
 // Executor runs tasks headlessly using the agent.
 type Executor struct {
@@ -43,14 +47,12 @@ func (e *Executor) Execute(ctx context.Context, taskID string) (*models.TaskRun,
 		return nil, fmt.Errorf("task not found: %w", err)
 	}
 
-	runs, err := e.taskRunStore.ListByTaskID(taskID, 1, 0)
+	hasRunning, err := e.taskRunStore.HasRunning(taskID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check running tasks: %w", err)
 	}
-	for _, r := range runs {
-		if r.Status == models.TaskRunStatusRunning {
-			return nil, fmt.Errorf("task is already running")
-		}
+	if hasRunning {
+		return nil, ErrAlreadyRunning
 	}
 
 	run := &models.TaskRun{
@@ -63,7 +65,7 @@ func (e *Executor) Execute(ctx context.Context, taskID string) (*models.TaskRun,
 		return nil, fmt.Errorf("failed to create task run: %w", err)
 	}
 
-	go e.executeAsync(ctx, task, created)
+	go e.executeAsync(context.Background(), task, created)
 	return created, nil
 }
 
@@ -117,19 +119,14 @@ func (e *Executor) executeAsync(ctx context.Context, task *models.Task, run *mod
 	}
 
 	var outputParts []string
-	timedOut := false
 	for ev := range events {
-		switch ev.Type {
-		case agent.EventTextDelta:
+		if ev.Type == agent.EventTextDelta {
 			if s, ok := ev.Content["text"].(string); ok {
 				outputParts = append(outputParts, s)
 			}
-		case agent.EventError:
-			if execCtx.Err() != nil {
-				timedOut = true
-			}
 		}
 	}
+	timedOut := execCtx.Err() != nil
 
 	now := time.Now()
 	run.RawOutput = strings.Join(outputParts, "")

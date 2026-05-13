@@ -48,7 +48,7 @@ func triggerTask(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id str
 	}
 	run, err := executor.Execute(r.Context(), id)
 	if err != nil {
-		if err.Error() == "task is already running" {
+		if errors.Is(err, scheduler.ErrAlreadyRunning) {
 			writeError(w, http.StatusConflict, err.Error())
 			return
 		}
