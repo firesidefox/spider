@@ -47,12 +47,11 @@ function dotClass(phase: AgentStatus['phase']) {
 function rowDetail(s: AgentStatus): string {
   switch (s.phase) {
     case 'thinking': return '思考中'
-    case 'tool': return s.toolName
-      ? formatToolDetail(s.toolName, s.toolInput ? JSON.parse(s.toolInput) : {})
-      : '执行中'
-    case 'confirm': return `等待确认 · ${s.toolName
-      ? formatToolDetail(s.toolName, s.toolInput ? JSON.parse(s.toolInput) : {})
-      : ''}`
+    case 'tool': return s.toolName ? formatToolDetail(s.toolName, s.toolInput) : '执行中'
+    case 'confirm': {
+      const tool = s.toolName ? formatToolDetail(s.toolName, s.toolInput) : ''
+      return tool ? `等待确认 · ${tool}` : '等待确认'
+    }
     case 'done': return '完成'
   }
 }

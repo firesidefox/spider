@@ -15,7 +15,7 @@ import {
 import { listHosts, type SafeHost } from '../api/hosts'
 import { authHeaders } from '../api/auth'
 import { listGroups, listDocumentsByGroup, type DocumentGroup, type Document as KbDocument } from '../api/documents'
-import { updateAgentStatus } from '../composables/useAgentStatus'
+import { updateAgentStatus, type AgentStatus } from '../composables/useAgentStatus'
 
 const route = useRoute()
 const router = useRouter()
@@ -299,6 +299,16 @@ function handleConvEvent(convId: string, event: ChatEvent) {
   const convMsgs = messagesMap.value[convId]
   if (!convMsgs) return
 
+  function setStatus(phase: AgentStatus['phase'], toolName?: string, toolInput?: unknown) {
+    updateAgentStatus({
+      conversationId: convId,
+      title: getConvTitle(convId),
+      phase,
+      toolName,
+      toolInput: toolInput ? JSON.stringify(toolInput) : undefined,
+    })
+  }
+
   if (event.type === 'message') {
     const msg = event.content as ChatMsg
     if (!msg || msg.role === 'user') return
@@ -336,17 +346,16 @@ function handleConvEvent(convId: string, event: ChatEvent) {
       } else {
         blocks.push({ type: 'text', content: event.content?.text || '' })
       }
-      updateAgentStatus({ conversationId: convId, title: getConvTitle(convId), phase: 'thinking' })
+      setStatus('thinking')
       break
     }
-    case 'tool_start':
       blocks.push({ type: 'tool', call: {
         id: event.content?.id || `t-${Date.now()}`,
         name: event.content?.name || 'unknown',
         input: event.content?.input,
         hostNames: event.content?.host_names,
       }})
-      updateAgentStatus({ conversationId: convId, title: getConvTitle(convId), phase: 'tool', toolName: event.content?.name || 'unknown', toolInput: event.content?.input ? JSON.stringify(event.content.input) : undefined })
+      setStatus('tool', event.content?.name || 'unknown', event.content?.input)
       break
     case 'tool_result': {
       const idx = blocks.findIndex(b => b.type === 'tool' && b.call.id === event.content?.id)
@@ -369,7 +378,7 @@ function handleConvEvent(convId: string, event: ChatEvent) {
         input: event.content?.input || {},
         riskLevel: event.content?.risk_level || 'moderate',
       }
-      updateAgentStatus({ conversationId: convId, title: getConvTitle(convId), phase: 'confirm', toolName: event.content?.tool || '', toolInput: event.content?.input ? JSON.stringify(event.content.input) : undefined })
+      setStatus('confirm', event.content?.tool || '', event.content?.input)
       break
     case 'error': {
       const errText = `\n\n**Error:** ${event.content?.error || 'unknown error'}`
@@ -392,7 +401,7 @@ function handleConvEvent(convId: string, event: ChatEvent) {
         isStreaming.value = false
         nextTick(() => scrollToBottom())
       }
-      updateAgentStatus({ conversationId: convId, title: getConvTitle(convId), phase: 'done' })
+      setStatus('done')
       loadConversations()
       break
     case 'todo_update': {

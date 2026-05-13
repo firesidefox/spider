@@ -23,6 +23,13 @@ export function updateAgentStatus(update: Omit<AgentStatus, 'updatedAt'>) {
     doneTimers.delete(update.conversationId)
   }
 
+  const prev = statuses.value.get(update.conversationId)
+  // Skip reactivity trigger if only phase is 'thinking' and it's already set —
+  // text_delta fires per token; avoid a full Map copy on every token.
+  if (update.phase === 'thinking' && prev?.phase === 'thinking') {
+    return
+  }
+
   statuses.value.set(update.conversationId, {
     ...update,
     updatedAt: Date.now(),
@@ -57,9 +64,11 @@ function truncate(s: string, n: number): string {
   return s.length > n ? s.slice(0, n) + '…' : s
 }
 
-export function formatToolDetail(name: string, input: unknown): string {
-  if (!input || typeof input !== 'object') return name
-  const inp = input as Record<string, unknown>
+export function formatToolDetail(name: string, inputJson?: string): string {
+  if (!inputJson) return name
+  let inp: Record<string, unknown>
+  try { inp = JSON.parse(inputJson) } catch { return name }
+  if (!inp || typeof inp !== 'object' || Array.isArray(inp)) return name
   const val = inp.command ?? inp.path ?? Object.values(inp).find(v => typeof v === 'string')
   if (!val) return name
   return `${name}: ${truncate(String(val), 40)}`
