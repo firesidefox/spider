@@ -119,7 +119,7 @@ func (t *CreateTaskTool) InputSchema() map[string]any {
 			"goal":               map[string]any{"type": "string", "description": "Natural language goal"},
 			"host_ids":           map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "Target device IDs"},
 			"schedule":           map[string]any{"type": "string", "description": "Cron expression (empty = manual only)"},
-			"notify_mode":        map[string]any{"type": "string", "description": "none|on_error|always"},
+			"notify_mode":        map[string]any{"type": "string", "description": "none|failure|complete|anomaly"},
 			"run_retention_days": map[string]any{"type": "integer", "description": "TaskRun retention days, default 30"},
 			"timeout_minutes":    map[string]any{"type": "integer", "description": "Execution timeout minutes, default 30"},
 		},
