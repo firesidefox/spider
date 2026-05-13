@@ -73,7 +73,7 @@
                 <tbody>
                   <tr v-for="r in runs" :key="r.id">
                     <td>{{ formatTime(r.started_at) }}</td>
-                    <td><span :class="runStatusBadge(r.status)" class="badge">{{ r.status }}</span></td>
+                    <td><span :class="runStatusBadge(r.status)">{{ r.status }}</span></td>
                     <td>{{ r.summary || '—' }}</td>
                     <td>{{ duration(r.started_at, r.finished_at) }}</td>
                   </tr>
@@ -176,8 +176,8 @@ function taskStatusBadge(status: string): string {
 }
 
 function runStatusBadge(status: string): string {
-  if (status === 'completed') return 'badge-ok'
-  if (status === 'failed') return 'badge-err'
+  if (status === 'completed') return 'badge badge-ok'
+  if (status === 'failed') return 'badge badge-err'
   return 'badge'
 }
 
