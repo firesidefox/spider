@@ -238,6 +238,17 @@ type NotifyChannel struct {
 
 调度器：进程内 goroutine，每分钟轮询 DB，找到到期 active Task 启动执行。行锁防止多实例重复执行。
 
+### 并发执行策略
+
+| 触发方式 | 已有 running TaskRun | 行为 |
+|---------|---------------------|------|
+| Cron 到期 | 存在 | **跳过**，记录日志 "skipped: previous run still running" |
+| 手动触发 | 存在 | **拒绝**，返回错误 "task is already running" |
+| Cron 到期 | 不存在 | 创建新 TaskRun，正常执行 |
+| 手动触发 | 不存在 | 创建新 TaskRun，正常执行 |
+
+实现：触发前查询 `SELECT COUNT(*) FROM task_runs WHERE task_id = ? AND status = 'running'`。
+
 ---
 
 ## 执行
