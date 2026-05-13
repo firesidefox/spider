@@ -346,5 +346,15 @@ func migrate(db *sql.DB) error {
 	if _, err := db.Exec(`CREATE INDEX IF NOT EXISTS idx_task_runs_task_id ON task_runs(task_id)`); err != nil {
 		return err
 	}
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS notify_channels (
+		id                INTEGER PRIMARY KEY AUTOINCREMENT,
+		name              TEXT NOT NULL,
+		type              TEXT NOT NULL DEFAULT 'dingtalk',
+		encrypted_config  TEXT NOT NULL DEFAULT '',
+		created_at        DATETIME NOT NULL,
+		updated_at        DATETIME NOT NULL
+	)`); err != nil {
+		return err
+	}
 	return nil
 }
