@@ -135,6 +135,7 @@ type Task struct {
     Schedule         string    `json:"schedule"`           // cron 表达式，空 = manual only
     NotifyMode       string    `json:"notify_mode"`        // "none" | "failure" | "complete" | "anomaly"
     RunRetentionDays int       `json:"run_retention_days"` // TaskRun 保留天数，默认 30，0 = 永久保留
+    TimeoutMinutes   int       `json:"timeout_minutes"`    // 执行超时（分钟），默认 30，0 = 无限制
     Status           string    `json:"status"`             // "active" | "paused" | "archived"
     CreatedAt        time.Time `json:"created_at"`
     UpdatedAt        time.Time `json:"updated_at"`
@@ -258,18 +259,24 @@ type NotifyChannel struct {
    - 查询 `SELECT id FROM hosts WHERE id IN (task.host_ids)` 得到有效 ID 列表
    - 若全部无效 → 更新 `TaskRun.Status = failed`，`RawOutput = "all hosts invalid: [...]"`，跳过后续步骤
    - 若部分无效 → 在 `RawOutput` 开头记录 "skipped invalid hosts: [...]"，继续执行有效 ID
-3. 启动 headless Agent：
+3. **启动 headless Agent（带超时）**：
+   - 创建 context，超时时长 = `Task.TimeoutMinutes`（0 = 无限制）
    - 无对话历史
    - System prompt 包含：任务目标 + 任务类型 + 有效目标设备信息
    - 可使用全部 Agent 工具（SSH、CLI、ListHosts 等）
 4. Agent 自主完成多步骤执行
-5. 执行完成，原始输出写入 `TaskRun.RawOutput`（前端展示截断至 10KB，完整内容保留在 DB）
-6. 轻量 LLM 调用分析输出（使用系统默认 provider）：
+5. **超时处理**：
+   - 若 context 超时 → 取消 Agent 执行
+   - `TaskRun.Status = failed`，`RawOutput` 追加 "execution timeout after Xm"
+   - `TaskRun.Alerted = true`
+   - 跳过后续 LLM 分析，直接发送通知（若 NotifyMode 匹配）
+6. 执行完成，原始输出写入 `TaskRun.RawOutput`（前端展示截断至 10KB，完整内容保留在 DB）
+7. 轻量 LLM 调用分析输出（使用系统默认 provider）：
    - 生成执行摘要，写入 `TaskRun.Summary`
    - 若 `NotifyMode = "anomaly"`：LLM 判断是否异常；异常则 `TaskRun.Alerted = true`
-7. 更新 `TaskRun.Status` 为 success / failed
+8. 更新 `TaskRun.Status` 为 success / failed
    - 若 status = failed：`TaskRun.Alerted = true`
-8. 按 `NotifyMode` 发送通知（需有 NotifyChannel）：
+9. 按 `NotifyMode` 发送通知（需有 NotifyChannel）：
    - `"failure"` 且 status = failed → 发中断原因
    - `"complete"` → 发摘要
    - `"anomaly"` 且 `TaskRun.Alerted = true` → 发摘要
@@ -302,6 +309,7 @@ InputSchema（所有字段 Agent 调用前已确定）：
 - `schedule` (string) — cron 表达式，空 = manual only
 - `notify_mode` (string) — `"none"` | `"failure"` | `"complete"` | `"anomaly"`，默认 `"none"`
 - `run_retention_days` (int) — 默认 30，0 = 永久保留
+- `timeout_minutes` (int) — 默认 30，0 = 无限制
 
 ### NotifyChannel 管理工具
 
