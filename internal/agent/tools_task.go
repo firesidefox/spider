@@ -27,13 +27,38 @@ func (t *CreateTaskTool) DefaultRiskLevel() RiskLevel { return RiskL2 }
 
 // Description returns the tool description.
 func (t *CreateTaskTool) Description() string {
-	return "Save a confirmed automated task. Has side effects. Call only after user has confirmed all fields."
+	return "Save a confirmed automated task to the database. Has side effects."
+}
+
+const createTaskPrompt = `## CreateTask
+
+**When to use:** Call only after the user has explicitly confirmed all task fields (name, goal, host_ids, schedule, notify_mode).
+
+**When NOT to use:**
+- Do not call speculatively or before user confirmation
+- Do not call if any required field is unclear
+
+**Rules:**
+- Extract fields from conversation context, present them to the user, wait for confirmation, then call
+- schedule is a 5-field cron expression (e.g. "0 2 * * 3") or empty string for manual-only tasks
+- notify_mode: "none" | "failure" | "complete" | "anomaly" (default: "none")`
+
+// SystemPromptSection returns the system prompt section for this tool.
+func (t *CreateTaskTool) SystemPromptSection() string {
+	return createTaskPrompt
 }
 
 // Execute creates the task and returns a confirmation string.
 func (t *CreateTaskTool) Execute(_ context.Context, input map[string]any) (*ToolResult, error) {
 	name, _ := input["name"].(string)
 	goal, _ := input["goal"].(string)
+
+	if name == "" {
+		return &ToolResult{Content: "name is required", IsError: true, RiskLevel: RiskL2}, nil
+	}
+	if goal == "" {
+		return &ToolResult{Content: "goal is required", IsError: true, RiskLevel: RiskL2}, nil
+	}
 
 	var hostIDs []string
 	if raw, ok := input["host_ids"].([]any); ok {
@@ -42,6 +67,10 @@ func (t *CreateTaskTool) Execute(_ context.Context, input map[string]any) (*Tool
 				hostIDs = append(hostIDs, s)
 			}
 		}
+	}
+
+	if len(hostIDs) == 0 {
+		return &ToolResult{Content: "host_ids must not be empty", IsError: true, RiskLevel: RiskL2}, nil
 	}
 
 	notifyMode, _ := input["notify_mode"].(string)
