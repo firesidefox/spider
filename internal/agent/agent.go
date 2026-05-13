@@ -57,6 +57,13 @@ type MessageStorer interface {
 	ListAfterMessage(conversationID, messageID string) ([]*models.Message, error)
 }
 
+// noopMessageStorer discards all messages. Used for headless task runs.
+type noopMessageStorer struct{}
+
+func (noopMessageStorer) Save(_, _, _, _ string) error                          { return nil }
+func (noopMessageStorer) ListByConversation(_ string) ([]*models.Message, error) { return nil, nil }
+func (noopMessageStorer) ListAfterMessage(_, _ string) ([]*models.Message, error) { return nil, nil }
+
 type Agent struct {
 	llmClient     llm.Client
 	registry      *ToolRegistry

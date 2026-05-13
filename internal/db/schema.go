@@ -353,5 +353,51 @@ func migrate(db *sql.DB) error {
 	// migrate existing topology_nodes: add layer, drop group_id
 	db.Exec("ALTER TABLE topology_nodes ADD COLUMN layer TEXT NOT NULL DEFAULT ''")
 	db.Exec("ALTER TABLE topology_nodes DROP COLUMN group_id")
+	// Task automation tables
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS tasks (
+		id                   TEXT PRIMARY KEY,
+		name                 TEXT NOT NULL,
+		goal                 TEXT NOT NULL,
+		host_ids             TEXT NOT NULL DEFAULT '[]',
+		schedule             TEXT NOT NULL DEFAULT '',
+		notify_mode          TEXT NOT NULL DEFAULT 'none',
+		run_retention_days   INTEGER NOT NULL DEFAULT 30,
+		timeout_minutes      INTEGER NOT NULL DEFAULT 30,
+		status               TEXT NOT NULL DEFAULT 'active',
+		created_at           DATETIME NOT NULL,
+		updated_at           DATETIME NOT NULL,
+		source_conv_id       TEXT NOT NULL DEFAULT ''
+	)`); err != nil {
+		return err
+	}
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS task_runs (
+		id          TEXT PRIMARY KEY,
+		task_id     TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+		started_at  DATETIME NOT NULL,
+		finished_at DATETIME,
+		status      TEXT NOT NULL DEFAULT 'running',
+		raw_output  TEXT NOT NULL DEFAULT '',
+		summary     TEXT NOT NULL DEFAULT '',
+		alerted     INTEGER NOT NULL DEFAULT 0
+	)`); err != nil {
+		return err
+	}
+	if _, err := db.Exec(`CREATE INDEX IF NOT EXISTS idx_task_runs_task_id ON task_runs(task_id)`); err != nil {
+		return err
+	}
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS notify_channels (
+		id                INTEGER PRIMARY KEY AUTOINCREMENT,
+		name              TEXT NOT NULL,
+		type              TEXT NOT NULL DEFAULT 'dingtalk',
+		encrypted_config  TEXT NOT NULL DEFAULT '',
+		enabled           INTEGER NOT NULL DEFAULT 1,
+		created_at        DATETIME NOT NULL,
+		updated_at        DATETIME NOT NULL
+	)`); err != nil {
+		return err
+	}
+	if _, err := db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_task_runs_one_running ON task_runs(task_id) WHERE status='running'`); err != nil {
+		return err
+	}
 	return nil
 }

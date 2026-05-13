@@ -18,6 +18,8 @@ const router = createRouter({
     { path: '/profile',  component: () => import('./views/ProfileView.vue') },
     { path: '/knowledge', component: () => import('./views/KnowledgeView.vue') },
     { path: '/topology',  component: () => import('./views/TopologyView.vue') },
+    { path: '/tasks',    component: () => import('./views/TasksView.vue') },
+    { path: '/settings', component: () => import('./views/SettingsView.vue') },
   ],
 })
 

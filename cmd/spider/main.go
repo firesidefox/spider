@@ -19,6 +19,7 @@ import (
 	"github.com/spiderai/spider/internal/logger"
 	mcppkg "github.com/spiderai/spider/internal/mcp"
 	"github.com/spiderai/spider/internal/permission"
+	"github.com/spiderai/spider/internal/scheduler"
 	sshpkg "github.com/spiderai/spider/internal/ssh"
 
 	"github.com/spiderai/spider/internal/config"
@@ -212,6 +213,13 @@ func serve(cfgFile, addrOverride, dataDirOverride string, debug bool) error {
 	app.ApprovalManager = permission.NewApprovalManager()
 	app.PermissionMode = permission.Mode(cfg.Agent.PermissionMode)
 
+	taskStore := store.NewTaskStore(database)
+	taskRunStore := store.NewTaskRunStore(database)
+	notifyChannelStore := store.NewNotifyChannelStore(database, cm)
+	app.TaskStore = taskStore
+	app.TaskRunStore = taskRunStore
+	app.NotifyChannelStore = notifyChannelStore
+
 	agentFactory, err := agent.NewFactory(
 		ps, hs, afs, pool, ks, ls, app.MsgStore,
 	)
@@ -222,7 +230,24 @@ func serve(cfgFile, addrOverride, dataDirOverride string, debug bool) error {
 		agentFactory.PermissionMode = app.PermissionMode
 		agentFactory.SummaryStore = store.NewSummaryStore(database)
 		agentFactory.CompactionCfg = cfg.Agent.Compaction
+		agentFactory.TodoStore = app.TodoStore
+		agentFactory.TaskStore = taskStore
 		app.AgentFactory = agentFactory
+	}
+
+	if app.AgentFactory != nil {
+		exec := scheduler.NewExecutor(taskStore, taskRunStore, hs, app.AgentFactory, notifyChannelStore)
+		app.Executor = exec
+		// Mark any runs left in 'running' state from a previous crash as failed.
+		if n, err := taskRunStore.MarkStaleRunsFailed(2 * time.Hour); err != nil {
+			logger.Global().Warn().Err(err).Msg("startup sweep for stale task runs failed")
+		} else if n > 0 {
+			logger.Global().Info().Int64("count", n).Msg("marked stale task runs as failed")
+		}
+		sched := scheduler.NewScheduler(taskStore, taskRunStore, exec)
+		sched.Start(shutdownCtx)
+		defer sched.Stop()
+		defer exec.Stop()
 	}
 
 	mcpHandler := mcppkg.NewHTTPHandler(app)

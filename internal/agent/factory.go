@@ -34,6 +34,7 @@ type Factory struct {
 	DataDir        string
 	DocStore       *store.DocumentStore
 	RagStore       *rag.Store
+	TaskStore      *store.TaskStore
 }
 
 // NewFactory creates a Factory by reading the active provider from the DB.
@@ -103,6 +104,30 @@ func (f *Factory) NewAgent(systemPrompt string, conversationID string) *Agent {
 		SystemPrompt: systemPrompt,
 		MaxTurns:     15,
 		Compactor:    compactor,
+		SkillManager: NewSkillManager(f.DataDir),
+	})
+}
+
+// NewHeadlessAgent creates an Agent that discards all messages (no DB writes).
+// Used for automated task runs that don't need conversation history.
+func (f *Factory) NewHeadlessAgent(systemPrompt string, conversationID string) *Agent {
+	logger.Global().Info().Str("model", f.LLMModel).Str("conv_id", conversationID).Msg("agent factory: creating headless agent")
+	registry := f.buildRegistry(conversationID)
+
+	hooks := NewHookChain()
+	if f.Enforcer != nil {
+		hooks.AddBefore(PermissionHook(f.Enforcer, f.PermissionMode))
+	} else {
+		hooks.AddBefore(DefaultRiskHook())
+	}
+
+	return NewAgent(AgentConfig{
+		LLMClient:    f.LLMClient,
+		Registry:     registry,
+		Hooks:        hooks,
+		MsgStore:     noopMessageStorer{},
+		SystemPrompt: systemPrompt,
+		MaxTurns:     15,
 		SkillManager: NewSkillManager(f.DataDir),
 	})
 }
@@ -206,6 +231,9 @@ func (f *Factory) buildRegistry(conversationID string) *ToolRegistry {
 	}
 	if f.TopologyStore != nil {
 		registry.Register(NewGetTopologyTool(f.TopologyStore))
+	}
+	if f.TaskStore != nil {
+		registry.Register(NewCreateTaskTool(f.TaskStore, conversationID))
 	}
 	if f.DataDir != "" {
 		registry.Register(NewInvokeSkillTool(filepath.Join(f.DataDir, "skills")))

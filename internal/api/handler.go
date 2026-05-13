@@ -522,6 +522,57 @@ func NewRouter(app *mcppkg.App) http.Handler {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	})
 
+	// Notify channels API
+	mux.HandleFunc("/api/v1/notify-channels", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			listNotifyChannels(app, w, r)
+		case http.MethodPost:
+			operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				createNotifyChannel(app, w, r)
+			})).ServeHTTP(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+	mux.HandleFunc("/api/v1/notify-channels/", func(w http.ResponseWriter, r *http.Request) {
+		rest := r.URL.Path[len("/api/v1/notify-channels/"):]
+		// Handle /api/v1/notify-channels/{id}/enabled
+		if strings.HasSuffix(rest, "/enabled") {
+			idStr := strings.TrimSuffix(rest, "/enabled")
+			id := parseChannelID(idStr)
+			if id < 0 {
+				http.NotFound(w, r)
+				return
+			}
+			if r.Method == http.MethodPatch {
+				operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					toggleNotifyChannelEnabled(app, w, r, id)
+				})).ServeHTTP(w, r)
+			} else {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			}
+			return
+		}
+		id := parseChannelID(rest)
+		if id < 0 {
+			http.NotFound(w, r)
+			return
+		}
+		switch r.Method {
+		case http.MethodPut:
+			operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				updateNotifyChannel(app, w, r, id)
+			})).ServeHTTP(w, r)
+		case http.MethodDelete:
+			operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				deleteNotifyChannel(app, w, r, id)
+			})).ServeHTTP(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
 	// Topology routes
 	mux.HandleFunc("/api/v1/topologies", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
@@ -619,6 +670,46 @@ func NewRouter(app *mcppkg.App) http.Handler {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
 	})
+
+	// Task automation API — reuse app.Executor (created in main.go)
+	mux.HandleFunc("/api/v1/tasks", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			listTasks(app, w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+	mux.HandleFunc("/api/v1/tasks/", func(w http.ResponseWriter, r *http.Request) {
+		rest := r.URL.Path[len("/api/v1/tasks/"):]
+		id := rest
+		sub := ""
+		if idx := indexOf(rest, '/'); idx >= 0 {
+			id = rest[:idx]
+			sub = rest[idx+1:]
+		}
+		switch sub {
+		case "":
+			if r.Method == http.MethodGet {
+				getTask(app, w, r, id)
+				return
+			}
+		case "trigger":
+			if r.Method == http.MethodPost {
+				operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					triggerTask(app, w, r, id, app.Executor)
+				})).ServeHTTP(w, r)
+				return
+			}
+		case "runs":
+			if r.Method == http.MethodGet {
+				listTaskRuns(app, w, r, id)
+				return
+			}
+		}
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	})
+
 
 	// log-level endpoint (admin only)
 	mux.Handle("/api/v1/log-level", adminOnly(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
