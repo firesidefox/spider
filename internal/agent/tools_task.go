@@ -10,12 +10,13 @@ import (
 
 // CreateTaskTool saves a confirmed automated task to the database.
 type CreateTaskTool struct {
-	taskStore *store.TaskStore
+	taskStore      *store.TaskStore
+	conversationID string
 }
 
 // NewCreateTaskTool creates a new CreateTaskTool.
-func NewCreateTaskTool(taskStore *store.TaskStore) *CreateTaskTool {
-	return &CreateTaskTool{taskStore: taskStore}
+func NewCreateTaskTool(taskStore *store.TaskStore, conversationID string) *CreateTaskTool {
+	return &CreateTaskTool{taskStore: taskStore, conversationID: conversationID}
 }
 
 // Name returns the tool name.
@@ -66,6 +67,7 @@ func (t *CreateTaskTool) Execute(_ context.Context, input map[string]any) (*Tool
 		RunRetentionDays: runRetentionDays,
 		TimeoutMinutes:   timeoutMinutes,
 		Status:           models.TaskStatusActive,
+		SourceConvID:     t.conversationID,
 	}
 
 	created, err := t.taskStore.Create(task)

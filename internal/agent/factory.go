@@ -205,7 +205,7 @@ func (f *Factory) buildRegistry(conversationID string) *ToolRegistry {
 		registry.Register(NewTodoTaskTool(f.TodoTaskStore, f.SSEBroadcaster, conversationID))
 	}
 	if f.TaskStore != nil {
-		registry.Register(NewCreateTaskTool(f.TaskStore))
+		registry.Register(NewCreateTaskTool(f.TaskStore, conversationID))
 	}
 	if f.DataDir != "" {
 		registry.Register(NewInvokeSkillTool(filepath.Join(f.DataDir, "skills")))
