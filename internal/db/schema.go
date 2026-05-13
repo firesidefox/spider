@@ -314,5 +314,37 @@ func migrate(db *sql.DB) error {
 	)`); err != nil {
 		return err
 	}
+	// Task automation tables
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS tasks (
+		id                   TEXT PRIMARY KEY,
+		name                 TEXT NOT NULL,
+		goal                 TEXT NOT NULL,
+		host_ids             TEXT NOT NULL DEFAULT '[]',
+		schedule             TEXT NOT NULL DEFAULT '',
+		notify_mode          TEXT NOT NULL DEFAULT 'none',
+		run_retention_days   INTEGER NOT NULL DEFAULT 30,
+		timeout_minutes      INTEGER NOT NULL DEFAULT 30,
+		status               TEXT NOT NULL DEFAULT 'active',
+		created_at           DATETIME NOT NULL,
+		updated_at           DATETIME NOT NULL,
+		source_conv_id       TEXT NOT NULL DEFAULT ''
+	)`); err != nil {
+		return err
+	}
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS task_runs (
+		id          TEXT PRIMARY KEY,
+		task_id     TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+		started_at  DATETIME NOT NULL,
+		finished_at DATETIME,
+		status      TEXT NOT NULL DEFAULT 'running',
+		raw_output  TEXT NOT NULL DEFAULT '',
+		summary     TEXT NOT NULL DEFAULT '',
+		alerted     INTEGER NOT NULL DEFAULT 0
+	)`); err != nil {
+		return err
+	}
+	if _, err := db.Exec(`CREATE INDEX IF NOT EXISTS idx_task_runs_task_id ON task_runs(task_id)`); err != nil {
+		return err
+	}
 	return nil
 }
