@@ -48,6 +48,11 @@ export function removeAgentStatus(conversationId: string) {
   statuses.value = new Map(statuses.value)
 }
 
+export function clearAllAgentTimers() {
+  doneTimers.forEach(timer => clearTimeout(timer))
+  doneTimers.clear()
+}
+
 function truncate(s: string, n: number): string {
   return s.length > n ? s.slice(0, n) + '…' : s
 }
