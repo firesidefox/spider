@@ -11,8 +11,9 @@
       </div>
 
       <p v-if="errMsg" class="err" style="margin-bottom:12px">{{ errMsg }}</p>
+      <p v-if="loading" class="dim" style="text-align:center;padding:24px 0">加载中…</p>
 
-      <table v-if="channels.length > 0" class="table">
+      <table v-else-if="channels.length > 0" class="table">
         <thead>
           <tr>
             <th>名称</th>
@@ -109,6 +110,7 @@ import {
 
 const channels = ref<NotifyChannel[]>([])
 const errMsg = ref('')
+const loading = ref(false)
 const toggling = ref<number | null>(null)
 const deleting = ref<number | null>(null)
 const pendingDeleteId = ref<number | null>(null)
@@ -126,16 +128,20 @@ const form = ref({
 })
 
 async function load() {
+  loading.value = true
   try {
     channels.value = await listNotifyChannels()
   } catch (e: unknown) {
     errMsg.value = e instanceof Error ? e.message : String(e)
+  } finally {
+    loading.value = false
   }
 }
 
 onMounted(load)
 
 function formatDate(s: string): string {
+  if (!s) return ''
   return new Date(s).toLocaleString('zh-CN', { hour12: false })
 }
 

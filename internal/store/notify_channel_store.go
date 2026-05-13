@@ -73,17 +73,30 @@ func (s *NotifyChannelStore) List() ([]*models.NotifyChannel, error) {
 	return out, rows.Err()
 }
 
-// Update replaces name, type, and config for the given channel. cfg is a JSON string.
-func (s *NotifyChannelStore) Update(id int64, name string, typ models.NotifyChannelType, cfg string) (*models.NotifyChannel, error) {
+// Update replaces name, type, config, and optionally enabled for the given channel.
+// cfg is a JSON string. If enabled is nil, the existing value is preserved.
+func (s *NotifyChannelStore) Update(id int64, name string, typ models.NotifyChannelType, cfg string, enabled *bool) (*models.NotifyChannel, error) {
 	enc, err := s.crypto.Encrypt(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("encrypt config: %w", err)
 	}
 	now := time.Now().UTC()
-	res, err := s.db.Exec(
-		`UPDATE notify_channels SET name=?, type=?, encrypted_config=?, updated_at=? WHERE id=?`,
-		name, string(typ), enc, now, id,
-	)
+	var res sql.Result
+	if enabled != nil {
+		enabledInt := 0
+		if *enabled {
+			enabledInt = 1
+		}
+		res, err = s.db.Exec(
+			`UPDATE notify_channels SET name=?, type=?, encrypted_config=?, enabled=?, updated_at=? WHERE id=?`,
+			name, string(typ), enc, enabledInt, now, id,
+		)
+	} else {
+		res, err = s.db.Exec(
+			`UPDATE notify_channels SET name=?, type=?, encrypted_config=?, updated_at=? WHERE id=?`,
+			name, string(typ), enc, now, id,
+		)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to update notify channel %d: %w", id, err)
 	}

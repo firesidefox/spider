@@ -20,6 +20,10 @@ func listNotifyChannels(app *mcppkg.App, w http.ResponseWriter, r *http.Request)
 	if channels == nil {
 		channels = []*models.NotifyChannel{}
 	}
+	// Clear decrypted config before sending to client — credentials stay server-side.
+	for _, ch := range channels {
+		ch.Config = ""
+	}
 	writeJSON(w, http.StatusOK, channels)
 }
 
@@ -49,9 +53,10 @@ func createNotifyChannel(app *mcppkg.App, w http.ResponseWriter, r *http.Request
 }
 
 type updateNotifyChannelRequest struct {
-	Name   string                   `json:"name"`
-	Type   models.NotifyChannelType `json:"type"`
-	Config string                   `json:"config"`
+	Name    string                   `json:"name"`
+	Type    models.NotifyChannelType `json:"type"`
+	Config  string                   `json:"config"`
+	Enabled *bool                    `json:"enabled"`
 }
 
 func updateNotifyChannel(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id int64) {
@@ -60,7 +65,7 @@ func updateNotifyChannel(app *mcppkg.App, w http.ResponseWriter, r *http.Request
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	ch, err := app.NotifyChannelStore.Update(id, req.Name, req.Type, req.Config)
+	ch, err := app.NotifyChannelStore.Update(id, req.Name, req.Type, req.Config, req.Enabled)
 	if errors.Is(err, store.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "notify channel not found")
 		return
