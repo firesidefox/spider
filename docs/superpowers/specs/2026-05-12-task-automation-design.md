@@ -135,16 +135,17 @@ open → resolved
 
 ```go
 type Task struct {
-    ID           int64     `json:"id"`
-    Name         string    `json:"name"`          // 任务名称
-    Goal         string    `json:"goal"`          // 自然语言目标
-    HostIDs      []int64   `json:"host_ids"`      // 目标设备
-    Schedule     string    `json:"schedule"`      // cron 表达式，空 = manual only
-    NotifyMode   string    `json:"notify_mode"`   // "none" | "failure" | "complete" | "anomaly"
-    Status       string    `json:"status"`        // "active" | "paused" | "archived"
-    CreatedAt    time.Time `json:"created_at"`
-    UpdatedAt    time.Time `json:"updated_at"`
-    SourceConvID string    `json:"source_conv_id"` // 创建来源对话
+    ID               int64     `json:"id"`
+    Name             string    `json:"name"`               // 任务名称
+    Goal             string    `json:"goal"`               // 自然语言目标
+    HostIDs          []int64   `json:"host_ids"`           // 目标设备
+    Schedule         string    `json:"schedule"`           // cron 表达式，空 = manual only
+    NotifyMode       string    `json:"notify_mode"`        // "none" | "failure" | "complete" | "anomaly"
+    RunRetentionDays int       `json:"run_retention_days"` // TaskRun 保留天数，默认 30，0 = 永久保留
+    Status           string    `json:"status"`             // "active" | "paused" | "archived"
+    CreatedAt        time.Time `json:"created_at"`
+    UpdatedAt        time.Time `json:"updated_at"`
+    SourceConvID     string    `json:"source_conv_id"`     // 创建来源对话
 }
 ```
 
@@ -266,6 +267,14 @@ type NotifyChannel struct {
 
 LLM 参与两个节点：创建时（Agent 提取信息）、执行后（分析报告，用系统默认 provider）。执行中不参与。
 
+### TaskRun 保留策略
+
+调度器每天凌晨执行一次清理：删除每个 Task 中 `started_at` 早于 `NOW() - run_retention_days` 的 TaskRun 记录。
+
+- 默认保留 30 天
+- `run_retention_days = 0` 表示永久保留
+- 清理在独立 goroutine 中执行，不影响任务调度
+
 ---
 
 ## Agent 工具：CreateTask
@@ -281,6 +290,7 @@ InputSchema（所有字段 Agent 调用前已确定）：
 - `host_ids` ([]int64, required)
 - `schedule` (string) — cron 表达式，空 = manual only
 - `notify_mode` (string) — `"none"` | `"failure"` | `"complete"` | `"anomaly"`，默认 `"none"`
+- `run_retention_days` (int) — 默认 30，0 = 永久保留
 
 ---
 
@@ -307,7 +317,7 @@ InputSchema（所有字段 Agent 调用前已确定）：
 
 ### 新建/编辑
 
-弹窗表单，字段：名称、目标、设备（多选）、调度（cron 表达式）、通知模式（radio：不通知 / 执行失败时通知 / 每次完成后发摘要 / 仅发现异常时发摘要）。
+弹窗表单，字段：名称、目标、设备（多选）、调度（cron 表达式）、通知模式（radio：不通知 / 执行失败时通知 / 每次完成后发摘要 / 仅发现异常时发摘要）、执行记录保留天数（数字输入，默认 30）。
 
 ---
 
