@@ -1,0 +1,347 @@
+# Spec: Task Automation
+
+## 概述
+
+Task 是持久化、可调度、跨对话的自动化任务。与 Todo（会话内临时进度跟踪）不同，Task 由 headless Agent 无人值守执行，执行后生成结构化报告。
+
+---
+
+## 需求、场景与价值
+
+### 核心需求
+
+- 用户在对话中描述意图，Agent 提取并创建持久化任务
+- 任务支持 cron 调度（自动执行）和手动触发
+- 执行由 headless Agent 完成，无需人工介入
+- 执行后 LLM 生成摘要；开启告警时判断异常并通知
+- 通知渠道：钉钉、邮件、Webhook，敏感字段加密存储
+- 前端：任务管理页 + 个人设置中的通知渠道配置
+
+### 用户场景
+
+1. **定期巡检**：每周三凌晨自动检查所有设备磁盘使用率，异常时钉钉告警
+2. **固件升级**：对话中说"下周升级固件"，Agent 提取并保存为手动任务，到时手动触发
+3. **配置核查**：每天检查关键配置是否被篡改，发现异常立即通知
+4. **日志清理**：每月定期清理 30 天前的日志，执行后生成摘要确认结果
+
+### 价值
+
+- **减少重复操作**：把对话中的一次性操作变成可复用的自动化任务
+- **异步执行，不阻塞对话**：任务在后台独立运行，执行过程不占用用户当前对话的上下文窗口，用户无需等待
+- **闭环可观测**：每次执行有原始输出 + LLM 摘要，历史可查
+- **低门槛告警**：不需要配置监控系统，一句话开启异常告警
+
+### 已知不足（v1）
+
+1. **调度精度粗糙**：每分钟轮询 DB，多实例部署时依赖行锁，没有分布式调度保障
+2. **headless Agent 无历史上下文**：每次执行从零开始，无法利用历史执行结果做趋势判断
+3. **告警判断依赖 LLM**：异常判断由 LLM 完成，可能误报或漏报，无法设置精确阈值
+4. **通知无重试**：发送失败只记录日志，没有重试机制
+5. **执行失败不通知**：automation 类型任务执行失败不发告警（v1 明确排除）
+6. **host_ids 静态绑定**：任务创建时绑定设备 ID，设备变更后不自动更新
+
+---
+
+## 需求建模
+
+### 领域模型
+
+```
+User ──── 创建 ────► Task ──── 绑定 ────► Host[]
+                      │
+                      ├── 触发 ──► TaskRun ──── 生成 ──► TaskAlert
+                      │               │
+                      │               └── 分析 ◄── LLM
+                      │
+                      └── 来源 ──► Conversation
+
+User ──── 配置 ────► NotifyChannel
+                         ▲
+                    TaskAlert ──── 发送 ────►
+```
+
+### 实体职责
+
+| 实体 | 职责 | 生命周期 |
+|------|------|----------|
+| Task | 意图 + 调度配置，持久化 | active / paused / archived |
+| TaskRun | 单次执行快照，只增不改（除状态更新） | running → success / failed |
+| TaskAlert | 异常事件记录 | open → resolved |
+| NotifyChannel | 通知渠道配置，与 Task 解耦 | 独立管理 |
+
+### 角色与用例
+
+三个 Actor：用户、Chat Agent、Scheduler。
+
+```
+用户          Chat Agent       Scheduler
+ │                │                │
+ ├─ 描述意图 ──►  │                │
+ │            提取字段             │
+ │            展示确认             │
+ ├─ 确认 ──────►  │                │
+ │            CreateTask           │
+ │                                 │
+ ├─ 手动触发 ──────────────────►  TriggerNow
+ │                                 │
+ │                            tick() 每分钟
+ │                            isDue() 检查 cron
+ │                            RunHeadless
+ │                            LLM 分析
+ │                            → TaskRun
+ │                            → TaskAlert（条件）
+ │                            → 通知（条件）
+ │
+ ├─ 查看执行记录
+ ├─ 处理告警（resolve）
+ └─ 配置通知渠道
+```
+
+### 状态机
+
+**Task**
+```
+[新建] → active ⇄ paused → archived
+```
+
+**TaskRun**（终态不可变更）
+```
+[创建] → running → success
+                 → failed
+```
+
+**TaskAlert**
+```
+open → resolved
+```
+
+### 触发器模型
+
+| `schedule` 值 | 触发方式 |
+|---|---|
+| 非空 cron 表达式 | Scheduler 自动触发（每分钟轮询） |
+| 空字符串 | 用户手动触发 |
+
+`TriggerType` 不作为独立字段，从 `schedule` 是否为空推断，避免冗余状态。
+
+### 关键约束
+
+1. **CreateTask 只在用户确认后调用**：Agent 提取 → 展示 → 确认 → 保存，工具本身无提取逻辑
+2. **TaskRun 与 Task 解耦**：Task 更新不影响历史 TaskRun
+3. **NotifyChannel 与 Task 解耦**：告警触发时遍历所有 enabled 渠道，不绑定到具体 Task
+4. **LLM 只参与两个节点**：创建时提取字段、执行后分析输出；执行过程中不参与
+
+---
+
+## 数据模型
+
+### Task
+
+```go
+type Task struct {
+    ID             int64     `json:"id"`
+    Name           string    `json:"name"`              // 任务名称
+    Goal           string    `json:"goal"`              // 自然语言目标
+    HostIDs        []int64   `json:"host_ids"`          // 目标设备
+    Schedule       string    `json:"schedule"`          // cron 表达式，空 = manual only
+    AlertOnAnomaly bool      `json:"alert_on_anomaly"`  // 执行后是否判断异常并告警
+    Status         string    `json:"status"`            // "active" | "paused" | "archived"
+    CreatedAt      time.Time `json:"created_at"`
+    UpdatedAt      time.Time `json:"updated_at"`
+    SourceConvID   string    `json:"source_conv_id"`    // 创建来源对话
+}
+```
+
+`AlertOnAnomaly` 说明：
+- `false`：执行后只生成执行摘要
+- `true`：执行后 LLM 判断结果是否异常；异常则写入 `TaskAlert` 并发送通知
+
+### TaskRun（执行记录）
+
+```go
+type TaskRun struct {
+    ID         int64      `json:"id"`
+    TaskID     int64      `json:"task_id"`
+    StartedAt  time.Time  `json:"started_at"`
+    FinishedAt *time.Time `json:"finished_at"`
+    Status     string     `json:"status"`     // "running" | "success" | "failed"
+    RawOutput  string     `json:"raw_output"`
+    Summary    string     `json:"summary"`    // LLM 生成摘要
+    Alerted    bool       `json:"alerted"`    // monitor type：是否触发告警
+}
+```
+
+### TaskAlert（告警记录）
+
+```go
+type TaskAlert struct {
+    ID         int64      `json:"id"`
+    TaskID     int64      `json:"task_id"`
+    TaskRunID  int64      `json:"task_run_id"`
+    Summary    string     `json:"summary"`     // LLM 生成的告警描述
+    Status     string     `json:"status"`      // "open" | "resolved"
+    CreatedAt  time.Time  `json:"created_at"`
+    ResolvedAt *time.Time `json:"resolved_at"`
+}
+```
+
+### NotifyChannel（通知渠道配置）
+
+通知渠道在个人设置中配置，告警触发时按用户配置的渠道发送。
+
+```go
+type NotifyChannel struct {
+    ID        int64     `json:"id"`
+    Type      string    `json:"type"`    // "dingtalk" | "email" | "webhook"
+    Name      string    `json:"name"`    // 用户自定义名称
+    Config    string    `json:"config"`  // JSON，各渠道配置不同（见下）
+    Enabled   bool      `json:"enabled"`
+    CreatedAt time.Time `json:"created_at"`
+}
+```
+
+各渠道 Config 结构：
+
+```json
+// dingtalk
+{ "webhook_url": "https://oapi.dingtalk.com/robot/send?access_token=xxx", "secret": "xxx" }
+
+// email
+{ "to": ["ops@example.com"], "smtp_host": "smtp.example.com", "smtp_port": 465, "username": "xxx", "password": "xxx" }
+
+// webhook
+{ "url": "https://example.com/hook", "method": "POST", "headers": {"Authorization": "Bearer xxx"} }
+```
+
+`Config` 中的敏感字段（`secret`、`password`、`headers` 中的 token）存储前使用项目现有 crypto 包加密，与 SSH 密钥、API Key 的处理方式一致。
+
+---
+
+## 创建流程
+
+1. 用户在对话中说"帮我记录，这台设备下周要升级固件，每周三执行"
+2. Agent（LLM）从对话上下文提取：
+   - `name`：任务名称
+   - `goal`：自然语言目标
+   - `host_ids`：涉及设备
+   - `schedule`：cron 表达式（如 `0 2 * * 3`），无调度则为空
+   - `alert_on_anomaly`：是否需要异常告警（默认 false）
+3. Agent 向用户展示提取结果，等待确认
+4. 用户确认后，Agent 调用 `CreateTask` 工具保存（所有字段已确定）
+
+---
+
+## 触发器
+
+| `schedule` 值 | 类型 | 说明 |
+|--------------|------|------|
+| 非空 cron 表达式 | cron | 标准 5 字段，DB 轮询调度（每分钟检查） |
+| 空字符串 | manual | 用户点"立即执行"或对话中触发 |
+
+`TriggerType` 字段不需要，从 `schedule` 是否为空推断。
+
+调度器：进程内 goroutine，每分钟轮询 DB，找到到期 active Task 启动执行。行锁防止多实例重复执行。
+
+---
+
+## 执行
+
+1. 调度器触发，创建 `TaskRun` 记录（status: running）
+2. 启动 headless Agent：
+   - 无对话历史
+   - System prompt 包含：任务目标 + 任务类型 + 目标设备信息
+   - 可使用全部 Agent 工具（SSH、CLI、ListHosts 等）
+3. Agent 自主完成多步骤执行
+4. 执行完成，原始输出写入 `TaskRun.RawOutput`（前端展示截断至 10KB，完整内容保留在 DB）
+5. 轻量 LLM 调用分析输出（使用系统默认 provider）：
+   - 生成执行摘要，写入 `TaskRun.Summary`
+   - 若 `AlertOnAnomaly = true`：判断结果是否异常；异常则写入 `TaskAlert`，`TaskRun.Alerted = true`，并按用户配置的 `NotifyChannel` 发送通知
+6. 更新 `TaskRun.Status` 为 success / failed
+
+LLM 参与两个节点：创建时（Agent 提取信息）、执行后（分析报告，用系统默认 provider）。执行中不参与。
+
+---
+
+## Agent 工具：CreateTask
+
+```
+Name: CreateTask
+Description: Save a confirmed automated task. Has side effects. Call only after user has confirmed all fields.
+```
+
+InputSchema（所有字段 Agent 调用前已确定）：
+- `name` (string, required)
+- `goal` (string, required)
+- `host_ids` ([]int64, required)
+- `schedule` (string) — cron 表达式，空 = manual only
+- `alert_on_anomaly` (bool) — 默认 false
+
+---
+
+## 前端界面
+
+### 页面结构
+
+左侧列表 + 右侧详情，与主机管理页风格一致。
+
+**左侧：**
+- 顶部：标题"任务" + "新建"按钮
+- 任务列表：名称、调度摘要、状态徽章（活跃/暂停）、上次执行结果；`alert_on_anomaly = true` 的任务显示告警图标
+
+**右侧顶部（配置摘要）：**
+- 任务名 + 状态徽章
+- 操作按钮：立即执行 / 编辑 / 暂停
+- 目标（goal）
+- 调度、设备、是否开启告警、创建来源对话
+
+**右侧主体（执行记录）：**
+- 按时间倒序列表
+- 每条记录：时间、耗时、状态图标；monitor type 额外显示告警图标
+- 可展开：LLM 摘要 + 原始输出（monospace）
+
+### 新建/编辑
+
+弹窗表单，字段：名称、目标、设备（多选）、调度（cron 表达式）、发现异常时告警（开关）。
+
+---
+
+## API
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/tasks` | 列表 |
+| POST | `/api/tasks` | 创建 |
+| GET | `/api/tasks/:id` | 详情 |
+| PUT | `/api/tasks/:id` | 更新 |
+| DELETE | `/api/tasks/:id` | 删除 |
+| POST | `/api/tasks/:id/trigger` | 手动触发 |
+| GET | `/api/tasks/:id/runs` | 执行记录 |
+| GET | `/api/tasks/:id/runs/:run_id` | 单次执行详情 |
+| GET | `/api/alerts` | 全局告警列表 |
+| PUT | `/api/alerts/:id/resolve` | 标记告警已处理 |
+| GET | `/api/notify-channels` | 通知渠道列表 |
+| POST | `/api/notify-channels` | 创建通知渠道 |
+| PUT | `/api/notify-channels/:id` | 更新通知渠道 |
+| DELETE | `/api/notify-channels/:id` | 删除通知渠道 |
+| POST | `/api/notify-channels/:id/test` | 测试发送 |
+
+---
+
+## 范围边界
+
+**v1 包含：**
+- Task 模型（`alert_on_anomaly` 控制告警行为）+ CRUD API
+- cron + manual 触发器
+- headless Agent 执行
+- 执行后 LLM 摘要（automation）/ 告警判断（monitor）
+- TaskAlert 模型 + 全局告警 API
+- NotifyChannel 模型（钉钉 / 邮件 / Webhook）+ 配置 API
+- 前端 Task 管理页
+- 个人设置：通知渠道管理
+
+**v1 不包含：**
+- 设备事件触发
+- 指标阈值触发
+- 跨任务依赖
+- automation 执行失败通知（monitor 告警通知已包含）
+- API 触发（外部 webhook）
