@@ -2,14 +2,12 @@ package store
 
 import (
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/spiderai/spider/internal/logger"
-
 	"github.com/spiderai/spider/internal/models"
 )
 
@@ -26,16 +24,12 @@ func (s *TodoStore) Create(task *models.Todo) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	blockedBy, _ := json.Marshal(task.BlockedBy)
-	if blockedBy == nil {
-		blockedBy = []byte("[]")
-	}
 	now := time.Now().UTC()
 	res, err := s.db.Exec(
-		`INSERT INTO todo_tasks (conversation_id, turn_id, subject, active_form, description, status, owner, blocked_by, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		task.ConversationID, task.TurnID, task.Subject, task.ActiveForm, task.Description,
-		task.Status, task.Owner, string(blockedBy), now, now,
+		`INSERT INTO todo_tasks (conversation_id, subject, active_form, description, status, owner, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		task.ConversationID, task.Subject, task.ActiveForm, task.Description,
+		task.Status, task.Owner, now, now,
 	)
 	if err != nil {
 		return err
@@ -48,7 +42,7 @@ func (s *TodoStore) Create(task *models.Todo) error {
 	return nil
 }
 
-func (s *TodoStore) Update(conversationID string, id int64, subject, activeForm, description, status, owner string, blockedBy []int64) (*models.Todo, error) {
+func (s *TodoStore) Update(conversationID string, id int64, subject, activeForm, description, status, owner string) (*models.Todo, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -76,11 +70,6 @@ func (s *TodoStore) Update(conversationID string, id int64, subject, activeForm,
 		setClauses = append(setClauses, "owner = ?")
 		args = append(args, owner)
 	}
-	if blockedBy != nil {
-		b, _ := json.Marshal(blockedBy)
-		setClauses = append(setClauses, "blocked_by = ?")
-		args = append(args, string(b))
-	}
 
 	args = append(args, id, conversationID)
 	_, err := s.db.Exec(
@@ -92,36 +81,25 @@ func (s *TodoStore) Update(conversationID string, id int64, subject, activeForm,
 	}
 
 	var t models.Todo
-	var blockedByJSON string
 	err = s.db.QueryRow(
-		`SELECT id, conversation_id, turn_id, subject, active_form, description, status, owner, blocked_by, created_at, updated_at
+		`SELECT id, conversation_id, subject, active_form, description, status, owner, created_at, updated_at
 		 FROM todo_tasks WHERE id = ?`, id,
-	).Scan(&t.ID, &t.ConversationID, &t.TurnID, &t.Subject, &t.ActiveForm, &t.Description,
-		&t.Status, &t.Owner, &blockedByJSON, &t.CreatedAt, &t.UpdatedAt)
+	).Scan(&t.ID, &t.ConversationID, &t.Subject, &t.ActiveForm, &t.Description,
+		&t.Status, &t.Owner, &t.CreatedAt, &t.UpdatedAt)
 	if err != nil {
 		return nil, err
-	}
-	if err := json.Unmarshal([]byte(blockedByJSON), &t.BlockedBy); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal blocked_by for task %d: %w", t.ID, err)
 	}
 	logger.Global().Debug().Str("table", "todo_tasks").Str("op", "update").Int64("task_id", id).Str("status", status).Msg("store")
 	return &t, nil
 }
 
 func (s *TodoStore) List(conversationID string) ([]*models.Todo, error) {
-	// Only return tasks from turns that have at least one non-completed task.
 	rows, err := s.db.Query(
-		`SELECT id, conversation_id, turn_id, subject, active_form, description, status, owner, blocked_by, created_at, updated_at
+		`SELECT id, conversation_id, subject, active_form, description, status, owner, created_at, updated_at
 		 FROM todo_tasks
-		 WHERE conversation_id = ?
-		   AND status != 'deleted'
-		   AND turn_id IN (
-		       SELECT DISTINCT turn_id FROM todo_tasks
-		       WHERE conversation_id = ?
-		         AND status NOT IN ('completed', 'deleted')
-		   )
+		 WHERE conversation_id = ? AND status NOT IN ('completed', 'deleted')
 		 ORDER BY id ASC`,
-		conversationID, conversationID,
+		conversationID,
 	)
 	if err != nil {
 		return nil, err
@@ -131,13 +109,9 @@ func (s *TodoStore) List(conversationID string) ([]*models.Todo, error) {
 	var tasks []*models.Todo
 	for rows.Next() {
 		var t models.Todo
-		var blockedByJSON string
-		if err := rows.Scan(&t.ID, &t.ConversationID, &t.TurnID, &t.Subject, &t.ActiveForm, &t.Description,
-			&t.Status, &t.Owner, &blockedByJSON, &t.CreatedAt, &t.UpdatedAt); err != nil {
+		if err := rows.Scan(&t.ID, &t.ConversationID, &t.Subject, &t.ActiveForm, &t.Description,
+			&t.Status, &t.Owner, &t.CreatedAt, &t.UpdatedAt); err != nil {
 			return nil, err
-		}
-		if err := json.Unmarshal([]byte(blockedByJSON), &t.BlockedBy); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal blocked_by for task %d: %w", t.ID, err)
 		}
 		tasks = append(tasks, &t)
 	}
@@ -148,46 +122,15 @@ func (s *TodoStore) List(conversationID string) ([]*models.Todo, error) {
 	return tasks, nil
 }
 
-func (s *TodoStore) ListByTurn(turnID string) ([]*models.Todo, error) {
-	rows, err := s.db.Query(
-		`SELECT id, conversation_id, turn_id, subject, active_form, description, status, owner, blocked_by, created_at, updated_at
-		 FROM todo_tasks WHERE turn_id = ? AND status != 'deleted' ORDER BY id ASC`,
-		turnID,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var tasks []*models.Todo
-	for rows.Next() {
-		var t models.Todo
-		var blockedByJSON string
-		if err := rows.Scan(&t.ID, &t.ConversationID, &t.TurnID, &t.Subject, &t.ActiveForm, &t.Description,
-			&t.Status, &t.Owner, &blockedByJSON, &t.CreatedAt, &t.UpdatedAt); err != nil {
-			return nil, err
-		}
-		if err := json.Unmarshal([]byte(blockedByJSON), &t.BlockedBy); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal blocked_by for task %d: %w", t.ID, err)
-		}
-		tasks = append(tasks, &t)
-	}
-	return tasks, rows.Err()
-}
-
 func (s *TodoStore) Get(id int64) (*models.Todo, error) {
 	var t models.Todo
-	var blockedByJSON string
 	err := s.db.QueryRow(
-		`SELECT id, conversation_id, turn_id, subject, active_form, description, status, owner, blocked_by, created_at, updated_at
+		`SELECT id, conversation_id, subject, active_form, description, status, owner, created_at, updated_at
 		 FROM todo_tasks WHERE id = ?`, id,
-	).Scan(&t.ID, &t.ConversationID, &t.TurnID, &t.Subject, &t.ActiveForm, &t.Description,
-		&t.Status, &t.Owner, &blockedByJSON, &t.CreatedAt, &t.UpdatedAt)
+	).Scan(&t.ID, &t.ConversationID, &t.Subject, &t.ActiveForm, &t.Description,
+		&t.Status, &t.Owner, &t.CreatedAt, &t.UpdatedAt)
 	if err != nil {
 		return nil, err
-	}
-	if err := json.Unmarshal([]byte(blockedByJSON), &t.BlockedBy); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal blocked_by for task %d: %w", t.ID, err)
 	}
 	return &t, nil
 }

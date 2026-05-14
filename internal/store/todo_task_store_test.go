@@ -32,7 +32,7 @@ func TestTodoStore_Update(t *testing.T) {
 	task := &models.Todo{ConversationID: "conv-1", Subject: "task1", Status: "pending"}
 	s.Create(task)
 
-	got, err := s.Update("conv-1", task.ID, "", "", "", "in_progress", "", nil)
+	got, err := s.Update("conv-1", task.ID, "", "", "", "in_progress", "")
 	if err != nil {
 		t.Fatalf("Update: %v", err)
 	}
@@ -46,7 +46,7 @@ func TestTodoStore_ListExcludesDeleted(t *testing.T) {
 
 	task := &models.Todo{ConversationID: "conv-1", Subject: "task1", Status: "pending"}
 	s.Create(task)
-	s.Update("conv-1", task.ID, "", "", "", "deleted", "", nil)
+	s.Update("conv-1", task.ID, "", "", "", "deleted", "")
 
 	tasks, _ := s.List("conv-1")
 	if len(tasks) != 0 {
@@ -54,19 +54,28 @@ func TestTodoStore_ListExcludesDeleted(t *testing.T) {
 	}
 }
 
-func TestTodoStore_BlockedBy(t *testing.T) {
+func TestTodoStore_ListExcludesCompleted(t *testing.T) {
 	s := NewTodoStore(setupTestDB(t))
 
-	t1 := &models.Todo{ConversationID: "conv-1", Subject: "t1", Status: "pending"}
-	t2 := &models.Todo{ConversationID: "conv-1", Subject: "t2", Status: "pending"}
-	s.Create(t1)
-	s.Create(t2)
+	task := &models.Todo{ConversationID: "conv-1", Subject: "task1", Status: "pending"}
+	s.Create(task)
+	s.Update("conv-1", task.ID, "", "", "", "completed", "")
 
-	s.Update("conv-1", t2.ID, "", "", "", "", "", []int64{t1.ID})
+	tasks, _ := s.List("conv-1")
+	if len(tasks) != 0 {
+		t.Errorf("expected 0 tasks after completion, got %d", len(tasks))
+	}
+}
 
-	got, _ := s.Get(t2.ID)
-	if len(got.BlockedBy) != 1 || got.BlockedBy[0] != t1.ID {
-		t.Errorf("unexpected blocked_by: %v", got.BlockedBy)
+func TestTodoStore_ListOnlyActiveConversation(t *testing.T) {
+	s := NewTodoStore(setupTestDB(t))
+
+	s.Create(&models.Todo{ConversationID: "conv-1", Subject: "t1", Status: "pending"})
+	s.Create(&models.Todo{ConversationID: "conv-2", Subject: "t2", Status: "pending"})
+
+	tasks, _ := s.List("conv-1")
+	if len(tasks) != 1 || tasks[0].Subject != "t1" {
+		t.Errorf("unexpected tasks: %+v", tasks)
 	}
 }
 
@@ -75,10 +84,10 @@ func TestTodoStore_ConcurrentWrites(t *testing.T) {
 
 	done := make(chan error, 5)
 	for i := 0; i < 5; i++ {
-		go func(i int) {
+		go func() {
 			task := &models.Todo{ConversationID: "conv-1", Subject: "task", Status: "pending"}
 			done <- s.Create(task)
-		}(i)
+		}()
 	}
 	for i := 0; i < 5; i++ {
 		if err := <-done; err != nil {
