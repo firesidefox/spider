@@ -34,6 +34,7 @@ const (
 	EventConfirmRequired EventType = "confirm_required"
 	EventError           EventType = "error"
 	EventDone            EventType = "done"
+	EventTurnUsage       EventType = "turn_usage"
 )
 
 type Event struct {
@@ -263,6 +264,10 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 				}
 				log.Debug().Int("turn", turn).Int64("duration_ms", time.Since(turnStart).Milliseconds()).Int("input_tokens", usage.InputTokens).Int("output_tokens", usage.OutputTokens).Str("response", assistantText).Msg("turn done")
 				log.Info().Int("turn", turn).Msg("agent done")
+				events <- Event{Type: EventTurnUsage, Content: map[string]any{
+					"input_tokens":  usage.InputTokens,
+					"output_tokens": usage.OutputTokens,
+				}}
 				events <- Event{Type: EventDone}
 				return
 			}
@@ -355,6 +360,10 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 			tcJSON, _ := json.Marshal(tcRecords)
 			a.msgStore.Save(conversationID, "assistant", assistantText, string(tcJSON))
 			log.Debug().Int("turn", turn).Int64("duration_ms", time.Since(turnStart).Milliseconds()).Int("input_tokens", usage.InputTokens).Int("output_tokens", usage.OutputTokens).Int("tools", len(tcRecords)).Str("response", assistantText).Msg("turn done")
+			events <- Event{Type: EventTurnUsage, Content: map[string]any{
+				"input_tokens":  usage.InputTokens,
+				"output_tokens": usage.OutputTokens,
+			}}
 		}
 
 		events <- Event{Type: EventError, Content: map[string]any{"error": "max turns exceeded"}}
