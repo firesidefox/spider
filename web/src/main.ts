@@ -10,7 +10,6 @@ const router = createRouter({
     { path: '/login', component: () => import('./views/LoginView.vue') },
     { path: '/hosts',    component: () => import('./views/HostsView.vue') },
     { path: '/exec',     component: () => import('./views/ExecView.vue') },
-    { path: '/audit',    component: () => import('./views/AuditView.vue') },
     { path: '/chat',     component: () => import('./views/ChatView.vue') },
     { path: '/chat/:id', component: () => import('./views/ChatView.vue') },
     { path: '/install',  component: () => import('./views/InstallView.vue') },
@@ -19,7 +18,6 @@ const router = createRouter({
     { path: '/knowledge', component: () => import('./views/KnowledgeView.vue') },
     { path: '/topology',  component: () => import('./views/TopologyView.vue') },
     { path: '/tasks',    component: () => import('./views/TasksView.vue') },
-    { path: '/settings', component: () => import('./views/SettingsView.vue') },
   ],
 })
 
