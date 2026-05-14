@@ -5,6 +5,7 @@ import "time"
 type Todo struct {
 	ID             int64     `json:"id"`
 	ConversationID string    `json:"conversation_id"`
+	TurnID         string    `json:"turn_id"`
 	Subject        string    `json:"subject"`
 	Description    string    `json:"description,omitempty"`
 	Status         string    `json:"status"`
