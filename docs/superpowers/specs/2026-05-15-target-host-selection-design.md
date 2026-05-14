@@ -18,7 +18,7 @@ Allow users to select target hosts before starting a conversation. Selected host
 
 ### Two zones with draggable divider (top to bottom)
 
-The two zones are separated by a draggable resize handle. The status zone (top) auto-expands to fit its content, capped at 50% of panel height. User can drag the handle to adjust further. Default: status zone fits content, selection zone takes remaining space.
+The two zones are separated by a draggable resize handle. The status zone (top) auto-expands to fit its content, with a maximum that allows the selection zone to be fully collapsed (i.e., status zone can grow until selection zone height = 0). When content exceeds that maximum, status zone scrolls internally. User can drag the handle to adjust the split freely.
 
 **Zone 1 — Status (heat matrix, read-only)**
 - Shows all hosts as colored cells (online=blue, offline=gray, failed=red, executing=yellow)
