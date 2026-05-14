@@ -116,9 +116,9 @@ func (t *TodoTool) execUpdate(input map[string]any) (*ToolResult, error) {
 	t.broadcast(task)
 	out, _ := json.Marshal(task)
 
-	allDone := t.allTasksDone()
+	tasks, allDone := t.allTasksDone()
 	if allDone {
-		t.broadcastSummary()
+		t.broadcastSummary(tasks)
 	}
 	return &ToolResult{Content: string(out) + todoNudge(allDone), RiskLevel: RiskL1}, nil
 }
@@ -136,47 +136,40 @@ func (t *TodoTool) execList() (*ToolResult, error) {
 }
 
 func (t *TodoTool) broadcast(task *models.Todo) {
+	t.broadcastEvent("todo_update", task)
+}
+
+func (t *TodoTool) broadcastEvent(eventType string, content any) {
 	if t.broadcaster == nil {
 		return
 	}
-	payload, _ := json.Marshal(map[string]any{"type": "todo_update", "content": task})
+	payload, _ := json.Marshal(map[string]any{"type": eventType, "content": content})
 	t.broadcaster.BroadcastSSE(t.conversationID, payload)
 }
 
-func (t *TodoTool) allTasksDone() bool {
+func (t *TodoTool) allTasksDone() ([]*models.Todo, bool) {
 	tasks, err := t.store.ListByTurn(t.turnID)
 	if err != nil || len(tasks) == 0 {
-		return false
+		return nil, false
 	}
 	for _, task := range tasks {
 		if task.Status != "completed" && task.Status != "deleted" {
-			return false
+			return nil, false
 		}
 	}
-	return true
+	return tasks, true
 }
 
-func (t *TodoTool) broadcastSummary() {
-	if t.broadcaster == nil {
-		return
-	}
-	tasks, err := t.store.ListByTurn(t.turnID)
-	if err != nil {
-		return
-	}
+func (t *TodoTool) broadcastSummary(tasks []*models.Todo) {
 	var sb strings.Builder
 	sb.WriteString("**Tasks completed:**\n")
 	n := 0
 	for _, task := range tasks {
-		if task.Status == "deleted" {
-			continue
-		}
 		n++
 		dur := task.UpdatedAt.Sub(task.CreatedAt).Round(time.Second)
-		sb.WriteString(fmt.Sprintf("%d. %s (%s)\n", n, task.Subject, dur))
+		fmt.Fprintf(&sb, "%d. %s (%s)\n", n, task.Subject, dur)
 	}
-	payload, _ := json.Marshal(map[string]any{"type": "todo_summary", "content": sb.String()})
-	t.broadcaster.BroadcastSSE(t.conversationID, payload)
+	t.broadcastEvent("todo_summary", sb.String())
 }
 
 const todoBaseNudge = "\n\nTodo list updated. Continue using the Todo tool to track remaining work — mark each task in_progress before starting and completed immediately when done."

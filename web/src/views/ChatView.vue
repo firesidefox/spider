@@ -13,7 +13,7 @@ import {
   type Conversation, type ChatMessage as ChatMsg, type ChatEvent, type Todo,
 } from '../api/chat'
 import { listHosts, type SafeHost } from '../api/hosts'
-import { authHeaders } from '../api/auth'
+import { authHeaders, getUIPrefs, setUIPrefs } from '../api/auth'
 import { listGroups, listDocumentsByGroup, type DocumentGroup, type Document as KbDocument } from '../api/documents'
 import { updateAgentStatus, type AgentStatus } from '../composables/useAgentStatus'
 
@@ -153,6 +153,42 @@ const chatPageRef = ref<HTMLElement | null>(null)
 const sidebarTab = ref<'conv' | 'target'>(
   (localStorage.getItem('spider-sidebar-tab') as 'conv' | 'target') || 'conv'
 )
+
+const targetOpen = ref(true)
+const targetWidth = ref(280)
+const isTargetDragging = ref(false)
+let prefsSaveTimer: ReturnType<typeof setTimeout> | null = null
+
+function savePrefs() {
+  if (prefsSaveTimer) clearTimeout(prefsSaveTimer)
+  prefsSaveTimer = setTimeout(() => {
+    setUIPrefs({ target_panel_open: targetOpen.value, target_panel_width: targetWidth.value })
+  }, 500)
+}
+
+function toggleTarget() {
+  targetOpen.value = !targetOpen.value
+  savePrefs()
+}
+
+function startTargetDrag(e: MouseEvent) {
+  isTargetDragging.value = true
+  const startX = e.clientX
+  const startWidth = targetWidth.value
+  const onMove = (ev: MouseEvent) => {
+    const delta = startX - ev.clientX
+    const newWidth = Math.min(600, Math.max(180, startWidth + delta))
+    targetWidth.value = newWidth
+  }
+  const onUp = () => {
+    isTargetDragging.value = false
+    document.removeEventListener('mousemove', onMove)
+    document.removeEventListener('mouseup', onUp)
+    savePrefs()
+  }
+  document.addEventListener('mousemove', onMove)
+  document.addEventListener('mouseup', onUp)
+}
 
 const showModelPicker = ref(false)
 const availableModels = ref<{id: string, display_name: string}[]>([])
@@ -426,8 +462,6 @@ function handleConvEvent(convId: string, event: ChatEvent) {
       break
     }
     case 'todo_summary': {
-      // convId is in scope from the outer SSE handler (same as todo_update)
-      // Append summary as assistant message
       const summaryMsg: DisplayMessage = {
         id: 'todo-summary-' + Date.now(),
         role: 'assistant',
@@ -435,7 +469,6 @@ function handleConvEvent(convId: string, event: ChatEvent) {
       }
       if (!messagesMap.value[convId]) messagesMap.value[convId] = []
       messagesMap.value[convId].push(summaryMsg)
-      // Clear task panel
       todoTasksMap.value[convId] = new Map()
       break
     }
@@ -751,6 +784,11 @@ async function initView() {
     const data = await res.json()
     globalMode.value = data.permission_mode || 'ask'
   } catch (_) { /* use default */ }
+  try {
+    const prefs = await getUIPrefs()
+    targetOpen.value = prefs.target_panel_open
+    targetWidth.value = prefs.target_panel_width || 280
+  } catch (_) { /* use default */ }
   initialized = true
 }
 
@@ -916,6 +954,23 @@ onUnmounted(() => {
       </div>
     </div>
 
+    <!-- Right target panel resize handle -->
+    <div class="target-resize-handle" @mousedown="startTargetDrag">
+      <div class="drag-indicator"></div>
+    </div>
+
+    <!-- Right target panel -->
+    <div class="target-side" :class="{ collapsed: !targetOpen }" :style="{ width: targetOpen ? targetWidth + 'px' : '0' }">
+      <div class="target-side-header">
+        <span class="target-side-title">目标</span>
+        <button class="target-toggle" @click="toggleTarget">×</button>
+      </div>
+      <div class="target-side-body">
+        <TargetPanel :devices="devices" />
+      </div>
+    </div>
+    <button v-if="!targetOpen" class="target-open-btn" @click="toggleTarget">目标</button>
+
   </div>
 </template>
 
@@ -1048,4 +1103,17 @@ onUnmounted(() => {
 .todo-completed .todo-subject { color: var(--text-sub); text-decoration: line-through; }
 .todo-deleted .todo-icon { color: var(--red, #e05252); opacity: 0.5; }
 .todo-deleted .todo-subject { opacity: 0.4; text-decoration: line-through; }
+
+/* Right target panel */
+.target-resize-handle { width: 5px; cursor: col-resize; background: transparent; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: background 0.15s; }
+.target-resize-handle:hover, .chat-page.dragging .target-resize-handle { background: rgba(108, 140, 255, 0.3); }
+.target-side { display: flex; flex-direction: column; flex-shrink: 0; overflow: hidden; transition: width 0.2s; border-left: 1px solid var(--border); background: var(--surface); }
+.target-side.collapsed { width: 0 !important; border-left: none; }
+.target-side-header { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.target-side-title { font-size: 12px; font-weight: 500; color: var(--text-sub); letter-spacing: 0.05em; }
+.target-toggle { background: none; border: none; cursor: pointer; color: var(--text-sub); font-size: 16px; padding: 0 2px; line-height: 1; }
+.target-toggle:hover { color: var(--text); }
+.target-side-body { flex: 1; overflow-y: auto; }
+.target-open-btn { position: fixed; right: 0; top: 50%; transform: translateY(-50%); writing-mode: vertical-rl; background: var(--surface); border: 1px solid var(--border); border-right: none; border-radius: 4px 0 0 4px; padding: 10px 4px; font-size: 12px; color: var(--text-sub); cursor: pointer; z-index: 10; }
+.target-open-btn:hover { color: var(--text); background: var(--row-hover); }
 </style>
