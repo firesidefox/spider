@@ -124,6 +124,14 @@ function taskIcon(t: Todo) {
 function taskClass(t: Todo) { return `todo-${t.status}` }
 const messagesRef = ref<HTMLElement | null>(null)
 const devices = ref<DeviceStatus[]>([])
+
+const targetBadge = computed(() => {
+  const failed = devices.value.filter(d => d.status === 'failed').length
+  const executing = devices.value.filter(d => d.status === 'executing').length
+  if (failed > 0) return { type: 'failed' as const, count: failed }
+  if (executing > 0) return { type: 'executing' as const, count: 0 }
+  return null
+})
 let abortCtrl: AbortController | null = null
 // Per-conversation EventSource subscriptions
 const convSubscriptions = new Map<string, () => void>()
@@ -138,9 +146,13 @@ function scheduleScrollToBottom() {
 }
 
 const sidebarOpen = ref(localStorage.getItem('spider-sidebar') !== 'closed')
-const targetWidth = ref(parseInt(localStorage.getItem('spider-target-width') || '280'))
+const sidebarWidth = ref(parseInt(localStorage.getItem('spider-sidebar-width') || '240'))
 const isDragging = ref(false)
 const chatPageRef = ref<HTMLElement | null>(null)
+
+const sidebarTab = ref<'conv' | 'target'>(
+  (localStorage.getItem('spider-sidebar-tab') as 'conv' | 'target') || 'conv'
+)
 
 const showModelPicker = ref(false)
 const availableModels = ref<{id: string, display_name: string}[]>([])
@@ -204,26 +216,27 @@ function toggleSidebar() {
 function startDrag(e: MouseEvent) {
   isDragging.value = true
   const startX = e.clientX
-  const startWidth = targetWidth.value
+  const startWidth = sidebarWidth.value
 
   function onMove(ev: MouseEvent) {
-    const delta = startX - ev.clientX
-    const newWidth = Math.min(
-      window.innerWidth * 0.5,
-      Math.max(200, startWidth + delta)
-    )
-    targetWidth.value = newWidth
+    const newWidth = Math.min(400, Math.max(180, startWidth + ev.clientX - startX))
+    sidebarWidth.value = newWidth
   }
 
   function onUp() {
     isDragging.value = false
-    localStorage.setItem('spider-target-width', String(targetWidth.value))
+    localStorage.setItem('spider-sidebar-width', String(sidebarWidth.value))
     document.removeEventListener('mousemove', onMove)
     document.removeEventListener('mouseup', onUp)
   }
 
   document.addEventListener('mousemove', onMove)
   document.addEventListener('mouseup', onUp)
+}
+
+function setSidebarTab(tab: 'conv' | 'target') {
+  sidebarTab.value = tab
+  localStorage.setItem('spider-sidebar-tab', tab)
 }
 
 async function loadConversations() {
@@ -765,27 +778,42 @@ onUnmounted(() => {
 <template>
   <div class="chat-page" ref="chatPageRef" :class="{ dragging: isDragging }">
     <!-- Sidebar -->
-    <div class="sidebar" :class="{ collapsed: !sidebarOpen }">
+    <div class="sidebar" :class="{ collapsed: !sidebarOpen }" :style="{ width: sidebarOpen ? sidebarWidth + 'px' : '0' }">
       <div class="sidebar-header">
         <button class="sidebar-toggle" @click="toggleSidebar">≡</button>
-        <button class="sidebar-new" @click="createNewConversation()">+ New</button>
+        <div class="sidebar-tabs">
+          <button class="sidebar-tab" :class="{ active: sidebarTab === 'conv' }" @click="setSidebarTab('conv')">对话</button>
+          <button class="sidebar-tab" :class="{ active: sidebarTab === 'target' }" @click="setSidebarTab('target')">
+            目标
+            <span v-if="targetBadge" class="tab-badge" :class="targetBadge.type">{{ targetBadge.type === 'failed' ? targetBadge.count : '' }}</span>
+          </button>
+        </div>
+        <button v-if="sidebarTab === 'conv'" class="sidebar-new" @click="createNewConversation()">+</button>
       </div>
       <div class="sidebar-body">
-        <div v-for="c in conversations" :key="c.id" class="conv-item"
-             :class="{ active: c.id === activeConvId }"
-             @click="selectConversation(c.id)">
-          <input v-if="editingConvId === c.id" class="conv-item-input"
-                 v-model="editTitleText"
-                 @keydown.enter="saveConvTitle(c.id)"
-                 @keydown.escape="cancelEdit"
-                 @blur="saveConvTitle(c.id)"
-                 @click.stop
-                 @vue:mounted="($event: any) => $event.el.focus()" />
-          <span v-else class="conv-item-title" @dblclick.stop="startEditConvTitle(c.id, c.title)">{{ c.title || '未命名对话' }}</span>
-          <span v-if="c.status === 'processing'" class="conv-processing-dot" title="处理中"></span>
-          <button class="conv-del" @click.stop="handleDeleteConversation(c.id)">×</button>
-        </div>
+        <template v-if="sidebarTab === 'conv'">
+          <div v-for="c in conversations" :key="c.id" class="conv-item"
+               :class="{ active: c.id === activeConvId }"
+               @click="selectConversation(c.id)">
+            <input v-if="editingConvId === c.id" class="conv-item-input"
+                   v-model="editTitleText"
+                   @keydown.enter="saveConvTitle(c.id)"
+                   @keydown.escape="cancelEdit"
+                   @blur="saveConvTitle(c.id)"
+                   @click.stop
+                   @vue:mounted="($event: any) => $event.el.focus()" />
+            <span v-else class="conv-item-title" @dblclick.stop="startEditConvTitle(c.id, c.title)">{{ c.title || '未命名对话' }}</span>
+            <span v-if="c.status === 'processing'" class="conv-processing-dot" title="处理中"></span>
+            <button class="conv-del" @click.stop="handleDeleteConversation(c.id)">×</button>
+          </div>
+        </template>
+        <template v-else>
+          <TargetPanel :devices="devices" />
+        </template>
       </div>
+    </div>
+    <div class="sidebar-resize-handle" @mousedown="startDrag">
+      <div class="drag-indicator"></div>
     </div>
 
     <!-- Chat main -->
@@ -888,13 +916,6 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <!-- Drag handle -->
-    <div class="drag-handle" @mousedown="startDrag">
-      <div class="drag-indicator"></div>
-    </div>
-
-    <!-- Target panel -->
-    <TargetPanel :devices="devices" class="target-side" :style="{ flexBasis: targetWidth + 'px' }" />
   </div>
 </template>
 
@@ -903,20 +924,24 @@ onUnmounted(() => {
 .chat-page.dragging { user-select: none; cursor: col-resize; }
 
 /* Sidebar */
-.sidebar { width: 240px; border-right: 1px solid var(--border); display: flex; flex-direction: column; background: var(--panel); transition: width 0.2s ease, opacity 0.2s ease; overflow: hidden; flex-shrink: 0; }
-.sidebar.collapsed { width: 0; border-right: none; opacity: 0; }
-.sidebar-header { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.sidebar { border-right: 1px solid var(--border); display: flex; flex-direction: column; background: var(--panel); transition: width 0.2s ease, opacity 0.2s ease; overflow: hidden; flex-shrink: 0; min-width: 0; }
+.sidebar.collapsed { width: 0 !important; border-right: none; opacity: 0; }
+.sidebar-header { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
 .sidebar-toggle { background: none; border: 1px solid var(--border); color: var(--text); padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 14px; flex-shrink: 0; }
 .sidebar-toggle:hover { background: var(--row-hover); }
-.sidebar-new { flex: 1; background: none; border: 1px solid var(--border); color: var(--text); padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 13px; font-family: 'SF Mono', monospace; }
+.sidebar-tabs { display: flex; flex: 1; gap: 2px; }
+.sidebar-tab { flex: 1; background: none; border: none; color: var(--text-sub); padding: 4px 6px; border-radius: 4px; cursor: pointer; font-size: 12px; font-family: 'SF Mono', monospace; position: relative; white-space: nowrap; }
+.sidebar-tab:hover { background: var(--row-hover); }
+.sidebar-tab.active { color: var(--primary); background: var(--row-hover); }
+.tab-badge { position: absolute; top: 1px; right: 2px; min-width: 14px; height: 14px; border-radius: 7px; font-size: 10px; display: flex; align-items: center; justify-content: center; padding: 0 3px; }
+.tab-badge.failed { background: var(--red); color: #fff; }
+.tab-badge.executing { background: var(--yellow); width: 7px; height: 7px; min-width: 0; border-radius: 50%; top: 3px; right: 3px; padding: 0; }
+.sidebar-new { background: none; border: 1px solid var(--border); color: var(--text); padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 13px; font-family: 'SF Mono', monospace; flex-shrink: 0; }
 .sidebar-new:hover { background: var(--row-hover); }
 .sidebar-body { flex: 1; overflow-y: auto; padding: 8px; }
 
 /* Chat main */
 .chat-main { flex: 1; display: flex; flex-direction: column; min-width: 300px; position: relative; }
-
-/* Target side */
-.target-side { min-width: 200px; max-width: 50vw; flex-shrink: 0; }
 
 .chat-header { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-bottom: 1px solid var(--border); background: var(--panel); }
 .header-new-btn { background: none; border: 1px solid var(--border); color: var(--text); width: 28px; height: 28px; border-radius: 4px; cursor: pointer; font-size: 16px; flex-shrink: 0; }
@@ -1004,9 +1029,9 @@ onUnmounted(() => {
 .model-picker-item.active { color: var(--primary); font-weight: 500; }
 .model-check { color: var(--green); font-size: 12px; }
 
-/* Drag handle */
-.drag-handle { width: 5px; cursor: col-resize; background: transparent; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: background 0.15s; }
-.drag-handle:hover, .chat-page.dragging .drag-handle { background: rgba(108, 140, 255, 0.3); }
+/* Sidebar resize handle */
+.sidebar-resize-handle { width: 5px; cursor: col-resize; background: transparent; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: background 0.15s; }
+.sidebar-resize-handle:hover, .chat-page.dragging .sidebar-resize-handle { background: rgba(108, 140, 255, 0.3); }
 .drag-indicator { width: 2px; height: 32px; border-radius: 1px; background: var(--border); }
 
 /* Todo panel */
