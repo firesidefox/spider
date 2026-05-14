@@ -4,8 +4,12 @@
       <div class="sidebar-toolbar">
         <span class="sidebar-title">知识库 <span v-if="docs.length" class="doc-count">{{ docs.length }}</span></span>
         <div style="display:flex;gap:6px">
-          <button class="btn btn-sm" @click="showNewGroup = true">+ 分组</button>
-          <button class="btn btn-primary btn-sm" @click="showIngest = true">+ 导入</button>
+          <button v-if="!editMode" class="btn btn-sm btn-ghost" @click="enterEditMode">编辑</button>
+          <button v-else class="btn btn-sm btn-ghost" @click="exitEditMode">完成</button>
+          <template v-if="!editMode">
+            <button class="btn btn-sm" @click="showNewGroup = true">+ 分组</button>
+            <button class="btn btn-primary btn-sm" @click="showIngest = true">+ 导入</button>
+          </template>
         </div>
       </div>
       <div class="sidebar-search">
@@ -17,6 +21,7 @@
         <div v-for="group in groups" :key="group.id" class="group-section"
           @dragover.prevent @drop="onDropToGroup($event, group.id)">
           <div class="group-header" @click="toggleGroup(group.id)">
+            <div v-if="editMode" class="edit-cb" :class="{ checked: selectedGroupIds.has(group.id) }" @click.stop="toggleGroupSelect(group.id)"></div>
             <span class="group-chevron">{{ collapsedGroups.has(group.id) ? '▶' : '▼' }}</span>
             <span v-if="editingGroupId !== group.id" class="group-name" @dblclick.stop="startRename(group)">{{ group.name }}</span>
             <input v-else class="group-name-input" v-model="editingGroupName"
@@ -27,8 +32,9 @@
           <template v-if="!collapsedGroups.has(group.id)">
             <div v-for="doc in groupedDocs(group.id)" :key="doc.id"
               class="doc-row" :class="{ selected: activeDoc?.id === doc.id }"
-              draggable="true" @dragstart="onDragStart($event, doc)"
+              :draggable="!editMode" @dragstart="!editMode && onDragStart($event, doc)"
               @click="activeDoc = doc; searched = false">
+              <div v-if="editMode" class="edit-cb" :class="{ checked: selectedDocIds.has(doc.id) }" @click.stop="toggleDocSelect(doc.id)"></div>
               <div class="doc-row-title">{{ docTitle(doc) }}</div>
               <div class="doc-row-meta">
                 <span class="badge">{{ doc.vendor }}</span>
@@ -48,8 +54,9 @@
           <template v-if="!collapsedGroups.has(0)">
             <div v-for="doc in ungroupedDocs" :key="doc.id"
               class="doc-row" :class="{ selected: activeDoc?.id === doc.id }"
-              draggable="true" @dragstart="onDragStart($event, doc)"
+              :draggable="!editMode" @dragstart="!editMode && onDragStart($event, doc)"
               @click="activeDoc = doc; searched = false">
+              <div v-if="editMode" class="edit-cb" :class="{ checked: selectedDocIds.has(doc.id) }" @click.stop="toggleDocSelect(doc.id)"></div>
               <div class="doc-row-title">{{ docTitle(doc) }}</div>
               <div class="doc-row-meta">
                 <span class="badge">{{ doc.vendor }}</span>
@@ -62,6 +69,13 @@
 
         <div v-if="docs.length === 0" class="sidebar-empty">暂无文档</div>
       </div>
+    <div v-if="editMode" class="edit-bottom-bar">
+      <span class="edit-sel-label">{{ selectionLabel }}</span>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span v-if="deleteErr" class="err" style="font-size:11px">{{ deleteErr }}</span>
+        <button class="btn btn-sm btn-danger" :disabled="!hasSelection || deleting" @click="onBatchDelete">删除</button>
+      </div>
+    </div>
     </aside>
 
     <div class="kb-detail">
@@ -172,6 +186,32 @@
         </div>
       </div>
     </div>
+    <!-- 批量删除分组确认弹窗 -->
+    <div v-if="showDeleteGroupConfirm" class="modal-overlay" @click.self="showDeleteGroupConfirm = false">
+      <div class="modal" style="max-width:360px">
+        <h3>删除分组</h3>
+        <p style="color:var(--text-sub);margin-bottom:12px">
+          将删除 {{ selectedGroupIds.size }} 个分组，请选择组内文档处理方式：
+        </p>
+        <div class="form-row" style="flex-direction:column;gap:8px">
+          <label class="radio-opt" :class="{ active: deleteGroupWithDocs }">
+            <input type="radio" :value="true" v-model="deleteGroupWithDocs" />
+            同时删除组内所有文档
+          </label>
+          <label class="radio-opt" :class="{ active: !deleteGroupWithDocs }">
+            <input type="radio" :value="false" v-model="deleteGroupWithDocs" />
+            将文档移至未分组
+          </label>
+        </div>
+        <div v-if="deleteErr" class="err" style="margin-top:8px">{{ deleteErr }}</div>
+        <div class="modal-footer">
+          <button class="btn" @click="showDeleteGroupConfirm = false; deleteErr = ''">取消</button>
+          <button class="btn btn-danger" :disabled="deleting" @click="doDeleteGroups">
+            {{ deleting ? '删除中…' : '确认删除' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -180,6 +220,7 @@ import { ref, computed, onMounted, nextTick } from 'vue'
 import {
   listDocuments, ingestDocument, deleteDocument, searchDocuments, moveDocument,
   listGroups, createGroup, renameGroup, deleteGroup,
+  deleteBatchDocuments, deleteBatchGroups,
   type Document, type DocumentGroup
 } from '../api/documents'
 
@@ -256,6 +297,84 @@ const newGroupName = ref('')
 const editingGroupId = ref<number | null>(null)
 const editingGroupName = ref('')
 let dragDoc: Document | null = null
+
+const editMode = ref(false)
+const selectedDocIds = ref<Set<number>>(new Set())
+const selectedGroupIds = ref<Set<number>>(new Set())
+const showDeleteGroupConfirm = ref(false)
+const deleteGroupWithDocs = ref(true)
+const deleting = ref(false)
+const deleteErr = ref('')
+
+function enterEditMode() { editMode.value = true }
+
+function exitEditMode() {
+  editMode.value = false
+  selectedDocIds.value = new Set()
+  selectedGroupIds.value = new Set()
+}
+
+function toggleDocSelect(id: number) {
+  const s = new Set(selectedDocIds.value)
+  s.has(id) ? s.delete(id) : s.add(id)
+  selectedDocIds.value = s
+}
+
+function toggleGroupSelect(id: number) {
+  const s = new Set(selectedGroupIds.value)
+  s.has(id) ? s.delete(id) : s.add(id)
+  selectedGroupIds.value = s
+}
+
+const hasSelection = computed(() => selectedDocIds.value.size > 0 || selectedGroupIds.value.size > 0)
+
+const selectionLabel = computed(() => {
+  const d = selectedDocIds.value.size
+  const g = selectedGroupIds.value.size
+  if (d === 0 && g === 0) return '未选择'
+  if (d > 0 && g > 0) return `已选 ${d} 个文档、${g} 个分组`
+  if (d > 0) return `已选 ${d} 个文档`
+  return `已选 ${g} 个分组`
+})
+
+async function onBatchDelete() {
+  deleteErr.value = ''
+  if (selectedGroupIds.value.size > 0) {
+    showDeleteGroupConfirm.value = true
+    return
+  }
+  await doDeleteDocs()
+}
+
+async function doDeleteDocs() {
+  deleting.value = true
+  deleteErr.value = ''
+  try {
+    await deleteBatchDocuments([...selectedDocIds.value])
+    await load()
+    exitEditMode()
+  } catch (e: any) {
+    deleteErr.value = e.message
+  } finally {
+    deleting.value = false
+  }
+}
+
+async function doDeleteGroups() {
+  deleting.value = true
+  deleteErr.value = ''
+  try {
+    await deleteBatchGroups([...selectedGroupIds.value], deleteGroupWithDocs.value)
+    await load()
+    await loadGroups()
+    exitEditMode()
+    showDeleteGroupConfirm.value = false
+  } catch (e: any) {
+    deleteErr.value = e.message
+  } finally {
+    deleting.value = false
+  }
+}
 
 const emptyForm = () => ({ vendor: '', useEmbedding: true })
 const form = ref(emptyForm())
@@ -483,4 +602,25 @@ onMounted(() => { load(); loadGroups() })
 @media (max-width: 520px) {
   .file-picker-row { align-items: stretch; flex-direction: column; }
 }
+
+.btn-ghost { background: transparent; border-color: var(--border); color: var(--text-sub); }
+.btn-ghost:hover { background: var(--row-hover); }
+
+.edit-cb {
+  width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0;
+  border: 1.5px solid var(--border); background: var(--panel); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.edit-cb.checked { background: var(--primary); border-color: var(--primary); }
+.edit-cb.checked::after { content: '✓'; font-size: 9px; color: #fff; }
+
+.edit-bottom-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 12px; border-top: 1px solid var(--border);
+  background: var(--surface); flex-shrink: 0;
+}
+.edit-sel-label { font-size: 11px; color: var(--text-sub); }
+
+.radio-opt { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; padding: 6px 8px; border-radius: 6px; border: 1.5px solid var(--border); }
+.radio-opt.active { border-color: var(--primary); background: rgba(99,102,241,0.06); }
 </style>
