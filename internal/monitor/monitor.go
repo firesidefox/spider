@@ -1,6 +1,7 @@
 package monitor
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"sync"
@@ -11,147 +12,154 @@ import (
 )
 
 const (
-	defaultProbePort     = 22
 	defaultProbeInterval = 2 * time.Second
-	maxConcurrency       = 20
+	defaultProbePort     = 22
+	dialTimeout          = 2 * time.Second
+	maxConcurrent        = 20
 )
 
-// Status represents host liveness.
-type Status int
-
-const (
-	StatusUnknown Status = iota
-	StatusUp
-	StatusDown
-)
-
-// OnChangeFunc is called when a host's status changes.
-type OnChangeFunc func(host *models.Host, status Status)
-
-// Monitor probes hosts via TCP and fires onChange on status transitions.
 type Monitor struct {
 	hostStore *store.HostStore
 	faceStore *store.AccessFaceStore
-	onChange  OnChangeFunc
-	tag       string
+	onChange  func(hostID string, online bool)
 
-	mu      sync.Mutex
-	statuses map[string]Status // keyed by host ID
-	stops    map[string]chan struct{}
+	statuses   map[string]bool
+	lastProbed map[string]time.Time
+	mu         sync.RWMutex
+
+	cancel context.CancelFunc
 }
 
-// New creates a Monitor. tag filters which hosts to watch ("" = all).
-func New(hs *store.HostStore, fs *store.AccessFaceStore, tag string, onChange OnChangeFunc) *Monitor {
+func New(
+	hostStore *store.HostStore,
+	faceStore *store.AccessFaceStore,
+	onChange func(hostID string, online bool),
+) *Monitor {
 	return &Monitor{
-		hostStore: hs,
-		faceStore: fs,
-		onChange:  onChange,
-		tag:       tag,
-		statuses:  make(map[string]Status),
-		stops:     make(map[string]chan struct{}),
+		hostStore:  hostStore,
+		faceStore:  faceStore,
+		onChange:   onChange,
+		statuses:   make(map[string]bool),
+		lastProbed: make(map[string]time.Time),
 	}
 }
 
-// Start loads hosts and begins probing. Blocks until Stop is called.
-func (m *Monitor) Start() error {
-	hosts, err := m.hostStore.List(m.tag)
+func (m *Monitor) Start(ctx context.Context) {
+	ctx, cancel := context.WithCancel(ctx)
+	m.cancel = cancel
+	go m.loop(ctx)
+}
+
+func (m *Monitor) Stop() {
+	if m.cancel != nil {
+		m.cancel()
+	}
+}
+
+// GetStatus returns the last known status for a host. Returns true (online) if unknown.
+func (m *Monitor) GetStatus(hostID string) bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	v, ok := m.statuses[hostID]
+	if !ok {
+		return true
+	}
+	return v
+}
+
+// Statuses returns a snapshot of all known statuses.
+func (m *Monitor) Statuses() map[string]bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make(map[string]bool, len(m.statuses))
+	for k, v := range m.statuses {
+		out[k] = v
+	}
+	return out
+}
+
+func (m *Monitor) loop(ctx context.Context) {
+	ticker := time.NewTicker(defaultProbeInterval)
+	defer ticker.Stop()
+	m.probeAll(ctx)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			m.probeAll(ctx)
+		}
+	}
+}
+
+func (m *Monitor) probeAll(ctx context.Context) {
+	hosts, err := m.hostStore.List("")
 	if err != nil {
-		return fmt.Errorf("monitor: list hosts: %w", err)
+		return
 	}
 
-	sem := make(chan struct{}, maxConcurrency)
+	sem := make(chan struct{}, maxConcurrent)
+	var wg sync.WaitGroup
 
 	for _, h := range hosts {
 		h := h
-		face, err := m.primaryFace(h.ID)
-		if err != nil {
+		interval, port := m.probeConfig(h.ID)
+
+		m.mu.RLock()
+		last := m.lastProbed[h.ID]
+		m.mu.RUnlock()
+
+		if time.Since(last) < interval {
 			continue
 		}
 
-		port := face.ProbePort
-		if port == 0 {
-			port = defaultProbePort
-		}
-		interval := time.Duration(face.ProbeInterval) * time.Second
-		if interval <= 0 {
-			interval = defaultProbeInterval
-		}
-
-		stop := make(chan struct{})
-		m.mu.Lock()
-		m.stops[h.ID] = stop
-		m.mu.Unlock()
-
+		wg.Add(1)
+		sem <- struct{}{}
 		go func() {
-			sem <- struct{}{}
+			defer wg.Done()
 			defer func() { <-sem }()
-			m.probeLoop(h, port, interval, stop)
+			m.probeOne(h, port)
 		}()
 	}
-
-	// Wait until all stop channels are closed (Stop() closes them).
-	<-make(chan struct{})
-	return nil
+	wg.Wait()
 }
 
-// Stop halts all probe goroutines.
-func (m *Monitor) Stop() {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	for id, ch := range m.stops {
-		close(ch)
-		delete(m.stops, id)
-	}
-}
-
-// probeLoop dials host:port on each interval tick until stop is closed.
-func (m *Monitor) probeLoop(h *models.Host, port int, interval time.Duration, stop <-chan struct{}) {
-	addr := fmt.Sprintf("%s:%d", h.IP, port)
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-stop:
-			return
-		case <-ticker.C:
-			m.probe(h, addr)
-		}
-	}
-}
-
-func (m *Monitor) probe(h *models.Host, addr string) {
-	conn, err := net.DialTimeout("tcp", addr, 3*time.Second)
-	var next Status
-	if err != nil {
-		next = StatusDown
-	} else {
+func (m *Monitor) probeOne(h *models.Host, port int) {
+	addr := net.JoinHostPort(h.IP, fmt.Sprintf("%d", port))
+	conn, err := net.DialTimeout("tcp", addr, dialTimeout)
+	online := err == nil
+	if conn != nil {
 		conn.Close()
-		next = StatusUp
 	}
 
 	m.mu.Lock()
-	prev := m.statuses[h.ID]
-	if prev == next {
-		m.mu.Unlock()
-		return
-	}
-	m.statuses[h.ID] = next
+	prev, known := m.statuses[h.ID]
+	m.statuses[h.ID] = online
+	m.lastProbed[h.ID] = time.Now()
 	m.mu.Unlock()
 
-	if m.onChange != nil {
-		m.onChange(h, next)
+	if !known || prev != online {
+		m.onChange(h.ID, online)
 	}
 }
 
-// primaryFace returns the first AccessFace for the host (any type).
-func (m *Monitor) primaryFace(hostID string) (*models.AccessFace, error) {
+func (m *Monitor) probeConfig(hostID string) (time.Duration, int) {
 	faces, err := m.faceStore.ListByHost(hostID)
-	if err != nil {
-		return nil, err
+	if err != nil || len(faces) == 0 {
+		return defaultProbeInterval, defaultProbePort
 	}
-	if len(faces) == 0 {
-		return nil, fmt.Errorf("no access face for host %s", hostID)
+	for _, f := range faces {
+		if f.Type == models.FaceSSH {
+			interval := defaultProbeInterval
+			port := defaultProbePort
+			if f.ProbeInterval > 0 {
+				interval = time.Duration(f.ProbeInterval) * time.Second
+			}
+			if f.ProbePort > 0 {
+				port = f.ProbePort
+			}
+			return interval, port
+		}
 	}
-	return faces[0], nil
+	return defaultProbeInterval, defaultProbePort
 }
