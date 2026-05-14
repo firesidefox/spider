@@ -20,12 +20,12 @@ export interface ChatMessage {
 }
 
 export interface ChatEvent {
-  type: 'text_delta' | 'tool_start' | 'tool_result' | 'confirm_required' | 'error' | 'done' | 'message' | 'todo_update' | 'todo_summary'
+  type: 'text_delta' | 'tool_start' | 'tool_result' | 'confirm_required' | 'error' | 'done' | 'message' | 'todo_update' | 'turn_usage'
   content?: Record<string, any>
 }
 
 export interface Todo {
-  id: number; conversation_id: string; subject: string
+  id: number; conversation_id: string; subject: string; active_form?: string
   description?: string; status: string; owner?: string
   blocked_by?: number[]; created_at: string; updated_at: string
 }
