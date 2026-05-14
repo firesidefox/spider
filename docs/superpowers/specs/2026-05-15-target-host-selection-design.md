@@ -47,7 +47,7 @@ On new conversation: `selectedHostIds = null` (meaning "all"). Displayed as "全
 
 ## Data Model
 
-Host selection is per-message, not per-conversation. No DB schema change needed.
+Host selection is **global frontend state** — it persists across conversations and is not stored per-conversation. Each message send passes the current selection at send time. No DB schema change needed.
 
 ### API
 
@@ -103,9 +103,8 @@ Computed:
 
 ### ChatView.vue changes
 
-- Load `allHosts` via `listHosts()` on mount
-- Hold `selectedHostIds: string[] | null = null`
-- Pass to TargetPanel as v-model
+- `selectedHostIds: string[] | null` moves to app-level global state (e.g. a composable or Pinia store), not local to ChatView
+- TargetPanel reads and writes this global state
 - On `sendMessage()`: pass current `selectedHostIds`
 
 ### chat.ts changes
