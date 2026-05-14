@@ -277,6 +277,14 @@
               <label>登录后输入（可选）</label>
               <input v-model="faceForm.ssh_login_input" class="input" placeholder="/rsh" />
             </div>
+            <div class="form-row">
+              <label>存活探测端口（可选）</label>
+              <input v-model.number="faceForm.probe_port" class="input" type="number" min="1" max="65535" placeholder="22" />
+            </div>
+            <div class="form-row">
+              <label>探测间隔（秒，可选）</label>
+              <input v-model.number="faceForm.probe_interval" class="input" type="number" min="1" max="3600" placeholder="2" />
+            </div>
           </template>
           <template v-if="faceForm.type === 'restapi'">
             <div class="form-row">
@@ -426,7 +434,7 @@ async function saveOverview() {
 const emptyForm = () => ({ name: '', ip: '', notes: '', vendor: '', product_name: '', product_version: '', tagsStr: '' })
 const form = ref(emptyForm())
 
-const emptyFaceForm = () => ({ type: 'ssh' as 'ssh' | 'restapi', ip: activeHost.value?.ip ?? '', port: 22, username: '', ssh_auth_type: 'password', credential: '', passphrase: '', ssh_key_id: '', ssh_legacy: false, ssh_login_input: '', base_url: '', rest_auth_type: 'none', rest_username: '', header_name: '', hmac_algo: 'HMAC-SHA256', knowledge_sources: [] as Array<{type:'group'|'doc';id:number}> })
+const emptyFaceForm = () => ({ type: 'ssh' as 'ssh' | 'restapi', ip: activeHost.value?.ip ?? '', port: 22, username: '', ssh_auth_type: 'password', credential: '', passphrase: '', ssh_key_id: '', ssh_legacy: false, ssh_login_input: '', probe_port: 0, probe_interval: 0, base_url: '', rest_auth_type: 'none', rest_username: '', header_name: '', hmac_algo: 'HMAC-SHA256', knowledge_sources: [] as Array<{type:'group'|'doc';id:number}> })
 const faceForm = ref(emptyFaceForm())
 
 const allTags = computed(() => {
@@ -603,6 +611,8 @@ function startEditFace(face: AccessFace) {
     ssh_key_id: face.ssh_key_id || '',
     ssh_legacy: face.ssh_legacy || false,
     ssh_login_input: face.ssh_login_input || '',
+    probe_port: face.probe_port || 0,
+    probe_interval: face.probe_interval || 0,
     base_url: face.base_url || '',
     rest_auth_type: face.rest_auth_type || 'none',
     rest_username: face.rest_username || '',
