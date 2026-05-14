@@ -137,13 +137,10 @@
                   </div>
                   <div class="knowledge-row">
                     <span class="knowledge-label">知识来源：</span>
-                    <span v-if="f.knowledge_sources?.some(k => k.type === 'none')" class="knowledge-tag knowledge-none">不查询</span>
-                    <template v-else>
-                    <span v-for="ks in f.knowledge_sources" :key="ks.type+ks.id" class="knowledge-tag">
+                    <span v-for="ks in f.knowledge_sources.filter(k => k.type !== 'none')" :key="ks.type+ks.id" class="knowledge-tag">
                       <span class="at">@</span>{{ docGroupsMap.get(ks.id)?.name || ks.id }}
                       <button class="ks-remove" @click.stop="saveKnowledgeSources(f, f.knowledge_sources.filter(k => k.id !== ks.id).map(k => k.id))">×</button>
                     </span>
-                    </template>
                     <div class="ks-picker-wrap">
                       <button class="add-knowledge" @click.stop="ksPickerFaceId = ksPickerFaceId === f.id ? null : f.id">+ 添加</button>
                       <div v-if="ksPickerFaceId === f.id" class="ks-dropdown" @click.stop>
@@ -317,7 +314,7 @@
               <button type="button" class="btn btn-sm" :class="{ active: ksMode === 'global' }" @click="setKsMode('global')">全局</button>
               <button type="button" class="btn btn-sm" :class="{ active: ksMode === 'group' }" @click="setKsMode('group')">文档组</button>
               <button type="button" class="btn btn-sm" :class="{ active: ksMode === 'doc' }" @click="setKsMode('doc')">具体文档</button>
-              <button type="button" class="btn btn-sm" :class="{ active: ksMode === 'none' }" @click="setKsMode('none')">不查询</button>
+              <button type="button" class="btn btn-sm" :class="{ active: ksMode === 'none' }" @click="setKsMode('none')">无</button>
             </div>
             <div v-if="ksMode === 'group' && docGroups && docGroups.length > 0" class="ks-checkboxes">
               <label v-for="g in docGroups" :key="g.id" class="checkbox-label">
