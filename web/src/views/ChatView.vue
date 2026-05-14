@@ -114,14 +114,94 @@ const inputText = ref('')
 const isStreaming = ref(false)
 
 const todoTasksMap = ref<Record<string, Map<number, Todo>>>({})
-const sortedTasks = computed(() => Array.from((todoTasksMap.value[activeConvId.value ?? ''] ?? new Map<number, Todo>()).values()).sort((a, b) => a.id - b.id))
-const completedCount = computed(() => sortedTasks.value.filter(t => t.status === 'completed').length)
+const completedFolded = ref(true)
+const pendingFolded = ref(true)
+const turnUsage = ref<{input: number; output: number} | null>(null)
+const taskTimers = ref<Map<number, ReturnType<typeof setInterval>>>(new Map())
+const taskElapsed = ref<Map<number, number>>(new Map())
+
+const allTasks = computed(() =>
+  Array.from((todoTasksMap.value[activeConvId.value ?? ''] ?? new Map<number, Todo>()).values())
+)
+const inProgressTasks = computed(() =>
+  allTasks.value.filter(t => t.status === 'in_progress').sort((a, b) => a.id - b.id)
+)
+const pendingTasks = computed(() =>
+  allTasks.value.filter(t => t.status === 'pending').sort((a, b) => a.id - b.id)
+)
+const completedTasks = computed(() =>
+  allTasks.value.filter(t => t.status === 'completed').sort((a, b) => a.id - b.id)
+)
+const visiblePending = computed(() =>
+  pendingFolded.value ? pendingTasks.value.slice(0, 2) : pendingTasks.value
+)
+const hiddenPendingCount = computed(() =>
+  pendingTasks.value.length - visiblePending.value.length
+)
+const visibleCompleted = computed(() =>
+  completedFolded.value ? [] : completedTasks.value
+)
+const hasTasks = computed(() =>
+  allTasks.value.length > 0
+)
+const panelHeader = computed(() => {
+  const active = inProgressTasks.value[0]
+  const tokenSuffix = turnUsage.value
+    ? '  ↓ ' + fmtTokens(turnUsage.value.output)
+    : ''
+  if (active) {
+    const label = active.active_form ?? active.subject
+    const elapsed = taskElapsed.value.get(active.id) ?? 0
+    return label + '… (' + fmtElapsed(elapsed) + ')' + tokenSuffix
+  }
+  const total = allTasks.value.length
+  const done = completedTasks.value.length
+  return `TASKS ${done}/${total}` + tokenSuffix
+})
+
 function taskIcon(t: Todo) {
   if (t.status === 'completed') return '✓'
   if (t.status === 'in_progress') return '●'
   return '○'
 }
 function taskClass(t: Todo) { return `todo-${t.status}` }
+
+function fmtElapsed(seconds: number): string {
+  if (seconds >= 60) {
+    const m = Math.floor(seconds / 60)
+    const s = seconds % 60
+    return `${m}m ${s}s`
+  }
+  return `${seconds}s`
+}
+
+function fmtTokens(n: number): string {
+  if (n >= 1000) return (n / 1000).toFixed(1) + 'k'
+  return String(n)
+}
+
+function startTimer(task: Todo) {
+  if (taskTimers.value.has(task.id)) return
+  const startTime = new Date(task.updated_at).getTime()
+  const tick = () => {
+    taskElapsed.value.set(task.id, Math.floor((Date.now() - startTime) / 1000))
+    taskElapsed.value = new Map(taskElapsed.value)
+  }
+  tick()
+  taskTimers.value.set(task.id, setInterval(tick, 1000))
+}
+
+function stopTimer(taskId: number) {
+  const t = taskTimers.value.get(taskId)
+  if (t) { clearInterval(t); taskTimers.value.delete(taskId) }
+  taskElapsed.value.delete(taskId)
+}
+
+function clearAllTimers() {
+  taskTimers.value.forEach(t => clearInterval(t))
+  taskTimers.value.clear()
+  taskElapsed.value.clear()
+}
 const messagesRef = ref<HTMLElement | null>(null)
 const devices = ref<DeviceStatus[]>([])
 
@@ -273,6 +353,13 @@ async function selectConversation(id: string) {
   const taskMap = new Map<number, Todo>()
   for (const t of data.todo_tasks ?? []) taskMap.set(t.id, t)
   todoTasksMap.value[id] = taskMap
+  clearAllTimers()
+  turnUsage.value = null
+  completedFolded.value = true
+  pendingFolded.value = true
+  for (const task of taskMap.values()) {
+    if (task.status === 'in_progress') startTimer(task)
+  }
   localStorage.setItem('spider-last-conv', id)
   router.replace(`/chat/${id}`)
 
@@ -446,6 +533,16 @@ function handleConvEvent(convId: string, event: ChatEvent) {
       if (!todoTasksMap.value[convId]) todoTasksMap.value[convId] = new Map()
       todoTasksMap.value[convId].set(task.id, task)
       todoTasksMap.value[convId] = todoTasksMap.value[convId]
+      if (task.status === 'in_progress') {
+        startTimer(task)
+      } else {
+        stopTimer(task.id)
+      }
+      break
+    }
+    case 'turn_usage': {
+      const u = event.content as { input_tokens: number; output_tokens: number }
+      turnUsage.value = { input: u.input_tokens, output: u.output_tokens }
       break
     }
     case 'todo_summary': {
@@ -519,6 +616,7 @@ async function send() {
   }
   convMsgs.push(assistantMsg)
   isStreaming.value = true
+  turnUsage.value = null
   await nextTick()
   scrollToBottom()
 
@@ -907,10 +1005,29 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <div v-if="sortedTasks.length > 0" class="todo-panel">
-        <div class="todo-header">TASKS {{ completedCount }}/{{ sortedTasks.length }}</div>
-        <div v-for="task in sortedTasks" :key="task.id" class="todo-row" :class="taskClass(task)">
-          <span class="todo-icon">{{ taskIcon(task) }}</span>
+      <div v-if="hasTasks" class="todo-panel">
+        <div class="todo-header">{{ panelHeader }}</div>
+
+        <div v-for="task in inProgressTasks" :key="task.id" class="todo-row todo-in_progress">
+          <span class="todo-icon">●</span>
+          <span class="todo-subject">{{ task.subject }}</span>
+        </div>
+
+        <div v-for="task in visiblePending" :key="task.id" class="todo-row todo-pending">
+          <span class="todo-icon">○</span>
+          <span class="todo-subject">{{ task.subject }}</span>
+        </div>
+        <div v-if="hiddenPendingCount > 0" class="todo-row todo-fold" @click="pendingFolded = !pendingFolded">
+          <span class="todo-icon">○</span>
+          <span class="todo-subject">+{{ hiddenPendingCount }} more{{ pendingFolded ? '' : ' ▲' }}</span>
+        </div>
+
+        <div v-if="completedTasks.length > 0" class="todo-row todo-fold" @click="completedFolded = !completedFolded">
+          <span class="todo-icon">✓</span>
+          <span class="todo-subject">+{{ completedTasks.length }} completed{{ completedFolded ? '' : ' ▲' }}</span>
+        </div>
+        <div v-for="task in visibleCompleted" :key="task.id" class="todo-row todo-completed todo-completed-indent">
+          <span class="todo-icon">✓</span>
           <span class="todo-subject">{{ task.subject }}</span>
         </div>
       </div>
@@ -1083,10 +1200,15 @@ onUnmounted(() => {
 .todo-icon { width: 14px; text-align: center; flex-shrink: 0; }
 .todo-subject { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .todo-pending .todo-icon { color: var(--text-sub); }
+.todo-in_progress { border-left: 2px solid var(--primary); background: rgba(99,102,241,0.06); }
 .todo-in_progress .todo-icon { color: var(--primary); }
-.todo-in_progress .todo-subject { color: var(--text); }
+.todo-in_progress .todo-subject { color: var(--text); font-weight: 500; }
 .todo-completed .todo-icon { color: var(--green, #4caf50); }
 .todo-completed .todo-subject { color: var(--text-sub); text-decoration: line-through; }
+.todo-completed-indent { padding-left: 20px; }
+.todo-fold { cursor: pointer; }
+.todo-fold:hover { background: var(--surface-2, rgba(255,255,255,0.04)); }
+.todo-fold .todo-icon { color: var(--text-sub); }
 .todo-deleted .todo-icon { color: var(--red, #e05252); opacity: 0.5; }
 .todo-deleted .todo-subject { opacity: 0.4; text-decoration: line-through; }
 
