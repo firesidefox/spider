@@ -107,7 +107,7 @@
         </div>
       </div>
 
-      <template v-else-if="activeDoc">
+      <div v-else-if="activeDoc" style="flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0">
         <div class="detail-topbar">
           <div class="detail-topbar-left">
             <span class="detail-title">{{ docTitle(activeDoc) }}</span>
@@ -126,7 +126,7 @@
           </div>
           <div class="output">{{ activeDoc.content }}</div>
         </div>
-      </template>
+      </div>
 
       <div v-else class="detail-empty">
         <div class="detail-empty-icon">📚</div>
