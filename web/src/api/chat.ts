@@ -168,3 +168,15 @@ export async function exportConversation(id: string, format: 'md' | 'json'): Pro
   document.body.removeChild(a)
   URL.revokeObjectURL(url)
 }
+
+export interface HostStatusItem {
+  host_id: string
+  online: boolean
+  checked_at: string
+}
+
+export async function getHostStatuses(): Promise<HostStatusItem[]> {
+  const res = await fetch('/api/v1/hosts/statuses', { headers: authHeaders() })
+  if (!res.ok) return []
+  return res.json()
+}

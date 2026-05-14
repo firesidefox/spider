@@ -10,7 +10,7 @@ import { useTargetHosts } from '../composables/useTargetHosts'
 import {
   sendMessage, subscribeConversation, createConversation, listConversations,
   getConversation, deleteConversation, confirmAction, cancelConversation,
-  getActiveModel, setActiveModel, updateTitle, exportConversation,
+  getActiveModel, setActiveModel, updateTitle, exportConversation, getHostStatuses,
   type Conversation, type ChatMessage as ChatMsg, type ChatEvent, type Todo,
 } from '../api/chat'
 import { listHosts, type Host } from '../api/hosts'
@@ -203,6 +203,43 @@ const devices = ref<DeviceStatus[]>([])
 const allHosts = ref<Host[]>([])
 const { selectedHostIds } = useTargetHosts()
 
+const deviceResetTimers = new Map<string, ReturnType<typeof setTimeout>>()
+const SSH_TOOLS = new Set(['RunCommand', 'RunCommandBatch'])
+const executingHosts = new Set<string>()
+const monitorStatuses = new Map<string, boolean>()
+
+function setDeviceStatus(hostName: string, status: DeviceStatus['status']) {
+  const idx = devices.value.findIndex(d => d.name === hostName)
+  if (idx === -1) return
+  devices.value = devices.value.map((d, i) => i === idx ? { ...d, status } : d)
+}
+
+function markDevicesExecuting(hostNames: string[]) {
+  for (const name of hostNames) {
+    const d = devices.value.find(d => d.name === name)
+    if (d) executingHosts.add(d.id)
+    const t = deviceResetTimers.get(name)
+    if (t) { clearTimeout(t); deviceResetTimers.delete(name) }
+    setDeviceStatus(name, 'executing')
+  }
+}
+
+function markDevicesDone(hostNames: string[], failed: boolean) {
+  const finalStatus = failed ? 'failed' : 'success'
+  for (const name of hostNames) {
+    setDeviceStatus(name, finalStatus)
+    const d = devices.value.find(d => d.name === name)
+    const t = setTimeout(() => {
+      if (d) {
+        executingHosts.delete(d.id)
+        const monitorOnline = monitorStatuses.get(d.id)
+        setDeviceStatus(name, monitorOnline === false ? 'offline' : 'online')
+      }
+      deviceResetTimers.delete(name)
+    }, 2000)
+    deviceResetTimers.set(name, t)
+  }
+}
 
 let abortCtrl: AbortController | null = null
 // Per-conversation EventSource subscriptions
@@ -471,15 +508,20 @@ function handleConvEvent(convId: string, event: ChatEvent) {
       setStatus('thinking')
       break
     }
-    case 'tool_start':  // fallthrough
+    case 'tool_start': {
+      const toolName = event.content?.name || 'unknown'
       blocks.push({ type: 'tool', call: {
         id: event.content?.id || `t-${Date.now()}`,
-        name: event.content?.name || 'unknown',
+        name: toolName,
         input: event.content?.input,
         hostNames: event.content?.host_names,
       }})
-      setStatus('tool', event.content?.name || 'unknown', event.content?.input)
+      if (SSH_TOOLS.has(toolName) && event.content?.host_names?.length) {
+        markDevicesExecuting(event.content.host_names)
+      }
+      setStatus('tool', toolName, event.content?.input)
       break
+    }
     case 'tool_result': {
       const idx = blocks.findIndex(b => b.type === 'tool' && b.call.id === event.content?.id)
       if (idx !== -1) {
@@ -491,6 +533,9 @@ function handleConvEvent(convId: string, event: ChatEvent) {
           isError: event.content?.is_error,
           durationMs: event.content?.duration_ms,
         }}
+        if (SSH_TOOLS.has(old.name) && old.hostNames?.length) {
+          markDevicesDone(old.hostNames, !!event.content?.is_error)
+        }
       }
       break
     }
@@ -703,11 +748,13 @@ async function handleDeleteConversation(id: string) {
 }
 
 async function loadDevices() {
-  const hosts = await listHosts()
+  const [hosts, statuses] = await Promise.all([listHosts(), getHostStatuses()])
   allHosts.value = hosts
+  const statusMap = new Map(statuses.map(s => [s.host_id, s.online]))
+  statuses.forEach(s => monitorStatuses.set(s.host_id, s.online))
   devices.value = hosts.map(h => ({
     id: h.id, name: h.name, ip: h.ip,
-    vendor: '', status: 'online' as const,
+    vendor: '', status: (statusMap.get(h.id) === false ? 'offline' : 'online') as DeviceStatus['status'],
   }))
 }
 
@@ -900,7 +947,32 @@ async function loadPrefs() {
   } catch (_) { /* use default */ }
 }
 
+let globalEs: EventSource | null = null
+
+function startGlobalSSE() {
+  globalEs = new EventSource('/api/v1/stream')
+  globalEs.onmessage = (e) => {
+    try {
+      const event = JSON.parse(e.data)
+      if (event.type === 'host_status') {
+        const { host_id, online } = event.content
+        monitorStatuses.set(host_id, online)
+        if (!executingHosts.has(host_id)) {
+          const idx = devices.value.findIndex(d => d.id === host_id)
+          if (idx !== -1) {
+            devices.value = devices.value.map((d, i) =>
+              i === idx ? { ...d, status: online ? 'online' : 'offline' } : d
+            )
+          }
+        }
+      }
+    } catch { /* skip malformed */ }
+  }
+  globalEs.onerror = () => { /* auto-reconnects */ }
+}
+
 onMounted(() => {
+  startGlobalSSE()
   document.addEventListener('click', closeModeDropdown)
   if (!initialized) { initialized = true; initView() }
   else loadPrefs()
@@ -919,6 +991,7 @@ onDeactivated(() => {
 })
 
 onUnmounted(() => {
+  globalEs?.close()
   clearAllTimers()
   convSubscriptions.forEach(unsub => unsub())
   convSubscriptions.clear()
