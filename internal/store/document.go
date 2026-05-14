@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/spiderai/spider/internal/models"
@@ -126,6 +127,19 @@ func (s *DocumentStore) FindByTitle(groupID int, title string) (*models.Document
 		d.Tags = []string{}
 	}
 	return &d, nil
+}
+
+func (s *DocumentStore) DeleteBatch(ids []int) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	query := "DELETE FROM documents WHERE id IN (?" + strings.Repeat(",?", len(ids)-1) + ")"
+	args := make([]any, len(ids))
+	for i, id := range ids {
+		args[i] = id
+	}
+	_, err := s.db.Exec(query, args...)
+	return err
 }
 
 func scanDocumentRows(rows *sql.Rows) ([]*models.Document, error) {

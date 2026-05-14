@@ -74,3 +74,42 @@ func TestFindByTitle(t *testing.T) {
 		t.Error("expected nil for missing doc")
 	}
 }
+
+func TestDocumentStore_DeleteBatch(t *testing.T) {
+	database := setupTestDB(t)
+	ds := NewDocumentStore(database)
+
+	ds.Save("h3c", nil, "doc1", "content1", nil, "f.md", 0, nil)
+	ds.Save("h3c", nil, "doc2", "content2", nil, "f.md", 1, nil)
+	ds.Save("cisco", nil, "doc3", "content3", nil, "g.md", 0, nil)
+
+	all, _ := ds.List()
+	ids := []int{all[0].ID, all[1].ID}
+
+	err := ds.DeleteBatch(ids)
+	if err != nil {
+		t.Fatalf("DeleteBatch: %v", err)
+	}
+	remaining, _ := ds.List()
+	if len(remaining) != 1 {
+		t.Errorf("len = %d, want 1", len(remaining))
+	}
+	if remaining[0].Title != "doc3" {
+		t.Errorf("remaining = %q, want doc3", remaining[0].Title)
+	}
+}
+
+func TestDocumentStore_DeleteBatch_Empty(t *testing.T) {
+	database := setupTestDB(t)
+	ds := NewDocumentStore(database)
+
+	ds.Save("h3c", nil, "doc1", "content1", nil, "f.md", 0, nil)
+
+	if err := ds.DeleteBatch([]int{}); err != nil {
+		t.Fatalf("DeleteBatch empty: %v", err)
+	}
+	all, _ := ds.List()
+	if len(all) != 1 {
+		t.Errorf("len = %d, want 1", len(all))
+	}
+}
