@@ -5,14 +5,13 @@
 
 ## Overview
 
-Allow users to select target hosts before starting a conversation. Selected hosts are stored on the Conversation and injected into the agent's system prompt as context. The agent uses this as a soft constraint — it prioritizes selected hosts but is not hard-blocked from others.
+Allow users to select target hosts via a global TargetPanel. The selection is global frontend state (not stored per-conversation) and is injected into the agent's system prompt on every message send. The agent uses this as a soft constraint — it prioritizes selected hosts but is not hard-blocked from others.
 
 ## User Flow
 
-1. User optionally adjusts host selection in TargetPanel (defaults to all hosts).
-2. User clicks "新建对话". `createConversation` is called with the current `selectedHostIds`.
-3. User can click **编辑** at any time to change the selection — even mid-conversation.
-4. Each message send uses the current selection at send time. Agent receives selected host IDs via system prompt injection on every turn.
+1. TargetPanel defaults to all hosts selected (`null`). User can click **编辑** at any time to narrow the selection.
+2. User clicks "新建对话". `createConversation` is called with no host context.
+3. Each message send passes the current global selection. Agent receives selected host IDs via system prompt injection on every turn.
 
 ## TargetPanel UI
 
@@ -22,8 +21,8 @@ The two zones are separated by a draggable resize handle. The status zone (top) 
 
 **Zone 1 — Status (heat matrix, read-only)**
 - Shows all hosts as colored cells (online=blue, offline=gray, failed=red, executing=yellow)
-- In view mode: all cells visible
-- In edit mode: unselected host cells are hidden (transparent placeholder, layout stable); selected cells remain visible
+- When `selectedHostIds` is null (all selected): all cells visible at full opacity
+- When `selectedHostIds` is non-null (partial): selected host cells visible, unselected cells hidden (transparent placeholder, layout stable)
 
 **Zone 2 — Host selection**
 
@@ -43,7 +42,7 @@ Edit mode:
 
 ### Default state
 
-On new conversation: `selectedHostIds = null` (meaning "all"). Displayed as "全部 N 台".
+Initial value: `selectedHostIds = null` (all hosts). Displayed as "全部 N 台". Persists across conversations until user changes it.
 
 ## Data Model
 
