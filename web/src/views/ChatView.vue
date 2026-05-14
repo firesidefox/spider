@@ -1116,10 +1116,10 @@ onUnmounted(() => {
   letter-spacing: 0.5px; user-select: none;
   font-family: 'SF Mono', monospace;
 }
-.mode-badge.ask { background: #dbeafe; color: #1d4ed8; }
-.mode-badge.auto { background: #dcfce7; color: #166534; }
-.mode-badge.plan { background: #fef9c3; color: #854d0e; }
-.mode-badge.readonly { background: #f3f4f6; color: #4b5563; }
+.mode-badge.ask { background: color-mix(in srgb, var(--primary) 15%, transparent); color: var(--primary); }
+.mode-badge.auto { background: color-mix(in srgb, var(--green, #4caf50) 15%, transparent); color: var(--green, #4caf50); }
+.mode-badge.plan { background: color-mix(in srgb, var(--yellow, #f59e0b) 15%, transparent); color: var(--yellow, #f59e0b); }
+.mode-badge.readonly { background: color-mix(in srgb, var(--text-sub) 15%, transparent); color: var(--text-sub); }
 .mode-dropdown {
   position: absolute; top: 100%; right: 0; margin-top: 4px;
   background: var(--bg-card, #1e1e1e); border: 1px solid var(--border, #333);
