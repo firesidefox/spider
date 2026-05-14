@@ -412,6 +412,20 @@ function handleConvEvent(convId: string, event: ChatEvent) {
       todoTasksMap.value[convId] = todoTasksMap.value[convId]
       break
     }
+    case 'todo_summary': {
+      // convId is in scope from the outer SSE handler (same as todo_update)
+      // Append summary as assistant message
+      const summaryMsg: DisplayMessage = {
+        id: 'todo-summary-' + Date.now(),
+        role: 'assistant',
+        blocks: [{ type: 'text', content: event.content as string }],
+      }
+      if (!messagesMap.value[convId]) messagesMap.value[convId] = []
+      messagesMap.value[convId].push(summaryMsg)
+      // Clear task panel
+      todoTasksMap.value[convId] = new Map()
+      break
+    }
   }
   if (activeConvId.value === convId) {
     scheduleScrollToBottom()
