@@ -10,6 +10,11 @@ const (
 	RoleViewer   Role = "viewer"
 )
 
+type UIPrefs struct {
+	TargetPanelOpen  bool `json:"target_panel_open"`
+	TargetPanelWidth int  `json:"target_panel_width"`
+}
+
 type User struct {
 	ID        string     `json:"id"`
 	Username  string     `json:"username"`
@@ -18,6 +23,7 @@ type User struct {
 	Enabled   bool       `json:"enabled"`
 	CreatedAt time.Time  `json:"created_at"`
 	LastLogin *time.Time `json:"last_login"`
+	UIPrefs   UIPrefs    `json:"ui_prefs"`
 }
 
 type ApiToken struct {

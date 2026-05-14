@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -49,7 +50,7 @@ func (s *UserStore) Create(username, password string, role models.Role) (*models
 // GetByUsername 按用户名查询。
 func (s *UserStore) GetByUsername(username string) (*models.User, error) {
 	row := s.db.QueryRow(
-		`SELECT id, username, password, role, enabled, created_at, last_login
+		`SELECT id, username, password, role, enabled, created_at, last_login, ui_prefs
 		 FROM users WHERE username = ?`, username,
 	)
 	return scanUser(row)
@@ -58,7 +59,7 @@ func (s *UserStore) GetByUsername(username string) (*models.User, error) {
 // GetByID 按 ID 查询。
 func (s *UserStore) GetByID(id string) (*models.User, error) {
 	row := s.db.QueryRow(
-		`SELECT id, username, password, role, enabled, created_at, last_login
+		`SELECT id, username, password, role, enabled, created_at, last_login, ui_prefs
 		 FROM users WHERE id = ?`, id,
 	)
 	return scanUser(row)
@@ -67,7 +68,7 @@ func (s *UserStore) GetByID(id string) (*models.User, error) {
 // List 列出所有用户。
 func (s *UserStore) List() ([]*models.User, error) {
 	rows, err := s.db.Query(
-		`SELECT id, username, password, role, enabled, created_at, last_login
+		`SELECT id, username, password, role, enabled, created_at, last_login, ui_prefs
 		 FROM users ORDER BY username`,
 	)
 	if err != nil {
@@ -171,8 +172,8 @@ func (s *UserStore) EnsureDefaultAdmin() error {
 func scanUser(row *sql.Row) (*models.User, error) {
 	var u models.User
 	var enabled int
-	var role string
-	err := row.Scan(&u.ID, &u.Username, &u.Password, &role, &enabled, &u.CreatedAt, &u.LastLogin)
+	var role, uiPrefsJSON string
+	err := row.Scan(&u.ID, &u.Username, &u.Password, &role, &enabled, &u.CreatedAt, &u.LastLogin, &uiPrefsJSON)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrUserNotFound
 	}
@@ -181,6 +182,7 @@ func scanUser(row *sql.Row) (*models.User, error) {
 	}
 	u.Role = models.Role(role)
 	u.Enabled = enabled != 0
+	json.Unmarshal([]byte(uiPrefsJSON), &u.UIPrefs) //nolint:errcheck
 	return &u, nil
 }
 
@@ -188,14 +190,40 @@ func scanUser(row *sql.Row) (*models.User, error) {
 func scanUserRows(rows *sql.Rows) (*models.User, error) {
 	var u models.User
 	var enabled int
-	var role string
-	err := rows.Scan(&u.ID, &u.Username, &u.Password, &role, &enabled, &u.CreatedAt, &u.LastLogin)
+	var role, uiPrefsJSON string
+	err := rows.Scan(&u.ID, &u.Username, &u.Password, &role, &enabled, &u.CreatedAt, &u.LastLogin, &uiPrefsJSON)
 	if err != nil {
 		return nil, fmt.Errorf("扫描用户数据失败: %w", err)
 	}
 	u.Role = models.Role(role)
 	u.Enabled = enabled != 0
+	json.Unmarshal([]byte(uiPrefsJSON), &u.UIPrefs) //nolint:errcheck
 	return &u, nil
+}
+
+// GetUIPrefs 返回用户的 UI 偏好。
+func (s *UserStore) GetUIPrefs(userID string) (*models.UIPrefs, error) {
+	var raw string
+	err := s.db.QueryRow(`SELECT ui_prefs FROM users WHERE id = ?`, userID).Scan(&raw)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrUserNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("查询 ui_prefs 失败: %w", err)
+	}
+	var prefs models.UIPrefs
+	json.Unmarshal([]byte(raw), &prefs) //nolint:errcheck
+	return &prefs, nil
+}
+
+// SetUIPrefs 更新用户的 UI 偏好。
+func (s *UserStore) SetUIPrefs(userID string, prefs models.UIPrefs) error {
+	data, err := json.Marshal(prefs)
+	if err != nil {
+		return fmt.Errorf("序列化 ui_prefs 失败: %w", err)
+	}
+	_, err = s.db.Exec(`UPDATE users SET ui_prefs=? WHERE id=?`, string(data), userID)
+	return err
 }
 
 func boolToInt(b bool) int {

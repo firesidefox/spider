@@ -400,5 +400,6 @@ func migrate(db *sql.DB) error {
 		return err
 	}
 	db.Exec(`ALTER TABLE todo_tasks ADD COLUMN turn_id TEXT NOT NULL DEFAULT ''`)
+	db.Exec(`ALTER TABLE users ADD COLUMN ui_prefs TEXT NOT NULL DEFAULT '{}'`)
 	return nil
 }

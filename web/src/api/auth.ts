@@ -13,6 +13,11 @@ export interface LoginResponse {
   user: UserInfo
 }
 
+export interface UIPrefs {
+  target_panel_open: boolean
+  target_panel_width: number
+}
+
 export async function login(username: string, password: string): Promise<LoginResponse> {
   const res = await fetch('/api/v1/auth/login', {
     method: 'POST',
@@ -34,6 +39,20 @@ export async function getMe(): Promise<UserInfo> {
   const res = await fetch('/api/v1/me', { headers: authHeaders() })
   if (!res.ok) throw new Error((await res.json()).error)
   return res.json()
+}
+
+export async function getUIPrefs(): Promise<UIPrefs> {
+  const res = await fetch('/api/v1/me/prefs', { headers: authHeaders() })
+  if (!res.ok) throw new Error((await res.json()).error)
+  return res.json()
+}
+
+export async function setUIPrefs(prefs: UIPrefs): Promise<void> {
+  await fetch('/api/v1/me/prefs', {
+    method: 'PUT',
+    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+    body: JSON.stringify(prefs),
+  })
 }
 
 export function authHeaders(): Record<string, string> {

@@ -9,6 +9,7 @@ import (
 
 	authmw "github.com/spiderai/spider/internal/auth"
 	mcppkg "github.com/spiderai/spider/internal/mcp"
+	"github.com/spiderai/spider/internal/models"
 )
 
 func loginHandler(app *mcppkg.App) http.HandlerFunc {
@@ -127,5 +128,51 @@ func changePasswordHandler(app *mcppkg.App) http.HandlerFunc {
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+var defaultUIPrefs = models.UIPrefs{TargetPanelOpen: true, TargetPanelWidth: 280}
+
+func getUIPrefsHandler(app *mcppkg.App) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		uc := authmw.GetUser(r.Context())
+		if uc == nil {
+			writeError(w, http.StatusUnauthorized, "unauthorized")
+			return
+		}
+		if uc.UserID == "anonymous" {
+			writeJSON(w, http.StatusOK, defaultUIPrefs)
+			return
+		}
+		prefs, err := app.UserStore.GetUIPrefs(uc.UserID)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, prefs)
+	}
+}
+
+func setUIPrefsHandler(app *mcppkg.App) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		uc := authmw.GetUser(r.Context())
+		if uc == nil {
+			writeError(w, http.StatusUnauthorized, "unauthorized")
+			return
+		}
+		var prefs models.UIPrefs
+		if err := json.NewDecoder(r.Body).Decode(&prefs); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid request")
+			return
+		}
+		if uc.UserID == "anonymous" {
+			writeJSON(w, http.StatusOK, prefs)
+			return
+		}
+		if err := app.UserStore.SetUIPrefs(uc.UserID, prefs); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, prefs)
 	}
 }

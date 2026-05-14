@@ -168,7 +168,7 @@ function savePrefs() {
 
 function toggleTarget() {
   targetOpen.value = !targetOpen.value
-  savePrefs()
+  setUIPrefs({ target_panel_open: targetOpen.value, target_panel_width: targetWidth.value })
 }
 
 function startTargetDrag(e: MouseEvent) {
@@ -784,21 +784,27 @@ async function initView() {
     const data = await res.json()
     globalMode.value = data.permission_mode || 'ask'
   } catch (_) { /* use default */ }
+  await loadPrefs()
+  initialized = true
+}
+
+async function loadPrefs() {
   try {
     const prefs = await getUIPrefs()
     targetOpen.value = prefs.target_panel_open
     targetWidth.value = prefs.target_panel_width || 280
   } catch (_) { /* use default */ }
-  initialized = true
 }
 
 onMounted(() => {
   document.addEventListener('click', closeModeDropdown)
   if (!initialized) { initialized = true; initView() }
+  else loadPrefs()
 })
 onActivated(() => {
   document.addEventListener('click', closeModeDropdown)
   if (!initialized) { initialized = true; initView() }
+  else loadPrefs()
 })
 
 onDeactivated(() => {

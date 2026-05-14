@@ -199,6 +199,8 @@ func NewRouter(app *mcppkg.App) http.Handler {
 	mux.HandleFunc("DELETE /api/v1/skills/custom/{name...}", deleteCustomSkillHandler(app.Config.DataDir))
 	mux.HandleFunc("GET /api/v1/me", meHandler(app))
 	mux.HandleFunc("PUT /api/v1/me/password", changePasswordHandler(app))
+	mux.HandleFunc("GET /api/v1/me/prefs", getUIPrefsHandler(app))
+	mux.HandleFunc("PUT /api/v1/me/prefs", setUIPrefsHandler(app))
 
 	mux.HandleFunc("/api/v1/me/ssh-keys", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
