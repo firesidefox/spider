@@ -409,6 +409,10 @@ func NewRouter(app *mcppkg.App) http.Handler {
 			operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				ingestDocument(app, w, r)
 			})).ServeHTTP(w, r)
+		case http.MethodDelete:
+			operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				deleteBatchDocuments(app, w, r)
+			})).ServeHTTP(w, r)
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -429,6 +433,10 @@ func NewRouter(app *mcppkg.App) http.Handler {
 		case http.MethodPost:
 			operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				createGroup(app, w, r)
+			})).ServeHTTP(w, r)
+		case http.MethodDelete:
+			operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				deleteBatchGroups(app, w, r)
 			})).ServeHTTP(w, r)
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)

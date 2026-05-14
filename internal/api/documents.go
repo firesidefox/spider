@@ -198,3 +198,50 @@ func moveDocumentToGroup(app *mcppkg.App, w http.ResponseWriter, r *http.Request
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
+
+func deleteBatchDocuments(app *mcppkg.App, w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		IDs []int `json:"ids"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+	if len(req.IDs) == 0 {
+		writeError(w, http.StatusBadRequest, "ids is required")
+		return
+	}
+	if len(req.IDs) > 500 {
+		writeError(w, http.StatusBadRequest, "too many ids (max 500)")
+		return
+	}
+	if err := app.DocStore.DeleteBatch(req.IDs); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func deleteBatchGroups(app *mcppkg.App, w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		IDs             []int `json:"ids"`
+		DeleteDocuments bool  `json:"delete_documents"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+	if len(req.IDs) == 0 {
+		writeError(w, http.StatusBadRequest, "ids is required")
+		return
+	}
+	if len(req.IDs) > 500 {
+		writeError(w, http.StatusBadRequest, "too many ids (max 500)")
+		return
+	}
+	if err := app.GroupStore.DeleteBatch(req.IDs, req.DeleteDocuments); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
