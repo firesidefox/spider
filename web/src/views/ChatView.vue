@@ -112,6 +112,7 @@ async function pollUntilIdle(convId: string) {
 
 const inputText = ref('')
 const isStreaming = ref(false)
+const queuedMessages = ref<string[]>([])
 
 const todoTasksMap = ref<Record<string, Map<number, Todo>>>({})
 const completedFolded = ref(true)
@@ -410,6 +411,7 @@ async function cancelSend() {
   messagesMap.value[convId] = buildDisplayMessages(data.messages)
   await nextTick()
   scrollToBottom()
+  flushQueue()
 }
 
 function handleConvEvent(convId: string, event: ChatEvent) {
@@ -507,17 +509,25 @@ function handleConvEvent(convId: string, event: ChatEvent) {
         last.blocks.push({ type: 'text', content: errText })
       }
       last.isStreaming = false
+      for (const b of last.blocks) {
+        if (b.type === 'tool' && b.call.durationMs == null) b.call.durationMs = 0
+      }
       if (activeConvId.value === convId) {
         isStreaming.value = false
         nextTick(() => scrollToBottom())
+        flushQueue()
       }
       break
     }
     case 'done':
       last.isStreaming = false
+      for (const b of last.blocks) {
+        if (b.type === 'tool' && b.call.durationMs == null) b.call.durationMs = 0
+      }
       if (activeConvId.value === convId) {
         isStreaming.value = false
         nextTick(() => scrollToBottom())
+        flushQueue()
       }
       setStatus('done')
       loadConversations()
@@ -556,34 +566,49 @@ function handleConvEvent(convId: string, event: ChatEvent) {
   }
 }
 
-async function send() {
-  const text = inputText.value.trim()
-  if (!text || isStreaming.value) return
-  if (text === '/model') {
+async function send(overrideText?: string) {
+  const text = (overrideText ?? inputText.value).trim()
+  if (!text) return
+
+  // slash commands only when not called from queue flush
+  if (!overrideText) {
+    if (text === '/model') {
+      inputText.value = ''
+      await handleModelCommand()
+      return
+    }
+    if (text === '/export' || text.startsWith('/export ')) {
+      const fmt = parseExportFormat(text)
+      if (fmt === 'invalid') {
+        addSystemMessage('用法：/export [md|json] 或 /export --format [md|json]')
+        return
+      }
+      inputText.value = ''
+      if (!activeConvId.value) {
+        addSystemMessage('没有活跃的会话')
+        return
+      }
+      await exportConversation(activeConvId.value, fmt === 'default' ? 'md' : fmt)
+      return
+    }
+  }
+
+  // enqueue when streaming (only for direct user input, not flush)
+  if (isStreaming.value && !overrideText) {
+    queuedMessages.value.push(text)
     inputText.value = ''
-    await handleModelCommand()
+    nextTick(() => {
+      if (textareaRef.value) textareaRef.value.style.height = 'auto'
+    })
     return
   }
 
-  if (text === '/export' || text.startsWith('/export ')) {
-    const fmt = parseExportFormat(text)
-    if (fmt === 'invalid') {
-      addSystemMessage('用法：/export [md|json] 或 /export --format [md|json]')
-      return
-    }
+  if (!overrideText) {
     inputText.value = ''
-    if (!activeConvId.value) {
-      addSystemMessage('没有活跃的会话')
-      return
-    }
-    await exportConversation(activeConvId.value, fmt === 'default' ? 'md' : fmt)
-    return
+    nextTick(() => {
+      if (textareaRef.value) textareaRef.value.style.height = 'auto'
+    })
   }
-
-  inputText.value = ''
-  nextTick(() => {
-    if (textareaRef.value) textareaRef.value.style.height = 'auto'
-  })
 
   if (!activeConvId.value) {
     await createNewConversation()
@@ -592,9 +617,7 @@ async function send() {
   const convId = activeConvId.value!
   const convMsgs = getOrInitMessages(convId)
 
-  // Ensure EventSource is subscribed for this conversation
   if (!convSubscriptions.has(convId)) {
-    // New conversation: no history to replay, skip all (lastEventId = -1 means skip nothing but no replay needed)
     const unsub = subscribeConversation(convId, (event) => handleConvEvent(convId, event), -1)
     convSubscriptions.set(convId, unsub)
   }
@@ -615,6 +638,13 @@ async function send() {
   scrollToBottom()
 
   abortCtrl = sendMessage(convId, text)
+}
+
+function flushQueue() {
+  if (queuedMessages.value.length === 0) return
+  const merged = queuedMessages.value.join('\n\n')
+  queuedMessages.value = []
+  send(merged)
 }
 
 function parseExportFormat(text: string): 'md' | 'json' | 'invalid' | 'default' {
@@ -1026,6 +1056,10 @@ onUnmounted(() => {
         </div>
       </div>
 
+      <div v-for="(qm, i) in queuedMessages" :key="`queued-${i}`" class="queued-message">
+        <span class="queued-message-text">{{ qm }}</span>
+      </div>
+
       <div class="chat-input">
         <div class="input-wrapper">
           <div v-if="kbDropdownMode" class="kb-dropdown">
@@ -1042,13 +1076,13 @@ onUnmounted(() => {
             @keydown.enter.exact.prevent="send()"
             @keydown="onTextareaKeydown"
             @input="onTextareaInput"
-            placeholder="输入运维指令..."
-            :disabled="isStreaming"
+            :placeholder="isStreaming ? '排队发送...' : '输入运维指令...'"
             rows="1"
           ></textarea>
         </div>
         <button v-if="isStreaming" @click="cancelSend" class="send-btn cancel-btn">取消</button>
-        <button v-else @click="send" :disabled="!inputText.trim()" class="send-btn">发送</button>
+        <button v-if="isStreaming" @click="send()" :disabled="!inputText.trim()" class="send-btn queue-btn">排队</button>
+        <button v-if="!isStreaming" @click="send()" :disabled="!inputText.trim()" class="send-btn">发送</button>
       </div>
     </div>
 
@@ -1164,6 +1198,10 @@ onUnmounted(() => {
 .send-btn { background: var(--primary); color: #fff; border: none; padding: 8px 20px; border-radius: 6px; cursor: pointer; font-size: 13px; font-family: 'SF Mono', monospace; }
 .send-btn:hover:not(:disabled) { background: var(--primary-hover); }
 .send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.queue-btn { background: var(--text-sub); }
+.queue-btn:hover:not(:disabled) { background: var(--text); }
+.queued-message { padding: 6px 16px; opacity: 0.45; }
+.queued-message-text { font-family: 'SF Mono', monospace; font-size: 13px; color: var(--text); white-space: pre-wrap; word-break: break-word; }
 .cancel-btn { background: var(--red, #e05252); }
 .cancel-btn:hover { background: #c94444; }
 .export-wrapper { position: relative; margin-left: auto; }
