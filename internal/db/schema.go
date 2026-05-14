@@ -399,8 +399,38 @@ func migrate(db *sql.DB) error {
 	if _, err := db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_task_runs_one_running ON task_runs(task_id) WHERE status='running'`); err != nil {
 		return err
 	}
-	db.Exec(`ALTER TABLE todo_tasks ADD COLUMN turn_id TEXT NOT NULL DEFAULT ''`)
-	db.Exec(`ALTER TABLE todo_tasks ADD COLUMN active_form TEXT NOT NULL DEFAULT ''`)
+	// Migrate todo_tasks: drop turn_id and blocked_by columns
+	var hasTurnID int
+	db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('todo_tasks') WHERE name='turn_id'`).Scan(&hasTurnID)
+	if hasTurnID > 0 {
+		if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS todo_tasks_new (
+			id              INTEGER PRIMARY KEY AUTOINCREMENT,
+			conversation_id TEXT    NOT NULL,
+			subject         TEXT    NOT NULL,
+			active_form     TEXT    NOT NULL DEFAULT '',
+			description     TEXT    NOT NULL DEFAULT '',
+			status          TEXT    NOT NULL DEFAULT 'pending',
+			owner           TEXT    NOT NULL DEFAULT '',
+			created_at      DATETIME NOT NULL,
+			updated_at      DATETIME NOT NULL,
+			FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+		)`); err != nil {
+			return err
+		}
+		if _, err := db.Exec(`INSERT INTO todo_tasks_new
+			SELECT id, conversation_id, subject, active_form, description, status, owner, created_at, updated_at
+			FROM todo_tasks`); err != nil {
+			return err
+		}
+		if _, err := db.Exec(`DROP TABLE todo_tasks`); err != nil {
+			return err
+		}
+		if _, err := db.Exec(`ALTER TABLE todo_tasks_new RENAME TO todo_tasks`); err != nil {
+			return err
+		}
+	} else {
+		db.Exec(`ALTER TABLE todo_tasks ADD COLUMN active_form TEXT NOT NULL DEFAULT ''`)
+	}
 	db.Exec(`ALTER TABLE users ADD COLUMN ui_prefs TEXT NOT NULL DEFAULT '{}'`)
 	return nil
 }
