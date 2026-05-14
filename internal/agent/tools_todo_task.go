@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/spiderai/spider/internal/logger"
 	"github.com/spiderai/spider/internal/models"
 	"github.com/spiderai/spider/internal/store"
 )
@@ -149,7 +150,11 @@ func (t *TodoTool) broadcastEvent(eventType string, content any) {
 
 func (t *TodoTool) allTasksDone() ([]*models.Todo, bool) {
 	tasks, err := t.store.ListByTurn(t.turnID)
-	if err != nil || len(tasks) == 0 {
+	if err != nil {
+		logger.Global().Error().Err(err).Str("turn_id", t.turnID).Msg("allTasksDone: ListByTurn failed")
+		return nil, false
+	}
+	if len(tasks) == 0 {
 		return nil, false
 	}
 	for _, task := range tasks {
