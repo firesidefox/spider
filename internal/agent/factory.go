@@ -36,7 +36,6 @@ type Factory struct {
 	RagStore       *rag.Store
 	TaskStore      *store.TaskStore
 	DisableSearchDocs bool
-	TurnID         string
 }
 
 // NewFactory creates a Factory by reading the active provider from the DB.
@@ -103,6 +102,7 @@ func (f *Factory) NewAgent(systemPrompt string, conversationID string) *Agent {
 		Registry:     registry,
 		Hooks:        hooks,
 		MsgStore:     f.MsgStore,
+		TodoStore:    f.TodoStore,
 		SystemPrompt: systemPrompt,
 		MaxTurns:     15,
 		Compactor:    compactor,

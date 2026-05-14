@@ -13,6 +13,7 @@ import (
 	"github.com/spiderai/spider/internal/logger"
 	"github.com/spiderai/spider/internal/models"
 	"github.com/spiderai/spider/internal/permission"
+	"github.com/spiderai/spider/internal/store"
 )
 
 const epaSystemPromptPrefix = `## Behavioral Constraints
@@ -70,6 +71,7 @@ type Agent struct {
 	registry      *ToolRegistry
 	hooks         *HookChain
 	msgStore      MessageStorer
+	todoStore     *store.TodoStore
 	systemPrompt  string
 	maxTurns      int
 	compactor     *Compactor
@@ -82,6 +84,7 @@ type AgentConfig struct {
 	Registry     *ToolRegistry
 	Hooks        *HookChain
 	MsgStore     MessageStorer
+	TodoStore    *store.TodoStore
 	SystemPrompt string
 	MaxTurns     int
 	Compactor    *Compactor
@@ -98,6 +101,7 @@ func NewAgent(cfg AgentConfig) *Agent {
 		registry:     cfg.Registry,
 		hooks:        cfg.Hooks,
 		msgStore:     cfg.MsgStore,
+		todoStore:    cfg.TodoStore,
 		systemPrompt: epaSystemPromptPrefix + cfg.SystemPrompt,
 		maxTurns:     maxTurns,
 		compactor:    cfg.Compactor,
@@ -186,6 +190,13 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 		// Replace last message with skill-injected version for LLM only
 		if finalUserMessage != userMessage && len(history) > 0 {
 			history[len(history)-1].Content = finalUserMessage
+		}
+
+		// Inject active task state so LLM sees existing tasks on every Run()
+		if a.todoStore != nil {
+			if tasks, err := a.todoStore.List(conversationID); err == nil && len(tasks) > 0 {
+				history = append(history, buildTaskReminderMessage(tasks))
+			}
 		}
 
 		toolDefs := a.registry.Definitions()
@@ -382,4 +393,14 @@ func isContextLengthError(err error) bool {
 		strings.Contains(s, "context length") ||
 		strings.Contains(s, "too many tokens") ||
 		strings.Contains(s, "maximum context")
+}
+
+func buildTaskReminderMessage(tasks []*models.Todo) llm.Message {
+	var sb strings.Builder
+	sb.WriteString("<system-reminder>\nCurrent tasks for this conversation:\n")
+	for _, t := range tasks {
+		sb.WriteString(fmt.Sprintf("[%d] %s: %s\n", t.ID, t.Status, t.Subject))
+	}
+	sb.WriteString("</system-reminder>")
+	return llm.Message{Role: llm.RoleUser, Content: sb.String()}
 }
