@@ -36,6 +36,7 @@ type Factory struct {
 	RagStore       *rag.Store
 	TaskStore      *store.TaskStore
 	DisableSearchDocs bool
+	TurnID         string
 }
 
 // NewFactory creates a Factory by reading the active provider from the DB.
@@ -230,7 +231,7 @@ func (f *Factory) buildRegistry(conversationID string) *ToolRegistry {
 		registry.Register(NewSearchDocsTool(f.RagStore, f.DocStore))
 	}
 	if f.TodoStore != nil {
-		registry.Register(NewTodoTool(f.TodoStore, f.SSEBroadcaster, conversationID, ""))
+		registry.Register(NewTodoTool(f.TodoStore, f.SSEBroadcaster, conversationID, f.TurnID))
 	}
 	if f.TopologyStore != nil {
 		registry.Register(NewGetTopologyTool(f.TopologyStore))

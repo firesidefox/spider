@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/google/uuid"
 	"github.com/spiderai/spider/internal/agent"
 	authmw "github.com/spiderai/spider/internal/auth"
 	mcppkg "github.com/spiderai/spider/internal/mcp"
@@ -131,6 +132,7 @@ func chatSendMessage(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id
 		writeError(w, 503, "LLM not configured: "+err.Error())
 		return
 	}
+	factory.TurnID = uuid.New().String()
 	factory.DataDir = app.Config.DataDir
 	var req struct {
 		Content string `json:"content"`
