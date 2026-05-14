@@ -137,10 +137,18 @@
                   </div>
                   <div class="knowledge-row">
                     <span class="knowledge-label">知识来源：</span>
-                    <span v-for="ks in f.knowledge_sources.filter(k => k.type !== 'none')" :key="ks.type+ks.id" class="knowledge-tag">
-                      <span class="at">@</span>{{ docGroupsMap.get(ks.id)?.name || ks.id }}
-                      <button class="ks-remove" @click.stop="saveKnowledgeSources(f, f.knowledge_sources.filter(k => k.id !== ks.id).map(k => k.id))">×</button>
-                    </span>
+                    <template v-if="!f.knowledge_sources || f.knowledge_sources.length === 0">
+                      <span class="knowledge-tag">全局</span>
+                    </template>
+                    <template v-else-if="f.knowledge_sources.some(k => k.type === 'none')">
+                      <!-- 无知识库，不显示 -->
+                    </template>
+                    <template v-else>
+                      <span v-for="ks in f.knowledge_sources" :key="ks.type+ks.id" class="knowledge-tag">
+                        <span class="at">@</span>{{ ks.type === 'doc' ? (allDocsMap.get(ks.id)?.title || ks.id) : (docGroupsMap.get(ks.id)?.name || ks.id) }}
+                        <button class="ks-remove" @click.stop="saveKnowledgeSources(f, f.knowledge_sources.filter(k => !(k.type === ks.type && k.id === ks.id)).map(k => ({type: k.type, id: k.id})))">×</button>
+                      </span>
+                    </template>
                     <div class="ks-picker-wrap">
                       <button class="add-knowledge" @click.stop="ksPickerFaceId = ksPickerFaceId === f.id ? null : f.id">+ 添加</button>
                       <div v-if="ksPickerFaceId === f.id" class="ks-dropdown" @click.stop>
@@ -441,6 +449,7 @@ const filtered = computed(() => hosts.value.filter(h => {
 }))
 
 const docGroupsMap = computed(() => new Map(docGroups.value.map(g => [g.id, g])))
+const allDocsMap = computed(() => new Map(allDocs.value.map(d => [d.id, d])))
 
 async function load() { hosts.value = await listHosts() }
 
@@ -508,24 +517,24 @@ async function bulkDelete() {
 function goExec(h: Host) { router.push({ path: '/exec', query: { host: h.id } }) }
 function bulkExecSelected() { router.push({ path: '/exec', query: { hosts: selected.value.join(',') } }) }
 
-async function saveKnowledgeSources(face: AccessFace, groupIds: number[]) {
+async function saveKnowledgeSources(face: AccessFace, sources: Array<{type: string; id: number}>) {
   if (!activeHost.value) return
   const prev = face.knowledge_sources
-  const ks = groupIds.map(id => ({ type: 'group' as const, id }))
-  face.knowledge_sources = ks
+  face.knowledge_sources = sources as typeof face.knowledge_sources
   ksPickerFaceId.value = null
   try {
-    await updateAccessFace(activeHost.value.id, face.id, { knowledge_sources: ks })
+    await updateAccessFace(activeHost.value.id, face.id, { knowledge_sources: sources as typeof face.knowledge_sources })
   } catch {
     face.knowledge_sources = prev
   }
 }
 
 function toggleKnowledgeSource(face: AccessFace, groupId: number) {
-  const ids = face.knowledge_sources.some(k => k.id === groupId)
-    ? face.knowledge_sources.filter(k => k.id !== groupId).map(k => k.id)
-    : [...face.knowledge_sources.map(k => k.id), groupId]
-  saveKnowledgeSources(face, ids)
+  const exists = face.knowledge_sources.some(k => k.type === 'group' && k.id === groupId)
+  const sources = exists
+    ? face.knowledge_sources.filter(k => !(k.type === 'group' && k.id === groupId))
+    : [...face.knowledge_sources, { type: 'group' as const, id: groupId }]
+  saveKnowledgeSources(face, sources)
 }
 
 function toggleFormKnowledgeSource(groupId: number) {

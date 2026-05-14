@@ -97,7 +97,9 @@ func (s *TodoStore) Update(conversationID string, id int64, subject, description
 	if err != nil {
 		return nil, err
 	}
-	json.Unmarshal([]byte(blockedByJSON), &t.BlockedBy) //nolint:errcheck
+	if err := json.Unmarshal([]byte(blockedByJSON), &t.BlockedBy); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal blocked_by for task %d: %w", t.ID, err)
+	}
 	logger.Global().Debug().Str("table", "todo_tasks").Str("op", "update").Int64("task_id", id).Str("status", status).Msg("store")
 	return &t, nil
 }
@@ -130,7 +132,9 @@ func (s *TodoStore) List(conversationID string) ([]*models.Todo, error) {
 			&t.Status, &t.Owner, &blockedByJSON, &t.CreatedAt, &t.UpdatedAt); err != nil {
 			return nil, err
 		}
-		json.Unmarshal([]byte(blockedByJSON), &t.BlockedBy) //nolint:errcheck
+		if err := json.Unmarshal([]byte(blockedByJSON), &t.BlockedBy); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal blocked_by for task %d: %w", t.ID, err)
+		}
 		tasks = append(tasks, &t)
 	}
 	if err := rows.Err(); err != nil {
@@ -159,7 +163,9 @@ func (s *TodoStore) ListByTurn(turnID string) ([]*models.Todo, error) {
 			&t.Status, &t.Owner, &blockedByJSON, &t.CreatedAt, &t.UpdatedAt); err != nil {
 			return nil, err
 		}
-		json.Unmarshal([]byte(blockedByJSON), &t.BlockedBy) //nolint:errcheck
+		if err := json.Unmarshal([]byte(blockedByJSON), &t.BlockedBy); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal blocked_by for task %d: %w", t.ID, err)
+		}
 		tasks = append(tasks, &t)
 	}
 	return tasks, rows.Err()
@@ -176,6 +182,8 @@ func (s *TodoStore) Get(id int64) (*models.Todo, error) {
 	if err != nil {
 		return nil, err
 	}
-	json.Unmarshal([]byte(blockedByJSON), &t.BlockedBy) //nolint:errcheck
+	if err := json.Unmarshal([]byte(blockedByJSON), &t.BlockedBy); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal blocked_by for task %d: %w", t.ID, err)
+	}
 	return &t, nil
 }
