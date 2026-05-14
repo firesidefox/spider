@@ -558,7 +558,8 @@ onMounted(() => { load(); loadGroups() })
 .detail-topbar-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .detail-topbar-right { display: flex; gap: 8px; flex-shrink: 0; }
 .detail-title { font-size: 15px; font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.detail-body { flex: 1; overflow-y: auto; padding: 20px; }
+.detail-body { flex: 1; display: flex; flex-direction: column; overflow: hidden; padding: 20px; }
+.output { flex: 1; overflow-y: auto; white-space: pre-wrap; word-break: break-all; font-family: monospace; font-size: 13px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px; min-height: 0; }
 .detail-meta {
   display: flex; flex-wrap: wrap; gap: 16px; font-size: 13px; color: var(--text-sub);
   padding: 12px 14px; background: var(--surface); border: 1px solid var(--border);
