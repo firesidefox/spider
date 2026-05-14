@@ -3,6 +3,7 @@ package store
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/spiderai/spider/internal/models"
@@ -51,6 +52,37 @@ func (s *GroupStore) Rename(id int, name string) error {
 func (s *GroupStore) Delete(id int) error {
 	_, err := s.db.Exec("DELETE FROM document_groups WHERE id = ?", id)
 	return err
+}
+
+func (s *GroupStore) DeleteBatch(ids []int, deleteDocuments bool) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	placeholders := "?" + strings.Repeat(",?", len(ids)-1)
+	args := make([]any, len(ids))
+	for i, id := range ids {
+		args[i] = id
+	}
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	if deleteDocuments {
+		if _, err := tx.Exec("DELETE FROM documents WHERE group_id IN ("+placeholders+")", args...); err != nil {
+			return err
+		}
+	} else {
+		if _, err := tx.Exec("UPDATE documents SET group_id = NULL WHERE group_id IN ("+placeholders+")", args...); err != nil {
+			return err
+		}
+	}
+	if _, err := tx.Exec("DELETE FROM document_groups WHERE id IN ("+placeholders+")", args...); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func (s *GroupStore) MoveDocument(docID int, groupID *int) error {
