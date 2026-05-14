@@ -873,6 +873,7 @@ onUnmounted(() => {
             <div class="export-option" @click="doExport('json')">JSON</div>
           </div>
         </div>
+        <button v-if="!targetOpen" class="sidebar-toggle" @click="toggleTarget">‹</button>
       </div>
 
       <div class="chat-messages" ref="messagesRef">
@@ -939,7 +940,7 @@ onUnmounted(() => {
     </div>
 
     <!-- Right target panel resize handle -->
-    <div class="target-resize-handle" @mousedown="startTargetDrag">
+    <div v-if="targetOpen" class="target-resize-handle" @mousedown="startTargetDrag">
       <div class="drag-indicator"></div>
     </div>
 
@@ -947,13 +948,12 @@ onUnmounted(() => {
     <div class="target-side" :class="{ collapsed: !targetOpen }" :style="{ width: targetOpen ? targetWidth + 'px' : '0' }">
       <div class="target-side-header">
         <span class="target-side-title">目标</span>
-        <button class="target-toggle" @click="toggleTarget">×</button>
+        <button class="target-toggle" @click="toggleTarget">›</button>
       </div>
       <div class="target-side-body">
         <TargetPanel :devices="devices" />
       </div>
     </div>
-    <button v-if="!targetOpen" class="target-open-btn" @click="toggleTarget">目标</button>
 
   </div>
 </template>
@@ -1093,11 +1093,9 @@ onUnmounted(() => {
 .target-resize-handle:hover, .chat-page.dragging .target-resize-handle { background: rgba(108, 140, 255, 0.3); }
 .target-side { display: flex; flex-direction: column; flex-shrink: 0; overflow: hidden; transition: width 0.2s; border-left: 1px solid var(--border); background: var(--surface); }
 .target-side.collapsed { width: 0 !important; border-left: none; }
-.target-side-header { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.target-side-header { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; border-bottom: 1px solid var(--border); flex-shrink: 0; min-height: 43px; box-sizing: border-box; }
 .target-side-title { font-size: 12px; font-weight: 500; color: var(--text-sub); letter-spacing: 0.05em; }
-.target-toggle { background: none; border: none; cursor: pointer; color: var(--text-sub); font-size: 16px; padding: 0 2px; line-height: 1; }
-.target-toggle:hover { color: var(--text); }
+.target-toggle { background: none; border: none; cursor: pointer; color: var(--text-sub); font-size: 18px; width: 24px; height: 24px; border-radius: 4px; display: flex; align-items: center; justify-content: center; line-height: 1; }
+.target-toggle:hover { background: rgba(255,255,255,0.06); color: var(--text); }
 .target-side-body { flex: 1; overflow-y: auto; }
-.target-open-btn { position: fixed; right: 0; top: 50%; transform: translateY(-50%); writing-mode: vertical-rl; background: var(--surface); border: 1px solid var(--border); border-right: none; border-radius: 4px 0 0 4px; padding: 10px 4px; font-size: 12px; color: var(--text-sub); cursor: pointer; z-index: 10; }
-.target-open-btn:hover { color: var(--text); background: var(--row-hover); }
 </style>
