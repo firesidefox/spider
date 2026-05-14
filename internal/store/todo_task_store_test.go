@@ -32,7 +32,7 @@ func TestTodoStore_Update(t *testing.T) {
 	task := &models.Todo{ConversationID: "conv-1", Subject: "task1", Status: "pending"}
 	s.Create(task)
 
-	got, err := s.Update("conv-1", task.ID, "", "", "in_progress", "", nil)
+	got, err := s.Update("conv-1", task.ID, "", "", "", "in_progress", "", nil)
 	if err != nil {
 		t.Fatalf("Update: %v", err)
 	}
@@ -46,7 +46,7 @@ func TestTodoStore_ListExcludesDeleted(t *testing.T) {
 
 	task := &models.Todo{ConversationID: "conv-1", Subject: "task1", Status: "pending"}
 	s.Create(task)
-	s.Update("conv-1", task.ID, "", "", "deleted", "", nil)
+	s.Update("conv-1", task.ID, "", "", "", "deleted", "", nil)
 
 	tasks, _ := s.List("conv-1")
 	if len(tasks) != 0 {
@@ -62,7 +62,7 @@ func TestTodoStore_BlockedBy(t *testing.T) {
 	s.Create(t1)
 	s.Create(t2)
 
-	s.Update("conv-1", t2.ID, "", "", "", "", []int64{t1.ID})
+	s.Update("conv-1", t2.ID, "", "", "", "", "", []int64{t1.ID})
 
 	got, _ := s.Get(t2.ID)
 	if len(got.BlockedBy) != 1 || got.BlockedBy[0] != t1.ID {

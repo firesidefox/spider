@@ -110,7 +110,7 @@ func (t *TodoTool) execUpdate(input map[string]any) (*ToolResult, error) {
 		return &ToolResult{Content: "update requires at least one field besides task_id", IsError: true, RiskLevel: RiskL1}, nil
 	}
 
-	task, err := t.store.Update(t.conversationID, taskID, subject, description, status, owner, blockedBy)
+	task, err := t.store.Update(t.conversationID, taskID, subject, "", description, status, owner, blockedBy)
 	if err != nil {
 		return &ToolResult{Content: "update failed: " + err.Error(), IsError: true, RiskLevel: RiskL1}, nil
 	}

@@ -32,9 +32,9 @@ func (s *TodoStore) Create(task *models.Todo) error {
 	}
 	now := time.Now().UTC()
 	res, err := s.db.Exec(
-		`INSERT INTO todo_tasks (conversation_id, turn_id, subject, description, status, owner, blocked_by, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		task.ConversationID, task.TurnID, task.Subject, task.Description,
+		`INSERT INTO todo_tasks (conversation_id, turn_id, subject, active_form, description, status, owner, blocked_by, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		task.ConversationID, task.TurnID, task.Subject, task.ActiveForm, task.Description,
 		task.Status, task.Owner, string(blockedBy), now, now,
 	)
 	if err != nil {
@@ -48,7 +48,7 @@ func (s *TodoStore) Create(task *models.Todo) error {
 	return nil
 }
 
-func (s *TodoStore) Update(conversationID string, id int64, subject, description, status, owner string, blockedBy []int64) (*models.Todo, error) {
+func (s *TodoStore) Update(conversationID string, id int64, subject, activeForm, description, status, owner string, blockedBy []int64) (*models.Todo, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -59,6 +59,10 @@ func (s *TodoStore) Update(conversationID string, id int64, subject, description
 	if subject != "" {
 		setClauses = append(setClauses, "subject = ?")
 		args = append(args, subject)
+	}
+	if activeForm != "" {
+		setClauses = append(setClauses, "active_form = ?")
+		args = append(args, activeForm)
 	}
 	if description != "" {
 		setClauses = append(setClauses, "description = ?")
@@ -90,9 +94,9 @@ func (s *TodoStore) Update(conversationID string, id int64, subject, description
 	var t models.Todo
 	var blockedByJSON string
 	err = s.db.QueryRow(
-		`SELECT id, conversation_id, turn_id, subject, description, status, owner, blocked_by, created_at, updated_at
+		`SELECT id, conversation_id, turn_id, subject, active_form, description, status, owner, blocked_by, created_at, updated_at
 		 FROM todo_tasks WHERE id = ?`, id,
-	).Scan(&t.ID, &t.ConversationID, &t.TurnID, &t.Subject, &t.Description,
+	).Scan(&t.ID, &t.ConversationID, &t.TurnID, &t.Subject, &t.ActiveForm, &t.Description,
 		&t.Status, &t.Owner, &blockedByJSON, &t.CreatedAt, &t.UpdatedAt)
 	if err != nil {
 		return nil, err
@@ -107,7 +111,7 @@ func (s *TodoStore) Update(conversationID string, id int64, subject, description
 func (s *TodoStore) List(conversationID string) ([]*models.Todo, error) {
 	// Only return tasks from turns that have at least one non-completed task.
 	rows, err := s.db.Query(
-		`SELECT id, conversation_id, turn_id, subject, description, status, owner, blocked_by, created_at, updated_at
+		`SELECT id, conversation_id, turn_id, subject, active_form, description, status, owner, blocked_by, created_at, updated_at
 		 FROM todo_tasks
 		 WHERE conversation_id = ?
 		   AND status != 'deleted'
@@ -128,7 +132,7 @@ func (s *TodoStore) List(conversationID string) ([]*models.Todo, error) {
 	for rows.Next() {
 		var t models.Todo
 		var blockedByJSON string
-		if err := rows.Scan(&t.ID, &t.ConversationID, &t.TurnID, &t.Subject, &t.Description,
+		if err := rows.Scan(&t.ID, &t.ConversationID, &t.TurnID, &t.Subject, &t.ActiveForm, &t.Description,
 			&t.Status, &t.Owner, &blockedByJSON, &t.CreatedAt, &t.UpdatedAt); err != nil {
 			return nil, err
 		}
@@ -146,7 +150,7 @@ func (s *TodoStore) List(conversationID string) ([]*models.Todo, error) {
 
 func (s *TodoStore) ListByTurn(turnID string) ([]*models.Todo, error) {
 	rows, err := s.db.Query(
-		`SELECT id, conversation_id, turn_id, subject, description, status, owner, blocked_by, created_at, updated_at
+		`SELECT id, conversation_id, turn_id, subject, active_form, description, status, owner, blocked_by, created_at, updated_at
 		 FROM todo_tasks WHERE turn_id = ? AND status != 'deleted' ORDER BY id ASC`,
 		turnID,
 	)
@@ -159,7 +163,7 @@ func (s *TodoStore) ListByTurn(turnID string) ([]*models.Todo, error) {
 	for rows.Next() {
 		var t models.Todo
 		var blockedByJSON string
-		if err := rows.Scan(&t.ID, &t.ConversationID, &t.TurnID, &t.Subject, &t.Description,
+		if err := rows.Scan(&t.ID, &t.ConversationID, &t.TurnID, &t.Subject, &t.ActiveForm, &t.Description,
 			&t.Status, &t.Owner, &blockedByJSON, &t.CreatedAt, &t.UpdatedAt); err != nil {
 			return nil, err
 		}
@@ -175,9 +179,9 @@ func (s *TodoStore) Get(id int64) (*models.Todo, error) {
 	var t models.Todo
 	var blockedByJSON string
 	err := s.db.QueryRow(
-		`SELECT id, conversation_id, turn_id, subject, description, status, owner, blocked_by, created_at, updated_at
+		`SELECT id, conversation_id, turn_id, subject, active_form, description, status, owner, blocked_by, created_at, updated_at
 		 FROM todo_tasks WHERE id = ?`, id,
-	).Scan(&t.ID, &t.ConversationID, &t.TurnID, &t.Subject, &t.Description,
+	).Scan(&t.ID, &t.ConversationID, &t.TurnID, &t.Subject, &t.ActiveForm, &t.Description,
 		&t.Status, &t.Owner, &blockedByJSON, &t.CreatedAt, &t.UpdatedAt)
 	if err != nil {
 		return nil, err
