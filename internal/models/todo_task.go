@@ -7,6 +7,7 @@ type Todo struct {
 	ConversationID string    `json:"conversation_id"`
 	TurnID         string    `json:"turn_id"`
 	Subject        string    `json:"subject"`
+	ActiveForm     string    `json:"active_form,omitempty"`
 	Description    string    `json:"description,omitempty"`
 	Status         string    `json:"status"`
 	Owner          string    `json:"owner,omitempty"`
