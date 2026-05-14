@@ -429,8 +429,10 @@ func migrate(db *sql.DB) error {
 			return err
 		}
 	} else {
+		// Fresh install: active_form may already exist; ignore duplicate column error
 		db.Exec(`ALTER TABLE todo_tasks ADD COLUMN active_form TEXT NOT NULL DEFAULT ''`)
 	}
+	// Idempotent: ignore duplicate column error
 	db.Exec(`ALTER TABLE users ADD COLUMN ui_prefs TEXT NOT NULL DEFAULT '{}'`)
 	return nil
 }
