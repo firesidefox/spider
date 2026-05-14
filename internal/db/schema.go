@@ -399,5 +399,6 @@ func migrate(db *sql.DB) error {
 	if _, err := db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_task_runs_one_running ON task_runs(task_id) WHERE status='running'`); err != nil {
 		return err
 	}
+	db.Exec(`ALTER TABLE todo_tasks ADD COLUMN turn_id TEXT NOT NULL DEFAULT ''`)
 	return nil
 }
