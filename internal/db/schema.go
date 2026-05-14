@@ -307,12 +307,13 @@ func migrate(db *sql.DB) error {
 		id              INTEGER PRIMARY KEY AUTOINCREMENT,
 		conversation_id TEXT    NOT NULL,
 		subject         TEXT    NOT NULL,
+		active_form     TEXT    NOT NULL DEFAULT '',
 		description     TEXT    NOT NULL DEFAULT '',
 		status          TEXT    NOT NULL DEFAULT 'pending',
 		owner           TEXT    NOT NULL DEFAULT '',
-		blocked_by      TEXT    NOT NULL DEFAULT '[]',
-		created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
-		updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP
+		created_at      DATETIME NOT NULL,
+		updated_at      DATETIME NOT NULL,
+		FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
 	)`); err != nil {
 		return err
 	}

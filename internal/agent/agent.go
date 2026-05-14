@@ -215,6 +215,11 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 					forced, ferr := a.compactor.BuildHistory(ctx, conversationID, true)
 					if ferr == nil {
 						history = forced
+						if a.todoStore != nil {
+							if tasks, terr := a.todoStore.List(conversationID); terr == nil && len(tasks) > 0 {
+								history = append(history, buildTaskReminderMessage(tasks))
+							}
+						}
 						stream, err = a.llmClient.ChatStream(ctx, &llm.ChatRequest{
 							System:    a.systemPrompt,
 							Messages:  history,
