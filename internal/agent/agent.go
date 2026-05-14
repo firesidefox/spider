@@ -279,6 +279,11 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 					continue
 				}
 
+				hidden := false
+				if h, ok2 := tool.(HiddenTool); ok2 {
+					hidden = h.Hidden()
+				}
+
 				riskLevel := tool.DefaultRiskLevel()
 				if rl, ok2 := tc.Input["risk_level"].(string); ok2 {
 					riskLevel = permission.ParseRiskLevel(rl)
@@ -296,20 +301,26 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 					if err != nil || !approved {
 						events <- Event{Type: EventToolResult, Content: map[string]any{"id": tc.ID, "tool": tc.Name, "result": "denied by user", "is_error": true}}
 						history = append(history, llm.Message{Role: llm.RoleUser, Content: "operation denied by user"})
-						tcRecords = append(tcRecords, ToolCallRecord{ID: tc.ID, Name: tc.Name, Input: tc.Input, Result: "denied by user", RiskLevel: hookResult.RiskLevel.String()})
+						if !hidden {
+							tcRecords = append(tcRecords, ToolCallRecord{ID: tc.ID, Name: tc.Name, Input: tc.Input, Result: "denied by user", RiskLevel: hookResult.RiskLevel.String()})
+						}
 						continue
 					}
 				} else if hookResult.Action == HookDeny {
 					events <- Event{Type: EventToolResult, Content: map[string]any{"id": tc.ID, "tool": tc.Name, "result": "denied: " + hookResult.Reason, "is_error": true}}
 					history = append(history, llm.Message{Role: llm.RoleUser, Content: "Tool denied: " + hookResult.Reason})
-					tcRecords = append(tcRecords, ToolCallRecord{ID: tc.ID, Name: tc.Name, Input: tc.Input, Result: "denied: " + hookResult.Reason, RiskLevel: hookResult.RiskLevel.String()})
+					if !hidden {
+						tcRecords = append(tcRecords, ToolCallRecord{ID: tc.ID, Name: tc.Name, Input: tc.Input, Result: "denied: " + hookResult.Reason, RiskLevel: hookResult.RiskLevel.String()})
+					}
 					continue
 				} else if hookResult.Action == HookPlan {
 					inputJSON, _ := json.Marshal(tc.Input)
 					planMsg := fmt.Sprintf("[PLAN] Would execute tool %s with input: %s", tc.Name, inputJSON)
 					events <- Event{Type: EventToolResult, Content: map[string]any{"id": tc.ID, "tool": tc.Name, "result": planMsg, "is_error": false}}
 					history = append(history, llm.Message{Role: llm.RoleUser, Content: planMsg})
-					tcRecords = append(tcRecords, ToolCallRecord{ID: tc.ID, Name: tc.Name, Input: tc.Input, Result: planMsg, RiskLevel: hookResult.RiskLevel.String()})
+					if !hidden {
+						tcRecords = append(tcRecords, ToolCallRecord{ID: tc.ID, Name: tc.Name, Input: tc.Input, Result: planMsg, RiskLevel: hookResult.RiskLevel.String()})
+					}
 					continue
 				}
 
@@ -332,11 +343,13 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 					history = append(history, llm.Message{Role: llm.RoleUser, Content: msg.Content})
 				}
 				history = append(history, llm.Message{Role: llm.RoleUser, Content: result.Content})
-				tcRecords = append(tcRecords, ToolCallRecord{
-					ID: tc.ID, Name: tc.Name, Input: tc.Input,
-					Result: result.Content, IsError: result.IsError,
-					RiskLevel: result.RiskLevel.String(), DurationMs: durationMs,
-				})
+				if !hidden {
+					tcRecords = append(tcRecords, ToolCallRecord{
+						ID: tc.ID, Name: tc.Name, Input: tc.Input,
+						Result: result.Content, IsError: result.IsError,
+						RiskLevel: result.RiskLevel.String(), DurationMs: durationMs,
+					})
+				}
 			}
 
 			tcJSON, _ := json.Marshal(tcRecords)

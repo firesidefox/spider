@@ -42,6 +42,12 @@ type SystemPromptSection interface {
 	SystemPromptSection() string
 }
 
+// HiddenTool is implemented by tools whose calls should not be persisted
+// to the message store (and therefore not shown in the conversation UI).
+type HiddenTool interface {
+	Hidden() bool
+}
+
 type ToolRegistry struct {
 	tools []Tool
 	index map[string]int
