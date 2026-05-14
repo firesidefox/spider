@@ -242,6 +242,8 @@ func migrate(db *sql.DB) error {
 		rest_username TEXT NOT NULL DEFAULT '',
 		header_name TEXT NOT NULL DEFAULT '',
 		knowledge_sources TEXT NOT NULL DEFAULT '[]',
+		probe_port INTEGER NOT NULL DEFAULT 0,
+		probe_interval INTEGER NOT NULL DEFAULT 0,
 		created_at DATETIME NOT NULL,
 		updated_at DATETIME NOT NULL
 	)`)
@@ -435,5 +437,7 @@ func migrate(db *sql.DB) error {
 	}
 	// Idempotent: ignore duplicate column error
 	db.Exec(`ALTER TABLE users ADD COLUMN ui_prefs TEXT NOT NULL DEFAULT '{}'`)
+	db.Exec(`ALTER TABLE todo_tasks ADD COLUMN seq INTEGER NOT NULL DEFAULT 0`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_todo_tasks_conv ON todo_tasks(conversation_id)`)
 	return nil
 }

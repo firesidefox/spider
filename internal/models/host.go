@@ -51,6 +51,8 @@ type AccessFace struct {
 	HeaderName       string               `json:"header_name,omitempty"`
 	HMACAlgo         string               `json:"hmac_algo,omitempty"`
 	KnowledgeSources []KnowledgeSourceRef `json:"knowledge_sources"`
+	ProbePort     int                  `json:"probe_port,omitempty"`
+	ProbeInterval int                  `json:"probe_interval,omitempty"`
 	CreatedAt        time.Time            `json:"created_at"`
 	UpdatedAt        time.Time            `json:"updated_at"`
 }
