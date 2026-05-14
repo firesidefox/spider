@@ -116,7 +116,7 @@ const isStreaming = ref(false)
 const todoTasksMap = ref<Record<string, Map<number, Todo>>>({})
 const completedFolded = ref(true)
 const pendingFolded = ref(true)
-const turnUsage = ref<{input: number; output: number} | null>(null)
+const turnUsage = ref<number | null>(null)
 const taskTimers = ref<Map<number, ReturnType<typeof setInterval>>>(new Map())
 const taskElapsed = ref<Map<number, number>>(new Map())
 
@@ -146,8 +146,8 @@ const hasTasks = computed(() =>
 )
 const panelHeader = computed(() => {
   const active = inProgressTasks.value[0]
-  const tokenSuffix = turnUsage.value
-    ? '  ↓ ' + fmtTokens(turnUsage.value.output)
+  const tokenSuffix = turnUsage.value !== null
+    ? '  ↓ ' + fmtTokens(turnUsage.value)
     : ''
   if (active) {
     const label = active.active_form ?? active.subject
@@ -158,13 +158,6 @@ const panelHeader = computed(() => {
   const done = completedTasks.value.length
   return `TASKS ${done}/${total}` + tokenSuffix
 })
-
-function taskIcon(t: Todo) {
-  if (t.status === 'completed') return '✓'
-  if (t.status === 'in_progress') return '●'
-  return '○'
-}
-function taskClass(t: Todo) { return `todo-${t.status}` }
 
 function fmtElapsed(seconds: number): string {
   if (seconds >= 60) {
@@ -541,8 +534,8 @@ function handleConvEvent(convId: string, event: ChatEvent) {
       break
     }
     case 'turn_usage': {
-      const u = event.content as { input_tokens: number; output_tokens: number }
-      turnUsage.value = { input: u.input_tokens, output: u.output_tokens }
+      const u = event.content as { output_tokens: number }
+      turnUsage.value = u.output_tokens
       break
     }
     case 'todo_summary': {
@@ -1200,7 +1193,7 @@ onUnmounted(() => {
 .todo-icon { width: 14px; text-align: center; flex-shrink: 0; }
 .todo-subject { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .todo-pending .todo-icon { color: var(--text-sub); }
-.todo-in_progress { border-left: 2px solid var(--primary); background: rgba(99,102,241,0.06); }
+.todo-in_progress { border-left: 2px solid var(--primary); background: color-mix(in srgb, var(--primary) 6%, transparent); }
 .todo-in_progress .todo-icon { color: var(--primary); }
 .todo-in_progress .todo-subject { color: var(--text); font-weight: 500; }
 .todo-completed .todo-icon { color: var(--green, #4caf50); }

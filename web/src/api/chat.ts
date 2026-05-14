@@ -27,7 +27,6 @@ export interface ChatEvent {
 export interface Todo {
   id: number; conversation_id: string; subject: string; active_form?: string
   description?: string; status: string; owner?: string
-  active_form?: string
   blocked_by?: number[]; created_at: string; updated_at: string
 }
 
