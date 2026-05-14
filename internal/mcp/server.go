@@ -15,6 +15,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 
 	"github.com/spiderai/spider/internal/agent"
+	"github.com/spiderai/spider/internal/monitor"
 	"github.com/spiderai/spider/internal/auth"
 	"github.com/spiderai/spider/internal/config"
 	"github.com/spiderai/spider/internal/logger"
@@ -68,6 +69,11 @@ type App struct {
 
 	sseClients   map[string][]chan []byte // convID -> SSE client channels
 	sseClientsMu sync.Mutex
+
+	Monitor *monitor.Monitor
+
+	globalSSEClients   []chan []byte
+	globalSSEClientsMu sync.Mutex
 
 	ragStoreCached *ragStoreEntry
 	ragStoreMu     sync.Mutex
@@ -215,6 +221,35 @@ func (a *App) BroadcastSSE(convID string, data []byte) {
 		case ch <- data:
 		default:
 			// Client channel full, skip
+		}
+	}
+}
+
+func (a *App) AddGlobalSSEClient(ch chan []byte) {
+	a.globalSSEClientsMu.Lock()
+	defer a.globalSSEClientsMu.Unlock()
+	a.globalSSEClients = append(a.globalSSEClients, ch)
+}
+
+func (a *App) RemoveGlobalSSEClient(ch chan []byte) {
+	a.globalSSEClientsMu.Lock()
+	defer a.globalSSEClientsMu.Unlock()
+	clients := make([]chan []byte, 0, len(a.globalSSEClients))
+	for _, c := range a.globalSSEClients {
+		if c != ch {
+			clients = append(clients, c)
+		}
+	}
+	a.globalSSEClients = clients
+}
+
+func (a *App) BroadcastGlobalSSE(data []byte) {
+	a.globalSSEClientsMu.Lock()
+	defer a.globalSSEClientsMu.Unlock()
+	for _, ch := range a.globalSSEClients {
+		select {
+		case ch <- data:
+		default:
 		}
 	}
 }
