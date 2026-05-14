@@ -21,7 +21,7 @@
         <div v-for="group in groups" :key="group.id" class="group-section"
           @dragover.prevent @drop="onDropToGroup($event, group.id)">
           <div class="group-header" @click="toggleGroup(group.id)">
-            <div v-if="editMode" class="edit-cb" :class="{ checked: selectedGroupIds.has(group.id) }" @click.stop="toggleGroupSelect(group.id)"></div>
+            <div v-if="editMode" class="edit-cb" :class="{ checked: isGroupAllSelected(group.id) }" @click.stop="toggleGroupDocsSelect(group.id)"></div>
             <span class="group-chevron">{{ collapsedGroups.has(group.id) ? '▶' : '▼' }}</span>
             <span v-if="editingGroupId !== group.id" class="group-name" @dblclick.stop="startRename(group)">{{ group.name }}</span>
             <input v-else class="group-name-input" v-model="editingGroupName"
@@ -48,6 +48,7 @@
         <!-- 未分组 -->
         <div class="group-section" @dragover.prevent @drop="onDropToGroup($event, null)">
           <div class="group-header" @click="toggleGroup(0)">
+            <div v-if="editMode" class="edit-cb" :class="{ checked: isGroupAllSelected(null) }" @click.stop="toggleGroupDocsSelect(null)"></div>
             <span class="group-chevron">{{ collapsedGroups.has(0) ? '▶' : '▼' }}</span>
             <span class="group-name">未分组</span>
           </div>
@@ -300,7 +301,6 @@ let dragDoc: Document | null = null
 
 const editMode = ref(false)
 const selectedDocIds = ref<Set<number>>(new Set())
-const selectedGroupIds = ref<Set<number>>(new Set())
 const showDeleteGroupConfirm = ref(false)
 const deleteGroupWithDocs = ref(true)
 const deleting = ref(false)
@@ -311,7 +311,6 @@ function enterEditMode() { editMode.value = true }
 function exitEditMode() {
   editMode.value = false
   selectedDocIds.value = new Set()
-  selectedGroupIds.value = new Set()
 }
 
 function toggleDocSelect(id: number) {
@@ -320,29 +319,34 @@ function toggleDocSelect(id: number) {
   selectedDocIds.value = s
 }
 
-function toggleGroupSelect(id: number) {
-  const s = new Set(selectedGroupIds.value)
-  s.has(id) ? s.delete(id) : s.add(id)
-  selectedGroupIds.value = s
+function toggleGroupDocsSelect(groupId: number | null) {
+  const groupDocs = groupId === null ? ungroupedDocs.value : groupedDocs(groupId)
+  if (groupDocs.length === 0) return
+  const allSelected = groupDocs.every(d => selectedDocIds.value.has(d.id))
+  const s = new Set(selectedDocIds.value)
+  if (allSelected) {
+    groupDocs.forEach(d => s.delete(d.id))
+  } else {
+    groupDocs.forEach(d => s.add(d.id))
+  }
+  selectedDocIds.value = s
 }
 
-const hasSelection = computed(() => selectedDocIds.value.size > 0 || selectedGroupIds.value.size > 0)
+function isGroupAllSelected(groupId: number | null): boolean {
+  const groupDocs = groupId === null ? ungroupedDocs.value : groupedDocs(groupId)
+  return groupDocs.length > 0 && groupDocs.every(d => selectedDocIds.value.has(d.id))
+}
+
+const hasSelection = computed(() => selectedDocIds.value.size > 0)
 
 const selectionLabel = computed(() => {
   const d = selectedDocIds.value.size
-  const g = selectedGroupIds.value.size
-  if (d === 0 && g === 0) return '未选择'
-  if (d > 0 && g > 0) return `已选 ${d} 个文档、${g} 个分组`
-  if (d > 0) return `已选 ${d} 个文档`
-  return `已选 ${g} 个分组`
+  if (d === 0) return '未选择'
+  return `已选 ${d} 个文档`
 })
 
 async function onBatchDelete() {
   deleteErr.value = ''
-  if (selectedGroupIds.value.size > 0) {
-    showDeleteGroupConfirm.value = true
-    return
-  }
   await doDeleteDocs()
 }
 
