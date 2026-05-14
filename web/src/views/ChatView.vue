@@ -795,12 +795,14 @@ onActivated(() => {
 })
 
 onDeactivated(() => {
+  clearAllTimers()
   pollTimers.forEach((t) => clearTimeout(t))
   pollTimers.clear()
   document.removeEventListener('click', closeModeDropdown)
 })
 
 onUnmounted(() => {
+  clearAllTimers()
   convSubscriptions.forEach(unsub => unsub())
   convSubscriptions.clear()
 })
