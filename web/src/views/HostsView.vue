@@ -137,10 +137,13 @@
                   </div>
                   <div class="knowledge-row">
                     <span class="knowledge-label">知识来源：</span>
+                    <span v-if="f.knowledge_sources?.some(k => k.type === 'none')" class="knowledge-tag knowledge-none">不查询</span>
+                    <template v-else>
                     <span v-for="ks in f.knowledge_sources" :key="ks.type+ks.id" class="knowledge-tag">
                       <span class="at">@</span>{{ docGroupsMap.get(ks.id)?.name || ks.id }}
                       <button class="ks-remove" @click.stop="saveKnowledgeSources(f, f.knowledge_sources.filter(k => k.id !== ks.id).map(k => k.id))">×</button>
                     </span>
+                    </template>
                     <div class="ks-picker-wrap">
                       <button class="add-knowledge" @click.stop="ksPickerFaceId = ksPickerFaceId === f.id ? null : f.id">+ 添加</button>
                       <div v-if="ksPickerFaceId === f.id" class="ks-dropdown" @click.stop>
@@ -758,6 +761,7 @@ onUnmounted(() => {
 .knowledge-row { padding: 8px 14px; border-top: 1px solid var(--border); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .knowledge-label { font-size: 11px; color: var(--muted); }
 .knowledge-tag { font-size: 11px; padding: 2px 8px; border-radius: 4px; background: var(--surface); border: 1px solid var(--border); color: var(--text-sub); display: flex; align-items: center; gap: 3px; }
+.knowledge-none { color: var(--muted); border-style: dashed; }
 .knowledge-tag .at { color: var(--primary); }
 .add-knowledge { font-size: 11px; color: var(--primary); cursor: pointer; padding: 2px 8px; border: 1px dashed var(--primary); border-radius: 4px; background: none; }
 .add-knowledge:hover { background: rgba(99,102,241,0.08); }
