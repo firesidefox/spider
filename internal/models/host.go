@@ -137,6 +137,8 @@ type AddAccessFaceRequest struct {
 	HeaderName       string               `json:"header_name"`
 	HMACAlgo         string               `json:"hmac_algo"`
 	KnowledgeSources []KnowledgeSourceRef `json:"knowledge_sources"`
+	ProbePort        int                  `json:"probe_port,omitempty"`
+	ProbeInterval    int                  `json:"probe_interval,omitempty"`
 }
 
 type UpdateAccessFaceRequest struct {
@@ -155,6 +157,8 @@ type UpdateAccessFaceRequest struct {
 	HeaderName       *string              `json:"header_name"`
 	HMACAlgo         *string              `json:"hmac_algo"`
 	KnowledgeSources []KnowledgeSourceRef `json:"knowledge_sources"`
+	ProbePort        *int                 `json:"probe_port,omitempty"`
+	ProbeInterval    *int                 `json:"probe_interval,omitempty"`
 }
 
 type AddMemoryRequest struct {

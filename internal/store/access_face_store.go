@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -38,12 +37,12 @@ func (s *AccessFaceStore) Add(hostID string, req *models.AddAccessFaceRequest) (
 		(id,host_id,type,ip,port,username,auth_type,
 		 encrypted_credential,encrypted_passphrase,ssh_key_id,ssh_legacy,
 		 ssh_login_input,
-		 base_url,rest_auth_type,rest_username,header_name,hmac_algo,knowledge_sources,created_at,updated_at)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		 base_url,rest_auth_type,rest_username,header_name,hmac_algo,knowledge_sources,probe_port,probe_interval,created_at,updated_at)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		id, hostID, req.Type, req.IP, req.Port, req.Username, req.SSHAuthType,
 		encCred, encPass, req.SSHKeyID, req.SSHLegacy,
 		req.SSHLoginInput,
-		req.BaseURL, req.RESTAuthType, req.RESTUsername, req.HeaderName, req.HMACAlgo, string(ksJSON), now, now)
+		req.BaseURL, req.RESTAuthType, req.RESTUsername, req.HeaderName, req.HMACAlgo, string(ksJSON), req.ProbePort, req.ProbeInterval, now, now)
 	if err != nil {
 		return nil, err
 	}
@@ -86,8 +85,7 @@ func (s *AccessFaceStore) FaceTypesByHostIDs(hostIDs []string) (map[string][]mod
 	if len(hostIDs) == 0 {
 		return result, nil
 	}
-	placeholders := strings.Repeat("?,", len(hostIDs))
-	placeholders = placeholders[:len(placeholders)-1]
+	placeholders := sqlPlaceholders(len(hostIDs))
 	args := make([]any, len(hostIDs))
 	for i, id := range hostIDs {
 		args[i] = id
@@ -167,6 +165,12 @@ func (s *AccessFaceStore) Update(id string, req *models.UpdateAccessFaceRequest)
 	if req.KnowledgeSources != nil {
 		cur.KnowledgeSources = req.KnowledgeSources
 	}
+	if req.ProbePort != nil {
+		cur.ProbePort = *req.ProbePort
+	}
+	if req.ProbeInterval != nil {
+		cur.ProbeInterval = *req.ProbeInterval
+	}
 	encCred := cur.EncryptedCred
 	encPass := cur.EncryptedPass
 	if req.Credential != nil {
@@ -187,11 +191,11 @@ func (s *AccessFaceStore) Update(id string, req *models.UpdateAccessFaceRequest)
 		encrypted_credential=?,encrypted_passphrase=?,
 		ssh_key_id=?,ssh_legacy=?,ssh_login_input=?,
 		base_url=?,rest_auth_type=?,rest_username=?,
-		header_name=?,hmac_algo=?,knowledge_sources=?,updated_at=?
+		header_name=?,hmac_algo=?,knowledge_sources=?,probe_port=?,probe_interval=?,updated_at=?
 		WHERE id=?`,
 		cur.IP, cur.Port, cur.Username, cur.SSHAuthType,
 		encCred, encPass, cur.SSHKeyID, cur.SSHLegacy, cur.SSHLoginInput,
-		cur.BaseURL, cur.RESTAuthType, cur.RESTUsername, cur.HeaderName, cur.HMACAlgo, string(ksJSON), now, id)
+		cur.BaseURL, cur.RESTAuthType, cur.RESTUsername, cur.HeaderName, cur.HMACAlgo, string(ksJSON), cur.ProbePort, cur.ProbeInterval, now, id)
 	if err != nil {
 		return nil, err
 	}
@@ -226,7 +230,7 @@ func (s *AccessFaceStore) DecryptCredential(f *models.AccessFace) (cred, pass st
 const accessFaceCols = `id,host_id,type,ip,port,username,auth_type,` +
 	`encrypted_credential,encrypted_passphrase,ssh_key_id,ssh_legacy,` +
 	`ssh_login_input,` +
-	`base_url,rest_auth_type,rest_username,header_name,hmac_algo,knowledge_sources,created_at,updated_at`
+	`base_url,rest_auth_type,rest_username,header_name,hmac_algo,knowledge_sources,probe_port,probe_interval,created_at,updated_at`
 
 type accessFaceScanner interface {
 	Scan(dest ...any) error
@@ -243,7 +247,7 @@ func scanAccessFace(s accessFaceScanner) (*models.AccessFace, error) {
 		&f.SSHKeyID, &sshLegacy,
 		&f.SSHLoginInput,
 		&f.BaseURL, &f.RESTAuthType, &f.RESTUsername, &f.HeaderName, &f.HMACAlgo,
-		&ksJSON, &f.CreatedAt, &f.UpdatedAt,
+		&ksJSON, &f.ProbePort, &f.ProbeInterval, &f.CreatedAt, &f.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {
 		return nil, ErrNotFound
