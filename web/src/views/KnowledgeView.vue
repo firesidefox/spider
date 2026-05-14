@@ -229,26 +229,6 @@ const fileInputRef = ref<HTMLInputElement | null>(null)
 const renameInputRef = ref<HTMLInputElement | null>(null)
 const pendingFiles = ref<File[]>([])
 
-function chunkText(text: string, maxChars = 3000): string[] {
-  const paragraphs = text.split(/\n\n+/)
-  const chunks: string[] = []
-  let current = ''
-  for (const para of paragraphs) {
-    if (para.length > maxChars) {
-      if (current) { chunks.push(current.trim()); current = '' }
-      for (let i = 0; i < para.length; i += maxChars - 200) {
-        chunks.push(para.slice(i, i + maxChars).trim())
-      }
-    } else if (current.length + para.length + 2 > maxChars) {
-      chunks.push(current.trim())
-      current = para
-    } else {
-      current = current ? current + '\n\n' + para : para
-    }
-  }
-  if (current.trim()) chunks.push(current.trim())
-  return chunks.filter(c => c.length > 0)
-}
 
 async function readFileContent(file: File): Promise<{ content: string; pages: string[] }> {
   if (file.name.toLowerCase().endsWith('.pdf')) {
@@ -481,18 +461,9 @@ async function doIngest() {
   try {
     for (const file of pendingFiles.value) {
       const { content, pages } = await readFileContent(file)
-      if (pages.length > 0) {
-        await Promise.all(
-          pages
-            .map((p, i) => ({ p, i }))
-            .filter(({ p }) => p.trim())
-            .map(({ p, i }) => ingestDocument({ vendor: form.value.vendor, content: p, source_file: file.name, chunk_index: i, group_id: ingestGroupId.value, use_embedding: form.value.useEmbedding }))
-        )
-      } else {
-        const chunks = chunkText(content)
-        await Promise.all(
-          chunks.map((c, i) => ingestDocument({ vendor: form.value.vendor, content: c, source_file: file.name, chunk_index: i, group_id: ingestGroupId.value, use_embedding: form.value.useEmbedding }))
-        )
+      const fullContent = pages.length > 0 ? pages.join('\n\n') : content
+      if (fullContent.trim()) {
+        await ingestDocument({ vendor: form.value.vendor, content: fullContent, source_file: file.name, chunk_index: 0, group_id: ingestGroupId.value, use_embedding: form.value.useEmbedding })
       }
     }
     showIngest.value = false
