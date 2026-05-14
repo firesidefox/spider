@@ -380,7 +380,7 @@ async function doDeleteGroups() {
   }
 }
 
-const emptyForm = () => ({ vendor: '', useEmbedding: true })
+const emptyForm = () => ({ vendor: '', useEmbedding: false })
 const form = ref(emptyForm())
 
 let loadTimer: ReturnType<typeof setTimeout> | null = null
