@@ -103,3 +103,21 @@ export async function deleteGroup(id: number): Promise<void> {
   const res = await fetch(`/api/v1/document-groups/${id}`, { method: 'DELETE', headers: authHeaders() })
   if (!res.ok) throw new Error((await res.json()).error)
 }
+
+export async function deleteBatchDocuments(ids: number[]): Promise<void> {
+  const res = await fetch('/api/v1/documents', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ ids }),
+  })
+  if (!res.ok) throw new Error((await res.json()).error)
+}
+
+export async function deleteBatchGroups(ids: number[], deleteDocuments: boolean): Promise<void> {
+  const res = await fetch('/api/v1/document-groups', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ ids, delete_documents: deleteDocuments }),
+  })
+  if (!res.ok) throw new Error((await res.json()).error)
+}
