@@ -123,3 +123,40 @@ func TestTodoTool_UnknownAction(t *testing.T) {
 		t.Error("expected error for unknown action")
 	}
 }
+
+func TestTodoTool_SummaryBroadcastOnTurnComplete(t *testing.T) {
+	tool, bc := newTestTodoTool(t)
+
+	// create two tasks in same turn
+	tool.Execute(context.Background(), map[string]any{"action": "create", "subject": "task A"})
+	tool.Execute(context.Background(), map[string]any{"action": "create", "subject": "task B"})
+
+	// complete first — no summary yet
+	tool.Execute(context.Background(), map[string]any{"action": "update", "task_id": float64(1), "status": "completed"})
+	for _, p := range bc.broadcasts {
+		var m map[string]any
+		json.Unmarshal(p, &m)
+		if m["type"] == "todo_summary" {
+			t.Fatal("should not broadcast summary after first task")
+		}
+	}
+
+	// complete second — summary must fire
+	bc.broadcasts = nil
+	tool.Execute(context.Background(), map[string]any{"action": "update", "task_id": float64(2), "status": "completed"})
+	found := false
+	for _, p := range bc.broadcasts {
+		var m map[string]any
+		json.Unmarshal(p, &m)
+		if m["type"] == "todo_summary" {
+			found = true
+			content, _ := m["content"].(string)
+			if !strings.Contains(content, "task A") || !strings.Contains(content, "task B") {
+				t.Errorf("summary missing tasks: %s", content)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("expected todo_summary broadcast after all tasks complete")
+	}
+}

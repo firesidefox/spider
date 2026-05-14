@@ -32,9 +32,9 @@ func (s *TodoStore) Create(task *models.Todo) error {
 	}
 	now := time.Now().UTC()
 	res, err := s.db.Exec(
-		`INSERT INTO todo_tasks (conversation_id, subject, description, status, owner, blocked_by, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		task.ConversationID, task.Subject, task.Description,
+		`INSERT INTO todo_tasks (conversation_id, turn_id, subject, description, status, owner, blocked_by, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		task.ConversationID, task.TurnID, task.Subject, task.Description,
 		task.Status, task.Owner, string(blockedBy), now, now,
 	)
 	if err != nil {
@@ -90,9 +90,9 @@ func (s *TodoStore) Update(conversationID string, id int64, subject, description
 	var t models.Todo
 	var blockedByJSON string
 	err = s.db.QueryRow(
-		`SELECT id, conversation_id, subject, description, status, owner, blocked_by, created_at, updated_at
+		`SELECT id, conversation_id, turn_id, subject, description, status, owner, blocked_by, created_at, updated_at
 		 FROM todo_tasks WHERE id = ?`, id,
-	).Scan(&t.ID, &t.ConversationID, &t.Subject, &t.Description,
+	).Scan(&t.ID, &t.ConversationID, &t.TurnID, &t.Subject, &t.Description,
 		&t.Status, &t.Owner, &blockedByJSON, &t.CreatedAt, &t.UpdatedAt)
 	if err != nil {
 		return nil, err
@@ -103,10 +103,19 @@ func (s *TodoStore) Update(conversationID string, id int64, subject, description
 }
 
 func (s *TodoStore) List(conversationID string) ([]*models.Todo, error) {
+	// Only return tasks from turns that have at least one non-completed task.
 	rows, err := s.db.Query(
-		`SELECT id, conversation_id, subject, description, status, owner, blocked_by, created_at, updated_at
-		 FROM todo_tasks WHERE conversation_id = ? AND status != 'deleted' ORDER BY id ASC`,
-		conversationID,
+		`SELECT id, conversation_id, turn_id, subject, description, status, owner, blocked_by, created_at, updated_at
+		 FROM todo_tasks
+		 WHERE conversation_id = ?
+		   AND status != 'deleted'
+		   AND turn_id IN (
+		       SELECT DISTINCT turn_id FROM todo_tasks
+		       WHERE conversation_id = ?
+		         AND status NOT IN ('completed', 'deleted')
+		   )
+		 ORDER BY id ASC`,
+		conversationID, conversationID,
 	)
 	if err != nil {
 		return nil, err
@@ -117,7 +126,7 @@ func (s *TodoStore) List(conversationID string) ([]*models.Todo, error) {
 	for rows.Next() {
 		var t models.Todo
 		var blockedByJSON string
-		if err := rows.Scan(&t.ID, &t.ConversationID, &t.Subject, &t.Description,
+		if err := rows.Scan(&t.ID, &t.ConversationID, &t.TurnID, &t.Subject, &t.Description,
 			&t.Status, &t.Owner, &blockedByJSON, &t.CreatedAt, &t.UpdatedAt); err != nil {
 			return nil, err
 		}
@@ -131,13 +140,38 @@ func (s *TodoStore) List(conversationID string) ([]*models.Todo, error) {
 	return tasks, nil
 }
 
+func (s *TodoStore) ListByTurn(turnID string) ([]*models.Todo, error) {
+	rows, err := s.db.Query(
+		`SELECT id, conversation_id, turn_id, subject, description, status, owner, blocked_by, created_at, updated_at
+		 FROM todo_tasks WHERE turn_id = ? AND status != 'deleted' ORDER BY id ASC`,
+		turnID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var tasks []*models.Todo
+	for rows.Next() {
+		var t models.Todo
+		var blockedByJSON string
+		if err := rows.Scan(&t.ID, &t.ConversationID, &t.TurnID, &t.Subject, &t.Description,
+			&t.Status, &t.Owner, &blockedByJSON, &t.CreatedAt, &t.UpdatedAt); err != nil {
+			return nil, err
+		}
+		json.Unmarshal([]byte(blockedByJSON), &t.BlockedBy) //nolint:errcheck
+		tasks = append(tasks, &t)
+	}
+	return tasks, rows.Err()
+}
+
 func (s *TodoStore) Get(id int64) (*models.Todo, error) {
 	var t models.Todo
 	var blockedByJSON string
 	err := s.db.QueryRow(
-		`SELECT id, conversation_id, subject, description, status, owner, blocked_by, created_at, updated_at
+		`SELECT id, conversation_id, turn_id, subject, description, status, owner, blocked_by, created_at, updated_at
 		 FROM todo_tasks WHERE id = ?`, id,
-	).Scan(&t.ID, &t.ConversationID, &t.Subject, &t.Description,
+	).Scan(&t.ID, &t.ConversationID, &t.TurnID, &t.Subject, &t.Description,
 		&t.Status, &t.Owner, &blockedByJSON, &t.CreatedAt, &t.UpdatedAt)
 	if err != nil {
 		return nil, err
