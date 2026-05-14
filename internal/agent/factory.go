@@ -35,6 +35,7 @@ type Factory struct {
 	DocStore       *store.DocumentStore
 	RagStore       *rag.Store
 	TaskStore      *store.TaskStore
+	DisableSearchDocs bool
 }
 
 // NewFactory creates a Factory by reading the active provider from the DB.
@@ -225,7 +226,9 @@ func (f *Factory) buildRegistry(conversationID string) *ToolRegistry {
 	registry.Register(NewBatchExecuteTool(f.Hosts, f.AccessFaces, f.SSHPool, f.Logs, f.SSHKeys))
 	registry.Register(NewVerifyTool(f.Hosts, f.AccessFaces, f.SSHPool, f.SSHKeys))
 	registry.Register(NewCallRESTAPITool(f.AccessFaces))
-	registry.Register(NewSearchDocsTool(f.RagStore, f.DocStore))
+	if !f.DisableSearchDocs {
+		registry.Register(NewSearchDocsTool(f.RagStore, f.DocStore))
+	}
 	if f.TodoStore != nil {
 		registry.Register(NewTodoTool(f.TodoStore, f.SSEBroadcaster, conversationID))
 	}

@@ -314,6 +314,7 @@
               <button type="button" class="btn btn-sm" :class="{ active: ksMode === 'global' }" @click="setKsMode('global')">全局</button>
               <button type="button" class="btn btn-sm" :class="{ active: ksMode === 'group' }" @click="setKsMode('group')">文档组</button>
               <button type="button" class="btn btn-sm" :class="{ active: ksMode === 'doc' }" @click="setKsMode('doc')">具体文档</button>
+              <button type="button" class="btn btn-sm" :class="{ active: ksMode === 'none' }" @click="setKsMode('none')">不查询</button>
             </div>
             <div v-if="ksMode === 'group' && docGroups && docGroups.length > 0" class="ks-checkboxes">
               <label v-for="g in docGroups" :key="g.id" class="checkbox-label">
@@ -376,7 +377,7 @@ const showAddFace = ref(false)
 const editFaceTarget = ref<AccessFace | null>(null)
 const sshKeys = ref<SafeSSHKey[]>([])
 const docGroups = ref<DocumentGroup[]>([])
-const ksMode = ref<'global' | 'group' | 'doc'>('global')
+const ksMode = ref<'global' | 'group' | 'doc' | 'none'>('global')
 const allDocs = ref<Document[]>([])
 
 const editingOverview = ref(false)
@@ -535,9 +536,9 @@ function toggleFormKnowledgeSource(groupId: number) {
     : [...ks, { type: 'group', id: groupId }]
 }
 
-function setKsMode(mode: 'global' | 'group' | 'doc') {
+function setKsMode(mode: 'global' | 'group' | 'doc' | 'none') {
   ksMode.value = mode
-  faceForm.value.knowledge_sources = []
+  faceForm.value.knowledge_sources = mode === 'none' ? [{ type: 'none', id: 0 }] : []
 }
 
 function toggleKs(type: 'group' | 'doc', id: number) {
@@ -603,6 +604,8 @@ function startEditFace(face: AccessFace) {
   const ks = face.knowledge_sources ?? []
   if (ks.length === 0) {
     ksMode.value = 'global'
+  } else if (ks[0].type === 'none') {
+    ksMode.value = 'none'
   } else if (ks[0].type === 'doc') {
     ksMode.value = 'doc'
   } else {

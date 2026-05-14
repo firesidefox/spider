@@ -148,6 +148,7 @@ func chatSendMessage(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id
 	if conv.PermissionMode != "" {
 		factory.PermissionMode = permission.Mode(conv.PermissionMode)
 	}
+	factory.DisableSearchDocs = allFacesDisableKB(app)
 
 	systemPrompt := factory.BuildSystemPrompt()
 	a := factory.NewAgent(systemPrompt, id)
@@ -208,6 +209,15 @@ func chatSendMessage(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id
 		if ev.Type == agent.EventToolStart {
 			injectHostNames(app, ev.Content)
 		}
+		if ev.Type == agent.EventToolStart || ev.Type == agent.EventToolResult {
+			name, _ := ev.Content["name"].(string)
+			if name == "" {
+				name, _ = ev.Content["tool"].(string)
+			}
+			if name == "Todo" {
+				continue
+			}
+		}
 		data, _ := json.Marshal(ev)
 		fmt.Fprintf(w, "data: %s\n\n", data)
 		if flusher != nil {
@@ -216,6 +226,28 @@ func chatSendMessage(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id
 		app.BroadcastSSE(id, data)
 	}
 	app.ConvStore.SetStatus(id, "idle") //nolint:errcheck
+}
+
+// allFacesDisableKB returns true when every access face in the system
+// has knowledge_sources set to the "none" sentinel [{type:"none",id:0}].
+// Used to skip registering SearchDocsTool entirely.
+func allFacesDisableKB(app *mcppkg.App) bool {
+	hosts, err := app.HostStore.List("")
+	if err != nil || len(hosts) == 0 {
+		return false
+	}
+	for _, h := range hosts {
+		faces, err := app.AccessFaceStore.ListByHost(h.ID)
+		if err != nil {
+			return false
+		}
+		for _, f := range faces {
+			if len(f.KnowledgeSources) == 0 || f.KnowledgeSources[0].Type != "none" {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func injectHostNames(app *mcppkg.App, content map[string]any) {
