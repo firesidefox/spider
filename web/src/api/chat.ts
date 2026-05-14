@@ -20,12 +20,12 @@ export interface ChatMessage {
 }
 
 export interface ChatEvent {
-  type: 'text_delta' | 'tool_start' | 'tool_result' | 'confirm_required' | 'error' | 'done' | 'message' | 'todo_update' | 'turn_usage' | 'todo_summary'
+  type: 'text_delta' | 'tool_start' | 'tool_result' | 'confirm_required' | 'error' | 'done' | 'message' | 'todo_update' | 'turn_usage'
   content?: Record<string, any>
 }
 
 export interface Todo {
-  id: number; conversation_id: string; subject: string; active_form?: string
+  id: number; seq: number; conversation_id: string; subject: string; active_form?: string
   description?: string; status: string; owner?: string
   blocked_by?: number[]; created_at: string; updated_at: string
 }
@@ -93,13 +93,16 @@ export function subscribeConversation(
 export function sendMessage(
   conversationId: string,
   content: string,
+  hostIds?: string[] | null,
 ): AbortController {
   const ctrl = new AbortController()
+  const body: Record<string, unknown> = { content }
+  if (hostIds && hostIds.length > 0) body.host_ids = hostIds
   fetch(`/api/v1/chat/conversations/${conversationId}/messages`, {
     method: 'POST',
     signal: ctrl.signal,
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ content }),
+    body: JSON.stringify(body),
   }).catch(() => { /* errors come via EventSource */ })
   return ctrl
 }

@@ -133,7 +133,8 @@ func chatSendMessage(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id
 	}
 	factory.DataDir = app.Config.DataDir
 	var req struct {
-		Content string `json:"content"`
+		Content  string   `json:"content"`
+		HostIDs  []string `json:"host_ids"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, 400, "invalid request body")
@@ -150,7 +151,7 @@ func chatSendMessage(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id
 	}
 	factory.DisableSearchDocs = allFacesDisableKB(app)
 
-	systemPrompt := factory.BuildSystemPrompt()
+	systemPrompt := factory.BuildSystemPrompt(req.HostIDs...)
 	a := factory.NewAgent(systemPrompt, id)
 	waiter := agent.NewConfirmationWaiter()
 	app.StoreChatWaiter(id, waiter)

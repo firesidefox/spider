@@ -6,13 +6,14 @@ import ChatMessage from '../components/ChatMessage.vue'
 import type { MessageBlock, ToolCallBlock } from '../components/ChatMessage.vue'
 import TargetPanel from '../components/TargetPanel.vue'
 import type { DeviceStatus } from '../components/TargetPanel.vue'
+import { useTargetHosts } from '../composables/useTargetHosts'
 import {
   sendMessage, subscribeConversation, createConversation, listConversations,
   getConversation, deleteConversation, confirmAction, cancelConversation,
   getActiveModel, setActiveModel, updateTitle, exportConversation,
   type Conversation, type ChatMessage as ChatMsg, type ChatEvent, type Todo,
 } from '../api/chat'
-import { listHosts, type SafeHost } from '../api/hosts'
+import { listHosts, type Host } from '../api/hosts'
 import { authHeaders, getUIPrefs, setUIPrefs } from '../api/auth'
 import { listGroups, listDocumentsByGroup, type DocumentGroup, type Document as KbDocument } from '../api/documents'
 import { updateAgentStatus, type AgentStatus } from '../composables/useAgentStatus'
@@ -199,6 +200,8 @@ function clearAllTimers() {
 }
 const messagesRef = ref<HTMLElement | null>(null)
 const devices = ref<DeviceStatus[]>([])
+const allHosts = ref<Host[]>([])
+const { selectedHostIds } = useTargetHosts()
 
 
 let abortCtrl: AbortController | null = null
@@ -531,6 +534,8 @@ function handleConvEvent(convId: string, event: ChatEvent) {
       }
       setStatus('done')
       loadConversations()
+      delete todoTasksMap.value[convId]
+      clearAllTimers()
       break
     case 'todo_update': {
       const task = event.content as Todo
@@ -547,17 +552,6 @@ function handleConvEvent(convId: string, event: ChatEvent) {
     case 'turn_usage': {
       const u = event.content as { output_tokens: number }
       turnUsage.value = u.output_tokens
-      break
-    }
-    case 'todo_summary': {
-      const summaryMsg: DisplayMessage = {
-        id: 'todo-summary-' + Date.now(),
-        role: 'assistant',
-        blocks: [{ type: 'text', content: event.content as string }],
-      }
-      if (!messagesMap.value[convId]) messagesMap.value[convId] = []
-      messagesMap.value[convId].push(summaryMsg)
-      todoTasksMap.value[convId] = new Map()
       break
     }
   }
@@ -637,7 +631,7 @@ async function send(overrideText?: string) {
   await nextTick()
   scrollToBottom()
 
-  abortCtrl = sendMessage(convId, text)
+  abortCtrl = sendMessage(convId, text, selectedHostIds.value)
 }
 
 function flushQueue() {
@@ -710,6 +704,7 @@ async function handleDeleteConversation(id: string) {
 
 async function loadDevices() {
   const hosts = await listHosts()
+  allHosts.value = hosts
   devices.value = hosts.map(h => ({
     id: h.id, name: h.name, ip: h.ip,
     vendor: '', status: 'online' as const,
@@ -1034,12 +1029,12 @@ onUnmounted(() => {
 
         <div v-for="task in inProgressTasks" :key="task.id" class="todo-row todo-in_progress">
           <span class="todo-icon">●</span>
-          <span class="todo-subject">{{ task.subject }}</span>
+          <span class="todo-subject">{{ task.seq }}: {{ task.subject }}</span>
         </div>
 
         <div v-for="task in visiblePending" :key="task.id" class="todo-row todo-pending">
           <span class="todo-icon">○</span>
-          <span class="todo-subject">{{ task.subject }}</span>
+          <span class="todo-subject">{{ task.seq }}: {{ task.subject }}</span>
         </div>
         <div v-if="hiddenPendingCount > 0" class="todo-row todo-fold" @click="pendingFolded = !pendingFolded">
           <span class="todo-icon">○</span>
@@ -1052,12 +1047,12 @@ onUnmounted(() => {
         </div>
         <div v-for="task in visibleCompleted" :key="task.id" class="todo-row todo-completed todo-completed-indent">
           <span class="todo-icon">✓</span>
-          <span class="todo-subject">{{ task.subject }}</span>
+          <span class="todo-subject">{{ task.seq }}: {{ task.subject }}</span>
         </div>
       </div>
 
       <div v-for="(qm, i) in queuedMessages" :key="`queued-${i}`" class="queued-message">
-        <span class="queued-message-text">{{ qm }}</span>
+        <span class="queued-message-text">{{ i + 1 }}: {{ qm }}</span>
       </div>
 
       <div class="chat-input">
@@ -1098,7 +1093,7 @@ onUnmounted(() => {
         <button class="target-toggle" @click="toggleTarget">›</button>
       </div>
       <div class="target-side-body">
-        <TargetPanel :devices="devices" />
+        <TargetPanel :devices="devices" :allHosts="allHosts" v-model="selectedHostIds" />
       </div>
     </div>
 

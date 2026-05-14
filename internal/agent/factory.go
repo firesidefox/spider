@@ -27,6 +27,7 @@ type Factory struct {
 	PermissionMode permission.Mode
 	SummaryStore   *store.SummaryStore
 	CompactionCfg  config.CompactionConfig
+	MaxTurns       int
 	LLMModel       string
 	TodoStore      *store.TodoStore
 	TopologyStore  *store.TopologyStore
@@ -81,6 +82,13 @@ func NewFactory(
 	}, nil
 }
 
+func (f *Factory) maxTurns() int {
+	if f.MaxTurns > 0 {
+		return f.MaxTurns
+	}
+	return 10000
+}
+
 // NewAgent creates a new Agent with all tools registered.
 func (f *Factory) NewAgent(systemPrompt string, conversationID string) *Agent {
 	logger.Global().Info().Str("model", f.LLMModel).Str("conv_id", conversationID).Msg("agent factory: creating agent")
@@ -104,7 +112,7 @@ func (f *Factory) NewAgent(systemPrompt string, conversationID string) *Agent {
 		MsgStore:     f.MsgStore,
 		TodoStore:    f.TodoStore,
 		SystemPrompt: systemPrompt,
-		MaxTurns:     15,
+		MaxTurns:     f.maxTurns(),
 		Compactor:    compactor,
 		SkillManager: NewSkillManager(f.DataDir),
 	})
@@ -129,7 +137,7 @@ func (f *Factory) NewHeadlessAgent(systemPrompt string, conversationID string) *
 		Hooks:        hooks,
 		MsgStore:     noopMessageStorer{},
 		SystemPrompt: systemPrompt,
-		MaxTurns:     15,
+		MaxTurns:     f.maxTurns(),
 		SkillManager: NewSkillManager(f.DataDir),
 	})
 }
@@ -167,7 +175,8 @@ Assistant: Collects CPU, memory, and I/O metrics first. Then picks one optimizat
 // Layer 1: dynamic role + host summary
 // Layer 2: per-tool SystemPromptSection() collected from a temp registry
 // Layer 3: intentFieldPrompt + orchestrationPrompt
-func (f *Factory) BuildSystemPrompt() string {
+// targetHostIDs: when non-empty, inject a target-host hint into layer 1.
+func (f *Factory) BuildSystemPrompt(targetHostIDs ...string) string {
 	// Layer 1
 	allHosts, err := f.Hosts.List("")
 	var layer1 string
@@ -194,6 +203,26 @@ func (f *Factory) BuildSystemPrompt() string {
 			len(allHosts),
 			strings.Join(parts, ", "),
 		)
+	}
+
+	// Inject target host hint when caller specifies a subset
+	if len(targetHostIDs) > 0 {
+		hostByID := make(map[string]string)
+		if hosts, e := f.Hosts.List(""); e == nil {
+			for _, h := range hosts {
+				hostByID[h.ID] = fmt.Sprintf("%s (%s)", h.Name, h.IP)
+			}
+		}
+		var lines []string
+		for _, id := range targetHostIDs {
+			if label, ok := hostByID[id]; ok {
+				lines = append(lines, "- "+label)
+			}
+		}
+		if len(lines) > 0 {
+			layer1 += "\n\n用户已预选以下主机作为操作目标：\n" + strings.Join(lines, "\n") +
+				"\n\n优先对这些主机执行操作。若用户明确指定其他主机，以用户指令为准。"
+		}
 	}
 
 	// Layer 2: collect tool sections
