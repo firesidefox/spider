@@ -188,6 +188,7 @@ function stopTimer(taskId: number) {
   const t = taskTimers.value.get(taskId)
   if (t) { clearInterval(t); taskTimers.value.delete(taskId) }
   taskElapsed.value.delete(taskId)
+  taskElapsed.value = new Map(taskElapsed.value)
 }
 
 function clearAllTimers() {
@@ -1202,8 +1203,6 @@ onUnmounted(() => {
 .todo-fold { cursor: pointer; }
 .todo-fold:hover { background: var(--surface-2, rgba(255,255,255,0.04)); }
 .todo-fold .todo-icon { color: var(--text-sub); }
-.todo-deleted .todo-icon { color: var(--red, #e05252); opacity: 0.5; }
-.todo-deleted .todo-subject { opacity: 0.4; text-decoration: line-through; }
 
 /* Right target panel */
 .target-resize-handle { width: 5px; cursor: col-resize; background: transparent; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: background 0.15s; }
