@@ -34,6 +34,15 @@ func NewRouter(app *mcppkg.App) http.Handler {
 
 	mux.HandleFunc("/api/v1/hosts/", func(w http.ResponseWriter, r *http.Request) {
 		rest := r.URL.Path[len("/api/v1/hosts/"):]
+		// statuses is a fixed sub-path, not a host ID
+		if rest == "statuses" {
+			if r.Method == http.MethodGet {
+				hostStatuses(app, w, r)
+			} else {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			}
+			return
+		}
 		// split into id and sub-path
 		id := rest
 		sub := ""
@@ -197,6 +206,10 @@ func NewRouter(app *mcppkg.App) http.Handler {
 	mux.HandleFunc("GET /api/v1/skills/{source}/{name...}", getSkillBySourceHandler(app.Config.DataDir))
 	mux.HandleFunc("PUT /api/v1/skills/custom/{name...}", uploadCustomSkillHandler(app.Config.DataDir))
 	mux.HandleFunc("DELETE /api/v1/skills/custom/{name...}", deleteCustomSkillHandler(app.Config.DataDir))
+	mux.HandleFunc("GET /api/v1/stream", func(w http.ResponseWriter, r *http.Request) {
+		globalStream(app, w, r)
+	})
+
 	mux.HandleFunc("GET /api/v1/me", meHandler(app))
 	mux.HandleFunc("PUT /api/v1/me/password", changePasswordHandler(app))
 	mux.HandleFunc("GET /api/v1/me/prefs", getUIPrefsHandler(app))
