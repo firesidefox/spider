@@ -42,6 +42,7 @@ func (t *TodoTool) InputSchema() map[string]any {
 		"properties": map[string]any{
 			"action":      map[string]any{"type": "string", "enum": []string{"create", "update", "list"}},
 			"subject":     map[string]any{"type": "string"},
+			"active_form": map[string]any{"type": "string"},
 			"description": map[string]any{"type": "string"},
 			"status":      map[string]any{"type": "string", "enum": []string{"pending", "in_progress", "completed", "deleted"}},
 			"owner":       map[string]any{"type": "string"},
@@ -74,6 +75,7 @@ func (t *TodoTool) execCreate(input map[string]any) (*ToolResult, error) {
 		ConversationID: t.conversationID,
 		TurnID:         t.turnID,
 		Subject:        subject,
+		ActiveForm:     strVal(input, "active_form"),
 		Description:    strVal(input, "description"),
 		Status:         "pending",
 		Owner:          strVal(input, "owner"),
@@ -95,6 +97,7 @@ func (t *TodoTool) execUpdate(input map[string]any) (*ToolResult, error) {
 	taskID := int64(taskIDFloat)
 
 	subject := strVal(input, "subject")
+	activeForm := strVal(input, "active_form")
 	description := strVal(input, "description")
 	status := strVal(input, "status")
 	owner := strVal(input, "owner")
@@ -106,11 +109,11 @@ func (t *TodoTool) execUpdate(input map[string]any) (*ToolResult, error) {
 		}
 	}
 
-	if subject == "" && description == "" && status == "" && owner == "" && blockedBy == nil {
+	if subject == "" && activeForm == "" && description == "" && status == "" && owner == "" && blockedBy == nil {
 		return &ToolResult{Content: "update requires at least one field besides task_id", IsError: true, RiskLevel: RiskL1}, nil
 	}
 
-	task, err := t.store.Update(t.conversationID, taskID, subject, "", description, status, owner, blockedBy)
+	task, err := t.store.Update(t.conversationID, taskID, subject, activeForm, description, status, owner, blockedBy)
 	if err != nil {
 		return &ToolResult{Content: "update failed: " + err.Error(), IsError: true, RiskLevel: RiskL1}, nil
 	}
@@ -211,6 +214,7 @@ Use the Todo tool proactively to track progress on complex tasks.
 - Only ONE task in_progress at a time
 - Mark completed IMMEDIATELY after finishing — do not batch completions
 - Only mark completed when fully done; if blocked, keep in_progress and create a new task describing the blocker
+- Provide active_form (present-continuous) when creating tasks, e.g. subject="Update TodoStore" active_form="Updating TodoStore"
 
 <example>
 User: Check disk usage on all web servers, clean up logs older than 30 days, and restart nginx if free space is below 20%.
