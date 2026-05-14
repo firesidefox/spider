@@ -182,7 +182,9 @@ func scanUser(row *sql.Row) (*models.User, error) {
 	}
 	u.Role = models.Role(role)
 	u.Enabled = enabled != 0
-	json.Unmarshal([]byte(uiPrefsJSON), &u.UIPrefs) //nolint:errcheck
+	if uiPrefsJSON != "" {
+		json.Unmarshal([]byte(uiPrefsJSON), &u.UIPrefs) //nolint:errcheck
+	}
 	return &u, nil
 }
 
@@ -197,7 +199,9 @@ func scanUserRows(rows *sql.Rows) (*models.User, error) {
 	}
 	u.Role = models.Role(role)
 	u.Enabled = enabled != 0
-	json.Unmarshal([]byte(uiPrefsJSON), &u.UIPrefs) //nolint:errcheck
+	if uiPrefsJSON != "" {
+		json.Unmarshal([]byte(uiPrefsJSON), &u.UIPrefs) //nolint:errcheck
+	}
 	return &u, nil
 }
 
@@ -212,7 +216,9 @@ func (s *UserStore) GetUIPrefs(userID string) (*models.UIPrefs, error) {
 		return nil, fmt.Errorf("查询 ui_prefs 失败: %w", err)
 	}
 	var prefs models.UIPrefs
-	json.Unmarshal([]byte(raw), &prefs) //nolint:errcheck
+	if raw != "" {
+		json.Unmarshal([]byte(raw), &prefs) //nolint:errcheck
+	}
 	return &prefs, nil
 }
 

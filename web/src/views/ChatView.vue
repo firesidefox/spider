@@ -125,13 +125,7 @@ function taskClass(t: Todo) { return `todo-${t.status}` }
 const messagesRef = ref<HTMLElement | null>(null)
 const devices = ref<DeviceStatus[]>([])
 
-const targetBadge = computed(() => {
-  const failed = devices.value.filter(d => d.status === 'failed').length
-  const executing = devices.value.filter(d => d.status === 'executing').length
-  if (failed > 0) return { type: 'failed' as const, count: failed }
-  if (executing > 0) return { type: 'executing' as const, count: 0 }
-  return null
-})
+
 let abortCtrl: AbortController | null = null
 // Per-conversation EventSource subscriptions
 const convSubscriptions = new Map<string, () => void>()
@@ -150,9 +144,6 @@ const sidebarWidth = ref(parseInt(localStorage.getItem('spider-sidebar-width') |
 const isDragging = ref(false)
 const chatPageRef = ref<HTMLElement | null>(null)
 
-const sidebarTab = ref<'conv' | 'target'>(
-  (localStorage.getItem('spider-sidebar-tab') as 'conv' | 'target') || 'conv'
-)
 
 const targetOpen = ref(true)
 const targetWidth = ref(280)
@@ -270,10 +261,6 @@ function startDrag(e: MouseEvent) {
   document.addEventListener('mouseup', onUp)
 }
 
-function setSidebarTab(tab: 'conv' | 'target') {
-  sidebarTab.value = tab
-  localStorage.setItem('spider-sidebar-tab', tab)
-}
 
 async function loadConversations() {
   conversations.value = await listConversations()
@@ -820,40 +807,31 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="chat-page" ref="chatPageRef" :class="{ dragging: isDragging }">
+  <div class="chat-page" ref="chatPageRef" :class="{ dragging: isDragging || isTargetDragging }">
     <!-- Sidebar -->
     <div class="sidebar" :class="{ collapsed: !sidebarOpen }" :style="{ width: sidebarOpen ? sidebarWidth + 'px' : '0' }">
       <div class="sidebar-header">
         <button class="sidebar-toggle" @click="toggleSidebar">≡</button>
         <div class="sidebar-tabs">
-          <button class="sidebar-tab" :class="{ active: sidebarTab === 'conv' }" @click="setSidebarTab('conv')">对话</button>
-          <button class="sidebar-tab" :class="{ active: sidebarTab === 'target' }" @click="setSidebarTab('target')">
-            目标
-            <span v-if="targetBadge" class="tab-badge" :class="targetBadge.type">{{ targetBadge.type === 'failed' ? targetBadge.count : '' }}</span>
-          </button>
+          <button class="sidebar-tab active">对话</button>
         </div>
-        <button v-if="sidebarTab === 'conv'" class="sidebar-new" @click="createNewConversation()">+</button>
+        <button class="sidebar-new" @click="createNewConversation()">+</button>
       </div>
       <div class="sidebar-body">
-        <template v-if="sidebarTab === 'conv'">
-          <div v-for="c in conversations" :key="c.id" class="conv-item"
-               :class="{ active: c.id === activeConvId }"
-               @click="selectConversation(c.id)">
-            <input v-if="editingConvId === c.id" class="conv-item-input"
-                   v-model="editTitleText"
-                   @keydown.enter="saveConvTitle(c.id)"
-                   @keydown.escape="cancelEdit"
-                   @blur="saveConvTitle(c.id)"
-                   @click.stop
-                   @vue:mounted="($event: any) => $event.el.focus()" />
-            <span v-else class="conv-item-title" @dblclick.stop="startEditConvTitle(c.id, c.title)">{{ c.title || '未命名对话' }}</span>
-            <span v-if="c.status === 'processing'" class="conv-processing-dot" title="处理中"></span>
-            <button class="conv-del" @click.stop="handleDeleteConversation(c.id)">×</button>
-          </div>
-        </template>
-        <template v-else>
-          <TargetPanel :devices="devices" />
-        </template>
+        <div v-for="c in conversations" :key="c.id" class="conv-item"
+             :class="{ active: c.id === activeConvId }"
+             @click="selectConversation(c.id)">
+          <input v-if="editingConvId === c.id" class="conv-item-input"
+                 v-model="editTitleText"
+                 @keydown.enter="saveConvTitle(c.id)"
+                 @keydown.escape="cancelEdit"
+                 @blur="saveConvTitle(c.id)"
+                 @click.stop
+                 @vue:mounted="($event: any) => $event.el.focus()" />
+          <span v-else class="conv-item-title" @dblclick.stop="startEditConvTitle(c.id, c.title)">{{ c.title || '未命名对话' }}</span>
+          <span v-if="c.status === 'processing'" class="conv-processing-dot" title="处理中"></span>
+          <button class="conv-del" @click.stop="handleDeleteConversation(c.id)">×</button>
+        </div>
       </div>
     </div>
     <div class="sidebar-resize-handle" @mousedown="startDrag">
@@ -1115,7 +1093,7 @@ onUnmounted(() => {
 .target-resize-handle:hover, .chat-page.dragging .target-resize-handle { background: rgba(108, 140, 255, 0.3); }
 .target-side { display: flex; flex-direction: column; flex-shrink: 0; overflow: hidden; transition: width 0.2s; border-left: 1px solid var(--border); background: var(--surface); }
 .target-side.collapsed { width: 0 !important; border-left: none; }
-.target-side-header { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.target-side-header { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
 .target-side-title { font-size: 12px; font-weight: 500; color: var(--text-sub); letter-spacing: 0.05em; }
 .target-toggle { background: none; border: none; cursor: pointer; color: var(--text-sub); font-size: 16px; padding: 0 2px; line-height: 1; }
 .target-toggle:hover { color: var(--text); }
