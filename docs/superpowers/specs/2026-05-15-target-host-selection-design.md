@@ -20,9 +20,22 @@ Allow users to select target hosts via a global TargetPanel. The selection is gl
 The two zones are separated by a draggable resize handle. The status zone (top) auto-expands to fit its content, with a maximum that allows the selection zone to be fully collapsed (i.e., status zone can grow until selection zone height = 0). When content exceeds that maximum, status zone scrolls internally. User can drag the handle to adjust the split freely.
 
 **Zone 1 — Status (heat matrix, read-only)**
-- Shows all hosts as colored cells (online=blue, offline=gray, failed=red, executing=yellow)
-- When `selectedHostIds` is null (all selected): all cells visible at full opacity
-- When `selectedHostIds` is non-null (partial): selected host cells visible, unselected cells hidden (transparent placeholder, layout stable)
+
+Each host is a colored cell. Color and animation reflect current execution state:
+
+| Status | Color | Animation |
+|--------|-------|-----------|
+| offline | `#3a3a3a` gray | none |
+| online | `#3fb950` green | none |
+| executing | `#d29922` yellow | continuous pulse (glow expand, 1.2s loop) |
+| success | `#3fb950` green | one-shot bright flash then settle (0.6s) |
+| failed | `#f85149` red | one-shot subtle shake (0.4s) |
+
+Selected target hosts get a blue outline (`#4a9eff`) overlaid on top of their status color.
+
+Visibility:
+- When `selectedHostIds` is null (all selected): all cells visible
+- When `selectedHostIds` is non-null (partial): selected host cells visible, unselected cells transparent (placeholder keeps layout stable)
 
 **Zone 2 — Host selection**
 
