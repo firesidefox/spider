@@ -230,7 +230,7 @@ func (f *Factory) buildRegistry(conversationID string) *ToolRegistry {
 		registry.Register(NewSearchDocsTool(f.RagStore, f.DocStore))
 	}
 	if f.TodoStore != nil {
-		registry.Register(NewTodoTool(f.TodoStore, f.SSEBroadcaster, conversationID))
+		registry.Register(NewTodoTool(f.TodoStore, f.SSEBroadcaster, conversationID, ""))
 	}
 	if f.TopologyStore != nil {
 		registry.Register(NewGetTopologyTool(f.TopologyStore))

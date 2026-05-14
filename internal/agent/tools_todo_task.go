@@ -3,6 +3,9 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"strings"
+	"time"
 
 	"github.com/spiderai/spider/internal/models"
 	"github.com/spiderai/spider/internal/store"
@@ -16,14 +19,16 @@ type TodoTool struct {
 	store          *store.TodoStore
 	broadcaster    SSEBroadcaster
 	conversationID string
+	turnID         string
 }
 
-func NewTodoTool(s *store.TodoStore, broadcaster SSEBroadcaster, conversationID string) *TodoTool {
-	return &TodoTool{store: s, broadcaster: broadcaster, conversationID: conversationID}
+func NewTodoTool(s *store.TodoStore, broadcaster SSEBroadcaster, conversationID, turnID string) *TodoTool {
+	return &TodoTool{store: s, broadcaster: broadcaster, conversationID: conversationID, turnID: turnID}
 }
 
 func (t *TodoTool) Name() string                    { return "Todo" }
 func (t *TodoTool) DefaultRiskLevel() RiskLevel     { return RiskL1 }
+func (t *TodoTool) Hidden() bool                    { return true }
 
 func (t *TodoTool) Description() string {
 	return "Update the todo task list for the current conversation. Use proactively to track progress on complex tasks. Actions: create (required: subject), update (required: task_id + at least one field), list. Status values: pending, in_progress, completed, deleted."
@@ -66,6 +71,7 @@ func (t *TodoTool) execCreate(input map[string]any) (*ToolResult, error) {
 	}
 	task := &models.Todo{
 		ConversationID: t.conversationID,
+		TurnID:         t.turnID,
 		Subject:        subject,
 		Description:    strVal(input, "description"),
 		Status:         "pending",
@@ -111,6 +117,9 @@ func (t *TodoTool) execUpdate(input map[string]any) (*ToolResult, error) {
 	out, _ := json.Marshal(task)
 
 	allDone := t.allTasksDone()
+	if allDone {
+		t.broadcastSummary()
+	}
 	return &ToolResult{Content: string(out) + todoNudge(allDone), RiskLevel: RiskL1}, nil
 }
 
@@ -135,7 +144,7 @@ func (t *TodoTool) broadcast(task *models.Todo) {
 }
 
 func (t *TodoTool) allTasksDone() bool {
-	tasks, err := t.store.List(t.conversationID)
+	tasks, err := t.store.ListByTurn(t.turnID)
 	if err != nil || len(tasks) == 0 {
 		return false
 	}
@@ -145,6 +154,29 @@ func (t *TodoTool) allTasksDone() bool {
 		}
 	}
 	return true
+}
+
+func (t *TodoTool) broadcastSummary() {
+	if t.broadcaster == nil {
+		return
+	}
+	tasks, err := t.store.ListByTurn(t.turnID)
+	if err != nil {
+		return
+	}
+	var sb strings.Builder
+	sb.WriteString("**Tasks completed:**\n")
+	n := 0
+	for _, task := range tasks {
+		if task.Status == "deleted" {
+			continue
+		}
+		n++
+		dur := task.UpdatedAt.Sub(task.CreatedAt).Round(time.Second)
+		sb.WriteString(fmt.Sprintf("%d. %s (%s)\n", n, task.Subject, dur))
+	}
+	payload, _ := json.Marshal(map[string]any{"type": "todo_summary", "content": sb.String()})
+	t.broadcaster.BroadcastSSE(t.conversationID, payload)
 }
 
 const todoBaseNudge = "\n\nTodo list updated. Continue using the Todo tool to track remaining work — mark each task in_progress before starting and completed immediately when done."

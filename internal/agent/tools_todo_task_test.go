@@ -33,7 +33,7 @@ func newTestTodoTool(t *testing.T) (*TodoTool, *mockBroadcaster) {
 	}
 	t.Cleanup(func() { database.Close() })
 	bc := &mockBroadcaster{}
-	return NewTodoTool(store.NewTodoStore(database), bc, "conv-1"), bc
+	return NewTodoTool(store.NewTodoStore(database), bc, "conv-1", "turn-1"), bc
 }
 
 func TestTodoTool_Create(t *testing.T) {
