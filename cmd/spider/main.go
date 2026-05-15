@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -112,9 +113,18 @@ func serve(cfgFile, addrOverride, dataDirOverride string, debug bool) error {
 	if err != nil {
 		return fmt.Errorf("加载配置失败: %w", err)
 	}
+	cfgPath := cfgFile
+	if cfgPath == "" {
+		cfgPath = config.DefaultConfigPath()
+	}
 	if addrOverride != "" {
 		cfg.SSE.Addr = addrOverride
-		cfg.SSE.BaseURL = "http://localhost" + addrOverride
+		host, port, err := net.SplitHostPort(addrOverride)
+		if err == nil && (host == "" || host == "0.0.0.0" || host == "::") {
+			cfg.SSE.BaseURL = "http://localhost:" + port
+		} else {
+			cfg.SSE.BaseURL = "http://" + addrOverride
+		}
 	}
 	if dataDirOverride != "" {
 		cfg.DataDir = dataDirOverride
@@ -188,6 +198,7 @@ func serve(cfgFile, addrOverride, dataDirOverride string, debug bool) error {
 		LogStore:         ls,
 		Pool:             pool,
 		Config:           cfg,
+		ConfigPath:       cfgPath,
 		DB:               database,
 		UserStore:        us,
 		TokenStore:       ts,

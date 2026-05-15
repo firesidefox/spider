@@ -2,9 +2,9 @@ package agent
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
@@ -147,8 +147,25 @@ func (t *BatchExecuteTool) Execute(ctx context.Context, input map[string]any) (*
 	}
 	wg.Wait()
 
-	out, _ := json.Marshal(results)
-	return &ToolResult{Content: string(out) + execNudge, RiskLevel: risk}, nil
+	// Format results as readable text
+	var output strings.Builder
+	for _, r := range results {
+		output.WriteString(fmt.Sprintf("Host: %s (%s)\n", r.HostName, r.HostID))
+		if r.Error != "" {
+			output.WriteString(fmt.Sprintf("  Error: %s\n", r.Error))
+		} else {
+			output.WriteString(fmt.Sprintf("  Exit Code: %d\n", r.ExitCode))
+			output.WriteString(fmt.Sprintf("  Duration: %dms\n", r.DurationMs))
+			if r.Stdout != "" {
+				output.WriteString(fmt.Sprintf("  Stdout:\n%s\n", r.Stdout))
+			}
+			if r.Stderr != "" {
+				output.WriteString(fmt.Sprintf("  Stderr:\n%s\n", r.Stderr))
+			}
+		}
+		output.WriteString("\n")
+	}
+	return &ToolResult{Content: output.String() + execNudge, RiskLevel: risk}, nil
 }
 
 func (t *BatchExecuteTool) SystemPromptSection() string { return runCommandPromptSection }

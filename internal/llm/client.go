@@ -2,6 +2,7 @@ package llm
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 )
 
@@ -21,6 +22,37 @@ type ContentBlock struct {
 	ToolUseID string         `json:"tool_use_id,omitempty"`
 	Content   string         `json:"content,omitempty"`
 	IsError   bool           `json:"is_error,omitempty"`
+}
+
+func (b ContentBlock) MarshalJSON() ([]byte, error) {
+	switch b.Type {
+	case "tool_use":
+		input := b.Input
+		if input == nil {
+			input = map[string]any{}
+		}
+		return json.Marshal(struct {
+			Type  string         `json:"type"`
+			ID    string         `json:"id"`
+			Name  string         `json:"name"`
+			Input map[string]any `json:"input"`
+		}{b.Type, b.ID, b.Name, input})
+	case "tool_result":
+		return json.Marshal(struct {
+			Type      string `json:"type"`
+			ToolUseID string `json:"tool_use_id"`
+			Content   string `json:"content"`
+			IsError   bool   `json:"is_error,omitempty"`
+		}{b.Type, b.ToolUseID, b.Content, b.IsError})
+	case "text":
+		return json.Marshal(struct {
+			Type string `json:"type"`
+			Text string `json:"text"`
+		}{b.Type, b.Content})
+	default:
+		type plain ContentBlock
+		return json.Marshal(plain(b))
+	}
 }
 
 type Message struct {

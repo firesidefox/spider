@@ -109,10 +109,32 @@ func updateProvider(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id 
 		writeError(w, http.StatusBadRequest, "type 必须为 anthropic 或 openai")
 		return
 	}
+	existing, err := app.ProviderStore.GetByID(id)
+	if err != nil {
+		writeError(w, http.StatusNotFound, err.Error())
+		return
+	}
 	p, err := app.ProviderStore.Update(id, req.Name, req.Type, req.APIKey, req.BaseURL)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
+	}
+	existingKey, _ := app.ProviderStore.DecryptAPIKey(existing)
+	newType := existing.Type
+	if req.Type != nil {
+		newType = *req.Type
+	}
+	newBaseURL := existing.BaseURL
+	if req.BaseURL != nil {
+		newBaseURL = *req.BaseURL
+	}
+	newKey := existingKey
+	if req.APIKey != nil {
+		newKey = *req.APIKey
+	}
+	if existing.Type != newType || existing.BaseURL != newBaseURL || existingKey != newKey {
+		_ = app.ProviderStore.SaveModels(id, nil)
+		_ = app.ProviderStore.SetSelectedModel(id, "")
 	}
 	pr, err := buildProviderResponse(app, p)
 	if err != nil {

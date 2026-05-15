@@ -62,6 +62,15 @@ func chatGetConversation(app *mcppkg.App, w http.ResponseWriter, r *http.Request
 		writeError(w, 500, err.Error())
 		return
 	}
+	// Filter out tool_result messages - results already in assistant's tool_calls JSON
+	n := 0
+	for _, m := range msgs {
+		if m.Role != "tool_result" {
+			msgs[n] = m
+			n++
+		}
+	}
+	msgs = msgs[:n]
 	tasks, err := app.TodoStore.List(id)
 	if err != nil {
 		writeError(w, 500, err.Error())
@@ -151,8 +160,8 @@ func chatSendMessage(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id
 	}
 	factory.DisableSearchDocs = allFacesDisableKB(app)
 
-	systemPrompt := factory.BuildSystemPrompt(req.HostIDs...)
-	a := factory.NewAgent(systemPrompt, id)
+	systemPrompt := factory.BuildSystemPrompt()
+	a := factory.NewAgent(systemPrompt, id, req.HostIDs)
 	waiter := agent.NewConfirmationWaiter()
 	app.StoreChatWaiter(id, waiter)
 	defer app.RemoveChatWaiter(id)

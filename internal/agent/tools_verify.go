@@ -2,33 +2,33 @@ package agent
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/spiderai/spider/internal/ssh"
 	"github.com/spiderai/spider/internal/store"
 )
 
-type VerifyTool struct {
+type PollUntilTool struct {
 	hosts   *store.HostStore
 	faces   *store.AccessFaceStore
 	sshPool *ssh.Pool
 	sshKeys *store.SSHKeyStore
 }
 
-func NewVerifyTool(hosts *store.HostStore, faces *store.AccessFaceStore, sshPool *ssh.Pool, sshKeys *store.SSHKeyStore) *VerifyTool {
-	return &VerifyTool{hosts: hosts, faces: faces, sshPool: sshPool, sshKeys: sshKeys}
+func NewVerifyTool(hosts *store.HostStore, faces *store.AccessFaceStore, sshPool *ssh.Pool, sshKeys *store.SSHKeyStore) *PollUntilTool {
+	return &PollUntilTool{hosts: hosts, faces: faces, sshPool: sshPool, sshKeys: sshKeys}
 }
 
-func (t *VerifyTool) DefaultRiskLevel() RiskLevel { return RiskL1 }
-func (t *VerifyTool) Name() string                  { return "Verify" }
-func (t *VerifyTool) Description() string {
-	return "Verify conditions on remote hosts with retry polling. Read-only. No side effects. Use freely in Explore phase."
+func (t *PollUntilTool) DefaultRiskLevel() RiskLevel { return RiskL1 }
+func (t *PollUntilTool) Name() string                { return "PollUntil" }
+func (t *PollUntilTool) Description() string {
+	return "Poll remote hosts until all conditions are met or timeout. Read-only. Use after deployments or config changes to wait for services to become ready."
 }
 
-func (t *VerifyTool) InputSchema() map[string]any {
+func (t *PollUntilTool) InputSchema() map[string]any {
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
@@ -39,13 +39,13 @@ func (t *VerifyTool) InputSchema() map[string]any {
 					"properties": map[string]any{
 						"host_id": map[string]any{"type": "string"},
 						"command": map[string]any{"type": "string"},
-						"expect":  map[string]any{"type": "string"},
+						"expect":  map[string]any{"type": "string", "description": "Substring expected in stdout"},
 					},
 					"required": []string{"host_id", "command", "expect"},
 				},
-				"description": "List of checks to verify",
+				"description": "Conditions to wait for — all must pass",
 			},
-			"timeout":  map[string]any{"type": "integer", "description": "Timeout in seconds (default 60)"},
+			"timeout":  map[string]any{"type": "integer", "description": "Total wait time in seconds (default 60)"},
 			"interval": map[string]any{"type": "integer", "description": "Poll interval in seconds (default 5)"},
 		},
 		"required": []string{"checks"},
@@ -87,7 +87,7 @@ func parseChecks(input map[string]any) ([]verifyCheck, error) {
 	return checks, nil
 }
 
-func (t *VerifyTool) runCheck(ctx context.Context, c verifyCheck) checkResult {
+func (t *PollUntilTool) runCheck(ctx context.Context, c verifyCheck) checkResult {
 	r := checkResult{HostID: c.HostID, Command: c.Command, Expect: c.Expect}
 	host, err := t.hosts.GetByID(c.HostID)
 	if err != nil {
@@ -115,7 +115,7 @@ func (t *VerifyTool) runCheck(ctx context.Context, c verifyCheck) checkResult {
 	return r
 }
 
-func (t *VerifyTool) Execute(ctx context.Context, input map[string]any) (*ToolResult, error) {
+func (t *PollUntilTool) Execute(ctx context.Context, input map[string]any) (*ToolResult, error) {
 	checks, err := parseChecks(input)
 	if err != nil {
 		return &ToolResult{Content: err.Error(), IsError: true, RiskLevel: RiskL1}, nil
@@ -132,21 +132,33 @@ func (t *VerifyTool) Execute(ctx context.Context, input map[string]any) (*ToolRe
 
 	deadline := time.Now().Add(time.Duration(timeoutSec) * time.Second)
 	interval := time.Duration(intervalSec) * time.Second
+	checkTimeout := interval
 
 	var lastResults []checkResult
 loop:
 	for time.Now().Before(deadline) {
 		lastResults = make([]checkResult, len(checks))
-		allPassed := true
+		var wg sync.WaitGroup
 		for i, c := range checks {
-			lastResults[i] = t.runCheck(ctx, c)
-			if !lastResults[i].Passed {
+			wg.Add(1)
+			go func(idx int, chk verifyCheck) {
+				defer wg.Done()
+				checkCtx, cancel := context.WithTimeout(ctx, checkTimeout)
+				defer cancel()
+				lastResults[idx] = t.runCheck(checkCtx, chk)
+			}(i, c)
+		}
+		wg.Wait()
+
+		allPassed := true
+		for _, r := range lastResults {
+			if !r.Passed {
 				allPassed = false
+				break
 			}
 		}
 		if allPassed {
-			out, _ := json.Marshal(map[string]any{"status": "ok", "checks": lastResults})
-			return &ToolResult{Content: string(out), RiskLevel: RiskL1}, nil
+			return &ToolResult{Content: formatPollResults("ok", lastResults), RiskLevel: RiskL1}, nil
 		}
 		select {
 		case <-ctx.Done():
@@ -155,23 +167,60 @@ loop:
 		}
 	}
 
-	out, _ := json.Marshal(map[string]any{"status": "timeout", "checks": lastResults})
-	return &ToolResult{Content: string(out), IsError: true, RiskLevel: RiskL1}, nil
+	return &ToolResult{Content: formatPollResults("timeout", lastResults), IsError: true, RiskLevel: RiskL1}, nil
 }
 
-const verifyToolPromptSection = `### VerifyTool (read-only, has retry semantics)
+func formatPollResults(status string, results []checkResult) string {
+	var b strings.Builder
+	if status == "ok" {
+		b.WriteString("All checks passed.\n\n")
+	} else {
+		b.WriteString("Timeout — not all checks passed.\n\n")
+	}
+	for _, r := range results {
+		if r.Passed {
+			fmt.Fprintf(&b, "✓ %s: %s\n", r.HostID, r.Command)
+		} else if r.Error != "" {
+			fmt.Fprintf(&b, "✗ %s: %s — error: %s\n", r.HostID, r.Command, r.Error)
+		} else {
+			fmt.Fprintf(&b, "✗ %s: %s — expected %q, got %q\n", r.HostID, r.Command, r.Expect, strings.TrimSpace(r.Stdout))
+		}
+	}
+	return b.String()
+}
 
-**When to use:** After a deployment or config change, to poll until a service is ready.
-**When NOT to use:** Don't use for a one-shot check — use RunCommand instead. VerifyTool retries on failure, adding latency when you just need a single result.
+const pollUntilPromptSection = `### PollUntil (read-only, polls until all conditions pass or timeout)
+
+**Core behavior:** Runs all checks in parallel, repeats every "interval" seconds until every check passes or "timeout" is reached.
+
+**When to use:**
+- After a state-changing operation (restart, deploy, config reload) when the result takes time to appear
+- When you need to wait for a condition, not just observe it once
+
+**When NOT to use:**
+- One-shot observation — use RunCommand instead (PollUntil always waits at least one interval)
+- Checks that are expected to pass immediately
+
+**How to set timeout and interval:**
+- Default: timeout=60s, interval=5s
+- For fast services (nginx, systemd unit): interval=3, timeout=30
+- For slow deploys or DB migrations: interval=10, timeout=120
+
+**expect field:** substring match against stdout. Command must exit 0 AND stdout must contain expect string.
 
 <example>
 User: Restart nginx and confirm it's up.
-Assistant: Calls RunCommand to restart, then VerifyTool to poll until nginx responds.
+Assistant: RunCommand → "systemctl restart nginx", then PollUntil → checks=[{host_id, "systemctl is-active nginx", "active"}], interval=3, timeout=30
+</example>
+
+<example>
+User: Deploy the app and wait for it to be healthy.
+Assistant: RunCommand → deploy script, then PollUntil → checks=[{host_id, "curl -sf http://localhost:8080/health", "ok"}], interval=5, timeout=120
 </example>
 
 <example>
 User: Is port 80 open on web-01?
-Assistant: Calls RunCommand with "ss -tlnp | grep :80". Does NOT use VerifyTool.
+Assistant: RunCommand → "ss -tlnp | grep :80". Does NOT use PollUntil — this is a one-shot check.
 </example>`
 
-func (t *VerifyTool) SystemPromptSection() string { return verifyToolPromptSection }
+func (t *PollUntilTool) SystemPromptSection() string { return pollUntilPromptSection }

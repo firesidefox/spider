@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
-	"path/filepath"
 
 	"github.com/spiderai/spider/internal/logger"
 	mcppkg "github.com/spiderai/spider/internal/mcp"
@@ -13,14 +12,18 @@ import (
 )
 
 type settingsResponse struct {
-	SSEAddr         string `json:"sse_addr"`
-	SSEBaseURL      string `json:"sse_base_url"`
-	SSHTimeout      int    `json:"ssh_default_timeout_seconds"`
-	SSHPoolTTL      int    `json:"ssh_pool_ttl_seconds"`
-	SSHMaxPool      int    `json:"ssh_max_pool_size"`
-	SSHNoProxy      string `json:"ssh_no_proxy"`
-	PermissionMode  string `json:"permission_mode"`
-	ApprovalTimeout int    `json:"approval_timeout"`
+	SSEAddr                string `json:"sse_addr"`
+	SSEBaseURL             string `json:"sse_base_url"`
+	SSHTimeout             int    `json:"ssh_default_timeout_seconds"`
+	SSHPoolTTL             int    `json:"ssh_pool_ttl_seconds"`
+	SSHMaxPool             int    `json:"ssh_max_pool_size"`
+	SSHNoProxy             string `json:"ssh_no_proxy"`
+	PermissionMode         string `json:"permission_mode"`
+	ApprovalTimeout        int    `json:"approval_timeout"`
+	MaxTurns               int    `json:"max_turns"`
+	CompactionThreshold    int    `json:"compaction_threshold_tokens"`
+	CompactionRecentTurns  int    `json:"compaction_recent_turns"`
+	CompactionMaxSummary   int    `json:"compaction_max_summary_tokens"`
 }
 
 const maskedPrefix = "****"
@@ -33,24 +36,27 @@ func maskKey(key string) string {
 }
 
 func saveConfig(app *mcppkg.App) error {
-	cfgPath := filepath.Join(app.Config.DataDir, "config.yaml")
 	data, err := yaml.Marshal(app.Config)
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(cfgPath, data, 0600)
+	return os.WriteFile(app.ConfigPath, data, 0600)
 }
 
 func buildSettingsResponse(app *mcppkg.App) settingsResponse {
 	return settingsResponse{
-		SSEAddr:         app.Config.SSE.Addr,
-		SSEBaseURL:      app.Config.SSE.BaseURL,
-		SSHTimeout:      app.Config.SSH.DefaultTimeout,
-		SSHPoolTTL:      app.Config.SSH.PoolTTL,
-		SSHMaxPool:      app.Config.SSH.MaxPoolSize,
-		SSHNoProxy:      app.Config.SSH.NoProxy,
-		PermissionMode:  app.Config.Agent.PermissionMode,
-		ApprovalTimeout: app.Config.Agent.ApprovalTimeout,
+		SSEAddr:               app.Config.SSE.Addr,
+		SSEBaseURL:            app.Config.SSE.BaseURL,
+		SSHTimeout:            app.Config.SSH.DefaultTimeout,
+		SSHPoolTTL:            app.Config.SSH.PoolTTL,
+		SSHMaxPool:            app.Config.SSH.MaxPoolSize,
+		SSHNoProxy:            app.Config.SSH.NoProxy,
+		PermissionMode:        app.Config.Agent.PermissionMode,
+		ApprovalTimeout:       app.Config.Agent.ApprovalTimeout,
+		MaxTurns:              app.Config.Agent.MaxTurns,
+		CompactionThreshold:   app.Config.Agent.Compaction.ThresholdTokens,
+		CompactionRecentTurns: app.Config.Agent.Compaction.RecentTurns,
+		CompactionMaxSummary:  app.Config.Agent.Compaction.MaxSummaryTokens,
 	}
 }
 
@@ -88,6 +94,22 @@ func updateSettings(app *mcppkg.App, w http.ResponseWriter, r *http.Request) {
 	}
 	if req.ApprovalTimeout > 0 {
 		app.Config.Agent.ApprovalTimeout = req.ApprovalTimeout
+	}
+	if req.MaxTurns > 0 {
+		app.Config.Agent.MaxTurns = req.MaxTurns
+	}
+	if req.CompactionThreshold > 0 {
+		app.Config.Agent.Compaction.ThresholdTokens = req.CompactionThreshold
+	}
+	if req.CompactionRecentTurns > 0 {
+		app.Config.Agent.Compaction.RecentTurns = req.CompactionRecentTurns
+	}
+	if req.CompactionMaxSummary > 0 {
+		app.Config.Agent.Compaction.MaxSummaryTokens = req.CompactionMaxSummary
+	}
+	if app.AgentFactory != nil {
+		app.AgentFactory.MaxTurns = app.Config.Agent.MaxTurns
+		app.AgentFactory.CompactionCfg = app.Config.Agent.Compaction
 	}
 
 	if err := saveConfig(app); err != nil {

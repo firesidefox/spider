@@ -90,9 +90,9 @@ func (f *Factory) maxTurns() int {
 }
 
 // NewAgent creates a new Agent with all tools registered.
-func (f *Factory) NewAgent(systemPrompt string, conversationID string) *Agent {
+func (f *Factory) NewAgent(systemPrompt string, conversationID string, selectedHostIDs []string) *Agent {
 	logger.Global().Info().Str("model", f.LLMModel).Str("conv_id", conversationID).Msg("agent factory: creating agent")
-	registry := f.buildRegistry(conversationID)
+	registry := f.buildRegistryWithHosts(conversationID, selectedHostIDs)
 
 	hooks := NewHookChain()
 	if f.Enforcer != nil {
@@ -175,8 +175,7 @@ Assistant: Collects CPU, memory, and I/O metrics first. Then picks one optimizat
 // Layer 1: dynamic role + host summary
 // Layer 2: per-tool SystemPromptSection() collected from a temp registry
 // Layer 3: intentFieldPrompt + orchestrationPrompt
-// targetHostIDs: when non-empty, inject a target-host hint into layer 1.
-func (f *Factory) BuildSystemPrompt(targetHostIDs ...string) string {
+func (f *Factory) BuildSystemPrompt() string {
 	// Layer 1
 	allHosts, err := f.Hosts.List("")
 	var layer1 string
@@ -205,26 +204,6 @@ func (f *Factory) BuildSystemPrompt(targetHostIDs ...string) string {
 		)
 	}
 
-	// Inject target host hint when caller specifies a subset
-	if len(targetHostIDs) > 0 {
-		hostByID := make(map[string]string)
-		if hosts, e := f.Hosts.List(""); e == nil {
-			for _, h := range hosts {
-				hostByID[h.ID] = fmt.Sprintf("%s (%s)", h.Name, h.IP)
-			}
-		}
-		var lines []string
-		for _, id := range targetHostIDs {
-			if label, ok := hostByID[id]; ok {
-				lines = append(lines, "- "+label)
-			}
-		}
-		if len(lines) > 0 {
-			layer1 += "\n\n用户已预选以下主机作为操作目标：\n" + strings.Join(lines, "\n") +
-				"\n\n优先对这些主机执行操作。若用户明确指定其他主机，以用户指令为准。"
-		}
-	}
-
 	// Layer 2: collect tool sections
 	reg := f.buildRegistry("")
 	var b strings.Builder
@@ -250,8 +229,14 @@ func (f *Factory) BuildSystemPrompt(targetHostIDs ...string) string {
 
 // buildRegistry creates a temporary registry to collect tool SystemPromptSections.
 func (f *Factory) buildRegistry(conversationID string) *ToolRegistry {
+	return f.buildRegistryWithHosts(conversationID, nil)
+}
+
+func (f *Factory) buildRegistryWithHosts(conversationID string, selectedHostIDs []string) *ToolRegistry {
 	registry := NewToolRegistry()
-	registry.Register(NewListDevicesTool(f.Hosts, f.AccessFaces))
+	listTool := NewListHostsTool(f.Hosts, f.AccessFaces)
+	listTool.selectedHostIDs = selectedHostIDs
+	registry.Register(listTool)
 	registry.Register(NewExecuteCLITool(f.Hosts, f.AccessFaces, f.SSHPool, f.Logs, f.SSHKeys))
 	registry.Register(NewBatchExecuteTool(f.Hosts, f.AccessFaces, f.SSHPool, f.Logs, f.SSHKeys))
 	registry.Register(NewVerifyTool(f.Hosts, f.AccessFaces, f.SSHPool, f.SSHKeys))

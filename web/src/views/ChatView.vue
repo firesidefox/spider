@@ -27,6 +27,7 @@ interface DisplayMessage {
   blocks: MessageBlock[]
   confirm?: { requestId: string; tool: string; input: any; riskLevel: string } | null
   isStreaming?: boolean
+  toolIndex?: Map<string, number>
 }
 
 const conversations = ref<Conversation[]>([])
@@ -54,22 +55,29 @@ function getOrInitMessages(convId: string): DisplayMessage[] {
   return messagesMap.value[convId]
 }
 
+const toolCallsCache = new Map<string, any[]>()
+
 function buildDisplayMessages(msgs: ChatMsg[]): DisplayMessage[] {
   return msgs.map(m => {
     const blocks: MessageBlock[] = []
     if (m.content) blocks.push({ type: 'text', content: m.content })
     if (m.tool_calls) {
-      try {
-        for (const tc of JSON.parse(m.tool_calls)) {
-          blocks.push({ type: 'tool', call: {
-            id: tc.id, name: tc.name, input: tc.input,
-            result: tc.result, isError: tc.is_error, durationMs: tc.duration_ms,
-          }})
-        }
-      } catch { /* ignore malformed */ }
+      let parsed = toolCallsCache.get(m.id)
+      if (!parsed) {
+        try {
+          parsed = JSON.parse(m.tool_calls)
+          toolCallsCache.set(m.id, parsed)
+        } catch { parsed = [] }
+      }
+      for (const tc of parsed) {
+        blocks.push({ type: 'tool', call: {
+          id: tc.id, name: tc.name, input: tc.input,
+          result: tc.result, isError: tc.is_error, durationMs: tc.duration_ms,
+        }})
+      }
     }
     return { id: m.id, role: m.role, blocks } as DisplayMessage
-  })
+  }).filter(m => m.blocks.length > 0)
 }
 
 let pollTimers: Map<string, ReturnType<typeof setTimeout>> = new Map()
@@ -119,6 +127,36 @@ const todoTasksMap = ref<Record<string, Map<number, Todo>>>({})
 const completedFolded = ref(true)
 const pendingFolded = ref(true)
 const turnUsage = ref<number | null>(null)
+
+interface RetryState {
+  attempt: number
+  maxRetries: number
+  error: string
+  retryInMs: number
+  countdownMs: number
+  timer: ReturnType<typeof setInterval> | null
+}
+const retryState = ref<RetryState | null>(null)
+
+function startRetryCountdown(attempt: number, maxRetries: number, error: string, retryInMs: number) {
+  if (retryState.value?.timer) clearInterval(retryState.value.timer)
+  const state: RetryState = { attempt, maxRetries, error, retryInMs, countdownMs: 0, timer: null }
+  state.timer = setInterval(() => {
+    state.countdownMs += 1000
+    retryState.value = { ...state }
+    if (state.countdownMs >= retryInMs) {
+      clearInterval(state.timer!)
+      state.timer = null
+    }
+  }, 1000)
+  retryState.value = state
+}
+
+function clearRetryState() {
+  if (retryState.value?.timer) clearInterval(retryState.value.timer)
+  retryState.value = null
+}
+
 const taskTimers = ref<Map<number, ReturnType<typeof setInterval>>>(new Map())
 const taskElapsed = ref<Map<number, number>>(new Map())
 
@@ -470,7 +508,7 @@ function handleConvEvent(convId: string, event: ChatEvent) {
 
   if (event.type === 'message') {
     const msg = event.content as ChatMsg
-    if (!msg || msg.role === 'user') return
+    if (!msg || msg.role === 'user' || msg.role === 'tool_result') return
     if (!convMsgs.find(m => m.id === msg.id)) {
       convMsgs.push(...buildDisplayMessages([msg]))
       if (activeConvId.value === convId) nextTick(() => scrollToBottom())
@@ -483,7 +521,7 @@ function handleConvEvent(convId: string, event: ChatEvent) {
   if (['text_delta', 'tool_start', 'confirm_required'].includes(event.type)) {
     const last = convMsgs[convMsgs.length - 1]
     if (!last || last.role !== 'assistant' || !last.isStreaming) {
-      const newMsg: DisplayMessage = { id: `a-${Date.now()}`, role: 'assistant', blocks: [], isStreaming: true }
+      const newMsg: DisplayMessage = { id: `a-${Date.now()}`, role: 'assistant', blocks: [], isStreaming: true, toolIndex: new Map() }
       convMsgs.push(newMsg)
       if (activeConvId.value === convId) {
         isStreaming.value = true
@@ -495,6 +533,8 @@ function handleConvEvent(convId: string, event: ChatEvent) {
   const last = convMsgs[convMsgs.length - 1]
   if (!last || last.role !== 'assistant') return
   const blocks = last.blocks
+  if (!last.toolIndex) last.toolIndex = new Map<string, number>()
+  const toolIndex = last.toolIndex
 
   switch (event.type) {
     case 'text_delta': {
@@ -510,12 +550,15 @@ function handleConvEvent(convId: string, event: ChatEvent) {
     }
     case 'tool_start': {
       const toolName = event.content?.name || 'unknown'
+      const toolId = event.content?.id || `t-${Date.now()}`
+      const idx = blocks.length
       blocks.push({ type: 'tool', call: {
-        id: event.content?.id || `t-${Date.now()}`,
+        id: toolId,
         name: toolName,
         input: event.content?.input,
         hostNames: event.content?.host_names,
       }})
+      toolIndex.set(toolId, idx)
       if (SSH_TOOLS.has(toolName) && event.content?.host_names?.length) {
         markDevicesExecuting(event.content.host_names)
       }
@@ -523,8 +566,8 @@ function handleConvEvent(convId: string, event: ChatEvent) {
       break
     }
     case 'tool_result': {
-      const idx = blocks.findIndex(b => b.type === 'tool' && b.call.id === event.content?.id)
-      if (idx !== -1) {
+      const idx = toolIndex.get(event.content?.id || '')
+      if (idx !== undefined && idx < blocks.length) {
         const old = (blocks[idx] as { type: 'tool'; call: ToolCallBlock }).call
         blocks[idx] = { type: 'tool', call: {
           ...old,
@@ -549,6 +592,7 @@ function handleConvEvent(convId: string, event: ChatEvent) {
       setStatus('confirm', event.content?.tool || '', event.content?.input)
       break
     case 'error': {
+      clearRetryState()
       const errText = `\n\n**Error:** ${event.content?.error || 'unknown error'}`
       const lastBlk = last.blocks[last.blocks.length - 1]
       if (lastBlk?.type === 'text') {
@@ -568,6 +612,7 @@ function handleConvEvent(convId: string, event: ChatEvent) {
       break
     }
     case 'done':
+      clearRetryState()
       last.isStreaming = false
       for (const b of last.blocks) {
         if (b.type === 'tool' && b.call.durationMs == null) b.call.durationMs = 0
@@ -597,6 +642,13 @@ function handleConvEvent(convId: string, event: ChatEvent) {
     case 'turn_usage': {
       const u = event.content as { output_tokens: number }
       turnUsage.value = u.output_tokens
+      break
+    }
+    case 'retrying': {
+      const r = event.content as { attempt: number; max_retries: number; error: string; retry_in_ms: number }
+      if (r.attempt >= 3) {
+        startRetryCountdown(r.attempt, r.max_retries, r.error, r.retry_in_ms)
+      }
       break
     }
   }
@@ -1124,6 +1176,11 @@ onUnmounted(() => {
         </div>
       </div>
 
+      <div v-if="retryState" class="retry-banner">
+        <span class="retry-error">{{ retryState.error }}</span>
+        <span class="retry-countdown">Retrying in {{ Math.max(0, Math.round((retryState.retryInMs - retryState.countdownMs) / 1000)) }}s… (attempt {{ retryState.attempt }}/{{ retryState.maxRetries }})</span>
+      </div>
+
       <div v-for="(qm, i) in queuedMessages" :key="`queued-${i}`" class="queued-message">
         <span class="queued-message-text">{{ i + 1 }}: {{ qm }}</span>
       </div>
@@ -1270,6 +1327,9 @@ onUnmounted(() => {
 .queue-btn:hover:not(:disabled) { background: var(--text); }
 .queued-message { padding: 6px 16px; opacity: 0.45; }
 .queued-message-text { font-family: 'SF Mono', monospace; font-size: 13px; color: var(--text); white-space: pre-wrap; word-break: break-word; }
+.retry-banner { padding: 6px 16px; display: flex; flex-direction: column; gap: 2px; }
+.retry-error { font-size: 12px; color: var(--error, #e05252); opacity: 0.8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.retry-countdown { font-size: 12px; color: var(--text-muted, #888); }
 .cancel-btn { background: var(--red, #e05252); }
 .cancel-btn:hover { background: #c94444; }
 .export-wrapper { position: relative; margin-left: auto; }

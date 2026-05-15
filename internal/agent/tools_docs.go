@@ -28,13 +28,18 @@ func (t *SearchDocsTool) Description() string {
 func (t *SearchDocsTool) SystemPromptSection() string {
 	return `## SearchDocs — Knowledge Base
 
-**When to use:** Before running any command on a host, search the knowledge base first to find the correct CLI syntax, expected output, or known caveats for that host/vendor.
+**When to use:**
+- Before running vendor-specific CLI commands — syntax varies by vendor/version
+- Before calling any API endpoint — need correct path, params, auth
+- When troubleshooting an unfamiliar error or behavior
 
-**When NOT to use:** Skip only if the task is purely informational (e.g., listing hosts) and involves no command execution.
+**When NOT to use:**
+- Universal commands (df -h, ps aux, ls, grep) — no need to look these up
+- Purely informational tasks (listing hosts, checking task status)
 
 **Rules:**
-- SearchDocs comes before RunCommand in Explore phase. Do not run a command without first checking if relevant docs exist.
-- Query with operation intent, not just keywords (e.g., "huawei 查看内存占用" not "memory").
+- Query with operation intent, not just keywords (e.g., "huawei 查看内存占用" not "memory")
+- For API calls: get group_id from face.knowledge_sources, then SearchDocs to find the endpoint
 
 **For full-text documents (no embedding):**
 1. Call SearchDocs with catalog=true and group_id to list available documents (ID + title).

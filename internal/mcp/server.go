@@ -33,6 +33,7 @@ type App struct {
 	LogStore     *store.LogStore
 	Pool         *sshpkg.Pool
 	Config       *config.Config
+	ConfigPath   string
 	DB           *sql.DB
 	UserStore    *store.UserStore   // Phase 2
 	TokenStore   *store.TokenStore  // Phase 2

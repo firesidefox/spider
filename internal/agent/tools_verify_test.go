@@ -2,7 +2,7 @@ package agent
 
 import (
 	"context"
-	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -31,8 +31,8 @@ func TestBatchExecuteTool_Interface(t *testing.T) {
 
 func TestVerifyTool_Interface(t *testing.T) {
 	tool := NewVerifyTool(nil, nil, nil, nil)
-	if tool.Name() != "Verify" {
-		t.Errorf("got name %q, want verify", tool.Name())
+	if tool.Name() != "PollUntil" {
+		t.Errorf("got name %q, want PollUntil", tool.Name())
 	}
 	if tool.Description() == "" {
 		t.Error("description should not be empty")
@@ -121,13 +121,15 @@ func TestVerifyTool_InputSchema_Checks(t *testing.T) {
 	}
 }
 
-func TestVerifyTool_ToolResultIsJSON(t *testing.T) {
+func TestVerifyTool_ToolResultNotEmpty(t *testing.T) {
 	tool := NewVerifyTool(nil, nil, nil, nil)
 	res, _ := tool.Execute(context.Background(), map[string]any{"checks": "bad"})
 	if res == nil {
 		t.Fatal("nil result")
 	}
-	_ = res.Content
+	if res.Content == "" {
+		t.Error("expected non-empty content")
+	}
 }
 
 func TestBatchExecuteTool_RiskLevel(t *testing.T) {
@@ -156,11 +158,7 @@ func TestVerifyTool_Timeout_EmptyChecks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	var out map[string]any
-	if jsonErr := json.Unmarshal([]byte(res.Content), &out); jsonErr != nil {
-		t.Fatalf("result not valid JSON: %v", jsonErr)
-	}
-	if out["status"] != "ok" {
-		t.Errorf("expected status ok for empty checks, got %v", out["status"])
+	if !strings.Contains(res.Content, "All checks passed") {
+		t.Errorf("expected 'All checks passed' for empty checks, got: %s", res.Content)
 	}
 }

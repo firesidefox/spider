@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
+	"math/rand"
 	"strings"
 	"sync"
 	"time"
@@ -36,6 +38,7 @@ const (
 	EventError           EventType = "error"
 	EventDone            EventType = "done"
 	EventTurnUsage       EventType = "turn_usage"
+	EventRetrying        EventType = "retrying"
 )
 
 type Event struct {
@@ -201,23 +204,46 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 		for turn := 0; turn < a.maxTurns; turn++ {
 			turnStart := time.Now()
 			log.Debug().Int("turn", turn).Int("history", len(history)).Msg("turn start")
-			stream, err := a.llmClient.ChatStream(ctx, &llm.ChatRequest{
+			chatReq := &llm.ChatRequest{
 				System:    a.systemPrompt,
 				Messages:  history,
 				Tools:     toolDefs,
 				MaxTokens: 4096,
-			})
+			}
+			var stream <-chan llm.StreamEvent
+			for attempt := 0; attempt < llmMaxRetries; attempt++ {
+				if attempt > 0 {
+					delay := llmRetryDelay(attempt - 1)
+					log.Warn().Err(err).Int("turn", turn).Int("attempt", attempt).Dur("backoff", delay).Msg("llm transient error, retrying")
+					events <- Event{Type: EventRetrying, Content: map[string]any{
+						"attempt":      attempt,
+						"max_retries":  llmMaxRetries,
+						"error":        err.Error(),
+						"retry_in_ms":  delay.Milliseconds(),
+					}}
+					select {
+					case <-ctx.Done():
+						log.Error().Err(ctx.Err()).Int("turn", turn).Msg("llm chat stream failed")
+						events <- Event{Type: EventError, Content: map[string]any{"error": "llm: " + ctx.Err().Error()}}
+						return
+					case <-time.After(delay):
+					}
+				}
+				stream, err = a.llmClient.ChatStream(ctx, chatReq)
+				if err == nil {
+					break
+				}
+				if ctx.Err() != nil || !isTransientLLMError(err) {
+					break
+				}
+			}
 			if err != nil {
 				if a.compactor != nil && isContextLengthError(err) {
 					forced, ferr := a.compactor.BuildHistory(ctx, conversationID, true)
 					if ferr == nil {
 						history = a.injectTaskReminder(forced, conversationID)
-						stream, err = a.llmClient.ChatStream(ctx, &llm.ChatRequest{
-							System:    a.systemPrompt,
-							Messages:  history,
-							Tools:     toolDefs,
-							MaxTokens: 4096,
-						})
+						chatReq.Messages = history
+						stream, err = a.llmClient.ChatStream(ctx, chatReq)
 					}
 				}
 				if err != nil {
@@ -403,6 +429,44 @@ func isContextLengthError(err error) bool {
 		strings.Contains(s, "context length") ||
 		strings.Contains(s, "too many tokens") ||
 		strings.Contains(s, "maximum context")
+}
+
+const (
+	llmMaxRetries    = 10
+	llmBaseDelayMs   = 500
+	llmMaxDelayMs    = 32_000
+)
+
+func llmRetryDelay(attempt int) time.Duration {
+	base := float64(llmBaseDelayMs) * math.Pow(2, float64(attempt))
+	if base > llmMaxDelayMs {
+		base = llmMaxDelayMs
+	}
+	jitter := rand.Float64() * 0.25 * base
+	return time.Duration(base+jitter) * time.Millisecond
+}
+
+func isTransientLLMError(err error) bool {
+	if err == nil {
+		return false
+	}
+	s := err.Error()
+	// Connection-level transient errors
+	if strings.Contains(s, "timeout awaiting response headers") ||
+		strings.Contains(s, "connection reset by peer") ||
+		strings.Contains(s, "EOF") {
+		return true
+	}
+	// HTTP status codes: 408 timeout, 409 lock, 429 rate limit, 5xx server errors
+	for _, prefix := range []string{"claude API error ", "openai API error "} {
+		if strings.HasPrefix(s, prefix) {
+			var code int
+			if _, scanErr := fmt.Sscanf(s[len(prefix):], "%d", &code); scanErr == nil {
+				return code == 408 || code == 409 || code == 429 || code >= 500
+			}
+		}
+	}
+	return false
 }
 
 func (a *Agent) injectTaskReminder(history []llm.Message, conversationID string) []llm.Message {

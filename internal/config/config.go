@@ -22,7 +22,7 @@ func defaultLogsDir() string {
 	return "/var/log/spider"
 }
 
-func defaultConfigPath() string {
+func DefaultConfigPath() string {
 	if home, err := os.UserHomeDir(); err == nil {
 		return filepath.Join(home, ".spider", "config.yaml")
 	}
@@ -133,7 +133,7 @@ func Load(path string) (*Config, error) {
 
 	derived := path == ""
 	if derived {
-		path = defaultConfigPath()
+		path = DefaultConfigPath()
 	}
 
 	data, err := os.ReadFile(path)

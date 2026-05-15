@@ -192,7 +192,45 @@ func (c *OpenAIClient) buildMessages(req *ChatRequest) []map[string]any {
 		msgs = append(msgs, map[string]any{"role": "system", "content": req.System})
 	}
 	for _, m := range req.Messages {
-		msgs = append(msgs, map[string]any{"role": string(m.Role), "content": m.Content})
+		blocks, ok := m.Content.([]ContentBlock)
+		if !ok {
+			msgs = append(msgs, map[string]any{"role": string(m.Role), "content": m.Content})
+			continue
+		}
+		if m.Role == RoleAssistant {
+			var toolCalls []map[string]any
+			var text string
+			for _, b := range blocks {
+				if b.Type == "tool_use" {
+					argsJSON, _ := json.Marshal(b.Input)
+					toolCalls = append(toolCalls, map[string]any{
+						"id":   b.ID,
+						"type": "function",
+						"function": map[string]any{
+							"name":      b.Name,
+							"arguments": string(argsJSON),
+						},
+					})
+				} else if b.Type == "text" {
+					text = b.Content
+				}
+			}
+			msg := map[string]any{"role": "assistant", "content": text}
+			if len(toolCalls) > 0 {
+				msg["tool_calls"] = toolCalls
+			}
+			msgs = append(msgs, msg)
+		} else {
+			for _, b := range blocks {
+				if b.Type == "tool_result" {
+					msgs = append(msgs, map[string]any{
+						"role":         "tool",
+						"content":      b.Content,
+						"tool_call_id": b.ToolUseID,
+					})
+				}
+			}
+		}
 	}
 	return msgs
 }

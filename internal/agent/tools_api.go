@@ -29,11 +29,14 @@ const callAPIPromptSection = `### CallAPI (GET: read-only; POST/PUT/DELETE: has 
 
 **When NOT to use:** Do not call mutating methods before the user has confirmed the plan.
 
-**SearchDocs first:** Before calling any API endpoint, search the knowledge base for the correct endpoint path, required parameters, and expected response format.
+**Workflow for API calls:**
+1. ListHosts → find host with "api" access face
+2. SearchDocs with group_id from face.knowledge_sources → find correct endpoint, params, auth
+3. CallAPI
 
 <example>
 User: Push a new ACL rule via the firewall API.
-Assistant: Calls SearchDocs for ACL API reference, then shows the request body to the user, confirms, then calls CallAPI with POST.
+Assistant: ListHosts → find gateway (api face, knowledge_sources group_id=3) → SearchDocs catalog=true group_id=3 → SearchDocs query="ACL rule create" → confirm request body with user → CallAPI POST
 </example>`
 
 type CallRESTAPITool struct {
