@@ -154,7 +154,9 @@ func (c *OpenAIClient) Chat(ctx context.Context, req *ChatRequest) (string, erro
 func (c *OpenAIClient) CountTokens(_ context.Context, msgs []Message) (int, error) {
 	total := 0
 	for _, m := range msgs {
-		total += EstimateTokens(m.Content)
+		if s, ok := m.Content.(string); ok {
+			total += EstimateTokens(s)
+		}
 	}
 	return total, nil
 }

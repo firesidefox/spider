@@ -34,7 +34,9 @@ func (m *mockLLMClient) Chat(_ context.Context, _ *llm.ChatRequest) (string, err
 func (m *mockLLMClient) CountTokens(_ context.Context, msgs []llm.Message) (int, error) {
 	total := 0
 	for _, msg := range msgs {
-		total += llm.EstimateTokens(msg.Content)
+		if s, ok := msg.Content.(string); ok {
+			total += llm.EstimateTokens(s)
+		}
 	}
 	return total, nil
 }

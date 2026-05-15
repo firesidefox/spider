@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -165,10 +166,69 @@ func estimateChunksTokens(chunks []string) int {
 
 func toLLMMessages(msgs []*models.Message) []llm.Message {
 	out := make([]llm.Message, 0, len(msgs))
-	for _, m := range msgs {
-		out = append(out, llm.Message{Role: llm.Role(m.Role), Content: m.Content})
+	i := 0
+	for i < len(msgs) {
+		m := msgs[i]
+		switch m.Role {
+		case "assistant":
+			out = append(out, buildAssistantMessage(m))
+			i++
+		case "tool_result":
+			// Collect consecutive tool_result rows into one user message.
+			var blocks []llm.ContentBlock
+			for i < len(msgs) && msgs[i].Role == "tool_result" {
+				blocks = append(blocks, parseToolResultBlock(msgs[i].Content))
+				i++
+			}
+			out = append(out, llm.Message{Role: llm.RoleUser, Content: blocks})
+		default:
+			out = append(out, llm.Message{Role: llm.Role(m.Role), Content: m.Content})
+			i++
+		}
 	}
 	return out
+}
+
+// buildAssistantMessage converts a stored assistant message into an llm.Message.
+// If ToolCalls JSON is present, content becomes []ContentBlock with tool_use entries.
+func buildAssistantMessage(m *models.Message) llm.Message {
+	if m.ToolCalls == "" {
+		return llm.Message{Role: llm.RoleAssistant, Content: m.Content}
+	}
+	var records []struct {
+		ID    string         `json:"id"`
+		Name  string         `json:"name"`
+		Input map[string]any `json:"input"`
+	}
+	if err := json.Unmarshal([]byte(m.ToolCalls), &records); err != nil || len(records) == 0 {
+		return llm.Message{Role: llm.RoleAssistant, Content: m.Content}
+	}
+	var blocks []llm.ContentBlock
+	if m.Content != "" {
+		blocks = append(blocks, llm.ContentBlock{Type: "text", Content: m.Content})
+	}
+	for _, r := range records {
+		blocks = append(blocks, llm.ContentBlock{
+			Type:  "tool_use",
+			ID:    r.ID,
+			Name:  r.Name,
+			Input: r.Input,
+		})
+	}
+	return llm.Message{Role: llm.RoleAssistant, Content: blocks}
+}
+
+// parseToolResultBlock parses a stored tool_result content string (toolID\x00result).
+func parseToolResultBlock(content string) llm.ContentBlock {
+	toolID, result, ok := strings.Cut(content, "\x00")
+	if !ok {
+		return llm.ContentBlock{Type: "tool_result", Content: content}
+	}
+	return llm.ContentBlock{
+		Type:      "tool_result",
+		ToolUseID: toolID,
+		Content:   result,
+	}
 }
 
 const segmentSummaryPrompt = `The following is a segment of a network device management conversation.
@@ -202,7 +262,13 @@ Historical summaries:
 func (c *Compactor) summarize(ctx context.Context, msgs []*models.Message) (string, error) {
 	var sb strings.Builder
 	for _, m := range msgs {
-		fmt.Fprintf(&sb, "[%s]: %s\n", m.Role, m.Content)
+		content := m.Content
+		if m.Role == "tool_result" {
+			if _, result, ok := strings.Cut(content, "\x00"); ok {
+				content = result
+			}
+		}
+		fmt.Fprintf(&sb, "[%s]: %s\n", m.Role, content)
 	}
 	req := &llm.ChatRequest{
 		Messages: []llm.Message{

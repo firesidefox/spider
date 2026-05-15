@@ -291,6 +291,7 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 				if !ok {
 					events <- Event{Type: EventToolResult, Content: map[string]any{"id": tc.ID, "tool": tc.Name, "result": "tool not found", "is_error": true}}
 					history = append(history, llm.Message{Role: llm.RoleUser, Content: "Tool " + tc.Name + " not found"})
+					a.msgStore.Save(conversationID, "tool_result", tc.ID+"\x00Tool "+tc.Name+" not found", "")
 					tcRecords = append(tcRecords, ToolCallRecord{ID: tc.ID, Name: tc.Name, Input: tc.Input, Result: "tool not found", IsError: true})
 					continue
 				}
@@ -318,6 +319,7 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 						events <- Event{Type: EventToolResult, Content: map[string]any{"id": tc.ID, "tool": tc.Name, "result": "denied by user", "is_error": true}}
 						history = append(history, llm.Message{Role: llm.RoleUser, Content: "operation denied by user"})
 						if !hidden {
+							a.msgStore.Save(conversationID, "tool_result", tc.ID+"\x00operation denied by user", "")
 							tcRecords = append(tcRecords, ToolCallRecord{ID: tc.ID, Name: tc.Name, Input: tc.Input, Result: "denied by user", RiskLevel: hookResult.RiskLevel.String()})
 						}
 						continue
@@ -326,6 +328,7 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 					events <- Event{Type: EventToolResult, Content: map[string]any{"id": tc.ID, "tool": tc.Name, "result": "denied: " + hookResult.Reason, "is_error": true}}
 					history = append(history, llm.Message{Role: llm.RoleUser, Content: "Tool denied: " + hookResult.Reason})
 					if !hidden {
+						a.msgStore.Save(conversationID, "tool_result", tc.ID+"\x00Tool denied: "+hookResult.Reason, "")
 						tcRecords = append(tcRecords, ToolCallRecord{ID: tc.ID, Name: tc.Name, Input: tc.Input, Result: "denied: " + hookResult.Reason, RiskLevel: hookResult.RiskLevel.String()})
 					}
 					continue
@@ -335,6 +338,7 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 					events <- Event{Type: EventToolResult, Content: map[string]any{"id": tc.ID, "tool": tc.Name, "result": planMsg, "is_error": false}}
 					history = append(history, llm.Message{Role: llm.RoleUser, Content: planMsg})
 					if !hidden {
+						a.msgStore.Save(conversationID, "tool_result", tc.ID+"\x00"+planMsg, "")
 						tcRecords = append(tcRecords, ToolCallRecord{ID: tc.ID, Name: tc.Name, Input: tc.Input, Result: planMsg, RiskLevel: hookResult.RiskLevel.String()})
 					}
 					continue
@@ -357,9 +361,11 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 				}}
 				for _, msg := range result.NewMessages {
 					history = append(history, llm.Message{Role: llm.RoleUser, Content: msg.Content})
+					a.msgStore.Save(conversationID, "user", msg.Content, "")
 				}
 				history = append(history, llm.Message{Role: llm.RoleUser, Content: result.Content})
 				if !hidden {
+					a.msgStore.Save(conversationID, "tool_result", tc.ID+"\x00"+result.Content, "")
 					tcRecords = append(tcRecords, ToolCallRecord{
 						ID: tc.ID, Name: tc.Name, Input: tc.Input,
 						Result: result.Content, IsError: result.IsError,

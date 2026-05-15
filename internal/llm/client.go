@@ -12,9 +12,20 @@ const (
 	RoleAssistant Role = "assistant"
 )
 
+// ContentBlock represents a structured content block for tool_use or tool_result.
+type ContentBlock struct {
+	Type      string         `json:"type"`
+	ID        string         `json:"id,omitempty"`
+	Name      string         `json:"name,omitempty"`
+	Input     map[string]any `json:"input,omitempty"`
+	ToolUseID string         `json:"tool_use_id,omitempty"`
+	Content   string         `json:"content,omitempty"`
+	IsError   bool           `json:"is_error,omitempty"`
+}
+
 type Message struct {
-	Role    Role   `json:"role"`
-	Content string `json:"content"`
+	Role    Role `json:"role"`
+	Content any  `json:"content"` // string or []ContentBlock
 }
 
 type ToolDef struct {
@@ -79,7 +90,14 @@ func EstimateTokens(s string) int {
 func estimateMessagesTokens(msgs []Message) int {
 	total := 0
 	for _, m := range msgs {
-		total += EstimateTokens(m.Content)
+		switch v := m.Content.(type) {
+		case string:
+			total += EstimateTokens(v)
+		case []ContentBlock:
+			for _, b := range v {
+				total += EstimateTokens(b.Content) + EstimateTokens(b.Name)
+			}
+		}
 	}
 	return total
 }

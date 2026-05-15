@@ -52,7 +52,9 @@ func (m *mockIntegrationLLMClient) Chat(_ context.Context, _ *llm.ChatRequest) (
 func (m *mockIntegrationLLMClient) CountTokens(_ context.Context, msgs []llm.Message) (int, error) {
 	total := 0
 	for _, msg := range msgs {
-		total += llm.EstimateTokens(msg.Content)
+		if s, ok := msg.Content.(string); ok {
+			total += llm.EstimateTokens(s)
+		}
 	}
 	return total, nil
 }
@@ -168,7 +170,7 @@ func TestIntegration_CacheReuse(t *testing.T) {
 		t.Fatalf("want at least 2 history entries, got %d", len(history))
 	}
 	// history[0] is the preamble user message; history[1] is the assistant message with chunk content
-	if !strings.Contains(history[1].Content, "cached summary") {
+	if !strings.Contains(history[1].Content.(string), "cached summary") {
 		t.Errorf("want chunk in assistant summary message, got %q", history[1].Content)
 	}
 }
@@ -202,7 +204,7 @@ func TestIntegration_FirstCompaction(t *testing.T) {
 	if sum == nil {
 		t.Fatal("want non-nil summary after compaction")
 	}
-	if len(history) < 2 || !strings.Contains(history[0].Content, "summary") {
+	if len(history) < 2 || !strings.Contains(history[0].Content.(string), "summary") {
 		t.Errorf("want summary injected at head of history")
 	}
 }
