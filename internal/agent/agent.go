@@ -175,12 +175,14 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 		if a.compactor != nil {
 			history, err = a.compactor.BuildHistory(ctx, conversationID, false)
 			if err != nil {
+				log.Error().Err(err).Msg("agent exit: build history failed")
 				events <- Event{Type: EventError, Content: map[string]any{"error": err.Error()}}
 				return
 			}
 		} else {
 			stored, err := a.msgStore.ListByConversation(conversationID)
 			if err != nil {
+				log.Error().Err(err).Msg("agent exit: list messages failed")
 				events <- Event{Type: EventError, Content: map[string]any{"error": err.Error()}}
 				return
 			}
@@ -270,7 +272,7 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 					a.msgStore.Save(conversationID, "assistant", assistantText, "")
 				}
 				log.Debug().Int("turn", turn).Int64("duration_ms", time.Since(turnStart).Milliseconds()).Int("input_tokens", usage.InputTokens).Int("output_tokens", usage.OutputTokens).Str("response", assistantText).Msg("turn done")
-				log.Info().Int("turn", turn).Msg("agent done")
+				log.Info().Int("turn", turn).Str("reason", "no_tool_calls").Msg("agent done")
 				events <- Event{Type: EventTurnUsage, Content: map[string]any{
 					"input_tokens":  usage.InputTokens,
 					"output_tokens": usage.OutputTokens,
@@ -279,7 +281,9 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 				return
 			}
 
-			history = append(history, llm.Message{Role: llm.RoleAssistant, Content: assistantText})
+			if assistantText != "" {
+				history = append(history, llm.Message{Role: llm.RoleAssistant, Content: assistantText})
+			}
 
 			var tcRecords []ToolCallRecord
 			for _, tc := range toolCalls {
