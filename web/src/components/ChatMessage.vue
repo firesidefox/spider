@@ -115,61 +115,65 @@ function formatTargets(call: ToolCallBlock): string {
     </div>
 
     <div v-else class="msg-assistant-wrap">
-      <div class="gutter"><span class="prompt prompt-assistant" :class="{ streaming: isStreaming }">*</span></div>
       <div class="content assistant-body">
-        <template v-for="(item, idx) in renderItems" :key="idx">
-          <!-- Text block -->
-          <div v-if="item.kind === 'text'" class="msg-assistant">
-            <div class="assistant-text" v-html="renderMd(item.content, isStreaming)"></div>
-          </div>
-
-          <!-- Explore group -->
-          <div v-else-if="item.kind === 'explore'" class="explore-group">
-            <div class="explore-group-header" @click="toggleGroup(item.calls[0].id)">
-              <span class="tool-arrow">{{ collapsedGroups.has(item.calls[0].id) ? '▶' : '▼' }}</span>
-              <span class="explore-label">Explored</span>
-              <span class="explore-count">({{ item.calls.length }})</span>
-            </div>
-            <div v-if="!collapsedGroups.has(item.calls[0].id)" class="explore-items">
-              <div v-for="call in item.calls" :key="call.id" class="explore-item">
-                <span class="tree-branch">└</span>
-                <span class="explore-tool-name" :class="{ 'is-error': call.isError }">{{ call.name }}</span>
-                <span v-if="exploreParam(call)" class="explore-param">{{ exploreParam(call) }}</span>
-                <span v-if="call.isError" class="explore-error-mark">✕</span>
-                <span v-else-if="call.durationMs != null" class="tool-duration">{{ formatDuration(call.durationMs) }}</span>
-                <span v-else class="explore-streaming">···</span>
+        <div class="assistant-lead">
+          <span class="prompt-assistant" :class="{ streaming: isStreaming }">*</span>
+          <div class="assistant-lead-body">
+            <template v-for="(item, idx) in renderItems" :key="idx">
+              <!-- Text block -->
+              <div v-if="item.kind === 'text'" class="msg-assistant">
+                <div class="assistant-text" v-html="renderMd(item.content, isStreaming)"></div>
               </div>
-            </div>
-          </div>
 
-          <!-- Act tool -->
-          <div v-else class="tool-calls">
-            <div class="tool-call" :class="{ 'has-error': item.call.isError }">
-              <div class="tool-header" @click="toggleTool(item.call.id)">
-                <span class="tool-arrow">{{ expandedTools.has(item.call.id) ? '▼' : '▶' }}</span>
-                <span class="tool-badge">Tool</span>
-                <span class="tool-name">{{ item.call.name }}</span>
-                <span v-if="formatTargets(item.call)" class="tool-targets">{{ formatTargets(item.call) }}</span>
-                <span v-if="item.call.input?.['intent']" class="tool-intent-inline"> -> {{ item.call.input['intent'] }}</span>
-                <span v-if="item.call.isError" class="tool-error-badge">✕</span>
-                <span v-else-if="item.call.durationMs != null" class="tool-duration">{{ formatDuration(item.call.durationMs) }}</span>
-                <span v-else class="act-streaming">···</span>
-              </div>
-              <div v-if="expandedTools.has(item.call.id)" class="tool-detail">
-                <div v-if="item.call.input && Object.keys(item.call.input).length" class="tool-section">
-                  <span class="tool-section-label input-label">INPUT</span>
-                  <pre class="tool-input">{{ JSON.stringify(item.call.input, null, 2) }}</pre>
+              <!-- Explore group -->
+              <div v-else-if="item.kind === 'explore'" class="explore-group">
+                <div class="explore-group-header" @click="toggleGroup(item.calls[0].id)">
+                  <span class="tool-arrow">{{ collapsedGroups.has(item.calls[0].id) ? '▶' : '▼' }}</span>
+                  <span class="explore-label">Explored</span>
+                  <span class="explore-count">({{ item.calls.length }})</span>
                 </div>
-                <div v-if="item.call.result" class="tool-section">
-                  <span class="tool-section-label" :class="item.call.isError ? 'error-label' : 'output-label'">{{ item.call.isError ? 'ERROR' : 'OUTPUT' }}</span>
-                  <pre class="tool-result" :class="{ 'is-error': item.call.isError }">{{ item.call.result }}</pre>
+                <div v-if="!collapsedGroups.has(item.calls[0].id)" class="explore-items">
+                  <div v-for="call in item.calls" :key="call.id" class="explore-item">
+                    <span class="tree-branch">└</span>
+                    <span class="explore-tool-name" :class="{ 'is-error': call.isError }">{{ call.name }}</span>
+                    <span v-if="exploreParam(call)" class="explore-param">{{ exploreParam(call) }}</span>
+                    <span v-if="call.isError" class="explore-error-mark">✕</span>
+                    <span v-else-if="call.durationMs != null" class="tool-duration">{{ formatDuration(call.durationMs) }}</span>
+                    <span v-else class="explore-streaming">···</span>
+                  </div>
                 </div>
               </div>
-            </div>
-          </div>
-        </template>
 
-        <span v-if="isStreaming" class="cursor">▊</span>
+              <!-- Act tool -->
+              <div v-else class="tool-calls">
+                <div class="tool-call" :class="{ 'has-error': item.call.isError }">
+                  <div class="tool-header" @click="toggleTool(item.call.id)">
+                    <span class="tool-arrow">{{ expandedTools.has(item.call.id) ? '▼' : '▶' }}</span>
+                    <span class="tool-badge">Tool</span>
+                    <span class="tool-name">{{ item.call.name }}</span>
+                    <span v-if="formatTargets(item.call)" class="tool-targets">{{ formatTargets(item.call) }}</span>
+                    <span v-if="item.call.input?.['intent']" class="tool-intent-inline"> -> {{ item.call.input['intent'] }}</span>
+                    <span v-if="item.call.isError" class="tool-error-badge">✕</span>
+                    <span v-else-if="item.call.durationMs != null" class="tool-duration">{{ formatDuration(item.call.durationMs) }}</span>
+                    <span v-else class="act-streaming">···</span>
+                  </div>
+                  <div v-if="expandedTools.has(item.call.id)" class="tool-detail">
+                    <div v-if="item.call.input && Object.keys(item.call.input).length" class="tool-section">
+                      <span class="tool-section-label input-label">INPUT</span>
+                      <pre class="tool-input">{{ JSON.stringify(item.call.input, null, 2) }}</pre>
+                    </div>
+                    <div v-if="item.call.result" class="tool-section">
+                      <span class="tool-section-label" :class="item.call.isError ? 'error-label' : 'output-label'">{{ item.call.isError ? 'ERROR' : 'OUTPUT' }}</span>
+                      <pre class="tool-result" :class="{ 'is-error': item.call.isError }">{{ item.call.result }}</pre>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </template>
+
+            <span v-if="isStreaming && renderItems.length > 0 && renderItems[renderItems.length - 1].kind === 'text'" class="cursor">▊</span>
+          </div><!-- .assistant-lead-body -->
+        </div><!-- .assistant-lead -->
       </div><!-- .content -->
     </div>
 
@@ -192,7 +196,9 @@ function formatTargets(call: ToolCallBlock): string {
 .gutter { flex-shrink: 0; width: 20px; text-align: center; }
 .content { flex: 1; min-width: 0; }
 .prompt { color: var(--primary); font-weight: bold; }
-.prompt-assistant { display: inline-block; margin-top: 2px; }
+.assistant-lead { display: flex; flex-direction: row; align-items: flex-start; gap: 6px; }
+.assistant-lead-body { flex: 1; min-width: 0; }
+.prompt-assistant { flex-shrink: 0; color: var(--primary); font-weight: bold; margin-top: 2px; width: 14px; text-align: center; }
 .prompt-assistant.streaming { animation: prompt-pulse 1.5s ease-in-out infinite; }
 @keyframes prompt-pulse {
   0%, 100% { opacity: 0.4; text-shadow: 0 0 0 transparent; }
