@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/spiderai/spider/internal/models"
 	"github.com/spiderai/spider/internal/permission"
@@ -54,7 +55,6 @@ func (t *ExecuteCLITool) Execute(ctx context.Context, input map[string]any) (*To
 	if hostID == "" || command == "" {
 		return &ToolResult{Content: "missing required fields: host_id, command", IsError: true, RiskLevel: RiskL2}, nil
 	}
-
 	risk := RiskL2
 	if riskStr != "" {
 		risk = permission.ParseRiskLevel(riskStr)
@@ -81,7 +81,9 @@ func (t *ExecuteCLITool) Execute(ctx context.Context, input map[string]any) (*To
 	}
 	defer t.sshPool.Release(face.ID)
 
-	result, err := client.Execute(ctx, command)
+	execCtx, execCancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer execCancel()
+	result, err := client.Execute(execCtx, command)
 	if err != nil {
 		return &ToolResult{Content: fmt.Sprintf("execute failed: %v", err), IsError: true, RiskLevel: risk}, nil
 	}
@@ -115,6 +117,14 @@ const runCommandPromptSection = `### RunCommand / RunCommandBatch (has side effe
 - Act phase: state-changing commands (rm, kill, systemctl restart, apt, chmod) — only after confirming intent
 
 **When NOT to use:** Do not run state-changing commands before the user has confirmed the plan.
+
+**Command complexity:** One goal per command call. Do not chain many && operators in a single command — the tool will reject overly complex commands. For multi-metric checks (CPU, memory, disk, logins, ports), use separate RunCommand calls — one per metric.
+
+<example>
+User: Check CPU, memory, disk, and listening ports on all servers.
+Bad:  RunCommandBatch with "uptime && free -h && df -h && ss -tlnp"
+Good: Four separate RunCommandBatch calls — uptime / free -h / df -h / ss -tlnp.
+</example>
 
 <example>
 User: Clean up logs older than 30 days on all app servers.

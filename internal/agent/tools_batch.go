@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"sync"
+	"time"
 
 	"github.com/spiderai/spider/internal/models"
 	"github.com/spiderai/spider/internal/permission"
@@ -105,6 +106,9 @@ func (t *BatchExecuteTool) Execute(ctx context.Context, input map[string]any) (*
 	results := make([]batchHostResult, len(hostList))
 	var wg sync.WaitGroup
 
+	execCtx, execCancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer execCancel()
+
 	for i, host := range hostList {
 		wg.Add(1)
 		go func(idx int, h *models.Host) {
@@ -123,7 +127,7 @@ func (t *BatchExecuteTool) Execute(ctx context.Context, input map[string]any) (*
 				return
 			}
 			defer t.sshPool.Release(face.ID)
-			res, err := client.Execute(ctx, command)
+			res, err := client.Execute(execCtx, command)
 			if err != nil {
 				r.Error = err.Error()
 			} else {
