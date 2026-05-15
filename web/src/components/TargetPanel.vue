@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import type { Host } from '../api/hosts'
 
 export interface DeviceStatus {
@@ -116,10 +116,72 @@ function isChecked(id: string): boolean {
   return isAllSelected.value || (props.modelValue?.includes(id) ?? false)
 }
 
-// ── heat matrix ──────────────────────────────────────────────────────────────
-function cellClass(d: DeviceStatus): string {
-  return `hc hc-${d.status}`
+// ── view mode filter ─────────────────────────────────────────────────────────
+const viewSearch = ref('')
+const viewActiveTags = ref<string[]>([])
+
+const viewFilteredHosts = computed(() => {
+  const q = viewSearch.value.toLowerCase()
+  const tags = viewActiveTags.value
+  const base = isAllSelected.value ? props.allHosts : props.allHosts.filter(h => props.modelValue!.includes(h.id))
+  return base.filter(h => {
+    if (tags.length > 0 && !tags.some(t => h.tags?.includes(t))) return false
+    if (q && !h.name.toLowerCase().includes(q) && !h.ip.includes(q)) return false
+    return true
+  })
+})
+
+const hasViewFilter = computed(() => viewSearch.value !== '' || viewActiveTags.value.length > 0)
+
+function toggleViewTag(tag: string) {
+  if (viewActiveTags.value.includes(tag)) {
+    viewActiveTags.value = viewActiveTags.value.filter(t => t !== tag)
+  } else {
+    viewActiveTags.value = [...viewActiveTags.value, tag]
+  }
 }
+
+function clearViewFilter() {
+  viewSearch.value = ''
+  viewActiveTags.value = []
+  activeCell.value = null
+}
+
+// ── heat matrix ──────────────────────────────────────────────────────────────
+const activeCell = ref<string | null>(null)
+
+// clear active cell when user manually edits the search box
+watch(viewSearch, (newVal) => {
+  if (activeCell.value !== null) {
+    const host = props.allHosts.find(h => h.id === activeCell.value)
+    if (!host || host.name !== newVal) {
+      activeCell.value = null
+    }
+  }
+})
+
+function cellClass(d: DeviceStatus): string {
+  return activeCell.value === d.id ? `hc hc-${d.status} hc-active` : `hc hc-${d.status}`
+}
+
+function clickCell(id: string) {
+  if (activeCell.value === id) {
+    activeCell.value = null
+    clearViewFilter()
+    return
+  }
+  activeCell.value = id
+  // set view filter to this host's name
+  const host = props.allHosts.find(h => h.id === id)
+  if (host) {
+    viewSearch.value = host.name
+    viewActiveTags.value = []
+  }
+}
+
+const activeCellDevice = computed(() =>
+  activeCell.value ? props.devices.find(d => d.id === activeCell.value) ?? null : null
+)
 
 function isCellVisible(id: string): boolean {
   return isAllSelected.value || (props.modelValue?.includes(id) ?? false)
@@ -135,15 +197,6 @@ const stats = computed(() => {
     else if (d.status === 'failed') s.failed++
   }
   return s
-})
-
-// ── view mode chip list ───────────────────────────────────────────────────────
-const MAX_CHIPS = 5
-const selectedChips = computed(() => {
-  if (isAllSelected.value) return []
-  return (props.modelValue ?? [])
-    .map(id => props.allHosts.find(h => h.id === id))
-    .filter(Boolean) as Host[]
 })
 
 // ── device row status dot ─────────────────────────────────────────────────────
@@ -182,6 +235,7 @@ function statusColor(hostId: string): string {
             :class="cellClass(d)"
             :style="!isAllSelected && isChecked(d.id) ? { outline: '2px solid var(--primary)', outlineOffset: '1px' } : {}"
             :title="`${d.name} — ${d.status}`"
+            @click="clickCell(d.id)"
           ></div>
           <div v-else class="hc hc-placeholder"></div>
         </template>
@@ -214,18 +268,38 @@ function statusColor(hostId: string): string {
 
       <!-- View mode body -->
       <div v-if="!editMode" class="view-body">
-        <div v-if="isAllSelected" class="all-label">全部主机（AI 自行选择目标）</div>
-        <template v-else>
-          <div class="chip-list">
-            <div v-for="h in selectedChips.slice(0, MAX_CHIPS)" :key="h.id" class="host-chip">
-              <span class="chip-name">{{ h.name }}</span>
-              <span class="chip-ip">{{ h.ip }}</span>
-            </div>
-            <div v-if="selectedChips.length > MAX_CHIPS" class="chip-more">
-              +{{ selectedChips.length - MAX_CHIPS }} 台
-            </div>
+        <!-- Active cell detail -->
+        <template v-if="activeCellDevice">
+          <div class="cell-detail">
+            <span class="row-dot" :style="{ background: statusColor(activeCellDevice.id) }"></span>
+            <span class="cd-name">{{ activeCellDevice.name }}</span>
+            <span class="cd-ip">{{ activeCellDevice.ip }}</span>
+            <span class="cd-status">{{ activeCellDevice.status }}</span>
           </div>
+          <div v-if="activeCellDevice.detail" class="cd-detail-text">{{ activeCellDevice.detail }}</div>
         </template>
+        <!-- View filter bar -->
+        <div v-if="allTags.length > 0" class="view-tag-bar">
+          <button
+            v-for="tag in allTags" :key="tag"
+            class="tag-chip"
+            :class="{ active: viewActiveTags.includes(tag) }"
+            @click="toggleViewTag(tag)"
+          >{{ tag }}</button>
+        </div>
+        <div class="view-search-row">
+          <input v-model="viewSearch" class="search-input view-search" placeholder="搜索名称或 IP..." />
+          <button v-if="hasViewFilter" class="clear-filter-btn" @click="clearViewFilter">✕</button>
+        </div>
+        <!-- Host list (always shown) -->
+        <div class="view-host-list">
+          <div v-for="h in viewFilteredHosts" :key="h.id" class="view-host-row">
+            <span class="row-dot" :style="{ background: statusColor(h.id) }"></span>
+            <span class="row-name">{{ h.name }}</span>
+            <span class="row-ip">{{ h.ip }}</span>
+          </div>
+          <div v-if="viewFilteredHosts.length === 0" class="view-empty">无匹配主机</div>
+        </div>
       </div>
 
       <!-- Edit mode body -->
@@ -370,7 +444,8 @@ function statusColor(hostId: string): string {
   border-radius: 2px;
   transition: opacity 0.15s;
 }
-.hc:hover { opacity: 1; transform: scale(1.3); }
+.hc:hover { opacity: 1; transform: scale(1.3); cursor: pointer; }
+.hc-active { outline: 2px solid var(--primary) !important; outline-offset: 1px; opacity: 1; transform: scale(1.3); }
 .hc-placeholder { background: transparent; }
 .hc-online  { background: #3fb950; }
 .hc-offline { background: #3a3a3a; }
@@ -402,8 +477,32 @@ function statusColor(hostId: string): string {
 }
 
 /* ── view body ── */
-.view-body { padding: 8px 10px; flex: 1; overflow-y: auto; }
-.all-label { color: var(--green); font-size: 11px; }
+.view-body { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; padding: 0; }
+.all-label { color: var(--green); font-size: 11px; padding: 8px 10px; }
+/* cell detail */
+.cell-detail { display: flex; align-items: center; gap: 6px; padding: 6px 10px 4px; flex-shrink: 0; }
+.cd-name { font-weight: 600; color: var(--fg); }
+.cd-ip { color: var(--muted); font-size: 11px; }
+.cd-status { margin-left: auto; font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.cd-detail-text { font-size: 11px; color: var(--muted); padding: 0 10px 4px; white-space: pre-wrap; word-break: break-all; flex-shrink: 0; }
+
+.view-tag-bar { display: flex; flex-wrap: wrap; gap: 4px; padding: 6px 10px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.view-search-row { display: flex; align-items: center; gap: 4px; padding: 4px 10px; flex-shrink: 0; }
+.view-search { margin: 0; flex: 1; }
+.clear-filter-btn { font-size: 10px; color: var(--text-sub); background: none; border: none; cursor: pointer; padding: 0 2px; font-family: inherit; }
+.clear-filter-btn:hover { color: var(--fg); }
+
+.view-host-list { flex: 1; overflow-y: auto; }
+.view-host-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 10px;
+  border-left: 2px solid transparent;
+}
+.view-host-row:hover { background: var(--row-hover); }
+.view-empty { color: var(--text-sub); font-size: 11px; padding: 8px 10px; }
+
 .chip-list { display: flex; flex-direction: column; gap: 3px; }
 .host-chip {
   display: flex;
