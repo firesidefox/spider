@@ -15,9 +15,17 @@ func defaultDataDir() string {
 	return "/var/lib/spider"
 }
 
+func defaultLogsDir() string {
+	if home, err := os.UserHomeDir(); err == nil {
+		return filepath.Join(home, ".spider", "logs")
+	}
+	return "/var/log/spider"
+}
+
 // Config 是 Spider 的全局配置。
 type Config struct {
 	DataDir  string      `yaml:"data_dir" json:"-"`
+	LogsDir  string      `yaml:"logs_dir" json:"-"`
 	LogLevel string      `yaml:"log_level" json:"-"`
 	SSH      SSHConfig   `yaml:"ssh"`
 	SSE      SSEConfig   `yaml:"sse"`
@@ -82,6 +90,7 @@ type SSHConfig struct {
 func DefaultConfig() *Config {
 	return &Config{
 		DataDir:  defaultDataDir(),
+		LogsDir:  defaultLogsDir(),
 		LogLevel: "info",
 		SSH: SSHConfig{
 			DefaultTimeout: 30,
@@ -140,3 +149,4 @@ func Load(path string) (*Config, error) {
 func (c *Config) EnsureDataDir() error {
 	return os.MkdirAll(c.DataDir, 0700)
 }
+

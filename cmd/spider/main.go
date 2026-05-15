@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"net/http"
@@ -128,7 +129,7 @@ func serve(cfgFile, addrOverride, dataDirOverride string, debug bool) error {
 
 	logFile := cfg.Log.File
 	if logFile == "" {
-		logFile = filepath.Join(cfg.DataDir, "logs", "spider.log")
+		logFile = filepath.Join(cfg.LogsDir, "spider.log")
 	}
 	if debug {
 		cfg.Log.Level = "debug"
@@ -303,10 +304,14 @@ func serve(cfgFile, addrOverride, dataDirOverride string, debug bool) error {
 
 	select {
 	case err := <-errCh:
-		return err
+		return fmt.Errorf("http server: %w", err)
 	case <-quit:
+		shutdownCancel() // close SSE streams before HTTP shutdown
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		return srv.Shutdown(ctx)
+		if err := srv.Shutdown(ctx); err != nil && !errors.Is(err, context.DeadlineExceeded) {
+			return err
+		}
+		return nil
 	}
 }

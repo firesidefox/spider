@@ -219,7 +219,8 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 					}
 				}
 				if err != nil {
-					events <- Event{Type: EventError, Content: map[string]any{"error": err.Error()}}
+					log.Error().Err(err).Int("turn", turn).Msg("llm chat stream failed")
+					events <- Event{Type: EventError, Content: map[string]any{"error": "llm: " + err.Error()}}
 					return
 				}
 			}
