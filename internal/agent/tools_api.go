@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -42,7 +43,12 @@ type CallRESTAPITool struct {
 
 func NewCallRESTAPITool(faces *store.AccessFaceStore) *CallRESTAPITool {
 	return &CallRESTAPITool{
-		http:  &http.Client{Timeout: 30 * time.Second},
+		http: &http.Client{
+			Timeout: 30 * time.Second,
+			Transport: &http.Transport{
+				DialContext: (&net.Dialer{Timeout: 5 * time.Second}).DialContext,
+			},
+		},
 		faces: faces,
 	}
 }

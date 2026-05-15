@@ -4,6 +4,7 @@ import "time"
 
 type Todo struct {
 	ID             int64     `json:"id"`
+	Seq            int64     `json:"seq"`
 	ConversationID string    `json:"conversation_id"`
 	Subject        string    `json:"subject"`
 	ActiveForm     string    `json:"active_form,omitempty"`

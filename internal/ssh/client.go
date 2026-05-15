@@ -33,7 +33,7 @@ func newSSHConfig(face *models.AccessFace, authMethods []gossh.AuthMethod) *goss
 		User:            face.Username,
 		Auth:            authMethods,
 		HostKeyCallback: gossh.InsecureIgnoreHostKey(),
-		Timeout:         15 * time.Second,
+		Timeout:         1 * time.Second,
 	}
 	if face.SSHLegacy {
 		cfg.Config = gossh.Config{

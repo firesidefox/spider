@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/spiderai/spider/internal/models"
@@ -133,7 +132,7 @@ func (s *DocumentStore) DeleteBatch(ids []int) error {
 	if len(ids) == 0 {
 		return nil
 	}
-	query := "DELETE FROM documents WHERE id IN (?" + strings.Repeat(",?", len(ids)-1) + ")"
+	query := "DELETE FROM documents WHERE id IN (" + sqlPlaceholders(len(ids)) + ")"
 	args := make([]any, len(ids))
 	for i, id := range ids {
 		args[i] = id

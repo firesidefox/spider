@@ -192,12 +192,7 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 			history[len(history)-1].Content = finalUserMessage
 		}
 
-		// Inject active task state so LLM sees existing tasks on every Run()
-		if a.todoStore != nil {
-			if tasks, err := a.todoStore.List(conversationID); err == nil && len(tasks) > 0 {
-				history = append(history, buildTaskReminderMessage(tasks))
-			}
-		}
+		history = a.injectTaskReminder(history, conversationID)
 
 		toolDefs := a.registry.Definitions()
 
@@ -214,12 +209,7 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 				if a.compactor != nil && isContextLengthError(err) {
 					forced, ferr := a.compactor.BuildHistory(ctx, conversationID, true)
 					if ferr == nil {
-						history = forced
-						if a.todoStore != nil {
-							if tasks, terr := a.todoStore.List(conversationID); terr == nil && len(tasks) > 0 {
-								history = append(history, buildTaskReminderMessage(tasks))
-							}
-						}
+						history = a.injectTaskReminder(forced, conversationID)
 						stream, err = a.llmClient.ChatStream(ctx, &llm.ChatRequest{
 							System:    a.systemPrompt,
 							Messages:  history,
@@ -400,11 +390,22 @@ func isContextLengthError(err error) bool {
 		strings.Contains(s, "maximum context")
 }
 
+func (a *Agent) injectTaskReminder(history []llm.Message, conversationID string) []llm.Message {
+	if a.todoStore == nil {
+		return history
+	}
+	tasks, err := a.todoStore.List(conversationID)
+	if err != nil || len(tasks) == 0 {
+		return history
+	}
+	return append(history, buildTaskReminderMessage(tasks))
+}
+
 func buildTaskReminderMessage(tasks []*models.Todo) llm.Message {
 	var sb strings.Builder
 	sb.WriteString("<system-reminder>\nCurrent tasks for this conversation:\n")
 	for _, t := range tasks {
-		sb.WriteString(fmt.Sprintf("[%d] %s: %s\n", t.ID, t.Status, t.Subject))
+		fmt.Fprintf(&sb, "[%d] %s: %s\n", t.Seq, t.Status, t.Subject)
 	}
 	sb.WriteString("</system-reminder>")
 	return llm.Message{Role: llm.RoleUser, Content: sb.String()}

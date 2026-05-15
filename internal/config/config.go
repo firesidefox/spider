@@ -44,6 +44,7 @@ type CompactionConfig struct {
 type AgentConfig struct {
 	PermissionMode  string           `yaml:"permission_mode"`            // ask | auto | plan | readonly，默认 ask
 	ApprovalTimeout int              `yaml:"approval_timeout"`           // 审批超时秒数，默认 300
+	MaxTurns        int              `yaml:"max_turns"`                  // 单次 agent run 最大 LLM 轮次，默认 10000
 	Rules           []RuleConfig     `yaml:"rules,omitempty" json:"rules,omitempty"` // 自定义权限规则
 	Compaction      CompactionConfig `yaml:"compaction"`
 }
@@ -94,6 +95,7 @@ func DefaultConfig() *Config {
 		Agent: AgentConfig{
 			PermissionMode:  "ask",
 			ApprovalTimeout: 300,
+			MaxTurns:        10000,
 			Compaction: CompactionConfig{
 				ThresholdTokens:  0,
 				RecentTurns:      20,

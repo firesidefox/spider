@@ -3,7 +3,6 @@ package store
 import (
 	"database/sql"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/spiderai/spider/internal/models"
@@ -58,7 +57,7 @@ func (s *GroupStore) DeleteBatch(ids []int, deleteDocuments bool) error {
 	if len(ids) == 0 {
 		return nil
 	}
-	placeholders := "?" + strings.Repeat(",?", len(ids)-1)
+	placeholders := sqlPlaceholders(len(ids))
 	args := make([]any, len(ids))
 	for i, id := range ids {
 		args[i] = id

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/spiderai/spider/internal/logger"
 	"github.com/spiderai/spider/internal/models"
 	"github.com/spiderai/spider/internal/store"
 )
@@ -17,6 +16,7 @@ type TodoTool struct {
 	store          *store.TodoStore
 	broadcaster    SSEBroadcaster
 	conversationID string
+	turnTaskIDs    []int64
 }
 
 func NewTodoTool(s *store.TodoStore, broadcaster SSEBroadcaster, conversationID string) *TodoTool {
@@ -77,6 +77,7 @@ func (t *TodoTool) execCreate(input map[string]any) (*ToolResult, error) {
 	if err := t.store.Create(task); err != nil {
 		return &ToolResult{Content: "create failed: " + err.Error(), IsError: true, RiskLevel: RiskL1}, nil
 	}
+	t.turnTaskIDs = append(t.turnTaskIDs, task.ID)
 	t.broadcast(task)
 	out, _ := json.Marshal(task)
 	return &ToolResult{Content: string(out) + todoNudge(false), RiskLevel: RiskL1}, nil
@@ -106,9 +107,11 @@ func (t *TodoTool) execUpdate(input map[string]any) (*ToolResult, error) {
 	t.broadcast(task)
 	out, _ := json.Marshal(task)
 
-	allDone := t.allTasksDone()
-	if allDone {
-		t.broadcastEvent("todo_summary", "**All tasks completed.**")
+	allDone := false
+	if status == "completed" || status == "deleted" {
+		if tasks, err := t.store.GetByIDs(t.turnTaskIDs); err == nil && len(tasks) > 0 {
+			allDone = tasksDone(tasks)
+		}
 	}
 	return &ToolResult{Content: string(out) + todoNudge(allDone), RiskLevel: RiskL1}, nil
 }
@@ -137,16 +140,15 @@ func (t *TodoTool) broadcastEvent(eventType string, content any) {
 	t.broadcaster.BroadcastSSE(t.conversationID, payload)
 }
 
-func (t *TodoTool) allTasksDone() bool {
-	// List() only returns non-completed, non-deleted tasks.
-	// Empty result means all tasks in this conversation are done.
-	active, err := t.store.List(t.conversationID)
-	if err != nil {
-		logger.Global().Error().Err(err).Str("conv_id", t.conversationID).Msg("allTasksDone: List failed")
-		return false
+func tasksDone(tasks []*models.Todo) bool {
+	for _, task := range tasks {
+		if task.Status != "completed" && task.Status != "deleted" {
+			return false
+		}
 	}
-	return len(active) == 0
+	return true
 }
+
 
 const todoBaseNudge = "\n\nTodo list updated. Continue using the Todo tool to track remaining work — mark each task in_progress before starting and completed immediately when done."
 const todoAllDoneNudge = "\n\nAll tasks are complete. Before finishing, verify your work by producing a concrete artifact (test output, build log, or command result) that confirms the changes are correct. Do not self-assess — let the output speak."

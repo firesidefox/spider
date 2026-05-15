@@ -5,7 +5,7 @@
 - 需要写或者修改文件时，**单次写入操作不得超过 50 行**。
 - 若内容超过 50 行，应分批写入。
 
-## 2. Claude Code 的源码位置：/Users/cw/fty.ai/claude-code-source-codes
+## 2. Claude Code 的源码位置：/Users/cw/fty.ai/claude-code-source-code
 
 ## 3. 前端调试方法
 

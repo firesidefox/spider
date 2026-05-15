@@ -244,7 +244,7 @@ func (f *Factory) BuildSystemPrompt(targetHostIDs ...string) string {
 	b.WriteString(intentFieldPrompt)
 	b.WriteString("\n\n")
 	b.WriteString(orchestrationPrompt)
-	b.WriteString("\n\n## Language\n\nAlways respond in Chinese (Simplified). Use English only for technical terms, command output, and code.")
+	b.WriteString("\n\n## Language and Style\n\nAlways respond in Chinese (Simplified). Use English only for technical terms, command output, and code.\n\nBe direct. Lead with the result. No preamble (\"好的\", \"当然\", \"我来帮你\"). No trailing summary. When reporting multi-host results, use a table or list — not prose.")
 	return b.String()
 }
 
