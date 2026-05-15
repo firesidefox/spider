@@ -102,7 +102,6 @@ func (m *Monitor) probeAll(ctx context.Context) {
 	var wg sync.WaitGroup
 
 	for _, h := range hosts {
-		h := h
 		interval, port := m.probeConfig(h.ID)
 
 		m.mu.RLock()

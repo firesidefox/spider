@@ -959,16 +959,16 @@ function startGlobalSSE() {
         monitorStatuses.set(host_id, online)
         if (!executingHosts.has(host_id)) {
           const idx = devices.value.findIndex(d => d.id === host_id)
-          if (idx !== -1) {
+          if (idx !== -1 && devices.value[idx].status !== (online ? 'online' : 'offline')) {
             devices.value = devices.value.map((d, i) =>
               i === idx ? { ...d, status: online ? 'online' : 'offline' } : d
             )
           }
         }
       }
-    } catch { /* skip malformed */ }
+    } catch {}
   }
-  globalEs.onerror = () => { /* auto-reconnects */ }
+  globalEs.onerror = () => {}
 }
 
 onMounted(() => {
