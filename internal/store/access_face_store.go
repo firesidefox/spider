@@ -8,7 +8,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/spiderai/spider/internal/crypto"
-	"github.com/spiderai/spider/internal/logger"
 	"github.com/spiderai/spider/internal/models"
 )
 
@@ -50,7 +49,6 @@ func (s *AccessFaceStore) Add(hostID string, req *models.AddAccessFaceRequest) (
 	if err != nil {
 		return nil, err
 	}
-	logger.Global().Debug().Str("table", "access_faces").Str("op", "insert").Str("host_id", hostID).Str("face_id", f.ID).Msg("store")
 	return f, nil
 }
 
@@ -76,7 +74,6 @@ func (s *AccessFaceStore) ListByHost(hostID string) ([]*models.AccessFace, error
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	logger.Global().Debug().Str("table", "access_faces").Str("op", "select").Str("host_id", hostID).Int("count", len(out)).Msg("store")
 	return out, nil
 }
 
@@ -214,7 +211,6 @@ func (s *AccessFaceStore) Delete(id string) error {
 	if n == 0 {
 		return ErrNotFound
 	}
-	logger.Global().Debug().Str("table", "access_faces").Str("op", "delete").Str("face_id", id).Msg("store")
 	return nil
 }
 

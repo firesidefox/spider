@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/spiderai/spider/internal/logger"
 	"github.com/spiderai/spider/internal/models"
 )
 
@@ -44,7 +43,6 @@ func (s *TodoStore) Create(task *models.Todo) error {
 	task.Seq = seq
 	task.CreatedAt = now
 	task.UpdatedAt = now
-	logger.Global().Debug().Str("table", "todo_tasks").Str("op", "insert").Int64("task_id", task.ID).Str("conv_id", task.ConversationID).Msg("store")
 	return nil
 }
 
@@ -94,7 +92,6 @@ func (s *TodoStore) Update(conversationID string, id int64, subject, activeForm,
 	if err != nil {
 		return nil, err
 	}
-	logger.Global().Debug().Str("table", "todo_tasks").Str("op", "update").Int64("task_id", id).Str("status", status).Msg("store")
 	return &t, nil
 }
 
@@ -131,7 +128,6 @@ func (s *TodoStore) List(conversationID string) ([]*models.Todo, error) {
 	if err != nil {
 		return nil, err
 	}
-	logger.Global().Debug().Str("table", "todo_tasks").Str("op", "select").Str("conv_id", conversationID).Int("count", len(tasks)).Msg("store")
 	return tasks, nil
 }
 
