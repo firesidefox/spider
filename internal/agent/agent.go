@@ -286,12 +286,13 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 			}
 
 			var tcRecords []ToolCallRecord
+			var pendingToolResults []string // toolID\x00content, saved after assistant
 			for _, tc := range toolCalls {
 				tool, ok := a.registry.Get(tc.Name)
 				if !ok {
 					events <- Event{Type: EventToolResult, Content: map[string]any{"id": tc.ID, "tool": tc.Name, "result": "tool not found", "is_error": true}}
 					history = append(history, llm.Message{Role: llm.RoleUser, Content: "Tool " + tc.Name + " not found"})
-					a.msgStore.Save(conversationID, "tool_result", tc.ID+"\x00Tool "+tc.Name+" not found", "")
+					pendingToolResults = append(pendingToolResults, tc.ID+"\x00Tool "+tc.Name+" not found")
 					tcRecords = append(tcRecords, ToolCallRecord{ID: tc.ID, Name: tc.Name, Input: tc.Input, Result: "tool not found", IsError: true})
 					continue
 				}
@@ -319,7 +320,7 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 						events <- Event{Type: EventToolResult, Content: map[string]any{"id": tc.ID, "tool": tc.Name, "result": "denied by user", "is_error": true}}
 						history = append(history, llm.Message{Role: llm.RoleUser, Content: "operation denied by user"})
 						if !hidden {
-							a.msgStore.Save(conversationID, "tool_result", tc.ID+"\x00operation denied by user", "")
+							pendingToolResults = append(pendingToolResults, tc.ID+"\x00operation denied by user")
 							tcRecords = append(tcRecords, ToolCallRecord{ID: tc.ID, Name: tc.Name, Input: tc.Input, Result: "denied by user", RiskLevel: hookResult.RiskLevel.String()})
 						}
 						continue
@@ -328,7 +329,7 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 					events <- Event{Type: EventToolResult, Content: map[string]any{"id": tc.ID, "tool": tc.Name, "result": "denied: " + hookResult.Reason, "is_error": true}}
 					history = append(history, llm.Message{Role: llm.RoleUser, Content: "Tool denied: " + hookResult.Reason})
 					if !hidden {
-						a.msgStore.Save(conversationID, "tool_result", tc.ID+"\x00Tool denied: "+hookResult.Reason, "")
+						pendingToolResults = append(pendingToolResults, tc.ID+"\x00Tool denied: "+hookResult.Reason)
 						tcRecords = append(tcRecords, ToolCallRecord{ID: tc.ID, Name: tc.Name, Input: tc.Input, Result: "denied: " + hookResult.Reason, RiskLevel: hookResult.RiskLevel.String()})
 					}
 					continue
@@ -338,7 +339,7 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 					events <- Event{Type: EventToolResult, Content: map[string]any{"id": tc.ID, "tool": tc.Name, "result": planMsg, "is_error": false}}
 					history = append(history, llm.Message{Role: llm.RoleUser, Content: planMsg})
 					if !hidden {
-						a.msgStore.Save(conversationID, "tool_result", tc.ID+"\x00"+planMsg, "")
+						pendingToolResults = append(pendingToolResults, tc.ID+"\x00"+planMsg)
 						tcRecords = append(tcRecords, ToolCallRecord{ID: tc.ID, Name: tc.Name, Input: tc.Input, Result: planMsg, RiskLevel: hookResult.RiskLevel.String()})
 					}
 					continue
@@ -365,7 +366,7 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 				}
 				history = append(history, llm.Message{Role: llm.RoleUser, Content: result.Content})
 				if !hidden {
-					a.msgStore.Save(conversationID, "tool_result", tc.ID+"\x00"+result.Content, "")
+					pendingToolResults = append(pendingToolResults, tc.ID+"\x00"+result.Content)
 					tcRecords = append(tcRecords, ToolCallRecord{
 						ID: tc.ID, Name: tc.Name, Input: tc.Input,
 						Result: result.Content, IsError: result.IsError,
@@ -376,6 +377,9 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 
 			tcJSON, _ := json.Marshal(tcRecords)
 			a.msgStore.Save(conversationID, "assistant", assistantText, string(tcJSON))
+			for _, tr := range pendingToolResults {
+				a.msgStore.Save(conversationID, "tool_result", tr, "")
+			}
 			log.Debug().Int("turn", turn).Int64("duration_ms", time.Since(turnStart).Milliseconds()).Int("input_tokens", usage.InputTokens).Int("output_tokens", usage.OutputTokens).Int("tools", len(tcRecords)).Str("response", assistantText).Msg("turn done")
 			events <- Event{Type: EventTurnUsage, Content: map[string]any{
 				"input_tokens":  usage.InputTokens,
