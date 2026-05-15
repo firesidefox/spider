@@ -22,6 +22,13 @@ func defaultLogsDir() string {
 	return "/var/log/spider"
 }
 
+func defaultConfigPath() string {
+	if home, err := os.UserHomeDir(); err == nil {
+		return filepath.Join(home, ".spider", "config.yaml")
+	}
+	return "/etc/spider/config.yaml"
+}
+
 // Config 是 Spider 的全局配置。
 type Config struct {
 	DataDir  string      `yaml:"data_dir" json:"-"`
@@ -121,14 +128,14 @@ func DefaultConfig() *Config {
 }
 
 // Load 从文件加载配置，文件不存在时静默使用默认配置。
-// path 为空时自动推导为 DataDir/config.yaml；推导路径读取失败一律静默忽略。
+// path 为空时自动推导为 ~/.spider/config.yaml；推导路径读取失败一律静默忽略。
 // path 显式指定时，文件不存在则静默忽略，其他错误则返回。
 func Load(path string) (*Config, error) {
 	cfg := DefaultConfig()
 
 	derived := path == ""
 	if derived {
-		path = filepath.Join(cfg.DataDir, "config.yaml")
+		path = defaultConfigPath()
 	}
 
 	data, err := os.ReadFile(path)
