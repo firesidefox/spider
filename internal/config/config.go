@@ -31,10 +31,9 @@ func defaultConfigPath() string {
 
 // Config 是 Spider 的全局配置。
 type Config struct {
-	DataDir  string      `yaml:"data_dir" json:"-"`
-	LogsDir  string      `yaml:"logs_dir" json:"-"`
-	LogLevel string      `yaml:"log_level" json:"-"`
-	SSH      SSHConfig   `yaml:"ssh"`
+	DataDir string      `yaml:"data_dir" json:"-"`
+	LogsDir string      `yaml:"logs_dir" json:"-"`
+	SSH     SSHConfig   `yaml:"ssh"`
 	SSE      SSEConfig   `yaml:"sse"`
 	Auth     AuthConfig  `yaml:"auth"`
 	Agent    AgentConfig `yaml:"agent"`
@@ -96,9 +95,8 @@ type SSHConfig struct {
 // DefaultConfig 返回默认配置。
 func DefaultConfig() *Config {
 	return &Config{
-		DataDir:  defaultDataDir(),
-		LogsDir:  defaultLogsDir(),
-		LogLevel: "info",
+		DataDir: defaultDataDir(),
+		LogsDir: defaultLogsDir(),
 		SSH: SSHConfig{
 			DefaultTimeout: 30,
 			PoolTTL:        300,
