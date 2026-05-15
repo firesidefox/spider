@@ -93,7 +93,7 @@ Description=Spider AI
 After=network.target
 
 [Service]
-ExecStart=$BIN_DIR/spider serve --data-dir $DATA_DIR
+ExecStart=$BIN_DIR/spider serve --config $HOME/.spider/config.yaml
 Restart=always
 StandardOutput=append:$LOG_DIR/spider.log
 StandardError=append:$LOG_DIR/spider.log
@@ -124,7 +124,7 @@ if _port_check; then
   printf "\n" >&2
   printf "  ${yellow}解决方案：${reset}\n" >&2
   detail "1. 停止占用进程：kill $(_port_pid)"
-  detail "2. 或修改监听端口：编辑 ~/.spider/data/config.yaml，设置 addr: :9090"
+  detail "2. 或修改监听端口：编辑 ~/.spider/config.yaml，设置 addr: :9090"
   _service_hint
   exit 1
 fi
