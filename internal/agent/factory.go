@@ -36,7 +36,9 @@ type Factory struct {
 	DocStore       *store.DocumentStore
 	RagStore       *rag.Store
 	TaskStore      *store.TaskStore
-	DisableSearchDocs bool
+	DisableSearchDocs            bool
+	PerToolResultMaxChars        int
+	PerMessageToolResultMaxChars int
 }
 
 // NewFactory creates a Factory by reading the active provider from the DB.
@@ -102,19 +104,25 @@ func (f *Factory) NewAgent(systemPrompt string, conversationID string, selectedH
 	}
 
 	var compactor *Compactor
+	replacementState := newContentReplacementState()
 	if f.SummaryStore != nil {
-		compactor = NewCompactor(f.LLMClient, f.SummaryStore, f.MsgStore, f.LLMModel, f.CompactionCfg)
+		compactor = NewCompactor(f.LLMClient, f.SummaryStore, f.MsgStore, f.LLMModel, f.CompactionCfg,
+			f.DataDir, f.PerMessageToolResultMaxChars, replacementState)
 	}
 	return NewAgent(AgentConfig{
-		LLMClient:    f.LLMClient,
-		Registry:     registry,
-		Hooks:        hooks,
-		MsgStore:     f.MsgStore,
-		TodoStore:    f.TodoStore,
-		SystemPrompt: systemPrompt,
-		MaxTurns:     f.maxTurns(),
-		Compactor:    compactor,
-		SkillManager: NewSkillManager(f.DataDir),
+		LLMClient:                    f.LLMClient,
+		Registry:                     registry,
+		Hooks:                        hooks,
+		MsgStore:                     f.MsgStore,
+		TodoStore:                    f.TodoStore,
+		SystemPrompt:                 systemPrompt,
+		MaxTurns:                     f.maxTurns(),
+		Compactor:                    compactor,
+		SkillManager:                 NewSkillManager(f.DataDir),
+		DataDir:                      f.DataDir,
+		PerToolResultMaxChars:        f.PerToolResultMaxChars,
+		PerMessageToolResultMaxChars: f.PerMessageToolResultMaxChars,
+		ReplacementState:             replacementState,
 	})
 }
 
@@ -132,13 +140,17 @@ func (f *Factory) NewHeadlessAgent(systemPrompt string, conversationID string) *
 	}
 
 	return NewAgent(AgentConfig{
-		LLMClient:    f.LLMClient,
-		Registry:     registry,
-		Hooks:        hooks,
-		MsgStore:     noopMessageStorer{},
-		SystemPrompt: systemPrompt,
-		MaxTurns:     f.maxTurns(),
-		SkillManager: NewSkillManager(f.DataDir),
+		LLMClient:                    f.LLMClient,
+		Registry:                     registry,
+		Hooks:                        hooks,
+		MsgStore:                     noopMessageStorer{},
+		SystemPrompt:                 systemPrompt,
+		MaxTurns:                     f.maxTurns(),
+		SkillManager:                 NewSkillManager(f.DataDir),
+		DataDir:                      f.DataDir,
+		PerToolResultMaxChars:        f.PerToolResultMaxChars,
+		PerMessageToolResultMaxChars: f.PerMessageToolResultMaxChars,
+		ReplacementState:             newContentReplacementState(),
 	})
 }
 

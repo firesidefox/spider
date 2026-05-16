@@ -117,7 +117,7 @@ func TestIntegration_ShortConversation(t *testing.T) {
 	msgStore := store.NewMessageStore(db)
 	sumStore := store.NewSummaryStore(db)
 	cfg := config.CompactionConfig{ThresholdTokens: 100000, RecentTurns: 20, MaxSummaryTokens: 4000}
-	c := NewCompactor(llmC, sumStore, msgStore, "test-model", cfg)
+	c := NewCompactor(llmC, sumStore, msgStore, "test-model", cfg, t.TempDir(), 0, nil)
 
 	history, err := c.BuildHistory(context.Background(), convID, false)
 	if err != nil {
@@ -156,7 +156,7 @@ func TestIntegration_CacheReuse(t *testing.T) {
 	llmC := &mockIntegrationLLMClient{}
 	msgStore := store.NewMessageStore(db)
 	cfg := config.CompactionConfig{ThresholdTokens: 100000, RecentTurns: 20, MaxSummaryTokens: 4000}
-	c := NewCompactor(llmC, sumStore, msgStore, "test-model", cfg)
+	c := NewCompactor(llmC, sumStore, msgStore, "test-model", cfg, t.TempDir(), 0, nil)
 
 	history, err := c.BuildHistory(context.Background(), convID, false)
 	if err != nil {
@@ -188,7 +188,7 @@ func TestIntegration_FirstCompaction(t *testing.T) {
 	msgStore := store.NewMessageStore(db)
 	sumStore := store.NewSummaryStore(db)
 	cfg := config.CompactionConfig{ThresholdTokens: 100, RecentTurns: 5, MaxSummaryTokens: 4000}
-	c := NewCompactor(llmC, sumStore, msgStore, "test-model", cfg)
+	c := NewCompactor(llmC, sumStore, msgStore, "test-model", cfg, t.TempDir(), 0, nil)
 
 	history, err := c.BuildHistory(context.Background(), convID, false)
 	if err != nil {
@@ -222,7 +222,7 @@ func TestIntegration_BoundaryAdvance(t *testing.T) {
 	msgStore := store.NewMessageStore(db)
 	sumStore := store.NewSummaryStore(db)
 	cfg := config.CompactionConfig{ThresholdTokens: 100, RecentTurns: 5, MaxSummaryTokens: 4000}
-	c := NewCompactor(llmC, sumStore, msgStore, "test-model", cfg)
+	c := NewCompactor(llmC, sumStore, msgStore, "test-model", cfg, t.TempDir(), 0, nil)
 
 	if _, err := c.BuildHistory(context.Background(), convID, false); err != nil {
 		t.Fatalf("first BuildHistory: %v", err)
@@ -272,7 +272,7 @@ func TestIntegration_ChunksConsolidation(t *testing.T) {
 	llmC := &mockIntegrationLLMClient{response: "consolidated summary"}
 	msgStore := store.NewMessageStore(db)
 	cfg := config.CompactionConfig{ThresholdTokens: 100, RecentTurns: 5, MaxSummaryTokens: 50}
-	c := NewCompactor(llmC, sumStore, msgStore, "test-model", cfg)
+	c := NewCompactor(llmC, sumStore, msgStore, "test-model", cfg, t.TempDir(), 0, nil)
 
 	if _, err := c.BuildHistory(context.Background(), convID, false); err != nil {
 		t.Fatalf("BuildHistory: %v", err)
@@ -300,7 +300,7 @@ func TestIntegration_ThresholdConfig(t *testing.T) {
 	msgStore := store.NewMessageStore(db)
 	sumStore := store.NewSummaryStore(db)
 	cfg := config.CompactionConfig{ThresholdTokens: 50, RecentTurns: 5, MaxSummaryTokens: 4000}
-	c := NewCompactor(llmC, sumStore, msgStore, "test-model", cfg)
+	c := NewCompactor(llmC, sumStore, msgStore, "test-model", cfg, t.TempDir(), 0, nil)
 
 	if _, err := c.BuildHistory(context.Background(), convID, false); err != nil {
 		t.Fatalf("BuildHistory: %v", err)
@@ -331,7 +331,7 @@ func TestIntegration_UnknownModelFallback(t *testing.T) {
 	sumStore := store.NewSummaryStore(db)
 	// ThresholdTokens=0 → use model table → 120000 for unknown model
 	cfg := config.CompactionConfig{ThresholdTokens: 0, RecentTurns: 20, MaxSummaryTokens: 4000}
-	c := NewCompactor(llmC, sumStore, msgStore, model, cfg)
+	c := NewCompactor(llmC, sumStore, msgStore, model, cfg, t.TempDir(), 0, nil)
 
 	if _, err := c.BuildHistory(context.Background(), convID, false); err != nil {
 		t.Fatalf("BuildHistory: %v", err)

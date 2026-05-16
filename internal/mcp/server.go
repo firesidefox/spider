@@ -98,6 +98,8 @@ func (a *App) NewAgentFactory() (*agent.Factory, error) {
 	f.PermissionMode = a.PermissionMode
 	f.SummaryStore = store.NewSummaryStore(a.DB)
 	f.CompactionCfg = a.Config.Agent.Compaction
+	f.PerToolResultMaxChars = a.Config.Agent.PerToolResultMaxChars
+	f.PerMessageToolResultMaxChars = a.Config.Agent.PerMessageToolResultMaxChars
 	f.TodoStore = a.TodoStore
 	f.TopologyStore = a.TopologyStore
 	f.SSEBroadcaster = a

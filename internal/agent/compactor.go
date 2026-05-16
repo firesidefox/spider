@@ -26,6 +26,9 @@ type Compactor struct {
 	msgStore     MessageStorer
 	model        string
 	cfg          config.CompactionConfig
+	dataDir                      string
+	perMessageToolResultMaxChars int
+	replacementState             *ContentReplacementState
 }
 
 func NewCompactor(
@@ -34,6 +37,9 @@ func NewCompactor(
 	msgStore MessageStorer,
 	model string,
 	cfg config.CompactionConfig,
+	dataDir string,
+	perMessageToolResultMaxChars int,
+	replacementState *ContentReplacementState,
 ) *Compactor {
 	if cfg.RecentTurns == 0 {
 		cfg.RecentTurns = 20
@@ -42,17 +48,26 @@ func NewCompactor(
 		cfg.MaxSummaryTokens = 4000
 	}
 	return &Compactor{
-		llmClient:    llmClient,
-		summaryStore: summaryStore,
-		msgStore:     msgStore,
-		model:        model,
-		cfg:          cfg,
+		llmClient:                    llmClient,
+		summaryStore:                 summaryStore,
+		msgStore:                     msgStore,
+		model:                        model,
+		cfg:                          cfg,
+		dataDir:                      dataDir,
+		perMessageToolResultMaxChars: perMessageToolResultMaxChars,
+		replacementState:             replacementState,
 	}
 }
 
 // BuildHistory 返回注入摘要后的 history，供 Agent.Run() 使用。
 // forceCompact=true 时跳过 threshold 检查，直接压缩（用于 context-length 错误重试）。
 func (c *Compactor) BuildHistory(ctx context.Context, conversationID string, forceCompact bool) ([]llm.Message, error) {
+	budget := toolResultBudget{
+		maxChars: c.perMessageToolResultMaxChars,
+		dataDir:  c.dataDir,
+		convID:   conversationID,
+		state:    c.replacementState,
+	}
 	// 1. 取摘要缓存
 	summary, err := c.summaryStore.Get(conversationID)
 	if err != nil {
@@ -74,14 +89,14 @@ func (c *Compactor) BuildHistory(ctx context.Context, conversationID string, for
 
 	// 3. 估算 token 数
 	threshold := c.resolveThreshold()
-	totalTokens, err := c.llmClient.CountTokens(ctx, toLLMMessages(msgs))
+	totalTokens, err := c.llmClient.CountTokens(ctx, toLLMMessages(msgs, toolResultBudget{}))
 	if err != nil {
 		return nil, fmt.Errorf("count tokens: %w", err)
 	}
 
 	// 4. 未超限且非强制：直接返回
 	if !forceCompact && totalTokens < threshold {
-		return injectSummary(existingChunks, msgs), nil
+		return injectSummary(existingChunks, msgs, budget), nil
 	}
 
 	// 5. 超限：计算新边界
@@ -116,7 +131,7 @@ func (c *Compactor) BuildHistory(ctx context.Context, conversationID string, for
 		return nil, fmt.Errorf("upsert summary: %w", err)
 	}
 
-	return injectSummary(chunks, recent), nil
+	return injectSummary(chunks, recent, budget), nil
 }
 
 func (c *Compactor) resolveThreshold() int {
@@ -144,7 +159,7 @@ func findBoundaryByTurns(msgs []*models.Message, n int) int {
 	return -1
 }
 
-func injectSummary(chunks []string, recent []*models.Message) []llm.Message {
+func injectSummary(chunks []string, recent []*models.Message, budget toolResultBudget) []llm.Message {
 	var history []llm.Message
 	if len(chunks) > 0 {
 		history = append(history,
@@ -152,7 +167,7 @@ func injectSummary(chunks []string, recent []*models.Message) []llm.Message {
 			llm.Message{Role: "assistant", Content: strings.Join(chunks, "\n\n")},
 		)
 	}
-	history = append(history, toLLMMessages(recent)...)
+	history = append(history, toLLMMessages(recent, budget)...)
 	return history
 }
 
@@ -164,7 +179,14 @@ func estimateChunksTokens(chunks []string) int {
 	return total
 }
 
-func toLLMMessages(msgs []*models.Message) []llm.Message {
+type toolResultBudget struct {
+	maxChars int
+	dataDir  string
+	convID   string
+	state    *ContentReplacementState
+}
+
+func toLLMMessages(msgs []*models.Message, budget toolResultBudget) []llm.Message {
 	out := make([]llm.Message, 0, len(msgs))
 	i := 0
 	for i < len(msgs) {
@@ -179,6 +201,9 @@ func toLLMMessages(msgs []*models.Message) []llm.Message {
 			for i < len(msgs) && msgs[i].Role == "tool_result" {
 				blocks = append(blocks, parseToolResultBlock(msgs[i].Content))
 				i++
+			}
+			if budget.state != nil && budget.maxChars > 0 {
+				blocks = enforcePerMessageBudget(blocks, budget.maxChars, budget.dataDir, budget.convID, budget.state)
 			}
 			out = append(out, llm.Message{Role: llm.RoleUser, Content: blocks})
 		default:

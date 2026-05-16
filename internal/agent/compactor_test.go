@@ -73,7 +73,7 @@ func (f *fixedMsgStore) ListAfterMessage(_, _ string) ([]*models.Message, error)
 }
 
 func newCompactor(llmC llm.Client, ss *mockSummaryStore, msgs []*models.Message, cfg config.CompactionConfig) *Compactor {
-	return NewCompactor(llmC, ss, &fixedMsgStore{msgs: msgs}, "", cfg)
+	return NewCompactor(llmC, ss, &fixedMsgStore{msgs: msgs}, "", cfg, "", 0, nil)
 }
 
 func TestBuildHistory_UnderThreshold(t *testing.T) {

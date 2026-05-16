@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/spiderai/spider/internal/llm"
 )
 
 func TestGeneratePreview_ShortContent(t *testing.T) {
@@ -68,5 +70,63 @@ func TestContentReplacementState_SeenNotReplaced(t *testing.T) {
 	}
 	if !s.isSeen("id2") {
 		t.Errorf("id2 should be seen")
+	}
+}
+
+func TestEnforcePerMessageBudget_UnderLimit(t *testing.T) {
+	state := newContentReplacementState()
+	blocks := []llm.ContentBlock{
+		{Type: "tool_result", ToolUseID: "id1", Content: strings.Repeat("a", 1000)},
+		{Type: "tool_result", ToolUseID: "id2", Content: strings.Repeat("b", 1000)},
+	}
+	result := enforcePerMessageBudget(blocks, 10_000, t.TempDir(), "conv1", state)
+	if len(result) != 2 {
+		t.Fatalf("expected 2 blocks, got %d", len(result))
+	}
+	if result[0].Content != blocks[0].Content {
+		t.Errorf("content should be unchanged under limit")
+	}
+}
+
+func TestEnforcePerMessageBudget_OverLimit_ReplacesLargest(t *testing.T) {
+	state := newContentReplacementState()
+	dataDir := t.TempDir()
+	small := strings.Repeat("s", 100)
+	large := strings.Repeat("L", 9000)
+	blocks := []llm.ContentBlock{
+		{Type: "tool_result", ToolUseID: "small1", Content: small},
+		{Type: "tool_result", ToolUseID: "large1", Content: large},
+	}
+	result := enforcePerMessageBudget(blocks, 5_000, dataDir, "conv1", state)
+	if len(result) != 2 {
+		t.Fatalf("expected 2 blocks, got %d", len(result))
+	}
+	var largeBlock llm.ContentBlock
+	for _, b := range result {
+		if b.ToolUseID == "large1" {
+			largeBlock = b
+		}
+	}
+	if !strings.Contains(largeBlock.Content, "too large") {
+		t.Errorf("large block should be replaced with preview, got: %s", largeBlock.Content[:80])
+	}
+	for _, b := range result {
+		if b.ToolUseID == "small1" && b.Content != small {
+			t.Errorf("small block should be unchanged")
+		}
+	}
+}
+
+func TestEnforcePerMessageBudget_StableAcrossRebuild(t *testing.T) {
+	state := newContentReplacementState()
+	dataDir := t.TempDir()
+	large := strings.Repeat("L", 9000)
+	blocks := []llm.ContentBlock{
+		{Type: "tool_result", ToolUseID: "id1", Content: large},
+	}
+	result1 := enforcePerMessageBudget(blocks, 5_000, dataDir, "conv1", state)
+	result2 := enforcePerMessageBudget(blocks, 5_000, dataDir, "conv1", state)
+	if result1[0].Content != result2[0].Content {
+		t.Errorf("preview must be identical across rebuilds")
 	}
 }

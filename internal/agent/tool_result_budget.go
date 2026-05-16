@@ -4,7 +4,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"sync"
+
+	"github.com/spiderai/spider/internal/llm"
 )
 
 const previewMaxChars = 2000
@@ -87,4 +90,79 @@ func (s *ContentReplacementState) isSeen(toolUseID string) bool {
 	defer s.mu.Unlock()
 	_, inReplacements := s.replacements[toolUseID]
 	return inReplacements || s.seen[toolUseID]
+}
+
+// enforcePerMessageBudget applies the per-message aggregate limit to a slice of
+// tool_result ContentBlocks. Blocks already in state are reused; fresh blocks
+// that push total over maxChars are persisted and replaced, largest first.
+func enforcePerMessageBudget(
+	blocks []llm.ContentBlock,
+	maxChars int,
+	dataDir, convID string,
+	state *ContentReplacementState,
+) []llm.ContentBlock {
+	if maxChars <= 0 {
+		return blocks
+	}
+
+	out := make([]llm.ContentBlock, len(blocks))
+	copy(out, blocks)
+
+	type freshEntry struct {
+		idx  int
+		size int
+	}
+	var fresh []freshEntry
+	total := 0
+
+	for i, b := range out {
+		if b.Type != "tool_result" {
+			continue
+		}
+		if prev := state.getReplacement(b.ToolUseID); prev != "" {
+			out[i].Content = prev
+			total += len(prev)
+			continue
+		}
+		if state.isSeen(b.ToolUseID) {
+			total += len(b.Content)
+			continue
+		}
+		fresh = append(fresh, freshEntry{i, len(b.Content)})
+		total += len(b.Content)
+	}
+
+	if total <= maxChars {
+		for _, f := range fresh {
+			state.markSeen(out[f.idx].ToolUseID)
+		}
+		return out
+	}
+
+	sort.Slice(fresh, func(a, b int) bool { return fresh[a].size > fresh[b].size })
+
+	for _, f := range fresh {
+		if total <= maxChars {
+			break
+		}
+		b := &out[f.idx]
+		filePath, err := persistToolResult(dataDir, convID, b.ToolUseID, b.Content)
+		if err != nil {
+			state.markSeen(b.ToolUseID)
+			continue
+		}
+		preview := generatePreview(b.Content, filePath)
+		state.setReplacement(b.ToolUseID, preview)
+		total -= len(b.Content)
+		total += len(preview)
+		b.Content = preview
+	}
+
+	for _, f := range fresh {
+		if !state.isSeen(out[f.idx].ToolUseID) && state.getReplacement(out[f.idx].ToolUseID) == "" {
+			state.markSeen(out[f.idx].ToolUseID)
+		}
+	}
+
+	return out
 }
