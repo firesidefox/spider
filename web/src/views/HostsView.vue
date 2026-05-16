@@ -273,18 +273,25 @@
               <label>兼容模式</label>
               <label class="checkbox-label"><input type="checkbox" v-model="faceForm.ssh_legacy" /> 启用（旧版 SSH 算法）</label>
             </div>
-            <div class="form-row">
-              <label>登录后输入（可选）</label>
-              <input v-model="faceForm.ssh_login_input" class="input" placeholder="/rsh" />
+            <div class="form-row advanced-toggle">
+              <button type="button" class="btn btn-sm" @click="showAdvanced = !showAdvanced">
+                {{ showAdvanced ? '▾' : '▸' }} 高级配置
+              </button>
             </div>
-            <div class="form-row">
-              <label>存活探测端口（可选）</label>
-              <input v-model.number="faceForm.probe_port" class="input" type="number" min="1" max="65535" placeholder="22" />
-            </div>
-            <div class="form-row">
-              <label>探测间隔（秒，可选）</label>
-              <input v-model.number="faceForm.probe_interval" class="input" type="number" min="1" max="3600" placeholder="2" />
-            </div>
+            <template v-if="showAdvanced">
+              <div class="form-row">
+                <label>登录后输入（可选）</label>
+                <input v-model="faceForm.ssh_login_input" class="input" placeholder="/rsh" />
+              </div>
+              <div class="form-row">
+                <label>存活探测端口（可选）</label>
+                <input v-model.number="faceForm.probe_port" class="input" type="number" min="1" max="65535" :placeholder="String(faceForm.port || 22)" />
+              </div>
+              <div class="form-row">
+                <label>探测间隔（秒，可选）</label>
+                <input v-model.number="faceForm.probe_interval" class="input" type="number" min="1" max="3600" placeholder="30" />
+              </div>
+            </template>
           </template>
           <template v-if="faceForm.type === 'restapi'">
             <div class="form-row">
@@ -394,6 +401,7 @@ const editFaceTarget = ref<AccessFace | null>(null)
 const sshKeys = ref<SafeSSHKey[]>([])
 const docGroups = ref<DocumentGroup[]>([])
 const ksMode = ref<'global' | 'group' | 'doc' | 'none'>('global')
+const showAdvanced = ref(false)
 const allDocs = ref<Document[]>([])
 
 const editingOverview = ref(false)
@@ -636,7 +644,9 @@ function startEditFace(face: AccessFace) {
 function openAddFace() {
   faceForm.value = emptyFaceForm()
   editFaceTarget.value = null
-  ksMode.value = 'global'
+  ksMode.value = 'none'
+  faceForm.value.knowledge_sources = [{ type: 'none', id: 0 }]
+  showAdvanced.value = false
   showAddFace.value = true
 }
 
