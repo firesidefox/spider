@@ -75,7 +75,8 @@ func Init(cfg Config) error {
 func Global() *zerolog.Logger {
 	mu.RLock()
 	defer mu.RUnlock()
-	return &global
+	l := global // copy under lock; caller gets pointer to the copy, not &global
+	return &l
 }
 
 func SetLevel(level string) {
@@ -104,7 +105,11 @@ func IsValidLevel(s string) bool {
 }
 
 // SetOutput redirects all log output — for tests only.
-func SetOutput(w io.Writer) { extraOut = w }
+func SetOutput(w io.Writer) {
+	mu.Lock()
+	extraOut = w
+	mu.Unlock()
+}
 
 func parseLevel(s string) zerolog.Level {
 	switch s {

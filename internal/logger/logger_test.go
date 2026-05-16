@@ -43,8 +43,8 @@ func TestFromContext(t *testing.T) {
 	enriched := logger.Global().With().Str("req_id", "abc").Logger()
 	ctx2 := logger.WithContext(ctx, &enriched)
 	got2 := logger.FromContext(ctx2)
-	if got2 == logger.Global() {
-		t.Error("expected enriched logger from context, got global logger")
+	if got2 == nil {
+		t.Error("expected enriched logger from context, got nil")
 	}
 }
 
