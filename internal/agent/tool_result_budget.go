@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/spiderai/spider/internal/llm"
@@ -32,22 +33,13 @@ func generatePreview(content, filePath string) string {
 		return content
 	}
 	cut := content[:previewMaxChars]
-	if idx := lastNewline(cut); idx > 0 {
+	if idx := strings.LastIndexByte(cut, '\n'); idx > 0 {
 		cut = cut[:idx]
 	}
 	return fmt.Sprintf(
 		"[Output too large: %d chars. Full output saved to: %s]\n\nPreview (first 2000 chars):\n%s\n...",
 		len(content), filePath, cut,
 	)
-}
-
-func lastNewline(s string) int {
-	for i := len(s) - 1; i >= 0; i-- {
-		if s[i] == '\n' {
-			return i
-		}
-	}
-	return -1
 }
 
 // ContentReplacementState freezes tool result replacement decisions so that
@@ -159,7 +151,7 @@ func enforcePerMessageBudget(
 	}
 
 	for _, f := range fresh {
-		if !state.isSeen(out[f.idx].ToolUseID) && state.getReplacement(out[f.idx].ToolUseID) == "" {
+		if !state.isSeen(out[f.idx].ToolUseID) {
 			state.markSeen(out[f.idx].ToolUseID)
 		}
 	}
