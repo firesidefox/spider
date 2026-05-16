@@ -20,3 +20,4 @@ install-arm64.sh
 test.sh
 whitepaper/
 .superpowers/
+test-results/
