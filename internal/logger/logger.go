@@ -22,6 +22,7 @@ type Config struct {
 }
 
 var (
+	mu           sync.RWMutex
 	global       zerolog.Logger
 	defaultLevel zerolog.Level
 	moduleLevels sync.Map // map[string]zerolog.Level — runtime overrides only
@@ -29,9 +30,6 @@ var (
 )
 
 func Init(cfg Config) error {
-	defaultLevel = parseLevel(cfg.Level)
-	zerolog.SetGlobalLevel(zerolog.TraceLevel) // filtering done per-logger
-
 	var writers []io.Writer
 
 	if cfg.File != "" {
@@ -66,14 +64,24 @@ func Init(cfg Config) error {
 		w = zerolog.ConsoleWriter{Out: w, TimeFormat: time.RFC3339}
 	}
 
+	mu.Lock()
+	defaultLevel = parseLevel(cfg.Level)
+	zerolog.SetGlobalLevel(zerolog.TraceLevel) // filtering done per-logger
 	global = zerolog.New(w).With().Timestamp().Logger().Level(defaultLevel)
+	mu.Unlock()
 	return nil
 }
 
-func Global() *zerolog.Logger { return &global }
+func Global() *zerolog.Logger {
+	mu.RLock()
+	defer mu.RUnlock()
+	return &global
+}
 
 func SetLevel(level string) {
 	l := parseLevel(level)
+	mu.Lock()
+	defer mu.Unlock()
 	if l == defaultLevel {
 		return
 	}
@@ -82,6 +90,8 @@ func SetLevel(level string) {
 }
 
 func CurrentLevel() string {
+	mu.RLock()
+	defer mu.RUnlock()
 	return defaultLevel.String()
 }
 
