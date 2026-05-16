@@ -1,6 +1,6 @@
 ---
 name: spider-log-analysis
-description: Use when analyzing logs on remote hosts via Spider. Triggers: 日志、报错、error、exception、异常、日志分析、log、查日志、错误频率、哪台机器有问题。
+description: "Use when analyzing logs on remote hosts via Spider. Triggers: 日志、报错、error、exception、异常、日志分析、log、查日志、错误频率、哪台机器有问题。"
 ---
 
 # Spider Log Analysis — 日志分析

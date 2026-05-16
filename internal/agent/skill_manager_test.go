@@ -297,6 +297,31 @@ func TestSkillManager_RenderList_ShadowsBuiltin(t *testing.T) {
 	}
 }
 
+func TestParseSkillFrontmatter_DescriptionWithColon(t *testing.T) {
+	content := "---\ndescription: Use when X. Triggers: foo、bar。\n---\n\n# Body"
+	meta, body, err := ParseSkillFrontmatter(content)
+	if err != nil {
+		t.Fatalf("description with colon should not error: %v", err)
+	}
+	if meta.Description != "Use when X. Triggers: foo、bar。" {
+		t.Errorf("got description %q", meta.Description)
+	}
+	if body != "\n# Body" {
+		t.Errorf("got body %q", body)
+	}
+}
+
+func TestParseSkillFrontmatter_DescriptionWithChineseColon(t *testing.T) {
+	content := "---\ndescription: 用于对比配置。触发词：配置对比、漂移。\n---\n\n# Body"
+	meta, _, err := ParseSkillFrontmatter(content)
+	if err != nil {
+		t.Fatalf("description with Chinese colon should not error: %v", err)
+	}
+	if meta.Description != "用于对比配置。触发词：配置对比、漂移。" {
+		t.Errorf("got description %q", meta.Description)
+	}
+}
+
 func writeSkillFile(t *testing.T, base, name, content string) {
 	t.Helper()
 	dir := filepath.Join(base, name)

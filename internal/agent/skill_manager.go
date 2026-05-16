@@ -67,6 +67,7 @@ func (sm *SkillManager) SourceDir(source string) string {
 }
 
 // ParseSkillFrontmatter splits YAML frontmatter from body and validates required fields.
+// description values with colons or other special characters do not need manual quoting.
 func ParseSkillFrontmatter(content string) (skillFrontmatter, string, error) {
 	if !strings.HasPrefix(content, "---") {
 		return skillFrontmatter{}, "", fmt.Errorf("missing frontmatter: file must start with ---")
@@ -75,8 +76,9 @@ func ParseSkillFrontmatter(content string) (skillFrontmatter, string, error) {
 	if len(parts) < 3 {
 		return skillFrontmatter{}, "", fmt.Errorf("malformed frontmatter: missing closing ---")
 	}
+	normalized := normalizeDescriptionLine(parts[1])
 	var meta skillFrontmatter
-	if err := yaml.Unmarshal([]byte(parts[1]), &meta); err != nil {
+	if err := yaml.Unmarshal([]byte(normalized), &meta); err != nil {
 		return skillFrontmatter{}, "", fmt.Errorf("frontmatter parse error: %w", err)
 	}
 	if meta.Description == "" {
@@ -87,6 +89,27 @@ func ParseSkillFrontmatter(content string) (skillFrontmatter, string, error) {
 	}
 	body := strings.TrimPrefix(parts[2], "\n")
 	return meta, body, nil
+}
+
+// normalizeDescriptionLine finds the description: line in a YAML frontmatter block and
+// wraps its value in double quotes if not already quoted, preventing colons in the value
+// from being misinterpreted as YAML mapping syntax.
+func normalizeDescriptionLine(frontmatter string) string {
+	lines := strings.Split(frontmatter, "\n")
+	for i, line := range lines {
+		key, val, found := strings.Cut(line, ":")
+		if !found || strings.TrimSpace(key) != "description" {
+			continue
+		}
+		val = strings.TrimLeft(val, " ")
+		if strings.HasPrefix(val, `"`) || strings.HasPrefix(val, `'`) {
+			break
+		}
+		escaped := strings.ReplaceAll(val, `"`, `\"`)
+		lines[i] = strings.TrimRight(key, " ") + `: "` + escaped + `"`
+		break
+	}
+	return strings.Join(lines, "\n")
 }
 
 // LoadSkills scans both builtin and custom skills directories.

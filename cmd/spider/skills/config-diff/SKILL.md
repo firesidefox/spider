@@ -1,6 +1,6 @@
 ---
 name: spider-config-diff
-description: Use when comparing configuration files across multiple remote hosts via Spider. Triggers: 配置对比、配置一致性、配置漂移、config diff、哪台机器配置不一样、配置是否同步。
+description: "Use when comparing configuration files across multiple remote hosts via Spider. Triggers: 配置对比、配置一致性、配置漂移、config diff、哪台机器配置不一样、配置是否同步。"
 ---
 
 # Spider Config Diff — 多主机配置对比
