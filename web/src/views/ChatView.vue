@@ -792,6 +792,9 @@ async function handleDeleteConversation(id: string) {
   clearPollTimer(id)
   const unsub = convSubscriptions.get(id)
   if (unsub) { unsub(); convSubscriptions.delete(id) }
+  // 清理该会话的 tool_calls 缓存
+  const msgs = messagesMap.value[id] || []
+  for (const m of msgs) toolCallsCache.delete(m.id)
   if (activeConvId.value === id) {
     activeConvId.value = null
     delete messagesMap.value[id]
@@ -1047,6 +1050,7 @@ onUnmounted(() => {
   clearAllTimers()
   convSubscriptions.forEach(unsub => unsub())
   convSubscriptions.clear()
+  toolCallsCache.clear()
 })
 </script>
 

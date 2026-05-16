@@ -201,7 +201,12 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 				events <- Event{Type: EventError, Content: map[string]any{"error": err.Error()}}
 				return
 			}
-			history = toLLMMessages(stored)
+			history = toLLMMessages(stored, toolResultBudget{
+					maxChars: a.perMessageToolResultMaxChars,
+					dataDir:  a.dataDir,
+					convID:   conversationID,
+					state:    a.replacementState,
+				})
 		}
 
 		// Replace last message with skill-injected version for LLM only

@@ -30,13 +30,6 @@ type execResult struct {
 	Error      string `json:"error,omitempty"`
 }
 
-func execTimeout(seconds int, cfg interface{ GetDefaultTimeout() int }) time.Duration {
-	if seconds > 0 {
-		return time.Duration(seconds) * time.Second
-	}
-	return 30 * time.Second
-}
-
 func runExec(ctx context.Context, app *mcppkg.App, host *models.Host, command string, timeout time.Duration) execResult {
 	execCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
