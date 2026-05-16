@@ -112,7 +112,6 @@ func normalizeDescriptionLine(frontmatter string) string {
 	return strings.Join(lines, "\n")
 }
 
-
 // LoadSkills scans both builtin and custom skills directories.
 // Returns all entries sorted by name ascending, with custom before builtin for same name.
 func (sm *SkillManager) LoadSkills() ([]SkillEntry, error) {

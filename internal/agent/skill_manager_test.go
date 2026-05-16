@@ -298,7 +298,6 @@ func TestSkillManager_RenderList_ShadowsBuiltin(t *testing.T) {
 }
 
 func TestParseSkillFrontmatter_DescriptionWithColon(t *testing.T) {
-	// description 含冒号但未加引号，当前会触发 YAML parse error
 	content := "---\ndescription: Use when X. Triggers: foo、bar。\n---\n\n# Body"
 	meta, body, err := ParseSkillFrontmatter(content)
 	if err != nil {
