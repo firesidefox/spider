@@ -4,6 +4,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -21,13 +22,15 @@ type Config struct {
 }
 
 var (
-	global   zerolog.Logger
-	extraOut io.Writer
+	global       zerolog.Logger
+	defaultLevel zerolog.Level
+	moduleLevels sync.Map // map[string]zerolog.Level — runtime overrides only
+	extraOut     io.Writer
 )
 
 func Init(cfg Config) error {
-	level := parseLevel(cfg.Level)
-	zerolog.SetGlobalLevel(level)
+	defaultLevel = parseLevel(cfg.Level)
+	zerolog.SetGlobalLevel(zerolog.TraceLevel) // filtering done per-logger
 
 	var writers []io.Writer
 
@@ -63,7 +66,7 @@ func Init(cfg Config) error {
 		w = zerolog.ConsoleWriter{Out: w, TimeFormat: time.RFC3339}
 	}
 
-	global = zerolog.New(w).With().Timestamp().Logger()
+	global = zerolog.New(w).With().Timestamp().Logger().Level(defaultLevel)
 	return nil
 }
 
@@ -71,14 +74,15 @@ func Global() *zerolog.Logger { return &global }
 
 func SetLevel(level string) {
 	l := parseLevel(level)
-	if l == zerolog.GlobalLevel() {
+	if l == defaultLevel {
 		return
 	}
-	zerolog.SetGlobalLevel(l)
+	defaultLevel = l
+	global = global.Level(defaultLevel)
 }
 
 func CurrentLevel() string {
-	return zerolog.GlobalLevel().String()
+	return defaultLevel.String()
 }
 
 func IsValidLevel(s string) bool {
