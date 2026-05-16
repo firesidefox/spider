@@ -33,6 +33,8 @@ export interface AccessFace {
   header_name?: string
   hmac_algo?: string
   knowledge_sources: Array<{ type: 'group' | 'doc'; id: number }>
+  probe_port?: number
+  probe_interval?: number
   created_at: string
   updated_at: string
 }
@@ -92,6 +94,8 @@ export interface AddAccessFaceRequest {
   header_name?: string
   hmac_algo?: string
   knowledge_sources?: Array<{ type: 'group' | 'doc'; id: number }>
+  probe_port?: number
+  probe_interval?: number
 }
 
 async function apiFetch(url: string, init?: RequestInit) {

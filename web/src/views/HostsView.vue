@@ -284,8 +284,8 @@
                 <input v-model="faceForm.ssh_login_input" class="input" placeholder="/rsh" />
               </div>
               <div class="form-row">
-                <label>存活探测端口（可选）</label>
-                <input v-model.number="faceForm.probe_port" class="input" type="number" min="1" max="65535" :placeholder="String(faceForm.port || 22)" />
+                <label>存活探测端口（默认使用操作面端口）</label>
+                <input :value="faceForm.probe_port || ''" @input="faceForm.probe_port = Number(($event.target as HTMLInputElement).value) || 0" class="input" type="number" min="1" max="65535" :placeholder="String(faceForm.port || 22)" />
               </div>
               <div class="form-row">
                 <label>探测间隔（秒，可选）</label>
@@ -442,7 +442,7 @@ async function saveOverview() {
 const emptyForm = () => ({ name: '', ip: '', notes: '', vendor: '', product_name: '', product_version: '', tagsStr: '' })
 const form = ref(emptyForm())
 
-const emptyFaceForm = () => ({ type: 'ssh' as 'ssh' | 'restapi', ip: activeHost.value?.ip ?? '', port: 22, username: '', ssh_auth_type: 'password', credential: '', passphrase: '', ssh_key_id: '', ssh_legacy: false, ssh_login_input: '', probe_port: 0, probe_interval: 0, base_url: '', rest_auth_type: 'none', rest_username: '', header_name: '', hmac_algo: 'HMAC-SHA256', knowledge_sources: [] as Array<{type:'group'|'doc';id:number}> })
+const emptyFaceForm = () => ({ type: 'ssh' as 'ssh' | 'restapi', ip: activeHost.value?.ip ?? '', port: 22, username: '', ssh_auth_type: 'password', credential: '', passphrase: '', ssh_key_id: '', ssh_legacy: false, ssh_login_input: '', probe_port: 0, probe_interval: 30, base_url: '', rest_auth_type: 'none', rest_username: '', header_name: '', hmac_algo: 'HMAC-SHA256', knowledge_sources: [] as Array<{type:'group'|'doc';id:number}> })
 const faceForm = ref(emptyFaceForm())
 
 const allTags = computed(() => {
@@ -580,7 +580,7 @@ function onRestAuthTypeChange() {
 
 async function submitFace() {
   if (!activeHost.value) return
-  const req: Record<string, unknown> = { type: faceForm.value.type, ip: faceForm.value.ip, port: faceForm.value.port, tags: [], knowledge_sources: faceForm.value.knowledge_sources }
+  const req: Record<string, unknown> = { type: faceForm.value.type, ip: faceForm.value.ip, port: faceForm.value.port, tags: [], knowledge_sources: faceForm.value.knowledge_sources, probe_port: faceForm.value.probe_port || 0, probe_interval: faceForm.value.probe_interval || 0 }
   if (faceForm.value.type === 'ssh') {
     req.username = faceForm.value.username || undefined
     req.ssh_auth_type = faceForm.value.ssh_auth_type
