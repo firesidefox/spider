@@ -32,18 +32,23 @@ func TestSetLevel(t *testing.T) {
 }
 
 func TestFromContext(t *testing.T) {
+	var buf bytes.Buffer
+	logger.SetOutput(&buf)
+	defer logger.SetOutput(nil)
 	logger.Init(logger.Config{Level: "info", Format: "json"})
+
 	ctx := context.Background()
 	got := logger.FromContext(ctx)
 	if got == nil {
 		t.Fatal("expected non-nil logger from empty context")
 	}
 
-	enriched := logger.Global().With().Str("req_id", "abc").Logger()
+	enriched := logger.Global().With().Str("req_id", "test-abc").Logger()
 	ctx2 := logger.WithContext(ctx, &enriched)
 	got2 := logger.FromContext(ctx2)
-	if got2 == nil {
-		t.Error("expected enriched logger from context, got nil")
+	got2.Info().Msg("probe")
+	if !bytes.Contains(buf.Bytes(), []byte("test-abc")) {
+		t.Error("expected enriched logger with req_id field from context")
 	}
 }
 

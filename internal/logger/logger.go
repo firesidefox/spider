@@ -134,7 +134,9 @@ func ClearModuleLevel(module string) {
 func ModuleLevels() map[string]string {
 	result := map[string]string{}
 	moduleLevels.Range(func(k, v any) bool {
-		result[k.(string)] = v.(zerolog.Level).String()
+		if l, ok := v.(zerolog.Level); ok {
+			result[k.(string)] = l.String()
+		}
 		return true
 	})
 	return result
