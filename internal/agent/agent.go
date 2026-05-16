@@ -80,6 +80,10 @@ type Agent struct {
 	compactor     *Compactor
 	skillManager  *SkillManager
 	lastSkillHash string
+	dataDir                      string
+	perToolResultMaxChars        int
+	perMessageToolResultMaxChars int
+	replacementState             *ContentReplacementState
 }
 
 type AgentConfig struct {
@@ -92,6 +96,10 @@ type AgentConfig struct {
 	MaxTurns     int
 	Compactor    *Compactor
 	SkillManager *SkillManager
+	DataDir                      string
+	PerToolResultMaxChars        int
+	PerMessageToolResultMaxChars int
+	ReplacementState             *ContentReplacementState
 }
 
 func NewAgent(cfg AgentConfig) *Agent {
@@ -100,15 +108,19 @@ func NewAgent(cfg AgentConfig) *Agent {
 		maxTurns = 10
 	}
 	return &Agent{
-		llmClient:    cfg.LLMClient,
-		registry:     cfg.Registry,
-		hooks:        cfg.Hooks,
-		msgStore:     cfg.MsgStore,
-		todoStore:    cfg.TodoStore,
-		systemPrompt: epaSystemPromptPrefix + cfg.SystemPrompt,
-		maxTurns:     maxTurns,
-		compactor:    cfg.Compactor,
-		skillManager: cfg.SkillManager,
+		llmClient:                    cfg.LLMClient,
+		registry:                     cfg.Registry,
+		hooks:                        cfg.Hooks,
+		msgStore:                     cfg.MsgStore,
+		todoStore:                    cfg.TodoStore,
+		systemPrompt:                 epaSystemPromptPrefix + cfg.SystemPrompt,
+		maxTurns:                     maxTurns,
+		compactor:                    cfg.Compactor,
+		skillManager:                 cfg.SkillManager,
+		dataDir:                      cfg.DataDir,
+		perToolResultMaxChars:        cfg.PerToolResultMaxChars,
+		perMessageToolResultMaxChars: cfg.PerMessageToolResultMaxChars,
+		replacementState:             cfg.ReplacementState,
 	}
 }
 
@@ -211,7 +223,7 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 				MaxTokens: 4096,
 			}
 			var stream <-chan llm.StreamEvent
-			for attempt := 0; attempt < llmMaxRetries; attempt++ {
+			for attempt := range llmMaxRetries {
 				if attempt > 0 {
 					delay := llmRetryDelay(attempt - 1)
 					log.Warn().Err(err).Int("turn", turn).Int("attempt", attempt).Dur("backoff", delay).Msg("llm transient error, retrying")
@@ -383,6 +395,18 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 				}
 				a.hooks.RunAfter(tc.Name, tc.Input, result)
 
+				// Layer 1: per-tool result size limit
+				if a.perToolResultMaxChars > 0 && len(result.Content) > a.perToolResultMaxChars && a.replacementState != nil {
+					filePath, ferr := persistToolResult(a.dataDir, conversationID, tc.ID, result.Content)
+					if ferr != nil {
+						log.Warn().Err(ferr).Str("tool", tc.Name).Msg("failed to persist large tool result; passing through")
+					} else {
+						preview := generatePreview(result.Content, filePath)
+						a.replacementState.setReplacement(tc.ID, preview)
+						result = &ToolResult{Content: preview, IsError: result.IsError, RiskLevel: result.RiskLevel}
+					}
+				}
+
 				events <- Event{Type: EventToolResult, Content: map[string]any{
 					"id": tc.ID, "tool": tc.Name, "input": tc.Input, "result": result.Content, "is_error": result.IsError, "duration_ms": durationMs,
 				}}
@@ -454,7 +478,7 @@ func isTransientLLMError(err error) bool {
 	// Connection-level transient errors
 	if strings.Contains(s, "timeout awaiting response headers") ||
 		strings.Contains(s, "connection reset by peer") ||
-		strings.Contains(s, "EOF") {
+		strings.HasSuffix(s, "EOF") {
 		return true
 	}
 	// HTTP status codes: 408 timeout, 409 lock, 429 rate limit, 5xx server errors

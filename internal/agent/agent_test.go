@@ -2,6 +2,8 @@ package agent
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -269,3 +271,53 @@ func TestActToolDescriptionsContainSideEffectHint(t *testing.T) {
 	}
 }
 
+func TestAgent_PerToolResultLimit_Truncates(t *testing.T) {
+	dataDir := t.TempDir()
+	bigContent := strings.Repeat("a", 60_000)
+
+	toolCall := &llm.ToolCall{ID: "tu1", Name: "big_tool"}
+	toolCallResp := []llm.StreamEvent{
+		{Type: "tool_start", ToolCall: toolCall},
+		{Type: "tool_input_delta", Text: `{}`},
+		{Type: "message_stop"},
+	}
+	doneResp := []llm.StreamEvent{
+		{Type: "text_delta", Text: "done"},
+		{Type: "message_stop"},
+	}
+	client := &mockLLMClient{responses: [][]llm.StreamEvent{toolCallResp, doneResp}}
+
+	reg := NewToolRegistry()
+	reg.Register(&mockResultTool{name: "big_tool", result: &ToolResult{Content: bigContent, RiskLevel: RiskL1}})
+
+	a := NewAgent(AgentConfig{
+		LLMClient:             client,
+		Registry:              reg,
+		Hooks:                 NewHookChain(),
+		MsgStore:              &mockMsgStore{},
+		MaxTurns:              3,
+		DataDir:               dataDir,
+		PerToolResultMaxChars: 50_000,
+		ReplacementState:      newContentReplacementState(),
+	})
+
+	ch, err := a.Run(context.Background(), "conv1", "go", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for e := range ch {
+		if e.Type == EventToolResult {
+			result, _ := e.Content["result"].(string)
+			if len(result) >= 60_000 {
+				t.Errorf("tool result not truncated: len=%d", len(result))
+			}
+			if !strings.Contains(result, "too large") {
+				t.Errorf("expected truncation notice in result, got: %s", result[:min(100, len(result))])
+			}
+		}
+	}
+	entries, _ := os.ReadDir(filepath.Join(dataDir, "tool-results", "conv1"))
+	if len(entries) != 1 {
+		t.Errorf("expected 1 persisted file, got %d", len(entries))
+	}
+}
