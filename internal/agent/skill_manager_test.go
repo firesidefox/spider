@@ -307,7 +307,7 @@ func TestParseSkillFrontmatter_DescriptionWithColon(t *testing.T) {
 	if meta.Description != "Use when X. Triggers: foo、bar。" {
 		t.Errorf("got description %q", meta.Description)
 	}
-	if !strings.Contains(body, "# Body") {
+	if body != "\n# Body" {
 		t.Errorf("got body %q", body)
 	}
 }
