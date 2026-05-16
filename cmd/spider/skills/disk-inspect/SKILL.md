@@ -1,6 +1,6 @@
 ---
 name: spider-disk-inspect
-description: Use when checking disk usage, finding large files, or cleaning up space on remote hosts via Spider. Triggers: 磁盘、磁盘使用率、磁盘满了、disk、df、du、大文件、清理磁盘、inode。
+description: "Use when checking disk usage, finding large files, or cleaning up space on remote hosts via Spider. Triggers: 磁盘、磁盘使用率、磁盘满了、disk、df、du、大文件、清理磁盘、inode。"
 ---
 
 # Spider Disk Inspect — 磁盘巡检

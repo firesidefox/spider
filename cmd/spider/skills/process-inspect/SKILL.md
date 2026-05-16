@@ -1,6 +1,6 @@
 ---
 name: spider-process-inspect
-description: Use when checking process health on remote hosts via Spider. Triggers: 进程、进程挂了、服务是否在跑、内存泄漏、CPU 飙高、僵尸进程、process、ps、top、OOM。
+description: "Use when checking process health on remote hosts via Spider. Triggers: 进程、进程挂了、服务是否在跑、内存泄漏、CPU 飙高、僵尸进程、process、ps、top、OOM。"
 ---
 
 # Spider Process Inspect — 进程巡检
