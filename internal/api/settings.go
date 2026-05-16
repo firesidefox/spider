@@ -26,15 +26,6 @@ type settingsResponse struct {
 	CompactionMaxSummary   int    `json:"compaction_max_summary_tokens"`
 }
 
-const maskedPrefix = "****"
-
-func maskKey(key string) string {
-	if len(key) <= 4 {
-		return key
-	}
-	return maskedPrefix + key[len(key)-4:]
-}
-
 func saveConfig(app *mcppkg.App) error {
 	data, err := yaml.Marshal(app.Config)
 	if err != nil {
@@ -121,19 +112,46 @@ func updateSettings(app *mcppkg.App, w http.ResponseWriter, r *http.Request) {
 }
 
 func getLogLevel(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]string{"level": logger.CurrentLevel()})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"level":   logger.CurrentLevel(),
+		"modules": logger.ModuleLevels(),
+	})
 }
 
 func setLogLevel(app *mcppkg.App, w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Level string `json:"level"`
+		Level  string `json:"level"`
+		Module string `json:"module"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request")
 		return
 	}
+
+	if req.Module != "" {
+		if req.Level == "inherit" {
+			logger.ClearModuleLevel(req.Module)
+		} else {
+			if !logger.IsValidLevel(req.Level) {
+				writeError(w, http.StatusBadRequest, "level must be debug, info, warn, or error")
+				return
+			}
+			if err := logger.SetModuleLevel(req.Module, req.Level); err != nil {
+				writeError(w, http.StatusBadRequest, err.Error())
+				return
+			}
+		}
+		logger.FromContext(r.Context()).Info().
+			Str("module", req.Module).Str("level", req.Level).Msg("module log level changed")
+		writeJSON(w, http.StatusOK, map[string]any{
+			"level":   logger.CurrentLevel(),
+			"modules": logger.ModuleLevels(),
+		})
+		return
+	}
+
 	if !logger.IsValidLevel(req.Level) {
-		writeError(w, http.StatusBadRequest, "level must be debug, info, or error")
+		writeError(w, http.StatusBadRequest, "level must be debug, info, warn, or error")
 		return
 	}
 	logger.SetLevel(req.Level)
@@ -143,5 +161,8 @@ func setLogLevel(app *mcppkg.App, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	logger.FromContext(r.Context()).Info().Str("level", req.Level).Msg("log level changed")
-	writeJSON(w, http.StatusOK, map[string]string{"level": req.Level})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"level":   req.Level,
+		"modules": logger.ModuleLevels(),
+	})
 }
