@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/spiderai/spider/internal/llm"
+	"github.com/spiderai/spider/internal/logger"
 	"github.com/spiderai/spider/internal/models"
 	mcppkg "github.com/spiderai/spider/internal/mcp"
 )
@@ -133,8 +134,12 @@ func updateProvider(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id 
 		newKey = *req.APIKey
 	}
 	if existing.Type != newType || existing.BaseURL != newBaseURL || existingKey != newKey {
-		_ = app.ProviderStore.SaveModels(id, nil)
-		_ = app.ProviderStore.SetSelectedModel(id, "")
+		if err := app.ProviderStore.SaveModels(id, nil); err != nil {
+			logger.FromContext(r.Context()).Warn().Err(err).Str("provider_id", id).Msg("clear provider models failed")
+		}
+		if err := app.ProviderStore.SetSelectedModel(id, ""); err != nil {
+			logger.FromContext(r.Context()).Warn().Err(err).Str("provider_id", id).Msg("clear selected model failed")
+		}
 	}
 	pr, err := buildProviderResponse(app, p)
 	if err != nil {
@@ -200,7 +205,9 @@ func activateProvider(app *mcppkg.App, w http.ResponseWriter, _ *http.Request, i
 		ms, _ := app.ProviderStore.ListModels(id)
 		if len(ms) > 0 {
 			_ = app.ProviderStore.SetSelectedModel(id, ms[0].ModelID)
-			p, _ = app.ProviderStore.GetByID(id)
+			if updated, err2 := app.ProviderStore.GetByID(id); err2 == nil {
+				p = updated
+			}
 		}
 	}
 	pr, err := buildProviderResponse(app, p)

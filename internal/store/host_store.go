@@ -184,7 +184,9 @@ func scanHost(row *sql.Row) (*models.Host, error) {
 	if err != nil {
 		return nil, fmt.Errorf("扫描主机数据失败: %w", err)
 	}
-	_ = json.Unmarshal([]byte(tagsJSON), &h.Tags)
+	if err := json.Unmarshal([]byte(tagsJSON), &h.Tags); err != nil {
+		return nil, fmt.Errorf("解析主机标签失败: %w", err)
+	}
 	if h.Tags == nil {
 		h.Tags = []string{}
 	}
@@ -202,7 +204,9 @@ func scanHostRows(rows *sql.Rows) (*models.Host, error) {
 	if err != nil {
 		return nil, fmt.Errorf("扫描主机数据失败: %w", err)
 	}
-	_ = json.Unmarshal([]byte(tagsJSON), &h.Tags)
+	if err := json.Unmarshal([]byte(tagsJSON), &h.Tags); err != nil {
+		return nil, fmt.Errorf("解析主机标签失败: %w", err)
+	}
 	if h.Tags == nil {
 		h.Tags = []string{}
 	}

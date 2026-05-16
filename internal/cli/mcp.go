@@ -138,7 +138,9 @@ func loadClaudeMCPServers(path string) (map[string]claudeMCPEntry, map[string]js
 		return nil, nil, fmt.Errorf("解析 .claude.json 失败: %w", err)
 	}
 	if v, ok := raw["mcpServers"]; ok {
-		_ = json.Unmarshal(v, &servers)
+		if err := json.Unmarshal(v, &servers); err != nil {
+			return nil, nil, fmt.Errorf("解析 mcpServers 失败: %w", err)
+		}
 	}
 	return servers, raw, nil
 }
@@ -241,7 +243,9 @@ func loadOpencodeConfig(path string) (*opencodeConfig, error) {
 		return nil, fmt.Errorf("解析 config.json 失败: %w", err)
 	}
 	if v, ok := raw["mcp"]; ok {
-		_ = json.Unmarshal(v, &s.MCP)
+		if err := json.Unmarshal(v, &s.MCP); err != nil {
+			return nil, fmt.Errorf("解析 mcp 字段失败: %w", err)
+		}
 	}
 	return s, nil
 }
@@ -253,7 +257,9 @@ func saveOpencodeConfig(path string, s *opencodeConfig) error {
 		return err
 	}
 	if len(data) > 0 {
-		_ = json.Unmarshal(data, &raw)
+		if err := json.Unmarshal(data, &raw); err != nil {
+			return err
+		}
 	}
 	if raw == nil {
 		raw = map[string]json.RawMessage{}

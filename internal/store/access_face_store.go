@@ -252,7 +252,9 @@ func scanAccessFace(s accessFaceScanner) (*models.AccessFace, error) {
 		return nil, err
 	}
 	f.SSHLegacy = sshLegacy != 0
-	_ = json.Unmarshal([]byte(ksJSON), &f.KnowledgeSources)
+	if err := json.Unmarshal([]byte(ksJSON), &f.KnowledgeSources); err != nil {
+		return nil, fmt.Errorf("解析知识源失败: %w", err)
+	}
 	if f.KnowledgeSources == nil {
 		f.KnowledgeSources = []models.KnowledgeSourceRef{}
 	}
