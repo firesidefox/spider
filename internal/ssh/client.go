@@ -79,13 +79,13 @@ func NewClientWithCredential(face *models.AccessFace, credential, passphrase str
 		return nil, err
 	}
 	addr := fmt.Sprintf("%s:%d", face.IP, face.Port)
-	logger.Global().Debug().Str("host", face.IP).Str("user", face.Username).Msg("ssh connecting")
+	logger.ForModule("ssh").Debug().Str("host", face.IP).Str("user", face.Username).Msg("ssh connecting")
 	conn, err := gossh.Dial("tcp", addr, newSSHConfig(face, authMethods))
 	if err != nil {
-		logger.Global().Error().Err(err).Str("host", face.IP).Msg("ssh connect failed")
+		logger.ForModule("ssh").Error().Err(err).Str("host", face.IP).Msg("ssh connect failed")
 		return nil, fmt.Errorf("SSH 连接 %s 失败: %w", addr, err)
 	}
-	logger.Global().Info().Str("host", face.IP).Msg("ssh connected")
+	logger.ForModule("ssh").Info().Str("host", face.IP).Msg("ssh connected")
 	c := &Client{conn: conn, face: face}
 	if err := sendLoginInput(conn, face.SSHLoginInput); err != nil {
 		conn.Close()

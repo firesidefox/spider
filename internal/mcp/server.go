@@ -279,7 +279,7 @@ func Serve(app *App) error {
 
 	errCh := make(chan error, 1)
 	go func() {
-		logger.Global().Info().Str("addr", app.Config.SSE.Addr).Msg("mcp server listening")
+		logger.ForModule("mcp").Info().Str("addr", app.Config.SSE.Addr).Msg("mcp server listening")
 		errCh <- h.Start(app.Config.SSE.Addr)
 	}()
 

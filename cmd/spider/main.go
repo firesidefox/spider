@@ -154,7 +154,7 @@ func serve(cfgFile, addrOverride, dataDirOverride string, debug bool) error {
 	}); err != nil {
 		return fmt.Errorf("初始化日志失败: %w", err)
 	}
-	logger.Global().Info().Str("version", version).Str("addr", cfg.SSE.Addr).Msg("spider starting")
+	logger.ForModule("main").Info().Str("version", version).Str("addr", cfg.SSE.Addr).Msg("spider starting")
 
 	cm, err := crypto.NewManager(cfg.DataDir)
 	if err != nil {
@@ -238,7 +238,7 @@ func serve(cfgFile, addrOverride, dataDirOverride string, debug bool) error {
 		ps, hs, afs, pool, ks, ls, app.MsgStore,
 	)
 	if err != nil {
-		logger.Global().Warn().Err(err).Msg("agent factory not available")
+		logger.ForModule("main").Warn().Err(err).Msg("agent factory not available")
 	} else {
 		agentFactory.Enforcer = app.Enforcer
 		agentFactory.PermissionMode = app.PermissionMode
@@ -255,9 +255,9 @@ func serve(cfgFile, addrOverride, dataDirOverride string, debug bool) error {
 		app.Executor = exec
 		// Mark any runs left in 'running' state from a previous crash as failed.
 		if n, err := taskRunStore.MarkStaleRunsFailed(2 * time.Hour); err != nil {
-			logger.Global().Warn().Err(err).Msg("startup sweep for stale task runs failed")
+			logger.ForModule("main").Warn().Err(err).Msg("startup sweep for stale task runs failed")
 		} else if n > 0 {
-			logger.Global().Info().Int64("count", n).Msg("marked stale task runs as failed")
+			logger.ForModule("main").Info().Int64("count", n).Msg("marked stale task runs as failed")
 		}
 		sched := scheduler.NewScheduler(taskStore, taskRunStore, exec)
 		sched.Start(shutdownCtx)
@@ -302,7 +302,7 @@ func serve(cfgFile, addrOverride, dataDirOverride string, debug bool) error {
 
 	errCh := make(chan error, 1)
 	go func() {
-		logger.Global().Info().
+		logger.ForModule("main").Info().
 			Str("addr", cfg.SSE.Addr).
 			Str("mcp", cfg.SSE.BaseURL+"/mcp").
 			Str("web", cfg.SSE.BaseURL).

@@ -91,7 +91,7 @@ func (e *Executor) Stop() {
 }
 
 func (e *Executor) executeAsync(ctx context.Context, task *models.Task, run *models.TaskRun) {
-	log := logger.Global().With().Str("task_id", task.ID).Str("run_id", run.ID).Logger()
+	log := logger.ForModule("scheduler").With().Str("task_id", task.ID).Str("run_id", run.ID).Logger()
 
 	validHostIDs := e.filterValidHosts(task.HostIDs)
 	if len(validHostIDs) == 0 {
@@ -202,7 +202,7 @@ func (e *Executor) sendNotifications(ctx context.Context, task *models.Task, run
 	}
 	channels, err := e.notifyChannelStore.List()
 	if err != nil {
-		logger.Global().Error().Err(err).Str("task_id", task.ID).Msg("failed to list notify channels")
+		logger.ForModule("scheduler").Error().Err(err).Str("task_id", task.ID).Msg("failed to list notify channels")
 		return
 	}
 	msg := notify.FormatMessage(task, run)
@@ -212,11 +212,11 @@ func (e *Executor) sendNotifications(ctx context.Context, task *models.Task, run
 		}
 		sender, err := notify.NewSender(ch)
 		if err != nil {
-			logger.Global().Warn().Err(err).Int64("channel_id", ch.ID).Msg("skip unsupported channel")
+			logger.ForModule("scheduler").Warn().Err(err).Int64("channel_id", ch.ID).Msg("skip unsupported channel")
 			continue
 		}
 		if err := sender.Send(ctx, msg); err != nil {
-			logger.Global().Error().Err(err).Int64("channel_id", ch.ID).Msg("notification send failed")
+			logger.ForModule("scheduler").Error().Err(err).Int64("channel_id", ch.ID).Msg("notification send failed")
 		}
 	}
 }
@@ -235,7 +235,7 @@ func (e *Executor) generateSummary(ctx context.Context, output string) string {
 		MaxTokens: 256,
 	})
 	if err != nil {
-		logger.Global().Error().Err(err).Msg("failed to generate summary")
+		logger.ForModule("scheduler").Error().Err(err).Msg("failed to generate summary")
 		return truncate(output, 200)
 	}
 	return resp
@@ -257,7 +257,7 @@ func (e *Executor) detectAnomaly(ctx context.Context, output string) bool {
 		MaxTokens: 8,
 	})
 	if err != nil {
-		logger.Global().Error().Err(err).Msg("failed to detect anomaly")
+		logger.ForModule("scheduler").Error().Err(err).Msg("failed to detect anomaly")
 		return false
 	}
 	return strings.Contains(strings.ToUpper(resp), "YES")

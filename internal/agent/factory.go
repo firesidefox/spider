@@ -91,7 +91,7 @@ func (f *Factory) maxTurns() int {
 
 // NewAgent creates a new Agent with all tools registered.
 func (f *Factory) NewAgent(systemPrompt string, conversationID string, selectedHostIDs []string) *Agent {
-	logger.Global().Info().Str("model", f.LLMModel).Str("conv_id", conversationID).Msg("agent factory: creating agent")
+	logger.ForModule("agent").Info().Str("model", f.LLMModel).Str("conv_id", conversationID).Msg("agent factory: creating agent")
 	registry := f.buildRegistryWithHosts(conversationID, selectedHostIDs)
 
 	hooks := NewHookChain()
@@ -121,7 +121,7 @@ func (f *Factory) NewAgent(systemPrompt string, conversationID string, selectedH
 // NewHeadlessAgent creates an Agent that discards all messages (no DB writes).
 // Used for automated task runs that don't need conversation history.
 func (f *Factory) NewHeadlessAgent(systemPrompt string, conversationID string) *Agent {
-	logger.Global().Info().Str("model", f.LLMModel).Str("conv_id", conversationID).Msg("agent factory: creating headless agent")
+	logger.ForModule("agent").Info().Str("model", f.LLMModel).Str("conv_id", conversationID).Msg("agent factory: creating headless agent")
 	registry := f.buildRegistry(conversationID)
 
 	hooks := NewHookChain()
