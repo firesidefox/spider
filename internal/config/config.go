@@ -61,6 +61,8 @@ type AgentConfig struct {
 	MaxTurns        int              `yaml:"max_turns"`                  // 单次 agent run 最大 LLM 轮次，默认 10000
 	Rules           []RuleConfig     `yaml:"rules,omitempty" json:"rules,omitempty"` // 自定义权限规则
 	Compaction      CompactionConfig `yaml:"compaction"`
+	PerToolResultMaxChars        int `yaml:"per_tool_result_max_chars"`        // 0 = disabled
+	PerMessageToolResultMaxChars int `yaml:"per_message_tool_result_max_chars"` // 0 = disabled
 }
 
 // AuthConfig 是认证相关配置。
@@ -115,6 +117,8 @@ func DefaultConfig() *Config {
 				RecentTurns:      20,
 				MaxSummaryTokens: 4000,
 			},
+			PerToolResultMaxChars:        50_000,
+			PerMessageToolResultMaxChars: 200_000,
 		},
 		Log: LogConfig{
 			Level:      "info",
