@@ -1,6 +1,7 @@
 package logger
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -94,6 +95,45 @@ func CurrentLevel() string {
 	mu.RLock()
 	defer mu.RUnlock()
 	return defaultLevel.String()
+}
+
+// ForModule returns a logger filtered at the module's override level.
+// Falls back to defaultLevel if no override is set.
+// Must be called per log-site, not cached — level is resolved at call time.
+func ForModule(name string) *zerolog.Logger {
+	mu.RLock()
+	base := global
+	dl := defaultLevel
+	mu.RUnlock()
+	var level zerolog.Level
+	if v, ok := moduleLevels.Load(name); ok {
+		level = v.(zerolog.Level)
+	} else {
+		level = dl
+	}
+	l := base.Level(level)
+	return &l
+}
+
+func SetModuleLevel(module, level string) error {
+	if !IsValidLevel(level) {
+		return fmt.Errorf("invalid level %q", level)
+	}
+	moduleLevels.Store(module, parseLevel(level))
+	return nil
+}
+
+func ClearModuleLevel(module string) {
+	moduleLevels.Delete(module)
+}
+
+func ModuleLevels() map[string]string {
+	result := map[string]string{}
+	moduleLevels.Range(func(k, v any) bool {
+		result[k.(string)] = v.(zerolog.Level).String()
+		return true
+	})
+	return result
 }
 
 func IsValidLevel(s string) bool {
