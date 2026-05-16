@@ -131,18 +131,16 @@ func setLogLevel(app *mcppkg.App, w http.ResponseWriter, r *http.Request) {
 	if req.Module != "" {
 		if req.Level == "inherit" {
 			logger.ClearModuleLevel(req.Module)
+			logger.FromContext(r.Context()).Info().
+				Str("module", req.Module).Str("level", "cleared").Msg("module log level changed")
 		} else {
-			if !logger.IsValidLevel(req.Level) {
-				writeError(w, http.StatusBadRequest, "level must be debug, info, warn, or error")
-				return
-			}
 			if err := logger.SetModuleLevel(req.Module, req.Level); err != nil {
 				writeError(w, http.StatusBadRequest, err.Error())
 				return
 			}
+			logger.FromContext(r.Context()).Info().
+				Str("module", req.Module).Str("level", req.Level).Msg("module log level changed")
 		}
-		logger.FromContext(r.Context()).Info().
-			Str("module", req.Module).Str("level", req.Level).Msg("module log level changed")
 		writeJSON(w, http.StatusOK, map[string]any{
 			"level":   logger.CurrentLevel(),
 			"modules": logger.ModuleLevels(),

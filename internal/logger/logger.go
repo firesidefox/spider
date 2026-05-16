@@ -107,7 +107,11 @@ func ForModule(name string) *zerolog.Logger {
 	mu.RUnlock()
 	var level zerolog.Level
 	if v, ok := moduleLevels.Load(name); ok {
-		level = v.(zerolog.Level)
+		if l, ok := v.(zerolog.Level); ok {
+			level = l
+		} else {
+			level = dl
+		}
 	} else {
 		level = dl
 	}
