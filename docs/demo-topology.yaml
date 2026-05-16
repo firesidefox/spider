@@ -1,0 +1,81 @@
+name: 演示拓扑
+layers:
+  - name: 核心层
+    color: "#ef4444"
+  - name: 汇聚层
+    color: "#f97316"
+  - name: 接入层
+    color: "#3b82f6"
+  - name: 服务器
+    color: "#22c55e"
+
+devices:
+  - name: core-sw-01
+    layer: 核心层
+    role: core-switch
+    upstream: []
+
+  - name: agg-sw-01
+    layer: 汇聚层
+    role: aggregation-switch
+    upstream: [core-sw-01]
+
+  - name: agg-sw-02
+    layer: 汇聚层
+    role: aggregation-switch
+    upstream: [core-sw-01]
+
+  - name: acc-sw-01
+    layer: 接入层
+    role: access-switch
+    upstream: [agg-sw-01]
+
+  - name: acc-sw-02
+    layer: 接入层
+    role: access-switch
+    upstream: [agg-sw-01]
+
+  - name: acc-sw-03
+    layer: 接入层
+    role: access-switch
+    upstream: [agg-sw-02]
+
+  - name: acc-sw-04
+    layer: 接入层
+    role: access-switch
+    upstream: [agg-sw-02]
+
+  - name: web-01
+    layer: 服务器
+    role: web
+    upstream: [acc-sw-01]
+
+  - name: web-02
+    layer: 服务器
+    role: web
+    upstream: [acc-sw-01]
+
+  - name: app-01
+    layer: 服务器
+    role: app
+    upstream: [acc-sw-02]
+
+  - name: app-02
+    layer: 服务器
+    role: app
+    upstream: [acc-sw-02]
+
+  - name: db-01
+    layer: 服务器
+    role: database
+    upstream: [acc-sw-03]
+
+  - name: db-02
+    layer: 服务器
+    role: database
+    upstream: [acc-sw-03]
+
+  - name: monitor-01
+    layer: 服务器
+    role: monitor
+    upstream: [acc-sw-04]
