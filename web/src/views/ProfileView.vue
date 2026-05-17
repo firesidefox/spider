@@ -575,11 +575,14 @@
             </div>
             <div class="edit-card">
               <div class="edit-card-title">日志</div>
-              <div class="detail-grid">
-                <div class="detail-field">
-                  <div class="detail-label">日志级别</div>
-                  <div class="detail-value">{{ logLevel || '—' }}</div>
-                </div>
+              <div class="log-cfg-row">
+                <span class="log-cfg-lbl">全局级别</span>
+                <span :class="['log-cfg-badge', `log-cfg-badge--${logLevel}`]">{{ levelLabel(logLevel) }}</span>
+              </div>
+              <hr class="log-cfg-divider">
+              <div v-for="m in LOG_MODULES" :key="m" class="log-cfg-row">
+                <span class="log-cfg-mod">{{ m }}</span>
+                <span :class="['log-cfg-badge', `log-cfg-badge--${moduleLevels[m] ?? 'inherit'}`]">{{ levelLabel(moduleLevels[m] ?? 'inherit') }}</span>
               </div>
             </div>
           </template>
