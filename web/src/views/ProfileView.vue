@@ -984,16 +984,14 @@ const logLevel = ref('info')
 const logLevelError = ref('')
 const moduleLevels = ref<Record<string, string>>({})
 
-function levelLabel(v: string): string {
-  const map: Record<string, string> = {
-    inherit: '继承 inherit',
-    debug: '调试 debug',
-    info: '信息 info',
-    warn: '警告 warn',
-    error: '错误 error',
-  }
-  return map[v] ?? v
+const LEVEL_LABELS: Record<string, string> = {
+  inherit: '继承 inherit',
+  debug: '调试 debug',
+  info: '信息 info',
+  warn: '警告 warn',
+  error: '错误 error',
 }
+function levelLabel(v: string): string { return LEVEL_LABELS[v] ?? v }
 let settingsLoaded = false
 
 async function loadProviders() {
@@ -1052,13 +1050,13 @@ async function saveSettings() {
     logLevelError.value = (await lvlRes.json()).error
     return
   }
-  for (const m of LOG_MODULES) {
-    await fetch('/api/v1/log-level', {
+  await Promise.all(LOG_MODULES.map(m =>
+    fetch('/api/v1/log-level', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify({ module: m, level: moduleLevels.value[m] ?? 'inherit' }),
     })
-  }
+  ))
   settingsEditing.value = false
 }
 
