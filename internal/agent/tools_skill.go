@@ -3,15 +3,14 @@ package agent
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 )
 
 type InvokeSkillTool struct {
-	skillsDir string
+	manager *SkillManager
 }
 
-func NewInvokeSkillTool(skillsDir string) *InvokeSkillTool {
-	return &InvokeSkillTool{skillsDir: skillsDir}
+func NewInvokeSkillTool(dataDir string) *InvokeSkillTool {
+	return &InvokeSkillTool{manager: NewSkillManager(dataDir)}
 }
 
 func (t *InvokeSkillTool) Name() string                { return "invoke_skill" }
@@ -37,23 +36,24 @@ func (t *InvokeSkillTool) InputSchema() map[string]any {
 func (t *InvokeSkillTool) Execute(_ context.Context, input map[string]any) (*ToolResult, error) {
 	name, _ := input["name"].(string)
 	if name == "" {
-		return &ToolResult{Content: "missing required field: name", IsError: true, RiskLevel: RiskL1}, nil
+		return &ToolResult{Content: "missing required field: name", IsError: true, RiskLevel: RiskL1, Summary: "failed to load skill: missing name"}, nil
 	}
 
-	mdPath := filepath.Join(t.skillsDir, filepath.FromSlash(name), "SKILL.md")
-	entry := SkillEntry{Name: name, bodyPath: mdPath}
-	body, err := entry.Body()
+	entry, err := t.manager.LookupSkill(name)
 	if err != nil {
 		return &ToolResult{
 			Content:   fmt.Sprintf("skill %q not found", name),
 			IsError:   true,
 			RiskLevel: RiskL1,
+			Summary:   fmt.Sprintf("failed to load skill %q", name),
 		}, nil
 	}
 
+	body, _ := entry.Body()
 	return &ToolResult{
 		Content:   fmt.Sprintf("skill %q loaded", name),
 		RiskLevel: RiskL1,
+		Summary:   fmt.Sprintf("skill %q loaded", name),
 		NewMessages: []InjectMessage{
 			{Content: fmt.Sprintf("<loaded-skill name=%q>\n%s\n</loaded-skill>", name, body)},
 		},
