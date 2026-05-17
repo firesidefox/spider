@@ -1,7 +1,8 @@
 # Tool Call Display Design
 
 **Date:** 2026-05-17  
-**Status:** Approved
+**Status:** Approved  
+**Mockup:** `.superpowers/brainstorm/56112-1779007579/content/final-v4.html`
 
 ## Overview
 
