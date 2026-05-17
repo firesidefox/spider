@@ -268,9 +268,7 @@ function toolSummary(call: ToolCallBlock): string {
 .tool-summary-arrow { color: var(--border); margin: 0 4px; font-size: 11px; }
 .tool-summary { color: var(--text-sub); font-size: 12px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tool-summary-error { color: #f85149; }
-.tool-duration { color: var(--muted); font-size: 11px; margin-left: auto; }
-.tool-error-badge { background: var(--red); color: #fff; font-size: 10px; padding: 1px 6px; border-radius: 3px; margin-left: auto; }
-.act-streaming { color: var(--muted); font-size: 11px; margin-left: auto; animation: blink 1s step-end infinite; }
+.tool-duration { color: var(--muted); font-size: 11px; margin-left: auto; }.act-streaming { color: var(--muted); font-size: 11px; margin-left: auto; animation: blink 1s step-end infinite; }
 .tool-detail { padding: 0; }
 .tool-section { border-top: 1px solid var(--border); }
 .tool-section-label { display: block; font-size: 10px; font-weight: 700; letter-spacing: 0.8px; padding: 4px 10px 2px; }

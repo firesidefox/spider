@@ -121,5 +121,5 @@ func (t *ListHostsTool) Execute(_ context.Context, input map[string]any) (*ToolR
 	}
 
 	out, _ := json.Marshal(hosts2)
-	return &ToolResult{Content: string(out), RiskLevel: RiskL1, Summary: fmt.Sprintf("%d hosts", len(hosts))}, nil
+	return &ToolResult{Content: string(out), RiskLevel: RiskL1, Summary: fmt.Sprintf("%d hosts", len(hosts2))}, nil
 }
