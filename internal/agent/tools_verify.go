@@ -158,7 +158,7 @@ loop:
 			}
 		}
 		if allPassed {
-			return &ToolResult{Content: formatPollResults("ok", lastResults), RiskLevel: RiskL1}, nil
+			return &ToolResult{Content: formatPollResults("ok", lastResults), RiskLevel: RiskL1, Summary: "ok"}, nil
 		}
 		select {
 		case <-ctx.Done():
@@ -167,7 +167,7 @@ loop:
 		}
 	}
 
-	return &ToolResult{Content: formatPollResults("timeout", lastResults), IsError: true, RiskLevel: RiskL1}, nil
+	return &ToolResult{Content: formatPollResults("timeout", lastResults), IsError: true, RiskLevel: RiskL1, Summary: "failed"}, nil
 }
 
 func formatPollResults(status string, results []checkResult) string {

@@ -85,7 +85,7 @@ func (t *SearchDocsTool) Execute(ctx context.Context, input map[string]any) (*To
 			entries[i] = entry{ID: d.ID, Title: d.Title, SourceFile: d.SourceFile}
 		}
 		b, _ := json.Marshal(entries)
-		return &ToolResult{Content: string(b), RiskLevel: RiskL1}, nil
+		return &ToolResult{Content: string(b), RiskLevel: RiskL1, Summary: fmt.Sprintf("found %d results", len(entries))}, nil
 	}
 
 	query, _ := input["query"].(string)
@@ -120,7 +120,7 @@ func (t *SearchDocsTool) Execute(ctx context.Context, input map[string]any) (*To
 				})
 			}
 			b, _ := json.Marshal(results)
-			return &ToolResult{Content: string(b), RiskLevel: RiskL1}, nil
+			return &ToolResult{Content: string(b), RiskLevel: RiskL1, Summary: fmt.Sprintf("found %d results", len(results))}, nil
 		}
 	}
 
@@ -158,7 +158,7 @@ func (t *SearchDocsTool) Execute(ctx context.Context, input map[string]any) (*To
 	if err != nil {
 		return &ToolResult{Content: fmt.Sprintf("marshal error: %v", err), IsError: true, RiskLevel: RiskL1}, nil
 	}
-	return &ToolResult{Content: string(b), RiskLevel: RiskL1}, nil
+	return &ToolResult{Content: string(b), RiskLevel: RiskL1, Summary: fmt.Sprintf("found %d results", len(results))}, nil
 }
 
 // toInt converts float64 (JSON number) or int to int.

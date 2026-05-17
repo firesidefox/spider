@@ -149,11 +149,18 @@ func (t *BatchExecuteTool) Execute(ctx context.Context, input map[string]any) (*
 
 	// Format results as readable text
 	var output strings.Builder
+	okCount, failCount := 0, 0
 	for _, r := range results {
 		output.WriteString(fmt.Sprintf("Host: %s (%s)\n", r.HostName, r.HostID))
 		if r.Error != "" {
+			failCount++
 			output.WriteString(fmt.Sprintf("  Error: %s\n", r.Error))
 		} else {
+			if r.ExitCode == 0 {
+				okCount++
+			} else {
+				failCount++
+			}
 			output.WriteString(fmt.Sprintf("  Exit Code: %d\n", r.ExitCode))
 			output.WriteString(fmt.Sprintf("  Duration: %dms\n", r.DurationMs))
 			if r.Stdout != "" {
@@ -165,7 +172,13 @@ func (t *BatchExecuteTool) Execute(ctx context.Context, input map[string]any) (*
 		}
 		output.WriteString("\n")
 	}
-	return &ToolResult{Content: output.String() + execNudge, RiskLevel: risk}, nil
+	var summary string
+	if failCount == 0 {
+		summary = fmt.Sprintf("%d hosts ok", okCount)
+	} else {
+		summary = fmt.Sprintf("%d ok, %d failed", okCount, failCount)
+	}
+	return &ToolResult{Content: output.String(), Nudge: execNudge, RiskLevel: risk, Summary: summary}, nil
 }
 
 func (t *BatchExecuteTool) SystemPromptSection() string { return runCommandPromptSection }
