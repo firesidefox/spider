@@ -151,23 +151,23 @@ func (t *BatchExecuteTool) Execute(ctx context.Context, input map[string]any) (*
 	var output strings.Builder
 	okCount, failCount := 0, 0
 	for _, r := range results {
-		output.WriteString(fmt.Sprintf("Host: %s (%s)\n", r.HostName, r.HostID))
+		fmt.Fprintf(&output, "Host: %s (%s)\n", r.HostName, r.HostID)
 		if r.Error != "" {
 			failCount++
-			output.WriteString(fmt.Sprintf("  Error: %s\n", r.Error))
+			fmt.Fprintf(&output, "  Error: %s\n", r.Error)
 		} else {
 			if r.ExitCode == 0 {
 				okCount++
 			} else {
 				failCount++
 			}
-			output.WriteString(fmt.Sprintf("  Exit Code: %d\n", r.ExitCode))
-			output.WriteString(fmt.Sprintf("  Duration: %dms\n", r.DurationMs))
+			fmt.Fprintf(&output, "  Exit Code: %d\n", r.ExitCode)
+			fmt.Fprintf(&output, "  Duration: %dms\n", r.DurationMs)
 			if r.Stdout != "" {
-				output.WriteString(fmt.Sprintf("  Stdout:\n%s\n", r.Stdout))
+				fmt.Fprintf(&output, "  Stdout:\n%s\n", r.Stdout)
 			}
 			if r.Stderr != "" {
-				output.WriteString(fmt.Sprintf("  Stderr:\n%s\n", r.Stderr))
+				fmt.Fprintf(&output, "  Stderr:\n%s\n", r.Stderr)
 			}
 		}
 		output.WriteString("\n")
