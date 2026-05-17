@@ -1645,6 +1645,31 @@ async function handleAddChannel() {
 .status-badge.fail { background: rgba(248,113,113,0.12); color: var(--red);  border-color: rgba(248,113,113,0.3); }
 
 .log-expand td { padding: 0 !important; }
+.log-cfg-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--border);
+}
+.log-cfg-row:last-child { border-bottom: none; }
+.log-cfg-lbl { font-size: 12px; color: var(--muted); }
+.log-cfg-mod { font-size: 12px; font-family: 'SF Mono', Consolas, monospace; color: var(--text); }
+.log-cfg-divider { border: none; border-top: 1px solid var(--border); margin: 8px 0 4px; }
+.log-cfg-select { width: 140px; }
+.log-cfg-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+}
+.log-cfg-badge--inherit { background: rgba(124,133,162,0.1); color: var(--muted); border-color: rgba(124,133,162,0.2); }
+.log-cfg-badge--debug   { background: rgba(74,222,128,0.1);  color: var(--green); border-color: rgba(74,222,128,0.25); }
+.log-cfg-badge--info    { background: rgba(99,102,241,0.1);  color: var(--primary); border-color: rgba(99,102,241,0.25); }
+.log-cfg-badge--warn    { background: rgba(234,179,8,0.1);   color: var(--yellow); border-color: rgba(234,179,8,0.25); }
+.log-cfg-badge--error   { background: rgba(248,113,113,0.1); color: var(--red);  border-color: rgba(248,113,113,0.25); }
 .log-output { padding: 12px 16px; display: flex; flex-direction: column; gap: 8px; }
 .output-block { display: flex; flex-direction: column; gap: 4px; }
 .output-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); }
