@@ -115,10 +115,7 @@ func cliSummary(exitCode int, stderr string) string {
 	if exitCode == 0 {
 		return "exit 0"
 	}
-	firstLine := stderr
-	if idx := strings.IndexByte(stderr, '\n'); idx >= 0 {
-		firstLine = stderr[:idx]
-	}
+	firstLine, _, _ := strings.Cut(stderr, "\n")
 	if len(firstLine) > 60 {
 		firstLine = firstLine[:60] + "…"
 	}
