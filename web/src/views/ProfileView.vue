@@ -1010,6 +1010,10 @@ async function loadSettings() {
   if (lvlRes.ok) {
     const lvlData = await lvlRes.json()
     logLevel.value = lvlData.level || 'info'
+    const mods = lvlData.modules ?? {}
+    for (const m of LOG_MODULES) {
+      moduleLevels.value[m] = mods[m] ?? 'inherit'
+    }
   }
 }
 
