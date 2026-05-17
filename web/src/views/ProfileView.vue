@@ -965,8 +965,21 @@ const settings = ref<Settings>({
 })
 const settingsEditing = ref(false)
 const settingsError = ref('')
+const LOG_MODULES = ['main', 'scheduler', 'agent', 'mcp', 'ssh'] as const
 const logLevel = ref('info')
 const logLevelError = ref('')
+const moduleLevels = ref<Record<string, string>>({})
+
+function levelLabel(v: string): string {
+  const map: Record<string, string> = {
+    inherit: '继承 inherit',
+    debug: '调试 debug',
+    info: '信息 info',
+    warn: '警告 warn',
+    error: '错误 error',
+  }
+  return map[v] ?? v
+}
 let settingsLoaded = false
 
 async function loadProviders() {
