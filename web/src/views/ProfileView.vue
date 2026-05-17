@@ -1038,6 +1038,13 @@ async function saveSettings() {
     logLevelError.value = (await lvlRes.json()).error
     return
   }
+  for (const m of LOG_MODULES) {
+    await fetch('/api/v1/log-level', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ module: m, level: moduleLevels.value[m] ?? 'inherit' }),
+    })
+  }
   settingsEditing.value = false
 }
 
