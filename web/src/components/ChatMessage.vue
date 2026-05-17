@@ -24,12 +24,13 @@ interface ConfirmRequest {
   riskLevel: string
 }
 
-const EXPLORE_TOOLS = new Set(['ListHosts', 'GetHost', 'SearchDocs', 'Verify'])
+const EXPLORE_TOOLS = new Set(['ListHosts', 'GetHost', 'SearchDocs', 'Verify', 'GetTopology'])
 
-type TextItem    = { kind: 'text';    content: string }
-type ExploreGroup = { kind: 'explore'; calls: ToolCallBlock[] }
-type ActItem     = { kind: 'act';     call: ToolCallBlock }
-type RenderItem  = TextItem | ExploreGroup | ActItem
+type TextItem     = { kind: 'text';        content: string }
+type HkItem       = { kind: 'housekeeping'; call: ToolCallBlock }
+type ExploreGroup = { kind: 'explore';     calls: ToolCallBlock[]; streaming: boolean }
+type ActItem      = { kind: 'act';         call: ToolCallBlock; hosts: string[]; command: string }
+type RenderItem   = TextItem | HkItem | ExploreGroup | ActItem
 
 const props = defineProps<{
   role: string
@@ -47,30 +48,36 @@ const renderItems = computed<RenderItem[]>(() => {
   for (const block of props.blocks) {
     if (block.type === 'text') {
       if (block.content) items.push({ kind: 'text', content: block.content })
+    } else if (block.call.name === 'Todo') {
+    } else if (block.call.name === 'invoke_skill') {
+      items.push({ kind: 'housekeeping', call: block.call })
     } else if (EXPLORE_TOOLS.has(block.call.name)) {
       const last = items[items.length - 1]
       if (last?.kind === 'explore') {
-        items[items.length - 1] = { kind: 'explore', calls: [...last.calls, block.call] }
+        const calls = [...last.calls, block.call]
+        items[items.length - 1] = { kind: 'explore', calls, streaming: calls.some(c => c.durationMs == null) }
       } else {
-        items.push({ kind: 'explore', calls: [block.call] })
+        items.push({ kind: 'explore', calls: [block.call], streaming: block.call.durationMs == null })
       }
     } else {
-      items.push({ kind: 'act', call: block.call })
+      items.push({ kind: 'act', call: block.call, hosts: actHosts(block.call), command: actCommand(block.call) })
     }
   }
   return items
 })
 
-const expandedTools = ref<Set<string>>(new Set())
 const collapsedGroups = ref<Set<string>>(new Set())
+const expandedAct = ref<Set<string>>(new Set())
 
-function toggle(set: Set<string>, key: string) {
-  if (set.has(key)) set.delete(key)
-  else set.add(key)
+function toggleGroup(firstId: string) {
+  if (collapsedGroups.value.has(firstId)) collapsedGroups.value.delete(firstId)
+  else collapsedGroups.value.add(firstId)
 }
 
-function toggleTool(id: string) { toggle(expandedTools.value, id) }
-function toggleGroup(firstId: string) { toggle(collapsedGroups.value, firstId) }
+function toggleAct(id: string) {
+  if (expandedAct.value.has(id)) expandedAct.value.delete(id)
+  else expandedAct.value.add(id)
+}
 
 function exploreParam(call: ToolCallBlock): string {
   if (!call.input) return ''
@@ -81,37 +88,44 @@ function exploreParam(call: ToolCallBlock): string {
   return s.length > 32 ? s.slice(0, 32) + '…' : s
 }
 
+function skillArg(call: ToolCallBlock): string {
+  if (!call.input) return ''
+  const v = call.input['skill'] ?? call.input['name'] ?? Object.values(call.input)[0]
+  return typeof v === 'string' ? v : ''
+}
+
+function actCommand(call: ToolCallBlock): string {
+  if (!call.input) return ''
+  const cmd = call.input['command'] ?? call.input['cmd'] ?? call.input['script']
+  if (typeof cmd === 'string') return cmd
+  const vals = Object.values(call.input)
+  if (vals.length === 1 && typeof vals[0] === 'string') return vals[0]
+  return JSON.stringify(call.input)
+}
+
+function actHosts(call: ToolCallBlock): string[] {
+  if (call.hostNames && call.hostNames.length > 0) return call.hostNames
+  if (!call.input) return []
+  const ids = call.input['host_ids']
+  if (Array.isArray(ids)) return ids
+  const id = call.input['host_id']
+  if (typeof id === 'string' && id) return [id]
+  return []
+}
+
+function exploreResult(call: ToolCallBlock): string {
+  if (call.summary) return call.summary
+  if (!call.result) return ''
+  const first = call.result.split('\n')[0]
+  return first.length > 40 ? first.slice(0, 40) + '…' : first
+}
+
 function renderMd(text: string) {
   return marked.parse(text || '') as string
 }
 
 function formatDuration(ms: number) {
   return ms >= 1000 ? (ms / 1000).toFixed(1) + 's' : ms + 'ms'
-}
-
-function formatTargets(call: ToolCallBlock): string {
-  if (call.hostNames && call.hostNames.length > 0) {
-    const shown = call.hostNames.slice(0, 2).join(', ')
-    const extra = call.hostNames.length - 2
-    return extra > 0 ? `(${shown} +${extra}台)` : `(${shown})`
-  }
-  if (!call.input) return ''
-  const hostId = call.input['host_id']
-  if (typeof hostId === 'string' && hostId) return `(${hostId})`
-  const hostIds = call.input['host_ids']
-  if (Array.isArray(hostIds) && hostIds.length > 0) {
-    const shown = hostIds.slice(0, 2).join(', ')
-    const extra = hostIds.length - 2
-    return extra > 0 ? `(${shown} +${extra}台)` : `(${shown})`
-  }
-  return ''
-}
-
-function toolSummary(call: ToolCallBlock): string {
-  if (call.summary) return call.summary
-  if (!call.result) return ''
-  const first = call.result.split('\n')[0]
-  return first.length > 60 ? first.slice(0, 60) + '…' : first
 }
 </script>
 
@@ -133,50 +147,75 @@ function toolSummary(call: ToolCallBlock): string {
                 <div class="assistant-text" v-html="renderMd(item.content, isStreaming)"></div>
               </div>
 
+              <!-- Housekeeping: invoke_skill -->
+              <div v-else-if="item.kind === 'housekeeping'" class="hk">
+                <span v-if="item.call.durationMs == null" class="star">*</span>
+                <span v-else class="hk-dot">·</span>
+                <span class="hk-call">
+                  <span class="hk-fn">{{ item.call.name }}</span><span class="hk-paren">(</span><span class="hk-arg">{{ skillArg(item.call) }}</span><span class="hk-paren">)</span>
+                </span>
+                <span v-if="item.call.durationMs != null" class="hk-dur">{{ formatDuration(item.call.durationMs) }}</span>
+                <div v-if="item.call.durationMs != null && item.call.summary" class="hk-sub">
+                  <span class="hook">⎿</span><span class="hk-result">{{ item.call.summary }}</span>
+                </div>
+              </div>
+
               <!-- Explore group -->
               <div v-else-if="item.kind === 'explore'" class="explore-group">
                 <div class="explore-group-header" @click="toggleGroup(item.calls[0].id)">
-                  <span class="tool-arrow">{{ collapsedGroups.has(item.calls[0].id) ? '▶' : '▼' }}</span>
-                  <span class="explore-label">Explored</span>
+                  <span v-if="item.streaming" class="star" style="width:10px">*</span>
+                  <span v-else class="ex-arrow">{{ collapsedGroups.has(item.calls[0].id) ? '▶' : '▼' }}</span>
+                  <span class="explore-label">Explore</span>
                   <span class="explore-count">({{ item.calls.length }})</span>
                 </div>
                 <div v-if="!collapsedGroups.has(item.calls[0].id)" class="explore-items">
                   <div v-for="call in item.calls" :key="call.id" class="explore-item">
                     <span class="tree-branch">└</span>
                     <span class="explore-tool-name" :class="{ 'is-error': call.isError }">{{ call.name }}</span>
-                    <span v-if="exploreParam(call)" class="explore-param">{{ exploreParam(call) }}</span>
-                    <span v-if="call.isError" class="explore-error-mark">✕</span>
-                    <span v-else-if="call.durationMs != null" class="tool-duration">{{ formatDuration(call.durationMs) }}</span>
+                    <span class="explore-param">{{ exploreParam(call) }}</span>
+                    <template v-if="call.durationMs != null">
+                      <span v-if="call.isError" class="ex-err">{{ exploreResult(call) }}</span>
+                      <span v-else class="ex-ok">{{ exploreResult(call) }}</span>
+                      <span class="tool-duration">{{ formatDuration(call.durationMs) }}</span>
+                    </template>
                     <span v-else class="explore-streaming">···</span>
                   </div>
                 </div>
               </div>
 
               <!-- Act tool -->
-              <div v-else class="tool-calls">
-                <div class="tool-call" :class="{ 'has-error': item.call.isError }">
-                  <div class="tool-header" @click="toggleTool(item.call.id)">
-                    <span class="tool-arrow">{{ expandedTools.has(item.call.id) ? '▼' : '▶' }}</span>
-                    <span class="tool-badge" :class="{ 'tool-badge-error': item.call.isError }">tool</span>
-                    <span class="tool-name">{{ item.call.name }}</span>
-                    <span v-if="item.call.input && Object.keys(item.call.input).length" class="tool-args">({{ exploreParam(item.call) }})</span>
-                    <template v-if="!expandedTools.has(item.call.id) && item.call.durationMs != null">
-                      <span v-if="toolSummary(item.call)" class="tool-summary-arrow">→</span>
-                      <span v-if="toolSummary(item.call)" class="tool-summary" :class="{ 'tool-summary-error': item.call.isError }">{{ toolSummary(item.call) }}</span>
-                    </template>
-                    <span v-if="formatTargets(item.call)" class="tool-targets">{{ formatTargets(item.call) }}</span>
-                    <span v-if="item.call.durationMs != null" class="tool-duration" style="margin-left:auto">{{ formatDuration(item.call.durationMs) }}</span>
-                    <span v-else class="act-streaming">···</span>
+              <div v-else class="act-block">
+                <div class="act-hd" @click="item.call.durationMs != null && toggleAct(item.call.id)" :style="item.call.durationMs != null ? 'cursor:pointer' : ''">
+                  <span v-if="item.call.durationMs == null" class="star">*</span>
+                  <span v-else class="act-arrow" :class="{ 'act-arrow-err': item.call.isError }">{{ expandedAct.has(item.call.id) ? '▼' : '▶' }}</span>
+                  <span class="act-name" :class="{ 'act-name-err': item.call.isError }">{{ item.call.name }}</span>
+                  <template v-if="item.hosts.length">
+                    <span class="act-at">@</span>
+                    <span class="act-hosts" :class="{ 'act-hosts-err': item.call.isError }">
+                      <template v-for="(h, hi) in item.hosts" :key="hi">
+                        <span v-if="hi > 0" class="act-sep">·</span>{{ h }}
+                      </template>
+                    </span>
+                  </template>
+                  <span v-if="item.call.durationMs != null" class="act-dur">{{ formatDuration(item.call.durationMs) }}</span>
+                  <span v-else class="act-streaming">···</span>
+                </div>
+                <div class="act-sub">
+                  <div v-if="item.command" class="act-cmd-row">
+                    <span class="hook">⎿</span><span class="act-cmd">{{ item.command }}</span>
                   </div>
-                  <div v-if="expandedTools.has(item.call.id)" class="tool-detail">
-                    <div v-if="item.call.input && Object.keys(item.call.input).length" class="tool-section">
-                      <span class="tool-section-label input-label">INPUT</span>
-                      <pre class="tool-input">{{ JSON.stringify(item.call.input, null, 2) }}</pre>
+                  <template v-if="item.call.durationMs != null">
+                    <div v-if="expandedAct.has(item.call.id) && item.call.result" class="act-res-row act-output-full">
+                      <span class="hook">⎿</span>
+                      <pre :class="item.call.isError ? 'res-err' : 'res-ok'" class="act-output-pre">{{ item.call.result }}</pre>
                     </div>
-                    <div v-if="item.call.result" class="tool-section">
-                      <span class="tool-section-label" :class="item.call.isError ? 'error-label' : 'output-label'">{{ item.call.isError ? 'ERROR' : 'OUTPUT' }}</span>
-                      <pre class="tool-result" :class="{ 'is-error': item.call.isError }">{{ item.call.result }}</pre>
+                    <div v-else-if="item.call.summary || item.call.result" class="act-res-row">
+                      <span class="hook">⎿</span>
+                      <span :class="item.call.isError ? 'res-err' : 'res-ok'">{{ item.call.summary || item.call.result?.split('\n')[0] }}</span>
                     </div>
+                  </template>
+                  <div v-else-if="item.command" class="act-res-row">
+                    <span class="hook">⎿</span><span class="act-streaming">···</span>
                   </div>
                 </div>
               </div>
@@ -240,46 +279,58 @@ function toolSummary(call: ToolCallBlock): string {
 @keyframes blink { 50% { opacity: 0; } }
 
 /* Explore group */
-.explore-group { margin: 6px 0; }
-.explore-group-header { display: flex; align-items: center; gap: 6px; padding: 3px 0; cursor: pointer; }
-.explore-group-header:hover .explore-label { color: var(--text-sub); }
-.explore-label { color: var(--muted); font-size: 12px; font-weight: 600; }
-.explore-count { color: var(--muted); font-size: 11px; opacity: 0.6; }
-.explore-items { padding-left: 14px; }
-.explore-item { display: flex; align-items: center; gap: 8px; padding: 2px 0; }
-.tree-branch { color: var(--muted); font-size: 12px; opacity: 0.5; }
-.explore-tool-name { color: var(--text-sub); font-size: 12px; font-weight: 500; }
-.explore-tool-name.is-error { color: var(--red); }
-.explore-param { color: var(--muted); font-size: 11px; }
-.explore-error-mark { color: var(--red); font-size: 11px; }
-.explore-streaming { color: var(--muted); font-size: 11px; animation: blink 1s step-end infinite; }
+.explore-group { margin: 3px 0; }
+.explore-group-header { display: flex; align-items: center; gap: 6px; padding: 2px 0; cursor: pointer; }
+.ex-arrow { color: #484f58; font-size: 10px; width: 10px; }
+.explore-label { color: #6e7681; font-size: 11.5px; font-weight: 600; }
+.explore-count { color: #484f58; font-size: 11px; }
+.explore-items { padding-left: 16px; }
+.explore-item { display: flex; align-items: baseline; gap: 7px; padding: 1px 0; }
+.tree-branch { color: #3d444d; font-size: 11px; }
+.explore-tool-name { color: #6e7681; font-size: 11.5px; font-weight: 500; }
+.explore-tool-name.is-error { color: #f85149; }
+.explore-param { color: #484f58; font-size: 11px; flex: 1; }
+.ex-ok { color: #3fb950; font-size: 10.5px; }
+.ex-err { color: #f85149; font-size: 10.5px; }
+.tool-duration { color: #3d444d; font-size: 10.5px; margin-left: auto; }
+.explore-streaming { color: #484f58; font-size: 11px; margin-left: auto; animation: blink 1s step-end infinite; }
+
+/* Housekeeping */
+.hk { display: flex; align-items: center; flex-wrap: wrap; padding: 1px 0; gap: 0; }
+.hk-dot { color: #3d444d; font-size: 9px; margin-right: 8px; }
+.hk-call { color: #484f58; font-size: 11.5px; }
+.hk-fn { color: #484f58; font-weight: 500; }
+.hk-paren { color: #3d444d; }
+.hk-arg { color: #3d444d; }
+.hk-dur { margin-left: auto; color: #2d333b; font-size: 10.5px; }
+.hk-sub { width: 100%; padding: 0 0 2px 18px; }
+.hk-result { color: #484f58; font-size: 11px; }
 
 /* Act tool */
-.tool-calls { margin: 8px 0; }
-.tool-call { border: 1px solid var(--border); border-left: 3px solid var(--primary); border-radius: 6px; margin: 4px 0; overflow: hidden; }
-.tool-call.has-error { border-left-color: var(--red); }
-.tool-header { padding: 6px 10px; cursor: pointer; display: flex; align-items: center; gap: 8px; background: var(--input-bg); }
-.tool-header:hover { background: var(--row-hover); }
-.tool-arrow { font-size: 10px; color: var(--muted); width: 12px; }
-.tool-name { color: var(--primary); font-weight: 500; }
-.tool-badge { background: #1f6feb22; color: #58a6ff; font-size: 10px; padding: 1px 6px; border-radius: 3px; border: 1px solid #1f6feb44; text-transform: uppercase; letter-spacing: 0.5px; }
-.tool-badge-error { background: #f8514922; color: #f85149; border-color: #f8514944; }
-.tool-args { color: var(--text-sub); font-size: 12px; }
-.tool-summary-arrow { color: var(--border); margin: 0 4px; font-size: 11px; }
-.tool-summary { color: var(--text-sub); font-size: 12px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tool-summary-error { color: #f85149; }
-.tool-duration { color: var(--muted); font-size: 11px; margin-left: auto; }.act-streaming { color: var(--muted); font-size: 11px; margin-left: auto; animation: blink 1s step-end infinite; }
-.tool-detail { padding: 0; }
-.tool-section { border-top: 1px solid var(--border); }
-.tool-section-label { display: block; font-size: 10px; font-weight: 700; letter-spacing: 0.8px; padding: 4px 10px 2px; }
-.input-label { color: var(--primary); }
-.output-label { color: var(--green, #4ade80); }
-.error-label { color: var(--red); }
-.tool-input, .tool-result { font-size: 12px; margin: 0; padding: 6px 10px 8px; white-space: pre-wrap; word-break: break-all; color: var(--text-sub); }
-.tool-result.is-error { color: var(--red); }
+.act-block { margin: 3px 0; }
+.act-hd { display: flex; flex-wrap: wrap; align-items: baseline; padding: 3px 0; row-gap: 0; column-gap: 0; }
+.act-arrow { font-size: 11px; margin-right: 6px; flex-shrink: 0; align-self: center; color: #58a6ff; }
+.act-arrow-err { color: #f85149; }
+.act-name { font-weight: 600; font-size: 12px; flex-shrink: 0; color: #58a6ff; }
+.act-name-err { color: #f85149; }
+.act-at { color: #3d444d; font-size: 11px; margin: 0 5px; flex-shrink: 0; }
+.act-hosts { color: #484f58; font-size: 11px; flex: 1; white-space: normal; word-break: break-word; }
+.act-hosts-err { color: #f8514466; }
+.act-sep { margin: 0 4px; color: #3d444d; }
+.act-dur { color: #484f58; font-size: 10.5px; margin-left: auto; flex-shrink: 0; padding-left: 12px; }
+.act-streaming { color: #484f58; font-size: 11px; margin-left: auto; animation: blink 1s step-end infinite; }
+.act-sub { padding: 0 0 5px 18px; }
+.act-cmd-row { display: flex; align-items: flex-start; }
+.act-res-row { display: flex; align-items: flex-start; }
+.hook { color: #3d444d; font-size: 11px; margin-right: 5px; flex-shrink: 0; }
+.act-cmd { color: #6e7681; font-size: 11px; white-space: pre-wrap; word-break: break-all; }
+.res-ok { color: #3fb950; font-size: 11.5px; }
+.res-err { color: #f85149; font-size: 11.5px; }
+.act-output-pre { margin: 0; font-family: inherit; font-size: 11px; white-space: pre-wrap; word-break: break-all; line-height: 1.55; }
 
-.tool-targets { color: var(--muted); font-size: 12px; }
-.tool-intent-inline { color: var(--muted); font-size: 12px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Streaming star */
+.star { color: #58a6ff; font-weight: bold; font-size: 11px; margin-right: 6px; animation: star-pulse 1.5s ease-in-out infinite; display: inline-block; flex-shrink: 0; }
+@keyframes star-pulse { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
 
 .confirm-bar { display: flex; flex-direction: column; gap: 6px; padding: 8px 12px; border-radius: 6px; margin: 8px 0; }
 .confirm-header { display: flex; align-items: center; gap: 10px; }

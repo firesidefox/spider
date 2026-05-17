@@ -41,8 +41,15 @@
 | `warn`       | 警告 warn  |
 | `error`      | 错误 error |
 
-只读 badge 只显示中文（继承 / 调试 / 信息 / 警告 / 错误）。  
-编辑下拉显示「中文 英文」格式，`继承` 选项无英文后缀。
+只读 badge 和编辑下拉均显示「中文 英文」格式。
+
+| 英文值 | 显示文本 |
+|--------|---------|
+| inherit | 继承 inherit |
+| debug | 调试 debug |
+| info | 信息 info |
+| warn | 警告 warn |
+| error | 错误 error |
 
 ---
 
