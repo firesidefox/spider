@@ -106,6 +106,13 @@ function formatTargets(call: ToolCallBlock): string {
   }
   return ''
 }
+
+function toolSummary(call: ToolCallBlock): string {
+  if (call.summary) return call.summary
+  if (!call.result) return ''
+  const first = call.result.split('\n')[0]
+  return first.length > 60 ? first.slice(0, 60) + '…' : first
+}
 </script>
 
 <template>
@@ -150,12 +157,15 @@ function formatTargets(call: ToolCallBlock): string {
                 <div class="tool-call" :class="{ 'has-error': item.call.isError }">
                   <div class="tool-header" @click="toggleTool(item.call.id)">
                     <span class="tool-arrow">{{ expandedTools.has(item.call.id) ? '▼' : '▶' }}</span>
-                    <span class="tool-badge">Tool</span>
+                    <span class="tool-badge" :class="{ 'tool-badge-error': item.call.isError }">tool</span>
                     <span class="tool-name">{{ item.call.name }}</span>
+                    <span v-if="item.call.input && Object.keys(item.call.input).length" class="tool-args">({{ exploreParam(item.call) }})</span>
+                    <template v-if="!expandedTools.has(item.call.id) && item.call.durationMs != null">
+                      <span v-if="toolSummary(item.call)" class="tool-summary-arrow">→</span>
+                      <span v-if="toolSummary(item.call)" class="tool-summary" :class="{ 'tool-summary-error': item.call.isError }">{{ toolSummary(item.call) }}</span>
+                    </template>
                     <span v-if="formatTargets(item.call)" class="tool-targets">{{ formatTargets(item.call) }}</span>
-                    <span v-if="item.call.input?.['intent']" class="tool-intent-inline"> -> {{ item.call.input['intent'] }}</span>
-                    <span v-if="item.call.isError" class="tool-error-badge">✕</span>
-                    <span v-else-if="item.call.durationMs != null" class="tool-duration">{{ formatDuration(item.call.durationMs) }}</span>
+                    <span v-if="item.call.durationMs != null" class="tool-duration" style="margin-left:auto">{{ formatDuration(item.call.durationMs) }}</span>
                     <span v-else class="act-streaming">···</span>
                   </div>
                   <div v-if="expandedTools.has(item.call.id)" class="tool-detail">
@@ -252,7 +262,12 @@ function formatTargets(call: ToolCallBlock): string {
 .tool-header:hover { background: var(--row-hover); }
 .tool-arrow { font-size: 10px; color: var(--muted); width: 12px; }
 .tool-name { color: var(--primary); font-weight: 500; }
-.tool-badge { font-size: 10px; padding: 1px 6px; border-radius: 3px; background: var(--primary); color: #fff; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+.tool-badge { background: #1f6feb22; color: #58a6ff; font-size: 10px; padding: 1px 6px; border-radius: 3px; border: 1px solid #1f6feb44; text-transform: uppercase; letter-spacing: 0.5px; }
+.tool-badge-error { background: #f8514922; color: #f85149; border-color: #f8514944; }
+.tool-args { color: var(--text-sub); font-size: 12px; }
+.tool-summary-arrow { color: var(--border); margin: 0 4px; font-size: 11px; }
+.tool-summary { color: var(--text-sub); font-size: 12px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tool-summary-error { color: #f85149; }
 .tool-duration { color: var(--muted); font-size: 11px; margin-left: auto; }
 .tool-error-badge { background: var(--red); color: #fff; font-size: 10px; padding: 1px 6px; border-radius: 3px; margin-left: auto; }
 .act-streaming { color: var(--muted); font-size: 11px; margin-left: auto; animation: blink 1s step-end infinite; }
