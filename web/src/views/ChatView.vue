@@ -452,8 +452,8 @@ async function selectConversation(id: string) {
   }
 
   if (!convSubscriptions.has(id)) {
-    const lastEventId = data.messages.length - 1
-    const unsub = subscribeConversation(id, (event) => handleConvEvent(id, event), lastEventId)
+    const lastMsg = data.messages[data.messages.length - 1]
+    const unsub = subscribeConversation(id, (event) => handleConvEvent(id, event), lastMsg?.id)
     convSubscriptions.set(id, unsub)
   }
 
@@ -573,6 +573,7 @@ function handleConvEvent(convId: string, event: ChatEvent) {
           ...old,
           input: event.content?.input ?? old.input,
           result: event.content?.result,
+          summary: event.content?.summary,
           isError: event.content?.is_error,
           durationMs: event.content?.duration_ms,
         }}
@@ -709,7 +710,7 @@ async function send(overrideText?: string) {
   const convMsgs = getOrInitMessages(convId)
 
   if (!convSubscriptions.has(convId)) {
-    const unsub = subscribeConversation(convId, (event) => handleConvEvent(convId, event), -1)
+    const unsub = subscribeConversation(convId, (event) => handleConvEvent(convId, event))
     convSubscriptions.set(convId, unsub)
   }
 

@@ -8,6 +8,7 @@ export interface ToolCallBlock {
   input?: Record<string, any>
   hostNames?: string[]
   result?: string
+  summary?: string
   isError?: boolean
   durationMs?: number
 }
