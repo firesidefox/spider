@@ -1050,13 +1050,18 @@ async function saveSettings() {
     logLevelError.value = (await lvlRes.json()).error
     return
   }
-  await Promise.all(LOG_MODULES.map(m =>
+  const modResults = await Promise.allSettled(LOG_MODULES.map(m =>
     fetch('/api/v1/log-level', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify({ module: m, level: moduleLevels.value[m] ?? 'inherit' }),
-    })
+    }).then(r => { if (!r.ok) throw new Error(m) })
   ))
+  const failed = modResults.filter(r => r.status === 'rejected').map(r => (r as PromiseRejectedResult).reason?.message ?? '?')
+  if (failed.length) {
+    logLevelError.value = `模块保存失败: ${failed.join(', ')}`
+    return
+  }
   settingsEditing.value = false
 }
 
