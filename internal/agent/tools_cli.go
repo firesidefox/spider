@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/spiderai/spider/internal/models"
@@ -107,7 +108,24 @@ func (t *ExecuteCLITool) Execute(ctx context.Context, input map[string]any) (*To
 	if err != nil {
 		return &ToolResult{Content: fmt.Sprintf("marshal error: %v", err), IsError: true, RiskLevel: risk}, nil
 	}
-	return &ToolResult{Content: string(out) + execNudge, RiskLevel: risk}, nil
+	return &ToolResult{Content: string(out), Nudge: execNudge, RiskLevel: risk, Summary: cliSummary(result.ExitCode, result.Stderr)}, nil
+}
+
+func cliSummary(exitCode int, stderr string) string {
+	if exitCode == 0 {
+		return "exit 0"
+	}
+	firstLine := stderr
+	if idx := strings.IndexByte(stderr, '\n'); idx >= 0 {
+		firstLine = stderr[:idx]
+	}
+	if len(firstLine) > 60 {
+		firstLine = firstLine[:60] + "…"
+	}
+	if firstLine == "" {
+		return fmt.Sprintf("exit %d", exitCode)
+	}
+	return fmt.Sprintf("exit %d: %s", exitCode, firstLine)
 }
 
 const runCommandPromptSection = `### RunCommand / RunCommandBatch (has side effects)
