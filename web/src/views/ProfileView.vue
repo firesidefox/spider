@@ -606,16 +606,27 @@
             </div>
             <div class="edit-card">
               <div class="edit-card-title">日志</div>
-              <div class="form-row">
-                <label>日志级别</label>
-                <select v-model="logLevel" class="input" style="max-width:160px">
-                  <option value="debug">debug</option>
-                  <option value="info">info</option>
-                  <option value="warn">warn</option>
-                  <option value="error">error</option>
+              <div class="log-cfg-row">
+                <span class="log-cfg-lbl">全局级别</span>
+                <select v-model="logLevel" class="input log-cfg-select">
+                  <option value="debug">调试 debug</option>
+                  <option value="info">信息 info</option>
+                  <option value="warn">警告 warn</option>
+                  <option value="error">错误 error</option>
                 </select>
               </div>
               <div v-if="logLevelError" class="err" style="margin-top:4px;font-size:12px">{{ logLevelError }}</div>
+              <hr class="log-cfg-divider">
+              <div v-for="m in LOG_MODULES" :key="m" class="log-cfg-row">
+                <span class="log-cfg-mod">{{ m }}</span>
+                <select v-model="moduleLevels[m]" class="input log-cfg-select">
+                  <option value="inherit">继承 inherit</option>
+                  <option value="debug">调试 debug</option>
+                  <option value="info">信息 info</option>
+                  <option value="warn">警告 warn</option>
+                  <option value="error">错误 error</option>
+                </select>
+              </div>
             </div>
             <div v-if="settingsError" class="err" style="margin-top:4px">{{ settingsError }}</div>
           </template>
