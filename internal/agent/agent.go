@@ -413,13 +413,12 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 				}
 
 				events <- Event{Type: EventToolResult, Content: map[string]any{
-					"id": tc.ID, "tool": tc.Name, "input": tc.Input, "result": result.Content, "is_error": result.IsError, "duration_ms": durationMs,
+					"id": tc.ID, "tool": tc.Name, "input": tc.Input, "result": result.Content, "is_error": result.IsError, "duration_ms": durationMs, "summary": result.Summary,
 				}}
 				for _, msg := range result.NewMessages {
 					history = append(history, llm.Message{Role: llm.RoleUser, Content: msg.Content})
-					a.msgStore.Save(conversationID, "user", msg.Content, "")
 				}
-				history = append(history, llm.Message{Role: llm.RoleUser, Content: result.Content})
+				history = append(history, llm.Message{Role: llm.RoleUser, Content: result.Content + result.Nudge})
 				if !hidden {
 					pendingToolResults = append(pendingToolResults, tc.ID+"\x00"+result.Content)
 					tcRecords = append(tcRecords, ToolCallRecord{

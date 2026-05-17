@@ -24,6 +24,8 @@ type ToolResult struct {
 	Content     string          `json:"content"`
 	IsError     bool            `json:"is_error"`
 	RiskLevel   RiskLevel       `json:"risk_level"`
+	Summary     string          `json:"-"`
+	Nudge       string          `json:"-"`
 	NewMessages []InjectMessage `json:"-"`
 }
 
