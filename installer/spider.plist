@@ -17,8 +17,8 @@
     <key>KeepAlive</key>
     <true/>
     <key>StandardOutPath</key>
-    <string>/var/log/spider.log</string>
+    <string>__HOME__/.spider/logs/spider.log</string>
     <key>StandardErrorPath</key>
-    <string>/var/log/spider.log</string>
+    <string>__HOME__/.spider/logs/spider.log</string>
   </dict>
   </plist>
