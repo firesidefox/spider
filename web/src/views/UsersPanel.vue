@@ -40,6 +40,7 @@
               <button class="btn btn-sm btn-primary" @click="handleDetailSave">保存</button>
               <button class="btn btn-sm" @click="cancelEdit">取消</button>
             </template>
+            <button class="btn btn-sm" @click="openResetPassword(selectedUser)">重置密码</button>
             <button class="btn btn-sm" @click="toggleEnabled(selectedUser)" :disabled="selectedUser.id === currentUser?.id">
               {{ selectedUser.enabled ? '禁用' : '启用' }}
             </button>
@@ -70,6 +71,19 @@
       <div v-else class="up-empty-state">
         <div class="up-empty-icon">←</div>
         <div>选择左侧用户查看详情</div>
+      </div>
+    </div>
+
+    <div v-if="showResetPassword" class="modal-overlay" @click.self="closeResetPassword">
+      <div class="modal">
+        <h3>重置密码 — {{ resetTarget?.username }}</h3>
+        <div class="form-row"><label>新密码</label><input v-model="resetForm.password" type="password" class="input" /></div>
+        <div class="form-row"><label>确认新密码</label><input v-model="resetForm.confirm" type="password" class="input" /></div>
+        <div v-if="resetError" class="err" style="margin-bottom:12px">{{ resetError }}</div>
+        <div class="modal-footer">
+          <button class="btn" @click="closeResetPassword">取消</button>
+          <button class="btn btn-primary" @click="handleResetPassword">确认重置</button>
+        </div>
       </div>
     </div>
 
@@ -111,6 +125,10 @@ const formError = ref('')
 const form = ref({ username: '', password: '', role: 'operator' })
 const detailForm = ref({ role: 'operator', password: '', confirmPassword: '' })
 const detailError = ref('')
+const showResetPassword = ref(false)
+const resetTarget = ref<UserInfo | null>(null)
+const resetForm = ref({ password: '', confirm: '' })
+const resetError = ref('')
 
 onMounted(async () => { users.value = await listUsers() })
 
@@ -172,6 +190,28 @@ async function handleDetailSave() {
     const updated = users.value.find(x => x.id === selectedUser.value?.id)
     if (updated) selectedUser.value = updated
   } catch (e: any) { detailError.value = e.message }
+}
+
+function openResetPassword(u: UserInfo) {
+  resetTarget.value = u
+  resetForm.value = { password: '', confirm: '' }
+  resetError.value = ''
+  showResetPassword.value = true
+}
+
+function closeResetPassword() {
+  showResetPassword.value = false
+  resetTarget.value = null
+}
+
+async function handleResetPassword() {
+  resetError.value = ''
+  if (!resetForm.value.password) { resetError.value = '请输入新密码'; return }
+  if (resetForm.value.password !== resetForm.value.confirm) { resetError.value = '两次密码不一致'; return }
+  try {
+    await updateUser(resetTarget.value!.id, { password: resetForm.value.password })
+    closeResetPassword()
+  } catch (e: any) { resetError.value = e.message }
 }
 </script>
 

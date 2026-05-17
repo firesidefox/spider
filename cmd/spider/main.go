@@ -67,6 +67,7 @@ func newRootCmd() *cobra.Command {
 
 	root.AddCommand(newServeCmd(&cfgFile, &addr, &dataDir, &debug))
 	root.AddCommand(newVersionCmd())
+	root.AddCommand(newResetPasswordCmd(&cfgFile, &dataDir))
 
 	return root
 }
@@ -87,6 +88,42 @@ func newVersionCmd() *cobra.Command {
 		Short: "显示版本信息",
 		Run: func(cmd *cobra.Command, args []string) {
 			fmt.Printf("spider %s (commit: %s, built: %s)\n", version, commit, buildTime)
+		},
+	}
+}
+
+func newResetPasswordCmd(cfgFile, dataDir *string) *cobra.Command {
+	return &cobra.Command{
+		Use:   "reset-password <username> <new-password>",
+		Short: "重置指定用户的密码（无需旧密码）",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			username, newPassword := args[0], args[1]
+			if len(newPassword) < 8 {
+				return fmt.Errorf("密码至少 8 位")
+			}
+			cfg, err := config.Load(*cfgFile)
+			if err != nil {
+				return fmt.Errorf("加载配置失败: %w", err)
+			}
+			if *dataDir != "" {
+				cfg.DataDir = *dataDir
+			}
+			database, err := db.Open(cfg.DataDir)
+			if err != nil {
+				return fmt.Errorf("打开数据库失败: %w", err)
+			}
+			defer database.Close()
+			us := store.NewUserStore(database)
+			user, err := us.GetByUsername(username)
+			if err != nil {
+				return fmt.Errorf("用户不存在: %s", username)
+			}
+			if _, err := us.Update(user.ID, nil, nil, &newPassword); err != nil {
+				return fmt.Errorf("重置密码失败: %w", err)
+			}
+			fmt.Printf("用户 %s 密码已重置\n", username)
+			return nil
 		},
 	}
 }
