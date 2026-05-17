@@ -212,3 +212,38 @@ func scanHostRows(rows *sql.Rows) (*models.Host, error) {
 	}
 	return &h, nil
 }
+
+// ResolveNames resolves host IDs from a tool input map to host names.
+// Reads host_ids ([]string or []any) and host_id (string) from input.
+// Falls back to the raw ID if a host is not found.
+func (s *HostStore) ResolveNames(input map[string]any) []string {
+	if input == nil {
+		return nil
+	}
+	var ids []string
+	switch v := input["host_ids"].(type) {
+	case []any:
+		for _, x := range v {
+			if id, ok := x.(string); ok {
+				ids = append(ids, id)
+			}
+		}
+	case []string:
+		ids = v
+	}
+	if id, ok := input["host_id"].(string); ok && id != "" {
+		ids = append(ids, id)
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	names := make([]string, 0, len(ids))
+	for _, id := range ids {
+		if h, err := s.GetByID(id); err == nil {
+			names = append(names, h.Name)
+		} else {
+			names = append(names, id)
+		}
+	}
+	return names
+}

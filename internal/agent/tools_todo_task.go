@@ -80,7 +80,7 @@ func (t *TodoTool) execCreate(input map[string]any) (*ToolResult, error) {
 	t.turnTaskIDs = append(t.turnTaskIDs, task.ID)
 	t.broadcast(task)
 	out, _ := json.Marshal(task)
-	return &ToolResult{Content: string(out) + todoNudge(false), RiskLevel: RiskL1}, nil
+	return &ToolResult{Content: string(out), Nudge: todoNudge(false), RiskLevel: RiskL1}, nil
 }
 
 func (t *TodoTool) execUpdate(input map[string]any) (*ToolResult, error) {
@@ -113,7 +113,7 @@ func (t *TodoTool) execUpdate(input map[string]any) (*ToolResult, error) {
 			allDone = tasksDone(tasks)
 		}
 	}
-	return &ToolResult{Content: string(out) + todoNudge(allDone), RiskLevel: RiskL1}, nil
+	return &ToolResult{Content: string(out), Nudge: todoNudge(allDone), RiskLevel: RiskL1}, nil
 }
 
 func (t *TodoTool) execList() (*ToolResult, error) {

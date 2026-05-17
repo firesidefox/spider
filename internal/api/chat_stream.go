@@ -4,14 +4,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strconv"
 	"time"
 
 	mcppkg "github.com/spiderai/spider/internal/mcp"
 )
 
 // chatStreamGet handles GET /api/v1/chat/conversations/:id/stream?last_event_id=X
-// Replays messages from DB as SSE events, then subscribes to live updates.
+// Replays messages from DB after the given message UUID cursor, then replays any
+// in-flight events from the current agent run, then subscribes to live updates.
 func chatStreamGet(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id string) {
 	_, err := verifyConvOwner(app, r, id)
 	if err != nil {
@@ -19,20 +19,14 @@ func chatStreamGet(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id s
 		return
 	}
 
-	// Parse last_event_id: query param takes precedence, then browser Last-Event-ID header
-	lastEventID := 0
-	rawID := r.URL.Query().Get("last_event_id")
-	if rawID == "" {
-		rawID = r.Header.Get("Last-Event-ID")
-	}
-	if rawID != "" {
-		if n, err := strconv.Atoi(rawID); err == nil {
-			lastEventID = n
-		}
+	// last_event_id is now a message UUID (or empty for full replay)
+	lastMsgID := r.URL.Query().Get("last_event_id")
+	if lastMsgID == "" {
+		lastMsgID = r.Header.Get("Last-Event-ID")
 	}
 
-	// Fetch all messages
-	msgs, err := app.MsgStore.ListByConversation(id)
+	// Fetch only messages after cursor
+	msgs, err := app.MsgStore.ListAfterMessage(id, lastMsgID)
 	if err != nil {
 		writeError(w, 500, err.Error())
 		return
@@ -44,11 +38,8 @@ func chatStreamGet(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id s
 	w.Header().Set("Connection", "keep-alive")
 	flusher, _ := w.(http.Flusher)
 
-	// Replay messages after last_event_id
-	for i, msg := range msgs {
-		if i <= lastEventID {
-			continue
-		}
+	// Replay persisted messages
+	for _, msg := range msgs {
 		event := map[string]any{
 			"type": "message",
 			"content": map[string]any{
@@ -61,7 +52,15 @@ func chatStreamGet(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id s
 			},
 		}
 		data, _ := json.Marshal(event)
-		fmt.Fprintf(w, "id: %d\ndata: %s\n\n", i, data)
+		fmt.Fprintf(w, "id: %s\ndata: %s\n\n", msg.ID, data)
+		if flusher != nil {
+			flusher.Flush()
+		}
+	}
+
+	// Replay in-flight events from current agent run (not yet persisted)
+	for _, data := range app.DrainSSEBuffer(id) {
+		fmt.Fprintf(w, "data: %s\n\n", data)
 		if flusher != nil {
 			flusher.Flush()
 		}
@@ -72,7 +71,6 @@ func chatStreamGet(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id s
 	app.RegisterSSEClient(id, ch)
 	defer app.UnregisterSSEClient(id, ch)
 
-	// Keep-alive ticker
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 

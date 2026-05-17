@@ -71,6 +71,9 @@ type App struct {
 	sseClients   map[string][]chan []byte // convID -> SSE client channels
 	sseClientsMu sync.Mutex
 
+	sseBuffers   map[string][][]byte // convID -> in-flight events for reconnect
+	sseBuffersMu sync.Mutex
+
 	Monitor *monitor.Monitor
 
 	globalSSEClients   []chan []byte
@@ -223,9 +226,41 @@ func (a *App) BroadcastSSE(convID string, data []byte) {
 		select {
 		case ch <- data:
 		default:
-			// Client channel full, skip
 		}
 	}
+}
+
+const maxSSEBufferEvents = 500
+
+// BufferSSEEvent appends an in-flight event for reconnect replay.
+func (a *App) BufferSSEEvent(convID string, data []byte) {
+	a.sseBuffersMu.Lock()
+	defer a.sseBuffersMu.Unlock()
+	if a.sseBuffers == nil {
+		a.sseBuffers = make(map[string][][]byte)
+	}
+	buf := a.sseBuffers[convID]
+	if len(buf) >= maxSSEBufferEvents {
+		a.sseBuffers[convID] = append(buf[1:], data)
+		return
+	}
+	a.sseBuffers[convID] = append(buf, data)
+}
+
+// DrainSSEBuffer returns and clears the in-flight event buffer for a conversation.
+func (a *App) DrainSSEBuffer(convID string) [][]byte {
+	a.sseBuffersMu.Lock()
+	defer a.sseBuffersMu.Unlock()
+	buf := a.sseBuffers[convID]
+	delete(a.sseBuffers, convID)
+	return buf
+}
+
+// ClearSSEBuffer removes the in-flight buffer when a turn completes.
+func (a *App) ClearSSEBuffer(convID string) {
+	a.sseBuffersMu.Lock()
+	defer a.sseBuffersMu.Unlock()
+	delete(a.sseBuffers, convID)
 }
 
 func (a *App) AddGlobalSSEClient(ch chan []byte) {

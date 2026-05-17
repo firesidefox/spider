@@ -316,6 +316,8 @@ func NewRouter(app *mcppkg.App) http.Handler {
 			chatStreamGet(app, w, r, id)
 		case action == "cancel" && r.Method == http.MethodPost:
 			chatCancel(app, w, r, id)
+		case action == "suggest-title" && r.Method == http.MethodPost:
+			chatSuggestTitle(app, w, r, id)
 		case action == "export" && r.Method == http.MethodGet:
 			chatExportConversation(app, w, r, id)
 		case strings.HasPrefix(action, "confirm/") && r.Method == http.MethodPost:

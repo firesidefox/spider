@@ -39,7 +39,7 @@ func (t *InvokeSkillTool) Execute(_ context.Context, input map[string]any) (*Too
 		return &ToolResult{Content: "missing required field: name", IsError: true, RiskLevel: RiskL1, Summary: "failed to load skill: missing name"}, nil
 	}
 
-	entry, err := t.manager.LookupSkill(name)
+	body, err := t.manager.LookupSkill(name)
 	if err != nil {
 		return &ToolResult{
 			Content:   fmt.Sprintf("skill %q not found", name),
@@ -49,7 +49,6 @@ func (t *InvokeSkillTool) Execute(_ context.Context, input map[string]any) (*Too
 		}, nil
 	}
 
-	body, _ := entry.Body()
 	return &ToolResult{
 		Content:   fmt.Sprintf("skill %q loaded", name),
 		RiskLevel: RiskL1,

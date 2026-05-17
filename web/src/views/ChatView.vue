@@ -11,6 +11,7 @@ import {
   sendMessage, subscribeConversation, createConversation, listConversations,
   getConversation, deleteConversation, confirmAction, cancelConversation,
   getActiveModel, setActiveModel, updateTitle, exportConversation, getHostStatuses,
+  suggestTitle,
   type Conversation, type ChatMessage as ChatMsg, type ChatEvent, type Todo,
 } from '../api/chat'
 import { listHosts, type Host } from '../api/hosts'
@@ -73,6 +74,7 @@ function buildDisplayMessages(msgs: ChatMsg[]): DisplayMessage[] {
         blocks.push({ type: 'tool', call: {
           id: tc.id, name: tc.name, input: tc.input,
           result: tc.result, isError: tc.is_error, durationMs: tc.duration_ms,
+          summary: tc.summary, hostNames: tc.host_names,
         }})
       }
     }
@@ -122,6 +124,25 @@ async function pollUntilIdle(convId: string) {
 const inputText = ref('')
 const isStreaming = ref(false)
 const queuedMessages = ref<string[]>([])
+
+const slashCommands = [
+  { cmd: '/rename', hint: '[name] — 重命名会话（空=AI生成）' },
+  { cmd: '/model', hint: '— 切换模型' },
+  { cmd: '/export', hint: '[md|json] — 导出会话' },
+]
+const slashHint = computed(() => {
+  const text = inputText.value
+  if (!text.startsWith('/')) return ''
+  for (const { cmd, hint } of slashCommands) {
+    if (cmd.startsWith(text) && text.length < cmd.length) {
+      return cmd.slice(text.length) + ' ' + hint
+    }
+    if (text === cmd || text.startsWith(cmd + ' ')) {
+      return ' ' + hint
+    }
+  }
+  return ''
+})
 
 const todoTasksMap = ref<Record<string, Map<number, Todo>>>({})
 const completedFolded = ref(true)
@@ -683,6 +704,15 @@ async function send(overrideText?: string) {
       await exportConversation(activeConvId.value, fmt === 'default' ? 'md' : fmt)
       return
     }
+    if (text === '/rename' || text.startsWith('/rename ')) {
+      inputText.value = ''
+      if (!activeConvId.value) {
+        addSystemMessage('没有活跃的会话')
+        return
+      }
+      await handleRenameCommand(text)
+      return
+    }
   }
 
   // enqueue when streaming (only for direct user input, not flush)
@@ -785,6 +815,34 @@ async function handleConfirm(requestId: string, approved: boolean) {
   await confirmAction(activeConvId.value, requestId, approved)
   const msg = messages.value.find(m => m.confirm?.requestId === requestId)
   if (msg) msg.confirm = null
+}
+
+async function applyConvTitle(id: string, title: string) {
+  await updateTitle(id, title)
+  const conv = conversations.value.find(c => c.id === id)
+  if (conv) conv.title = title
+}
+
+async function handleRenameCommand(text: string) {
+  const id = activeConvId.value!
+  const arg = text.slice('/rename'.length).trim()
+  if (arg) {
+    try {
+      await applyConvTitle(id, arg)
+      addSystemMessage(`已重命名为 **${arg}**`)
+    } catch (e: any) {
+      addSystemMessage(`重命名失败: ${e.message}`)
+    }
+    return
+  }
+  try {
+    addSystemMessage('正在生成命名建议…')
+    const title = await suggestTitle(id)
+    await applyConvTitle(id, title)
+    addSystemMessage(`已重命名为 **${title}**`)
+  } catch (e: any) {
+    addSystemMessage(`生成命名失败: ${e.message}`)
+  }
 }
 
 async function handleDeleteConversation(id: string) {
@@ -918,6 +976,17 @@ async function loadGroupsIfNeeded() {
 }
 
 function onTextareaKeydown(e: KeyboardEvent) {
+  if (e.key === 'Tab' && slashHint.value && inputText.value.startsWith('/')) {
+    e.preventDefault()
+    const text = inputText.value
+    for (const { cmd } of slashCommands) {
+      if (cmd.startsWith(text) && text.length <= cmd.length) {
+        inputText.value = cmd + ' '
+        return
+      }
+    }
+    return
+  }
   if (!kbDropdownMode.value) return
   if (e.key === 'ArrowDown') {
     e.preventDefault()
@@ -1209,6 +1278,7 @@ onUnmounted(() => {
             :placeholder="isStreaming ? '排队发送...' : '输入运维指令...'"
             rows="1"
           ></textarea>
+          <span v-if="slashHint" class="slash-hint" aria-hidden="true">{{ inputText }}<span class="ghost">{{ slashHint }}</span></span>
         </div>
         <button v-if="isStreaming" @click="cancelSend" class="send-btn cancel-btn">取消</button>
         <button v-if="isStreaming" @click="send()" :disabled="!inputText.trim()" class="send-btn queue-btn">排队</button>
@@ -1313,6 +1383,8 @@ onUnmounted(() => {
 .input-wrapper { flex: 1; position: relative; display: flex; flex-direction: column; }
 .input-wrapper textarea { background: var(--input-bg); border: 1px solid var(--border); color: var(--text); padding: 8px 12px; border-radius: 6px; font-family: 'SF Mono', monospace; font-size: 13px; resize: none; outline: none; width: 100%; box-sizing: border-box; min-height: 36px; max-height: 200px; overflow-y: auto; line-height: 1.5; }
 .input-wrapper textarea:focus { border-color: var(--primary); }
+.slash-hint { position: absolute; top: 0; left: 0; padding: 8px 12px; font-family: 'SF Mono', monospace; font-size: 13px; line-height: 1.5; pointer-events: none; white-space: pre; color: transparent; }
+.slash-hint .ghost { color: var(--text-muted, #666); opacity: 0.6; }
 .kb-dropdown {
   position: absolute; bottom: 100%; left: 0; right: 0; margin-bottom: 4px;
   background: var(--bg-card, #1e1e1e); border: 1px solid var(--border, #333);

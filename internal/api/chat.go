@@ -5,9 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/spiderai/spider/internal/agent"
 	authmw "github.com/spiderai/spider/internal/auth"
+	"github.com/spiderai/spider/internal/llm"
 	mcppkg "github.com/spiderai/spider/internal/mcp"
 	"github.com/spiderai/spider/internal/models"
 	"github.com/spiderai/spider/internal/permission"
@@ -91,10 +95,12 @@ func chatDeleteConversation(app *mcppkg.App, w http.ResponseWriter, r *http.Requ
 		writeError(w, 500, err.Error())
 		return
 	}
+	app.DB.Exec(`DELETE FROM conversation_summaries WHERE conversation_id = ?`, id)
 	if err := app.ConvStore.Delete(id); err != nil {
 		writeError(w, 500, err.Error())
 		return
 	}
+	cleanupToolResultFiles(app.Config.DataDir, id)
 	w.WriteHeader(204)
 }
 
@@ -233,8 +239,10 @@ func chatSendMessage(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id
 		if flusher != nil {
 			flusher.Flush()
 		}
+		app.BufferSSEEvent(id, data)
 		app.BroadcastSSE(id, data)
 	}
+	app.ClearSSEBuffer(id)
 	app.ConvStore.SetStatus(id, "idle") //nolint:errcheck
 }
 
@@ -265,32 +273,10 @@ func injectHostNames(app *mcppkg.App, content map[string]any) {
 	if input == nil {
 		return
 	}
-	var ids []string
-	switch v := input["host_ids"].(type) {
-	case []any:
-		for _, x := range v {
-			if s, ok := x.(string); ok {
-				ids = append(ids, s)
-			}
-		}
-	case []string:
-		ids = v
+	names := app.HostStore.ResolveNames(input)
+	if len(names) > 0 {
+		content["host_names"] = names
 	}
-	if s, ok := input["host_id"].(string); ok && s != "" {
-		ids = append(ids, s)
-	}
-	if len(ids) == 0 {
-		return
-	}
-	names := make([]string, 0, len(ids))
-	for _, id := range ids {
-		if h, err := app.HostStore.GetByID(id); err == nil {
-			names = append(names, h.Name)
-		} else {
-			names = append(names, id)
-		}
-	}
-	content["host_names"] = names
 }
 
 func chatCancel(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id string) {
@@ -318,4 +304,79 @@ func chatConfirm(app *mcppkg.App, w http.ResponseWriter, r *http.Request, convID
 	}
 	waiter.Resolve(requestID, req.Approved)
 	writeJSON(w, 200, map[string]string{"status": "ok"})
+}
+
+func cleanupToolResultFiles(dataDir, conversationID string) {
+	if dataDir == "" {
+		return
+	}
+	dir := filepath.Join(dataDir, "tool-results", conversationID)
+	_ = os.RemoveAll(dir)
+}
+
+const suggestTitlePrompt = `Based on the conversation below, generate a short kebab-case description (English, lowercase, 3-6 words, no date prefix) that captures the main topic.
+
+Rules:
+- Output ONLY the kebab-case string, nothing else
+- No quotes, no explanation
+- Examples: "fix-auth-middleware", "add-sse-reconnect", "refactor-tool-display"
+
+Conversation:
+%s`
+
+func chatSuggestTitle(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id string) {
+	conv, err := verifyConvOwner(app, r, id)
+	if err != nil {
+		writeError(w, 404, "conversation not found")
+		return
+	}
+
+	factory, err := app.NewAgentFactory()
+	if err != nil {
+		writeError(w, 503, "LLM not configured: "+err.Error())
+		return
+	}
+
+	msgs, err := app.MsgStore.ListByConversation(id)
+	if err != nil {
+		writeError(w, 500, err.Error())
+		return
+	}
+	if len(msgs) == 0 {
+		writeError(w, 400, "no messages in conversation")
+		return
+	}
+
+	var sb strings.Builder
+	for _, m := range msgs {
+		if m.Role != "user" && m.Role != "assistant" {
+			continue
+		}
+		content := m.Content
+		if len(content) > 200 {
+			content = content[:200]
+		}
+		fmt.Fprintf(&sb, "[%s]: %s\n", m.Role, content)
+		if sb.Len() > 2000 {
+			break
+		}
+	}
+
+	req := &llm.ChatRequest{
+		Messages: []llm.Message{
+			{Role: llm.RoleUser, Content: fmt.Sprintf(suggestTitlePrompt, sb.String())},
+		},
+		MaxTokens: 64,
+	}
+	desc, err := factory.LLMClient.Chat(r.Context(), req)
+	if err != nil {
+		writeError(w, 500, "LLM error: "+err.Error())
+		return
+	}
+
+	desc = strings.TrimSpace(desc)
+	// LLM generates only the topic slug; server prepends the date prefix.
+	title := conv.CreatedAt.Format("2006-01-02-1504") + "-" + desc
+
+	writeJSON(w, 200, map[string]string{"title": title})
 }

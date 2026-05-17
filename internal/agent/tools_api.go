@@ -169,7 +169,7 @@ func (t *CallRESTAPITool) Execute(ctx context.Context, input map[string]any) (*T
 	if method != "GET" {
 		nudge = apiMutateNudge
 	}
-	return &ToolResult{Content: string(out) + nudge, RiskLevel: RiskL2}, nil
+	return &ToolResult{Content: string(out), Nudge: nudge, RiskLevel: RiskL2}, nil
 }
 
 func hmacSign(sk, method, path string, ts int64, algo string) string {

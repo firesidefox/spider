@@ -67,14 +67,14 @@ export async function updateTitle(id: string, title: string): Promise<void> {
 }
 
 // subscribeConversation opens a persistent EventSource for a conversation.
-// lastEventId: skip messages already loaded from DB (pass msgs.length - 1)
+// lastEventId: message UUID cursor — skip messages already loaded from DB
 // Returns a cleanup function to close the connection.
 export function subscribeConversation(
   conversationId: string,
   onEvent: (event: ChatEvent) => void,
-  lastEventId?: number,
+  lastEventId?: string,
 ): () => void {
-  const url = lastEventId !== undefined
+  const url = lastEventId
     ? `/api/v1/chat/conversations/${conversationId}/stream?last_event_id=${lastEventId}`
     : `/api/v1/chat/conversations/${conversationId}/stream`
   const es = new EventSource(url)
@@ -105,6 +105,16 @@ export function sendMessage(
     body: JSON.stringify(body),
   }).catch(() => { /* errors come via EventSource */ })
   return ctrl
+}
+
+export async function suggestTitle(id: string): Promise<string> {
+  const res = await fetch(`/api/v1/chat/conversations/${id}/suggest-title`, {
+    method: 'POST',
+    headers: authHeaders(),
+  })
+  if (!res.ok) throw new Error((await res.json()).error)
+  const data = await res.json()
+  return data.title
 }
 
 export async function getActiveModel(): Promise<{provider_id: string, model: string, provider_name: string}> {

@@ -2,7 +2,6 @@ package agent
 
 import (
 	"fmt"
-	"path/filepath"
 	"strings"
 
 	"github.com/spiderai/spider/internal/config"
@@ -115,6 +114,7 @@ func (f *Factory) NewAgent(systemPrompt string, conversationID string, selectedH
 		Hooks:                        hooks,
 		MsgStore:                     f.MsgStore,
 		TodoStore:                    f.TodoStore,
+		Hosts:                        f.Hosts,
 		SystemPrompt:                 systemPrompt,
 		MaxTurns:                     f.maxTurns(),
 		Compactor:                    compactor,
@@ -266,7 +266,7 @@ func (f *Factory) buildRegistryWithHosts(conversationID string, selectedHostIDs 
 		registry.Register(NewCreateTaskTool(f.TaskStore, conversationID))
 	}
 	if f.DataDir != "" {
-		registry.Register(NewInvokeSkillTool(filepath.Join(f.DataDir, "skills")))
+		registry.Register(NewInvokeSkillTool(f.DataDir))
 	}
 	return registry
 }

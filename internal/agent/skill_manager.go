@@ -58,6 +58,18 @@ func NewSkillManager(dataDir string) *SkillManager {
 	}
 }
 
+// LookupSkill resolves a skill by name. Custom shadows builtin.
+func (sm *SkillManager) LookupSkill(name string) (string, error) {
+	for _, dir := range []string{sm.customDir, sm.builtinDir} {
+		mdPath := filepath.Join(dir, filepath.FromSlash(name), "SKILL.md")
+		entry := SkillEntry{Name: name, bodyPath: mdPath}
+		if body, err := entry.Body(); err == nil {
+			return body, nil
+		}
+	}
+	return "", fmt.Errorf("skill %q not found", name)
+}
+
 // SourceDir returns the directory for the given source ("builtin" or "custom").
 func (sm *SkillManager) SourceDir(source string) string {
 	if source == "builtin" {

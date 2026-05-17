@@ -89,7 +89,7 @@ func (c *Compactor) BuildHistory(ctx context.Context, conversationID string, for
 
 	// 3. 估算 token 数
 	threshold := c.resolveThreshold()
-	totalTokens, err := c.llmClient.CountTokens(ctx, toLLMMessages(msgs, toolResultBudget{}))
+	totalTokens, err := c.llmClient.CountTokens(ctx, toLLMMessages(msgs, budget))
 	if err != nil {
 		return nil, fmt.Errorf("count tokens: %w", err)
 	}

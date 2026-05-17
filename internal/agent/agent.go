@@ -54,6 +54,8 @@ type ToolCallRecord struct {
 	IsError    bool           `json:"is_error"`
 	RiskLevel  string         `json:"risk_level"`
 	DurationMs int64          `json:"duration_ms"`
+	Summary    string         `json:"summary,omitempty"`
+	HostNames  []string       `json:"host_names,omitempty"`
 }
 
 type MessageStorer interface {
@@ -75,6 +77,7 @@ type Agent struct {
 	hooks         *HookChain
 	msgStore      MessageStorer
 	todoStore     *store.TodoStore
+	hosts         *store.HostStore
 	systemPrompt  string
 	maxTurns      int
 	compactor     *Compactor
@@ -92,6 +95,7 @@ type AgentConfig struct {
 	Hooks        *HookChain
 	MsgStore     MessageStorer
 	TodoStore    *store.TodoStore
+	Hosts        *store.HostStore
 	SystemPrompt string
 	MaxTurns     int
 	Compactor    *Compactor
@@ -113,6 +117,7 @@ func NewAgent(cfg AgentConfig) *Agent {
 		hooks:                        cfg.Hooks,
 		msgStore:                     cfg.MsgStore,
 		todoStore:                    cfg.TodoStore,
+		hosts:                        cfg.Hosts,
 		systemPrompt:                 epaSystemPromptPrefix + cfg.SystemPrompt,
 		maxTurns:                     maxTurns,
 		compactor:                    cfg.Compactor,
@@ -425,6 +430,8 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 						ID: tc.ID, Name: tc.Name, Input: tc.Input,
 						Result: result.Content, IsError: result.IsError,
 						RiskLevel: result.RiskLevel.String(), DurationMs: durationMs,
+						Summary:   result.Summary,
+						HostNames: a.resolveHostNames(tc.Input),
 					})
 				}
 			}
@@ -516,4 +523,11 @@ func buildTaskReminderMessage(tasks []*models.Todo) llm.Message {
 	}
 	sb.WriteString("</system-reminder>")
 	return llm.Message{Role: llm.RoleUser, Content: sb.String()}
+}
+
+func (a *Agent) resolveHostNames(input map[string]any) []string {
+	if a.hosts == nil {
+		return nil
+	}
+	return a.hosts.ResolveNames(input)
 }

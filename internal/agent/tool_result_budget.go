@@ -13,9 +13,13 @@ import (
 
 const previewMaxChars = 2000
 
+func toolResultDir(dataDir, convID string) string {
+	return filepath.Join(dataDir, "tool-results", convID)
+}
+
 // persistToolResult writes content to {dataDir}/tool-results/{convID}/{toolUseID}.txt.
 func persistToolResult(dataDir, convID, toolUseID, content string) (string, error) {
-	dir := filepath.Join(dataDir, "tool-results", convID)
+	dir := toolResultDir(dataDir, convID)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", fmt.Errorf("mkdir tool-results: %w", err)
 	}

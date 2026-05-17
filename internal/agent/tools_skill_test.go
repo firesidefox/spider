@@ -17,7 +17,7 @@ func TestInvokeSkillTool_Name(t *testing.T) {
 
 func TestInvokeSkillTool_Execute_Success(t *testing.T) {
 	dir := t.TempDir()
-	skillDir := filepath.Join(dir, "deploy")
+	skillDir := filepath.Join(dir, "skills", "deploy")
 	os.MkdirAll(skillDir, 0o755)
 	os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("---\ndescription: Use when deploying.\n---\n\n# Deploy Steps\n\nRun make deploy."), 0o644)
 
