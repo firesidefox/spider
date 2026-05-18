@@ -59,7 +59,7 @@ function getOrInitMessages(convId: string): DisplayMessage[] {
 const toolCallsCache = new Map<string, any[]>()
 
 function buildDisplayMessages(msgs: ChatMsg[]): DisplayMessage[] {
-  return msgs.map(m => {
+  return msgs.filter(m => m.role !== 'tool_result').map(m => {
     const blocks: MessageBlock[] = []
     if (m.content) blocks.push({ type: 'text', content: m.content })
     if (m.tool_calls) {
@@ -70,7 +70,7 @@ function buildDisplayMessages(msgs: ChatMsg[]): DisplayMessage[] {
           toolCallsCache.set(m.id, parsed)
         } catch { parsed = [] }
       }
-      for (const tc of parsed) {
+      for (const tc of (Array.isArray(parsed) ? parsed : [])) {
         blocks.push({ type: 'tool', call: {
           id: tc.id, name: tc.name, input: tc.input,
           result: tc.result, isError: tc.is_error, durationMs: tc.duration_ms,
