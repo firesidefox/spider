@@ -78,7 +78,8 @@ type mockResultTool struct {
 func (t *mockResultTool) Name() string                    { return t.name }
 func (t *mockResultTool) Description() string             { return t.name }
 func (t *mockResultTool) InputSchema() map[string]any     { return map[string]any{} }
-func (t *mockResultTool) DefaultRiskLevel() RiskLevel     { return RiskL1 }
+func (t *mockResultTool) DefaultRiskLevel() RiskLevel              { return RiskL1 }
+func (t *mockResultTool) IsConcurrencySafe(_ map[string]any) bool { return false }
 func (t *mockResultTool) Execute(_ context.Context, _ map[string]any) (*ToolResult, error) {
 	return t.result, nil
 }

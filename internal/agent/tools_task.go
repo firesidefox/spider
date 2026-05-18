@@ -24,7 +24,8 @@ func NewCreateTaskTool(taskStore *store.TaskStore, conversationID string) *Creat
 func (t *CreateTaskTool) Name() string { return "CreateTask" }
 
 // DefaultRiskLevel returns L2 because this tool writes to the database.
-func (t *CreateTaskTool) DefaultRiskLevel() RiskLevel { return RiskL2 }
+func (t *CreateTaskTool) DefaultRiskLevel() RiskLevel              { return RiskL2 }
+func (t *CreateTaskTool) IsConcurrencySafe(_ map[string]any) bool { return false }
 
 // Description returns the tool description.
 func (t *CreateTaskTool) Description() string {

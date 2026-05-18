@@ -26,7 +26,8 @@ func NewBatchExecuteTool(hosts *store.HostStore, faces *store.AccessFaceStore, s
 	return &BatchExecuteTool{hosts: hosts, faces: faces, sshPool: sshPool, logs: logs, sshKeys: sshKeys}
 }
 
-func (t *BatchExecuteTool) DefaultRiskLevel() RiskLevel { return RiskL2 }
+func (t *BatchExecuteTool) DefaultRiskLevel() RiskLevel              { return RiskL2 }
+func (t *BatchExecuteTool) IsConcurrencySafe(_ map[string]any) bool { return false }
 func (t *BatchExecuteTool) Name() string                  { return "RunCommandBatch" }
 func (t *BatchExecuteTool) Description() string {
 	return "Execute a CLI command on multiple hosts in parallel. Has side effects. Use only after confirming intent in Plan phase. Always set `intent` to a short goal description (e.g. \"重启 nginx 使配置生效\"). Check ListHosts \"access_faces\" first — only target hosts with \"ssh\". If you are unsure of host IDs, call ListHosts first — never guess host IDs."

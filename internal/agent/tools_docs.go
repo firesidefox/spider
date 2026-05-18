@@ -18,7 +18,8 @@ func NewSearchDocsTool(ragStore *rag.Store, docStore *store.DocumentStore) *Sear
 	return &SearchDocsTool{ragStore: ragStore, docStore: docStore}
 }
 
-func (t *SearchDocsTool) DefaultRiskLevel() RiskLevel { return RiskL1 }
+func (t *SearchDocsTool) DefaultRiskLevel() RiskLevel              { return RiskL1 }
+func (t *SearchDocsTool) IsConcurrencySafe(_ map[string]any) bool { return true }
 func (t *SearchDocsTool) Name() string                { return "SearchDocs" }
 
 func (t *SearchDocsTool) Description() string {

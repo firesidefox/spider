@@ -24,7 +24,8 @@ func NewTodoTool(s *store.TodoStore, broadcaster SSEBroadcaster, conversationID 
 }
 
 func (t *TodoTool) Name() string                { return "Todo" }
-func (t *TodoTool) DefaultRiskLevel() RiskLevel { return RiskL1 }
+func (t *TodoTool) DefaultRiskLevel() RiskLevel              { return RiskL1 }
+func (t *TodoTool) IsConcurrencySafe(_ map[string]any) bool { return false }
 func (t *TodoTool) Hidden() bool                { return true }
 
 func (t *TodoTool) Description() string {

@@ -56,7 +56,8 @@ func NewCallRESTAPITool(faces *store.AccessFaceStore) *CallRESTAPITool {
 	}
 }
 
-func (t *CallRESTAPITool) DefaultRiskLevel() RiskLevel  { return RiskL2 }
+func (t *CallRESTAPITool) DefaultRiskLevel() RiskLevel              { return RiskL2 }
+func (t *CallRESTAPITool) IsConcurrencySafe(_ map[string]any) bool { return false }
 func (t *CallRESTAPITool) Name() string                 { return "CallAPI" }
 func (t *CallRESTAPITool) SystemPromptSection() string  { return callAPIPromptSection }
 

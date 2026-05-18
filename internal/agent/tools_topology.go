@@ -16,7 +16,8 @@ func NewGetTopologyTool(topos *store.TopologyStore) *GetTopologyTool {
 	return &GetTopologyTool{topos: topos}
 }
 
-func (t *GetTopologyTool) DefaultRiskLevel() RiskLevel { return RiskL1 }
+func (t *GetTopologyTool) DefaultRiskLevel() RiskLevel              { return RiskL1 }
+func (t *GetTopologyTool) IsConcurrencySafe(_ map[string]any) bool { return true }
 func (t *GetTopologyTool) Name() string                { return "GetTopology" }
 func (t *GetTopologyTool) Description() string {
 	return "Get topology data including groups, nodes, and edges. Read-only. Use in Explore phase."

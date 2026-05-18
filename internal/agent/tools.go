@@ -35,6 +35,7 @@ type Tool interface {
 	InputSchema() map[string]any
 	DefaultRiskLevel() RiskLevel
 	Execute(ctx context.Context, input map[string]any) (*ToolResult, error)
+	IsConcurrencySafe(input map[string]any) bool
 }
 
 // SystemPromptSection is implemented by tools that contribute behavior

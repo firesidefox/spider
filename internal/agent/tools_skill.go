@@ -14,7 +14,8 @@ func NewInvokeSkillTool(dataDir string) *InvokeSkillTool {
 }
 
 func (t *InvokeSkillTool) Name() string                { return "invoke_skill" }
-func (t *InvokeSkillTool) DefaultRiskLevel() RiskLevel { return RiskL1 }
+func (t *InvokeSkillTool) DefaultRiskLevel() RiskLevel              { return RiskL1 }
+func (t *InvokeSkillTool) IsConcurrencySafe(_ map[string]any) bool { return true }
 
 func (t *InvokeSkillTool) Description() string {
 	return `Load a skill's full instructions into context. Call this ONCE per skill per turn when you need to execute a skill listed in <skills>. If <loaded-skill name=X> is already present in this conversation, do NOT call invoke_skill("X") again — use the loaded instructions directly.`

@@ -20,7 +20,8 @@ func NewListHostsTool(hosts *store.HostStore, faces *store.AccessFaceStore) *Lis
 	return &ListHostsTool{hosts: hosts, faces: faces}
 }
 
-func (t *ListHostsTool) DefaultRiskLevel() RiskLevel { return RiskL1 }
+func (t *ListHostsTool) DefaultRiskLevel() RiskLevel              { return RiskL1 }
+func (t *ListHostsTool) IsConcurrencySafe(_ map[string]any) bool { return true }
 func (t *ListHostsTool) Name() string                { return "ListHosts" }
 func (t *ListHostsTool) Description() string {
 	return "List all managed hosts, optionally filtered by tag. Read-only. No side effects. Use freely in Explore phase."

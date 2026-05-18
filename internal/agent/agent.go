@@ -10,11 +10,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/spiderai/spider/internal/llm"
 	"github.com/spiderai/spider/internal/logger"
 	"github.com/spiderai/spider/internal/models"
-	"github.com/spiderai/spider/internal/permission"
 	"github.com/spiderai/spider/internal/store"
 )
 
@@ -333,106 +331,27 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 				history = append(history, llm.Message{Role: llm.RoleAssistant, Content: assistantText})
 			}
 
-			var tcRecords []ToolCallRecord
+			tcRecords := make([]ToolCallRecord, 0)
 			var pendingToolResults []string // toolID\x00content, saved after assistant
-			for _, tc := range toolCalls {
-				tool, ok := a.registry.Get(tc.Name)
-				if !ok {
-					events <- Event{Type: EventToolResult, Content: map[string]any{"id": tc.ID, "tool": tc.Name, "result": "tool not found", "is_error": true}}
-					history = append(history, llm.Message{Role: llm.RoleUser, Content: "Tool " + tc.Name + " not found"})
-					pendingToolResults = append(pendingToolResults, tc.ID+"\x00Tool "+tc.Name+" not found")
-					tcRecords = append(tcRecords, ToolCallRecord{ID: tc.ID, Name: tc.Name, Input: tc.Input, Result: "tool not found", IsError: true})
-					continue
-				}
 
-				hidden := false
-				if h, ok2 := tool.(HiddenTool); ok2 {
-					hidden = h.Hidden()
-				}
-
-				riskLevel := tool.DefaultRiskLevel()
-				if rl, ok2 := tc.Input["risk_level"].(string); ok2 {
-					riskLevel = permission.ParseRiskLevel(rl)
-				}
-
-				hookResult := a.hooks.RunBefore(tc.Name, tc.Input, riskLevel)
-
-				if hookResult.Action == HookRequireConfirm && waiter != nil {
-					requestID := uuid.New().String()
-					events <- Event{Type: EventConfirmRequired, Content: map[string]any{
-						"request_id": requestID, "tool": tc.Name,
-						"input": tc.Input, "risk_level": hookResult.RiskLevel.String(),
-					}}
-					approved, err := waiter.Wait(requestID, 5*time.Minute)
-					if err != nil || !approved {
-						events <- Event{Type: EventToolResult, Content: map[string]any{"id": tc.ID, "tool": tc.Name, "result": "denied by user", "is_error": true}}
-						history = append(history, llm.Message{Role: llm.RoleUser, Content: "operation denied by user"})
-						if !hidden {
-							pendingToolResults = append(pendingToolResults, tc.ID+"\x00operation denied by user")
-							tcRecords = append(tcRecords, ToolCallRecord{ID: tc.ID, Name: tc.Name, Input: tc.Input, Result: "denied by user", RiskLevel: hookResult.RiskLevel.String()})
-						}
-						continue
-					}
-				} else if hookResult.Action == HookDeny {
-					events <- Event{Type: EventToolResult, Content: map[string]any{"id": tc.ID, "tool": tc.Name, "result": "denied: " + hookResult.Reason, "is_error": true}}
-					history = append(history, llm.Message{Role: llm.RoleUser, Content: "Tool denied: " + hookResult.Reason})
-					if !hidden {
-						pendingToolResults = append(pendingToolResults, tc.ID+"\x00Tool denied: "+hookResult.Reason)
-						tcRecords = append(tcRecords, ToolCallRecord{ID: tc.ID, Name: tc.Name, Input: tc.Input, Result: "denied: " + hookResult.Reason, RiskLevel: hookResult.RiskLevel.String()})
-					}
-					continue
-				} else if hookResult.Action == HookPlan {
-					inputJSON, _ := json.Marshal(tc.Input)
-					planMsg := fmt.Sprintf("[PLAN] Would execute tool %s with input: %s", tc.Name, inputJSON)
-					events <- Event{Type: EventToolResult, Content: map[string]any{"id": tc.ID, "tool": tc.Name, "result": planMsg, "is_error": false}}
-					history = append(history, llm.Message{Role: llm.RoleUser, Content: planMsg})
-					if !hidden {
-						pendingToolResults = append(pendingToolResults, tc.ID+"\x00"+planMsg)
-						tcRecords = append(tcRecords, ToolCallRecord{ID: tc.ID, Name: tc.Name, Input: tc.Input, Result: planMsg, RiskLevel: hookResult.RiskLevel.String()})
-					}
-					continue
-				}
-
-				start := time.Now()
-				log.Debug().Str("tool", tc.Name).Msg("tool call start")
-				result, err := tool.Execute(ctx, tc.Input)
-				durationMs := time.Since(start).Milliseconds()
-				if err != nil {
-					result = &ToolResult{Content: err.Error(), IsError: true, RiskLevel: riskLevel}
-					log.Error().Err(err).Str("tool", tc.Name).Int64("duration_ms", durationMs).Msg("tool call error")
+			batches := partitionToolCalls(toolCalls, a.registry)
+			for _, batch := range batches {
+				var results []toolExecResult
+				if batch.concurrent && len(batch.calls) > 1 {
+					results = a.executeConcurrent(ctx, batch.calls, conversationID, waiter, events)
 				} else {
-					log.Debug().Str("tool", tc.Name).Int64("duration_ms", durationMs).Bool("is_error", result.IsError).Interface("input", tc.Input).Str("output", result.Content).Msg("tool call done")
-				}
-				a.hooks.RunAfter(tc.Name, tc.Input, result)
-
-				// Layer 1: per-tool result size limit
-				if a.perToolResultMaxChars > 0 && len(result.Content) > a.perToolResultMaxChars && a.replacementState != nil {
-					filePath, ferr := persistToolResult(a.dataDir, conversationID, tc.ID, result.Content)
-					if ferr != nil {
-						log.Warn().Err(ferr).Str("tool", tc.Name).Msg("failed to persist large tool result; passing through")
-					} else {
-						preview := generatePreview(result.Content, filePath)
-						a.replacementState.setReplacement(tc.ID, preview)
-						result = &ToolResult{Content: preview, IsError: result.IsError, RiskLevel: result.RiskLevel}
+					for _, tc := range batch.calls {
+						results = append(results, a.executeOne(ctx, tc, conversationID, waiter, events))
 					}
 				}
-
-				events <- Event{Type: EventToolResult, Content: map[string]any{
-					"id": tc.ID, "tool": tc.Name, "input": tc.Input, "result": result.Content, "is_error": result.IsError, "duration_ms": durationMs, "summary": result.Summary,
-				}}
-				for _, msg := range result.NewMessages {
-					history = append(history, llm.Message{Role: llm.RoleUser, Content: msg.Content})
-				}
-				history = append(history, llm.Message{Role: llm.RoleUser, Content: result.Content + result.Nudge})
-				if !hidden {
-					pendingToolResults = append(pendingToolResults, tc.ID+"\x00"+result.Content)
-					tcRecords = append(tcRecords, ToolCallRecord{
-						ID: tc.ID, Name: tc.Name, Input: tc.Input,
-						Result: result.Content, IsError: result.IsError,
-						RiskLevel: result.RiskLevel.String(), DurationMs: durationMs,
-						Summary:   result.Summary,
-						HostNames: a.resolveHostNames(tc.Input),
-					})
+				for _, r := range results {
+					history = append(history, r.historyMessages...)
+					if r.pendingResult != "" {
+						pendingToolResults = append(pendingToolResults, r.pendingResult)
+					}
+					if r.record != nil {
+						tcRecords = append(tcRecords, *r.record)
+					}
 				}
 			}
 

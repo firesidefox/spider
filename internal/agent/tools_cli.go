@@ -26,7 +26,8 @@ func NewExecuteCLITool(hosts *store.HostStore, faces *store.AccessFaceStore, ssh
 	return &ExecuteCLITool{hosts: hosts, faces: faces, sshPool: sshPool, logs: logs, sshKeys: sshKeys}
 }
 
-func (t *ExecuteCLITool) DefaultRiskLevel() RiskLevel { return RiskL2 }
+func (t *ExecuteCLITool) DefaultRiskLevel() RiskLevel              { return RiskL2 }
+func (t *ExecuteCLITool) IsConcurrencySafe(_ map[string]any) bool { return false }
 func (t *ExecuteCLITool) Name() string                  { return "RunCommand" }
 
 func (t *ExecuteCLITool) Description() string {

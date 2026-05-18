@@ -22,7 +22,8 @@ func NewVerifyTool(hosts *store.HostStore, faces *store.AccessFaceStore, sshPool
 	return &PollUntilTool{hosts: hosts, faces: faces, sshPool: sshPool, sshKeys: sshKeys}
 }
 
-func (t *PollUntilTool) DefaultRiskLevel() RiskLevel { return RiskL1 }
+func (t *PollUntilTool) DefaultRiskLevel() RiskLevel              { return RiskL1 }
+func (t *PollUntilTool) IsConcurrencySafe(_ map[string]any) bool { return false }
 func (t *PollUntilTool) Name() string                { return "PollUntil" }
 func (t *PollUntilTool) Description() string {
 	return "Poll remote hosts until all conditions are met or timeout. Read-only. Use after deployments or config changes to wait for services to become ready."
@@ -221,6 +222,8 @@ Assistant: RunCommand → deploy script, then PollUntil → checks=[{host_id, "c
 <example>
 User: Is port 80 open on web-01?
 Assistant: RunCommand → "ss -tlnp | grep :80". Does NOT use PollUntil — this is a one-shot check.
-</example>`
+</example>
+
+**Rule:** If the state change has not yet been triggered, do NOT call PollUntil — trigger the change first with RunCommand.`
 
 func (t *PollUntilTool) SystemPromptSection() string { return pollUntilPromptSection }
