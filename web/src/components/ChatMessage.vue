@@ -147,95 +147,93 @@ function formatDuration(ms: number) {
     </div>
 
     <div v-else class="msg-assistant-wrap">
-      <div class="content assistant-body">
-        <div class="assistant-lead">
-          <span class="prompt-assistant" :class="{ streaming: showLeadStar }">{{ showLeadStar ? '*' : '' }}</span>
-          <div class="assistant-lead-body">
-            <template v-for="(item, idx) in renderItems" :key="idx">
-              <!-- Text block -->
-              <div v-if="item.kind === 'text'" class="msg-assistant">
-                <div class="assistant-text" v-html="renderMd(item.content, isStreaming)"></div>
-              </div>
+      <template v-for="(item, idx) in renderItems" :key="idx">
 
-              <!-- Housekeeping: invoke_skill -->
-              <div v-else-if="item.kind === 'housekeeping'" class="hk">
-                <span v-if="isStreaming && item.call.durationMs == null" class="star">*</span>
-                <span v-else class="hk-done">·</span>
-                <span class="hk-call">
-                  <span class="hk-fn">{{ item.call.name }}</span><span class="hk-paren">(</span><span class="hk-arg">{{ skillArg(item.call) }}</span><span class="hk-paren">)</span>
-                </span>
-                <span v-if="item.call.durationMs != null" class="hk-dur">{{ formatDuration(item.call.durationMs) }}</span>
-                <div v-if="item.call.durationMs != null && item.call.summary" class="hk-sub">
-                  <span class="hook">⎿</span><span class="hk-result">{{ item.call.summary }}</span>
-                </div>
-              </div>
+        <div v-if="item.kind === 'text'" class="block-row">
+          <div class="gutter"><span class="dot" :class="{ pulsing: isStreaming && idx === renderItems.length - 1 }">*</span></div>
+          <div class="block-body">
+            <div class="assistant-text" v-html="renderMd(item.content)"></div>
+            <span v-if="isStreaming && idx === renderItems.length - 1" class="cursor">▊</span>
+          </div>
+        </div>
+
+        <div v-else-if="item.kind === 'housekeeping'" class="block-row">
+          <div class="gutter"><span class="dot" :class="{ pulsing: isStreaming && item.call.durationMs == null }">*</span></div>
+          <div class="block-body">
+            <div class="hk-line">
+              <span class="hk-fn">{{ item.call.name }}</span><span class="hk-paren">(</span><span class="hk-arg">{{ skillArg(item.call) }}</span><span class="hk-paren">)</span>
+              <span class="tool-hd-spacer"></span>
+              <span v-if="isStreaming && item.call.durationMs == null" class="streaming-dots">···</span>
+              <span v-if="item.call.durationMs != null" class="dur">{{ formatDuration(item.call.durationMs) }}</span>
+            </div>
+            <div v-if="item.call.durationMs != null && item.call.summary" class="sub-line">
+              <span class="hook">└</span><span class="sub-text">{{ item.call.summary }}</span>
+            </div>
+          </div>
+        </div>
 
               <!-- Explore group -->
-              <div v-else-if="item.kind === 'explore'" class="explore-group">
-                <div class="explore-group-header" @click="toggleGroup(item.calls[0].id)">
-                  <span v-if="isStreaming && item.streaming" class="star">*</span>
-                  <span v-else class="ex-arrow">{{ collapsedGroups.has(item.calls[0].id) ? '▶' : '▼' }}</span>
-                  <span class="explore-label">Explore</span>
-                  <span class="explore-count">({{ item.calls.length }} tools called)</span>
-                  <span v-if="exploreTotalMs(item.calls) != null" class="explore-dur">{{ formatDuration(exploreTotalMs(item.calls)!) }}</span>
-                </div>
-                <div v-if="!collapsedGroups.has(item.calls[0].id)" class="explore-items">
-                  <div v-for="call in item.calls" :key="call.id" class="explore-item">
-                    <span class="tree-branch">└</span>
-                    <span class="explore-tool-name" :class="{ 'is-error': call.isError }">{{ call.name }}</span>
-                    <span class="explore-param">{{ exploreParam(call) }}</span>
-                    <template v-if="call.durationMs != null">
-                      <span v-if="call.isError" class="ex-err">{{ exploreResult(call) }}</span>
-                      <span v-else class="ex-ok">{{ exploreResult(call) }}</span>
-                      <span class="tool-duration">{{ formatDuration(call.durationMs) }}</span>
-                    </template>
-                    <span v-else-if="isStreaming" class="explore-streaming">···</span>
-                  </div>
-                </div>
+        <div v-else-if="item.kind === 'explore'" class="block-row">
+          <div class="gutter"><span class="dot" :class="{ pulsing: isStreaming && item.streaming }">*</span></div>
+          <div class="block-body">
+            <div class="tool-hd" @click="toggleGroup(item.calls[0].id)">
+              <span class="tool-fn">Explore</span><span class="tool-paren">(</span><span class="tool-arg">{{ item.calls.length }} tools</span><span class="tool-paren">)</span>
+              <span class="tool-hd-spacer"></span>
+              <span v-if="isStreaming && item.streaming" class="streaming-dots">···</span>
+              <span v-if="exploreTotalMs(item.calls) != null" class="dur">{{ formatDuration(exploreTotalMs(item.calls)!) }}</span>
+              <span class="expand-toggle">{{ collapsedGroups.has(item.calls[0].id) ? '▶' : '▼' }}</span>
+            </div>
+            <div v-if="!collapsedGroups.has(item.calls[0].id)" class="sub-lines">
+              <div v-for="call in item.calls" :key="call.id" class="sub-line">
+                <span class="hook">└</span>
+                <span class="sub-fn" :class="{ 'is-error': call.isError }">{{ call.name }}</span>
+                <span class="sub-param">{{ exploreParam(call) }}</span>
+                <template v-if="call.durationMs != null">
+                  <span :class="call.isError ? 'res-err' : 'res-ok'">{{ exploreResult(call) }}</span>
+                  <span class="dur">{{ formatDuration(call.durationMs) }}</span>
+                </template>
+                <span v-else-if="isStreaming" class="streaming-dots">···</span>
               </div>
+            </div>
+          </div>
+        </div>
 
-              <!-- Act tool -->
-              <div v-else class="act-block">
-                <div class="act-hd" @click="item.call.durationMs != null && toggleAct(item.call.id)" :style="item.call.durationMs != null ? 'cursor:pointer' : ''">
-                  <span v-if="isStreaming && item.call.durationMs == null" class="star">*</span>
-                  <span v-else class="act-arrow" :class="{ 'act-arrow-err': item.call.isError }">{{ expandedAct.has(item.call.id) ? '▼' : '▶' }}</span>
-                  <span class="act-name" :class="{ 'act-name-err': item.call.isError }">{{ item.call.name }}</span>
-                  <template v-if="item.hosts.length">
-                    <span class="act-at">@</span>
-                    <span class="act-hosts" :class="{ 'act-hosts-err': item.call.isError }">
-                      <template v-for="(h, hi) in item.hosts" :key="hi">
-                        <span v-if="hi > 0" class="act-sep">·</span>{{ h }}
-                      </template>
-                    </span>
-                  </template>
-                  <span v-if="item.call.durationMs != null" class="act-dur">{{ formatDuration(item.call.durationMs) }}</span>
-                  <span v-else-if="isStreaming" class="act-streaming">···</span>
-                </div>
-                <div class="act-sub">
-                  <div v-if="item.command" class="act-cmd-row">
-                    <span class="hook">⎿</span><span class="act-cmd">{{ item.command }}</span>
-                  </div>
-                  <template v-if="item.call.durationMs != null">
-                    <div v-if="expandedAct.has(item.call.id) && item.call.result" class="act-res-row act-output-full">
-                      <span class="hook">⎿</span>
-                      <pre :class="item.call.isError ? 'res-err' : 'res-ok'" class="act-output-pre">{{ item.call.result }}</pre>
-                    </div>
-                    <div v-else-if="item.call.summary || item.call.result" class="act-res-row">
-                      <span class="hook">⎿</span>
-                      <span :class="item.call.isError ? 'res-err' : 'res-ok'">{{ item.call.summary || item.call.result?.split('\n')[0] }}</span>
-                    </div>
-                  </template>
-                  <div v-else-if="isStreaming && item.command" class="act-res-row">
-                    <span class="hook">⎿</span><span class="act-streaming">···</span>
-                  </div>
-                </div>
+        <div v-else class="block-row">
+          <div class="gutter"><span class="dot" :class="{ pulsing: isStreaming && item.call.durationMs == null, 'dot-err': item.call.isError }">*</span></div>
+          <div class="block-body">
+            <div class="tool-hd" @click="item.call.durationMs != null && toggleAct(item.call.id)" :style="item.call.durationMs != null ? 'cursor:pointer' : ''">
+              <span class="act-arrow" :class="{ 'act-arrow-err': item.call.isError }">{{ expandedAct.has(item.call.id) ? '▼' : '▶' }}</span>
+              <span class="tool-fn" :class="{ 'tool-fn-err': item.call.isError }">{{ item.call.name }}</span>
+              <template v-if="item.hosts.length">
+                <span class="tool-at">@</span>
+                <span class="tool-hosts" :class="{ 'tool-hosts-err': item.call.isError }">
+                  <template v-for="(h, hi) in item.hosts" :key="hi"><span v-if="hi > 0" class="act-sep">·</span>{{ h }}</template>
+                </span>
+              </template>
+              <span class="tool-hd-spacer"></span>
+              <span v-if="isStreaming && item.call.durationMs == null" class="streaming-dots">···</span>
+              <span v-if="item.call.durationMs != null" class="dur">{{ formatDuration(item.call.durationMs) }}</span>
+            </div>
+            <template v-if="item.call.durationMs != null">
+              <div v-if="item.command" class="sub-line">
+                <span class="hook">⎿</span><span class="act-cmd">{{ item.command }}</span>
+              </div>
+              <div v-if="expandedAct.has(item.call.id) && item.call.result" class="sub-line sub-line-full">
+                <span class="hook">⎿</span>
+                <pre :class="item.call.isError ? 'res-err' : 'res-ok'" class="act-output-pre">{{ item.call.result }}</pre>
+              </div>
+              <div v-else-if="item.call.summary || item.call.result" class="sub-line">
+                <span class="hook">⎿</span>
+                <span :class="item.call.isError ? 'res-err' : 'res-ok'">{{ item.call.summary || item.call.result?.split('\n')[0] }}</span>
               </div>
             </template>
+            <div v-else-if="isStreaming" class="sub-line">
+              <span class="hook">⎿</span><span class="streaming-dots">···</span>
+            </div>
+          </div>
+        </div>
 
-            <span v-if="isStreaming && renderItems.length > 0 && renderItems[renderItems.length - 1].kind === 'text'" class="cursor">▊</span>
-          </div><!-- .assistant-lead-body -->
-        </div><!-- .assistant-lead -->
-      </div><!-- .content -->
+      </template>
     </div>
 
     <div v-if="confirm" class="confirm-bar" :class="confirm.riskLevel === 'dangerous' ? 'risk-dangerous' : confirm.riskLevel === 'safe' ? 'risk-safe' : 'risk-moderate'">
@@ -253,20 +251,22 @@ function formatDuration(ms: number) {
 <style scoped>
 .chat-msg { padding: 8px 0; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 13px; }
 .msg-user { display: flex; color: var(--text); }
-.msg-assistant-wrap { display: flex; }
-.gutter { flex-shrink: 0; width: 20px; text-align: center; }
+.msg-assistant-wrap { display: flex; flex-direction: column; }
+.gutter { flex-shrink: 0; width: 20px; text-align: center; padding-top: 2px; }
 .content { flex: 1; min-width: 0; }
 .prompt { color: var(--primary); font-weight: bold; }
-.assistant-lead { display: flex; flex-direction: row; align-items: flex-start; gap: 6px; }
-.assistant-lead-body { flex: 1; min-width: 0; }
-.prompt-assistant { flex-shrink: 0; color: var(--primary); font-weight: bold; margin-top: 2px; width: 14px; text-align: center; }
-.prompt-assistant.streaming { animation: prompt-pulse 1.5s ease-in-out infinite; }
-@keyframes prompt-pulse {
-  0%, 100% { opacity: 0.4; text-shadow: 0 0 0 transparent; }
-  50% { opacity: 1; text-shadow: 0 0 8px var(--primary); }
-}
-.assistant-body { }
-.msg-assistant { line-height: 1.6; }
+
+/* Block row: gutter + body side by side */
+.block-row { display: flex; align-items: flex-start; padding: 2px 0; }
+.block-body { flex: 1; min-width: 0; }
+
+/* Gutter dot (the * status icon) */
+.dot { color: var(--primary); font-weight: bold; font-size: 18px; line-height: 1.2; display: inline-block; }
+.dot.pulsing { animation: dot-pulse 1.5s ease-in-out infinite; }
+.dot.dot-err { color: var(--red); }
+@keyframes dot-pulse { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
+
+/* Text block */
 .assistant-text { font-family: -apple-system, 'Segoe UI', sans-serif; font-size: 13.5px; color: var(--text-sub); line-height: 1.65; }
 .assistant-text :deep(h1),
 .assistant-text :deep(h2) { font-size: 14px; font-weight: 600; color: var(--text); margin: 0 0 8px; }
@@ -289,59 +289,40 @@ function formatDuration(ms: number) {
 .cursor { color: var(--primary); animation: blink 1s step-end infinite; }
 @keyframes blink { 50% { opacity: 0; } }
 
-/* Explore group */
-.explore-group { margin: 3px 0; }
-.explore-group-header { display: flex; align-items: center; gap: 6px; padding: 2px 0; cursor: pointer; }
-.ex-arrow { color: var(--label); font-size: 10px; width: 10px; }
-.explore-label { color: var(--label); font-size: 11.5px; font-weight: 600; }
-.explore-count { color: var(--label); font-size: 11px; }
-.explore-dur { color: var(--label); font-size: 10.5px; margin-left: auto; }
-.explore-items { padding-left: 16px; }
-.explore-item { display: flex; align-items: baseline; gap: 7px; padding: 1px 0; }
-.tree-branch { color: var(--label); font-size: 11px; }
-.explore-tool-name { color: var(--text-sub); font-size: 11.5px; font-weight: 500; }
-.explore-tool-name.is-error { color: var(--red); }
-.explore-param { color: var(--label); font-size: 11px; flex: 1; }
-.ex-ok { color: var(--green); font-size: 10.5px; }
-.ex-err { color: var(--red); font-size: 10.5px; }
-.tool-duration { color: var(--label); font-size: 10.5px; margin-left: auto; }
-.explore-streaming { color: var(--label); font-size: 11px; margin-left: auto; animation: blink 1s step-end infinite; }
-
-/* Housekeeping */
-.hk { display: flex; align-items: center; flex-wrap: wrap; padding: 1px 0; gap: 0; }
-.hk-call { color: var(--label); font-size: 11.5px; }
-.hk-fn { color: var(--label); font-weight: 500; }
-.hk-paren { color: var(--label); }
-.hk-arg { color: var(--primary); }
-.hk-dur { margin-left: auto; color: var(--label); font-size: 10.5px; }
-.hk-sub { width: 100%; padding: 0 0 2px 18px; }
-.hk-result { color: var(--text-sub); font-size: 11px; }
-
-/* Act tool */
-.act-block { margin: 3px 0; }
-.act-hd { display: flex; flex-wrap: wrap; align-items: baseline; padding: 3px 0; row-gap: 0; column-gap: 0; }
+/* Tool header line: ▶ ToolName @host ··· dur */
+.tool-hd { display: flex; align-items: baseline; flex-wrap: wrap; padding: 1px 0; }
 .act-arrow { font-size: 11px; margin-right: 6px; flex-shrink: 0; align-self: center; color: var(--primary); }
 .act-arrow-err { color: var(--red); }
-.act-name { font-weight: 600; font-size: 12px; flex-shrink: 0; color: var(--primary); }
-.act-name-err { color: var(--red); }
-.act-at { color: var(--label); font-size: 11px; margin: 0 5px; flex-shrink: 0; }
-.act-hosts { color: var(--text-sub); font-size: 11px; flex: 1; white-space: normal; word-break: break-word; }
-.act-hosts-err { color: var(--red); opacity: 0.5; }
+.tool-fn { color: var(--primary); font-weight: 600; font-size: 12.5px; flex-shrink: 0; }
+.tool-fn-err { color: var(--red); }
+.tool-paren { color: var(--label); font-size: 12px; }
+.tool-arg { color: var(--text-sub); font-size: 11.5px; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tool-at { color: var(--label); font-size: 11px; margin: 0 4px; }
+.tool-hosts { color: var(--text-sub); font-size: 11px; white-space: normal; }
+.tool-hosts-err { color: var(--red); opacity: 0.5; }
 .act-sep { margin: 0 4px; color: var(--label); }
-.act-dur { color: var(--label); font-size: 10.5px; margin-left: auto; flex-shrink: 0; padding-left: 12px; }
-.act-streaming { color: var(--label); font-size: 11px; margin-left: auto; animation: blink 1s step-end infinite; }
-.act-sub { padding: 0 0 5px 18px; }
-.act-cmd-row { display: flex; align-items: flex-start; }
-.act-res-row { display: flex; align-items: flex-start; }
-.hook { color: var(--label); font-size: 11px; margin-right: 5px; flex-shrink: 0; }
 .act-cmd { color: var(--text-sub); font-size: 11px; white-space: pre-wrap; word-break: break-all; }
-.res-ok { color: var(--green); font-size: 11.5px; }
-.res-err { color: var(--red); font-size: 11.5px; }
-.act-output-pre { margin: 0; font-family: inherit; font-size: 11px; white-space: pre-wrap; word-break: break-all; line-height: 1.55; }
+.tool-hd-spacer { flex: 1; }
+.dur { color: var(--label); font-size: 10.5px; margin-left: 8px; flex-shrink: 0; }
+.expand-toggle { color: var(--label); font-size: 10px; margin-left: 6px; flex-shrink: 0; }
+.streaming-dots { color: var(--label); font-size: 11px; margin-left: 8px; animation: blink 1s step-end infinite; }
 
-/* Status star */
-.star { color: var(--primary); font-weight: bold; font-size: 11px; margin-right: 6px; animation: star-pulse 1.5s ease-in-out infinite; display: inline-block; flex-shrink: 0; }
-@keyframes star-pulse { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
+/* Sub-lines (tool output rows) */
+.sub-lines { padding: 0; }
+.sub-line { display: flex; align-items: flex-start; gap: 5px; padding: 0; }
+.sub-line-full { align-items: flex-start; }
+.hook { color: var(--label); font-size: 11px; flex-shrink: 0; margin-top: 1px; }
+.sub-text { color: var(--text-sub); font-size: 11px; }
+.sub-fn { color: var(--text-sub); font-size: 11.5px; font-weight: 500; flex-shrink: 0; }
+.sub-fn.is-error { color: var(--red); }
+.sub-param { color: var(--label); font-size: 11px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hk-line { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0; }
+.hk-fn { color: var(--label); font-weight: 500; font-size: 12px; }
+.hk-paren { color: var(--label); font-size: 12px; }
+.hk-arg { color: var(--primary); font-size: 11.5px; }
+.res-ok { color: var(--green); font-size: 11px; }
+.res-err { color: var(--red); font-size: 11px; }
+.act-output-pre { margin: 0; font-family: inherit; font-size: 11px; white-space: pre-wrap; word-break: break-all; line-height: 1.55; }
 
 .confirm-bar { display: flex; flex-direction: column; gap: 6px; padding: 8px 12px; border-radius: 6px; margin: 8px 0; }
 .confirm-header { display: flex; align-items: center; gap: 10px; }
