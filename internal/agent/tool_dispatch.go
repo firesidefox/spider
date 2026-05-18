@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
-	"strconv"
 	"sync"
 	"time"
 
@@ -16,9 +14,6 @@ import (
 )
 
 type toolExecResult struct {
-	tc              llm.ToolCall
-	result          *ToolResult
-	hidden          bool
 	durationMs      int64
 	historyMessages []llm.Message
 	pendingResult   string          // toolID\x00content; empty if hidden
@@ -45,13 +40,6 @@ func partitionToolCalls(calls []llm.ToolCall, registry *ToolRegistry) []toolBatc
 	return batches
 }
 
-func getMaxToolConcurrency() int {
-	if v, err := strconv.Atoi(os.Getenv("SPIDER_MAX_TOOL_CONCURRENCY")); err == nil && v > 0 {
-		return v
-	}
-	return 10
-}
-
 func (a *Agent) executeOne(
 	ctx context.Context,
 	tc llm.ToolCall,
@@ -60,7 +48,7 @@ func (a *Agent) executeOne(
 	events chan<- Event,
 ) toolExecResult {
 	log := logger.FromContext(ctx)
-	res := toolExecResult{tc: tc}
+	res := toolExecResult{}
 
 	tool, ok := a.registry.Get(tc.Name)
 	if !ok {
@@ -71,8 +59,9 @@ func (a *Agent) executeOne(
 		return res
 	}
 
+	hidden := false
 	if h, ok2 := tool.(HiddenTool); ok2 {
-		res.hidden = h.Hidden()
+		hidden = h.Hidden()
 	}
 
 	riskLevel := tool.DefaultRiskLevel()
@@ -92,7 +81,7 @@ func (a *Agent) executeOne(
 		if err != nil || !approved {
 			events <- Event{Type: EventToolResult, Content: map[string]any{"id": tc.ID, "tool": tc.Name, "result": "denied by user", "is_error": true}}
 			res.historyMessages = []llm.Message{{Role: llm.RoleUser, Content: "operation denied by user"}}
-			if !res.hidden {
+			if !hidden {
 				res.pendingResult = tc.ID + "\x00operation denied by user"
 				res.record = &ToolCallRecord{ID: tc.ID, Name: tc.Name, Input: tc.Input, Result: "denied by user", RiskLevel: hookResult.RiskLevel.String()}
 			}
@@ -101,7 +90,7 @@ func (a *Agent) executeOne(
 	} else if hookResult.Action == HookDeny {
 		events <- Event{Type: EventToolResult, Content: map[string]any{"id": tc.ID, "tool": tc.Name, "result": "denied: " + hookResult.Reason, "is_error": true}}
 		res.historyMessages = []llm.Message{{Role: llm.RoleUser, Content: "Tool denied: " + hookResult.Reason}}
-		if !res.hidden {
+		if !hidden {
 			res.pendingResult = tc.ID + "\x00Tool denied: " + hookResult.Reason
 			res.record = &ToolCallRecord{ID: tc.ID, Name: tc.Name, Input: tc.Input, Result: "denied: " + hookResult.Reason, RiskLevel: hookResult.RiskLevel.String()}
 		}
@@ -111,7 +100,7 @@ func (a *Agent) executeOne(
 		planMsg := fmt.Sprintf("[PLAN] Would execute tool %s with input: %s", tc.Name, inputJSON)
 		events <- Event{Type: EventToolResult, Content: map[string]any{"id": tc.ID, "tool": tc.Name, "result": planMsg, "is_error": false}}
 		res.historyMessages = []llm.Message{{Role: llm.RoleUser, Content: planMsg}}
-		if !res.hidden {
+		if !hidden {
 			res.pendingResult = tc.ID + "\x00" + planMsg
 			res.record = &ToolCallRecord{ID: tc.ID, Name: tc.Name, Input: tc.Input, Result: planMsg, RiskLevel: hookResult.RiskLevel.String()}
 		}
@@ -141,7 +130,6 @@ func (a *Agent) executeOne(
 		}
 	}
 
-	res.result = result
 	events <- Event{Type: EventToolResult, Content: map[string]any{
 		"id": tc.ID, "tool": tc.Name, "input": tc.Input, "result": result.Content, "is_error": result.IsError, "duration_ms": res.durationMs, "summary": result.Summary,
 	}}
@@ -153,7 +141,7 @@ func (a *Agent) executeOne(
 	msgs = append(msgs, llm.Message{Role: llm.RoleUser, Content: result.Content + result.Nudge})
 	res.historyMessages = msgs
 
-	if !res.hidden {
+	if !hidden {
 		res.pendingResult = tc.ID + "\x00" + result.Content
 		res.record = &ToolCallRecord{
 			ID: tc.ID, Name: tc.Name, Input: tc.Input,
@@ -175,7 +163,7 @@ func (a *Agent) executeConcurrent(
 ) []toolExecResult {
 	results := make([]toolExecResult, len(calls))
 	var wg sync.WaitGroup
-	sem := make(chan struct{}, getMaxToolConcurrency())
+	sem := make(chan struct{}, a.maxToolConcurrency)
 	for i, tc := range calls {
 		wg.Add(1)
 		go func(i int, tc llm.ToolCall) {

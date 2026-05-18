@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -85,6 +87,7 @@ type Agent struct {
 	perToolResultMaxChars        int
 	perMessageToolResultMaxChars int
 	replacementState             *ContentReplacementState
+	maxToolConcurrency           int
 }
 
 type AgentConfig struct {
@@ -102,6 +105,13 @@ type AgentConfig struct {
 	PerToolResultMaxChars        int
 	PerMessageToolResultMaxChars int
 	ReplacementState             *ContentReplacementState
+}
+
+func getMaxToolConcurrency() int {
+	if v, err := strconv.Atoi(os.Getenv("SPIDER_MAX_TOOL_CONCURRENCY")); err == nil && v > 0 {
+		return v
+	}
+	return 10
 }
 
 func NewAgent(cfg AgentConfig) *Agent {
@@ -124,6 +134,7 @@ func NewAgent(cfg AgentConfig) *Agent {
 		perToolResultMaxChars:        cfg.PerToolResultMaxChars,
 		perMessageToolResultMaxChars: cfg.PerMessageToolResultMaxChars,
 		replacementState:             cfg.ReplacementState,
+		maxToolConcurrency:           getMaxToolConcurrency(),
 	}
 }
 
