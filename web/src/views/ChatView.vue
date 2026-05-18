@@ -1,6 +1,6 @@
 <script setup lang="ts">
 defineOptions({ name: 'ChatView' })
-import { ref, onMounted, onActivated, onDeactivated, onUnmounted, nextTick, computed } from 'vue'
+import { ref, onMounted, onActivated, onDeactivated, onUnmounted, nextTick, computed, provide } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ChatMessage from '../components/ChatMessage.vue'
 import type { MessageBlock, ToolCallBlock } from '../components/ChatMessage.vue'
@@ -18,6 +18,26 @@ import { listHosts, type Host } from '../api/hosts'
 import { authHeaders, getUIPrefs, setUIPrefs } from '../api/auth'
 import { listGroups, listDocumentsByGroup, type DocumentGroup, type Document as KbDocument } from '../api/documents'
 import { updateAgentStatus, type AgentStatus } from '../composables/useAgentStatus'
+import {
+  chatThemes, densityPresets,
+  getSavedChatTheme, saveChatTheme,
+  getSavedChatDensity, saveChatDensity,
+  type ChatThemeName, type ChatDensityName,
+} from '../chatTheme'
+
+const chatThemeName = ref<ChatThemeName>(getSavedChatTheme())
+const chatDensityName = ref<ChatDensityName>(getSavedChatDensity())
+
+provide('chatTheme', () => chatThemes[chatThemeName.value])
+provide('chatDensity', () => densityPresets[chatDensityName.value])
+provide('setChatTheme', (name: ChatThemeName) => {
+  chatThemeName.value = name
+  saveChatTheme(name)
+})
+provide('setChatDensity', (name: ChatDensityName) => {
+  chatDensityName.value = name
+  saveChatDensity(name)
+})
 
 const route = useRoute()
 const router = useRouter()
