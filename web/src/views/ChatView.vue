@@ -1131,6 +1131,8 @@ onMounted(() => {
 })
 onActivated(() => {
   document.addEventListener('click', closeModeDropdown)
+  chatThemeName.value = getSavedChatTheme()
+  chatDensityName.value = getSavedChatDensity()
   if (!initialized) { initialized = true; initView() }
   else loadPrefs()
 })
