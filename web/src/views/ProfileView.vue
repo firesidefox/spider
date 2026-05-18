@@ -205,15 +205,35 @@
           <!-- 展示模式 -->
           <template v-if="!chatThemeEditing">
             <div class="edit-card">
-              <div class="ct-display-row">
-                <span class="ct-display-label">配色方案</span>
-                <span class="ct-display-chip" :style="{ background: chatThemes[chatThemeName].codeBg, color: chatThemes[chatThemeName].primary, borderColor: chatThemes[chatThemeName].primary }">
-                  {{ chatThemes[chatThemeName].displayName }}
-                </span>
+              <div class="field-group">
+                <div class="field-label">配色方案</div>
+                <div class="theme-cards">
+                  <div
+                    v-for="t in chatThemeList"
+                    :key="t.name"
+                    class="theme-card"
+                    :class="{ selected: chatThemeName === t.name }"
+                  >
+                    <div class="theme-preview" :style="{ background: t.codeBg }">
+                      <span class="theme-preview-dot" :style="{ color: t.primary }">*</span>
+                      <span class="theme-preview-fn" :style="{ color: t.primary }">fn</span>
+                      <span class="theme-preview-text" :style="{ color: t.textSub }">text</span>
+                    </div>
+                    <div class="theme-name">{{ t.displayName }}</div>
+                  </div>
+                </div>
               </div>
-              <div class="ct-display-row">
-                <span class="ct-display-label">布局密度</span>
-                <span class="ct-display-chip">{{ densityLabels[chatDensityName] }}</span>
+              <div class="field-group">
+                <div class="field-label">布局密度</div>
+                <div class="density-btns">
+                  <button
+                    v-for="d in (['compact', 'comfortable', 'spacious'] as ChatDensityName[])"
+                    :key="d"
+                    class="density-btn"
+                    :class="{ selected: chatDensityName === d }"
+                    disabled
+                  >{{ densityLabels[d] }}</button>
+                </div>
               </div>
             </div>
           </template>
