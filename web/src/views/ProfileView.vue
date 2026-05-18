@@ -82,6 +82,11 @@
             </div>
             <button v-else class="btn btn-sm" @click="settingsEditing = true">编辑</button>
           </template>
+
+          <template v-if="activeTab === 'chat-theme'">
+            <button v-if="!chatThemeEditing" class="btn btn-sm" @click="chatThemeEditing = true">编辑</button>
+            <button v-else class="btn btn-sm" @click="chatThemeEditing = false">完成</button>
+          </template>
         </div>
         <div class="detail-body">
         <template v-if="activeTab === 'info'">
@@ -197,40 +202,57 @@
         </template>
 
         <template v-if="activeTab === 'chat-theme'">
-          <div class="section-card">
-            <div class="section-title">对话框主题</div>
-            <div class="field-group">
-              <div class="field-label">配色方案</div>
-              <div class="theme-cards">
-                <div
-                  v-for="t in chatThemeList"
-                  :key="t.name"
-                  class="theme-card"
-                  :class="{ selected: chatThemeName === t.name }"
-                  @click="selectChatTheme(t.name)"
-                >
-                  <div class="theme-preview" :style="{ background: t.codeBg }">
-                    <span class="theme-preview-dot" :style="{ color: t.primary }">*</span>
-                    <span class="theme-preview-fn" :style="{ color: t.primary }">fn</span>
-                    <span class="theme-preview-text" :style="{ color: t.textSub }">text</span>
+          <!-- 展示模式 -->
+          <template v-if="!chatThemeEditing">
+            <div class="edit-card">
+              <div class="ct-display-row">
+                <span class="ct-display-label">配色方案</span>
+                <span class="ct-display-chip" :style="{ background: chatThemes[chatThemeName].codeBg, color: chatThemes[chatThemeName].primary, borderColor: chatThemes[chatThemeName].primary }">
+                  {{ chatThemes[chatThemeName].displayName }}
+                </span>
+              </div>
+              <div class="ct-display-row">
+                <span class="ct-display-label">布局密度</span>
+                <span class="ct-display-chip">{{ densityLabels[chatDensityName] }}</span>
+              </div>
+            </div>
+          </template>
+          <!-- 编辑模式 -->
+          <template v-else>
+            <div class="edit-card">
+              <div class="field-group">
+                <div class="field-label">配色方案</div>
+                <div class="theme-cards">
+                  <div
+                    v-for="t in chatThemeList"
+                    :key="t.name"
+                    class="theme-card"
+                    :class="{ selected: chatThemeName === t.name }"
+                    @click="selectChatTheme(t.name)"
+                  >
+                    <div class="theme-preview" :style="{ background: t.codeBg }">
+                      <span class="theme-preview-dot" :style="{ color: t.primary }">*</span>
+                      <span class="theme-preview-fn" :style="{ color: t.primary }">fn</span>
+                      <span class="theme-preview-text" :style="{ color: t.textSub }">text</span>
+                    </div>
+                    <div class="theme-name">{{ t.displayName }}</div>
                   </div>
-                  <div class="theme-name">{{ t.displayName }}</div>
+                </div>
+              </div>
+              <div class="field-group">
+                <div class="field-label">布局密度</div>
+                <div class="density-btns">
+                  <button
+                    v-for="d in (['compact', 'comfortable', 'spacious'] as ChatDensityName[])"
+                    :key="d"
+                    class="density-btn"
+                    :class="{ selected: chatDensityName === d }"
+                    @click="selectChatDensity(d)"
+                  >{{ densityLabels[d] }}</button>
                 </div>
               </div>
             </div>
-            <div class="field-group">
-              <div class="field-label">布局密度</div>
-              <div class="density-btns">
-                <button
-                  v-for="d in (['compact', 'comfortable', 'spacious'] as ChatDensityName[])"
-                  :key="d"
-                  class="density-btn"
-                  :class="{ selected: chatDensityName === d }"
-                  @click="selectChatDensity(d)"
-                >{{ densityLabels[d] }}</button>
-              </div>
-            </div>
-          </div>
+          </template>
         </template>
 
         <!-- Tab: 智能体 -->
@@ -844,11 +866,13 @@ const activeTab = ref<'info' | 'tokens' | 'ssh-keys' | 'logs' | 'chat-theme' | '
 watch(activeTab, (tab) => router.replace({ query: { tab } }))
 const tabTitle = computed(() => ({
   info: '基本信息', tokens: '访问令牌', 'ssh-keys': 'SSH Keys', logs: '操作日志',
+  'chat-theme': '对话框主题',
   users: '用户管理', install: '安装', agent: '智能体', kb: '知识库', settings: '偏好设置', notify: '通知渠道',
 }[activeTab.value]))
 
 const chatThemeName = ref<ChatThemeName>(getSavedChatTheme())
 const chatDensityName = ref<ChatDensityName>(getSavedChatDensity())
+const chatThemeEditing = ref(false)
 const chatThemeList = Object.values(chatThemes)
 const densityLabels: Record<ChatDensityName, string> = { compact: '紧凑', comfortable: '舒适', spacious: '宽松' }
 
@@ -1863,4 +1887,11 @@ async function handleAddChannel() {
 .density-btns { display: flex; gap: 8px; margin-top: 8px; }
 .density-btn { padding: 5px 16px; border: 1px solid var(--border); border-radius: 4px; background: transparent; color: var(--text-sub); cursor: pointer; font-size: 12px; }
 .density-btn.selected { border-color: var(--primary); color: var(--primary); background: var(--row-hover); }
+.field-group { margin-bottom: 16px; }
+.field-group:last-child { margin-bottom: 0; }
+.field-label { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 4px; }
+.ct-display-row { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.ct-display-row:last-child { border-bottom: none; }
+.ct-display-label { font-size: 12px; color: var(--muted); width: 72px; flex-shrink: 0; }
+.ct-display-chip { display: inline-block; font-size: 12px; font-weight: 500; padding: 3px 10px; border-radius: 12px; border: 1px solid var(--border); color: var(--text-sub); background: var(--panel); }
 </style>
