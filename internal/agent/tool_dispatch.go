@@ -14,7 +14,6 @@ import (
 )
 
 type toolExecResult struct {
-	durationMs      int64
 	historyMessages []llm.Message
 	pendingResult   string          // toolID\x00content; empty if hidden
 	record          *ToolCallRecord // nil if hidden
@@ -110,12 +109,12 @@ func (a *Agent) executeOne(
 	start := time.Now()
 	log.Debug().Str("tool", tc.Name).Msg("tool call start")
 	result, err := tool.Execute(ctx, tc.Input)
-	res.durationMs = time.Since(start).Milliseconds()
+	durationMs := time.Since(start).Milliseconds()
 	if err != nil {
 		result = &ToolResult{Content: err.Error(), IsError: true, RiskLevel: riskLevel}
-		log.Error().Err(err).Str("tool", tc.Name).Int64("duration_ms", res.durationMs).Msg("tool call error")
+		log.Error().Err(err).Str("tool", tc.Name).Int64("duration_ms", durationMs).Msg("tool call error")
 	} else {
-		log.Debug().Str("tool", tc.Name).Int64("duration_ms", res.durationMs).Bool("is_error", result.IsError).Interface("input", tc.Input).Str("output", result.Content).Msg("tool call done")
+		log.Debug().Str("tool", tc.Name).Int64("duration_ms", durationMs).Bool("is_error", result.IsError).Interface("input", tc.Input).Str("output", result.Content).Msg("tool call done")
 	}
 	a.hooks.RunAfter(tc.Name, tc.Input, result)
 
@@ -131,7 +130,7 @@ func (a *Agent) executeOne(
 	}
 
 	events <- Event{Type: EventToolResult, Content: map[string]any{
-		"id": tc.ID, "tool": tc.Name, "input": tc.Input, "result": result.Content, "is_error": result.IsError, "duration_ms": res.durationMs, "summary": result.Summary,
+		"id": tc.ID, "tool": tc.Name, "input": tc.Input, "result": result.Content, "is_error": result.IsError, "duration_ms": durationMs, "summary": result.Summary,
 	}}
 
 	var msgs []llm.Message
@@ -146,7 +145,7 @@ func (a *Agent) executeOne(
 		res.record = &ToolCallRecord{
 			ID: tc.ID, Name: tc.Name, Input: tc.Input,
 			Result: result.Content, IsError: result.IsError,
-			RiskLevel: result.RiskLevel.String(), DurationMs: res.durationMs,
+			RiskLevel: result.RiskLevel.String(), DurationMs: durationMs,
 			Summary:   result.Summary,
 			HostNames: a.resolveHostNames(tc.Input),
 		}
