@@ -354,6 +354,7 @@ function formatDuration(ms: number) {
 .res-err { color: var(--ct-red, var(--red)); font-size: 11px; }
 .act-output-pre { margin: 0; font-family: inherit; font-size: 11px; white-space: pre-wrap; word-break: break-all; line-height: 1.55; }
 
+/* confirm-bar uses global theme vars intentionally — system UI, not chat content */
 .confirm-bar { display: flex; flex-direction: column; gap: 6px; padding: 8px 12px; border-radius: 6px; margin: 8px 0; }
 .confirm-header { display: flex; align-items: center; gap: 10px; }
 .confirm-input { font-size: 12px; margin: 0; white-space: pre-wrap; word-break: break-all; color: var(--ct-text-sub, var(--text-sub)); background: transparent; border: none; padding: 0; font-family: inherit; }
