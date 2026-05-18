@@ -203,7 +203,7 @@
               <div class="field-label">配色方案</div>
               <div class="theme-cards">
                 <div
-                  v-for="t in Object.values(chatThemes)"
+                  v-for="t in chatThemeList"
                   :key="t.name"
                   class="theme-card"
                   :class="{ selected: chatThemeName === t.name }"
@@ -227,7 +227,7 @@
                   class="density-btn"
                   :class="{ selected: chatDensityName === d }"
                   @click="selectChatDensity(d)"
-                >{{ ({ compact: '紧凑', comfortable: '舒适', spacious: '宽松' } as Record<ChatDensityName, string>)[d] }}</button>
+                >{{ densityLabels[d] }}</button>
               </div>
             </div>
           </div>
@@ -849,6 +849,8 @@ const tabTitle = computed(() => ({
 
 const chatThemeName = ref<ChatThemeName>(getSavedChatTheme())
 const chatDensityName = ref<ChatDensityName>(getSavedChatDensity())
+const chatThemeList = Object.values(chatThemes)
+const densityLabels: Record<ChatDensityName, string> = { compact: '紧凑', comfortable: '舒适', spacious: '宽松' }
 
 function selectChatTheme(name: ChatThemeName) {
   chatThemeName.value = name

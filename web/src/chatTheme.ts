@@ -13,7 +13,6 @@ export interface ChatDensity {
 export interface ChatThemeTokens {
   name: ChatThemeName
   displayName: string
-  msgBg: string
   codeBg: string
   codeBlockBorder: string
   text: string
@@ -21,7 +20,6 @@ export interface ChatThemeTokens {
   muted: string
   labelColor: string
   primary: string
-  accent: string
   green: string
   red: string
   yellow: string
@@ -58,37 +56,37 @@ export const densityPresets: Record<ChatDensityName, ChatDensity> = {
 export const chatThemes: Record<ChatThemeName, ChatThemeTokens> = {
   dark: {
     name: 'dark', displayName: 'Dark',
-    msgBg: 'transparent', codeBg: '#12141f', codeBlockBorder: '#2c3150',
+    codeBg: '#12141f', codeBlockBorder: '#2c3150',
     text: '#eceef5', textSub: '#b0b8c8', muted: '#8892a4', labelColor: '#8892a4',
-    primary: '#6366f1', accent: '#e94560',
+    primary: '#6366f1',
     green: '#4ade80', red: '#f87171', yellow: '#fbbf24', purple: '#a78bfa',
   },
   light: {
     name: 'light', displayName: 'Light',
-    msgBg: 'transparent', codeBg: '#f5f7ff', codeBlockBorder: '#d8dce8',
+    codeBg: '#f5f7ff', codeBlockBorder: '#d8dce8',
     text: '#111827', textSub: '#374151', muted: '#6b7280', labelColor: '#4b5563',
-    primary: '#6366f1', accent: '#e94560',
+    primary: '#6366f1',
     green: '#15803d', red: '#dc2626', yellow: '#b45309', purple: '#6d28d9',
   },
   'one-dark-pro': {
     name: 'one-dark-pro', displayName: 'One Dark Pro',
-    msgBg: 'transparent', codeBg: '#282c34', codeBlockBorder: '#528bff',
+    codeBg: '#282c34', codeBlockBorder: '#528bff',
     text: '#abb2bf', textSub: '#abb2bf', muted: '#5c6370', labelColor: '#5c6370',
-    primary: '#61afef', accent: '#e06c75',
+    primary: '#61afef',
     green: '#98c379', red: '#e06c75', yellow: '#e5c07b', purple: '#c678dd',
   },
   'solarized-dark': {
     name: 'solarized-dark', displayName: 'Solarized Dark',
-    msgBg: 'transparent', codeBg: '#073642', codeBlockBorder: '#268bd2',
+    codeBg: '#073642', codeBlockBorder: '#268bd2',
     text: '#839496', textSub: '#93a1a1', muted: '#586e75', labelColor: '#657b83',
-    primary: '#268bd2', accent: '#dc322f',
+    primary: '#268bd2',
     green: '#859900', red: '#dc322f', yellow: '#b58900', purple: '#6c71c4',
   },
   nord: {
     name: 'nord', displayName: 'Nord',
-    msgBg: 'transparent', codeBg: '#2e3440', codeBlockBorder: '#88c0d0',
+    codeBg: '#2e3440', codeBlockBorder: '#88c0d0',
     text: '#d8dee9', textSub: '#e5e9f0', muted: '#4c566a', labelColor: '#616e88',
-    primary: '#88c0d0', accent: '#bf616a',
+    primary: '#88c0d0',
     green: '#a3be8c', red: '#bf616a', yellow: '#ebcb8b', purple: '#b48ead',
   },
 }

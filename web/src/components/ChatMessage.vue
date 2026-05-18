@@ -46,7 +46,6 @@ const ctVars = computed(() => {
     '--ct-muted': t.muted,
     '--ct-label-color': t.labelColor,
     '--ct-primary': t.primary,
-    '--ct-accent': t.accent,
     '--ct-green': t.green,
     '--ct-red': t.red,
     '--ct-yellow': t.yellow,

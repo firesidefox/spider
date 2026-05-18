@@ -39,6 +39,13 @@ provide('setChatDensity', (name: ChatDensityName) => {
   saveChatDensity(name)
 })
 
+function syncChatThemeFromStorage() {
+  chatThemeName.value = getSavedChatTheme()
+  chatDensityName.value = getSavedChatDensity()
+}
+onMounted(() => window.addEventListener('storage', syncChatThemeFromStorage))
+onUnmounted(() => window.removeEventListener('storage', syncChatThemeFromStorage))
+
 const route = useRoute()
 const router = useRouter()
 
