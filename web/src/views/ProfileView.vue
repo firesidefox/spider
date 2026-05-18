@@ -208,18 +208,13 @@
               <div class="field-group">
                 <div class="field-label">配色方案</div>
                 <div class="theme-cards">
-                  <div
-                    v-for="t in chatThemeList"
-                    :key="t.name"
-                    class="theme-card"
-                    :class="{ selected: chatThemeName === t.name }"
-                  >
-                    <div class="theme-preview" :style="{ background: t.codeBg }">
-                      <span class="theme-preview-dot" :style="{ color: t.primary }">*</span>
-                      <span class="theme-preview-fn" :style="{ color: t.primary }">fn</span>
-                      <span class="theme-preview-text" :style="{ color: t.textSub }">text</span>
+                  <div class="theme-card selected">
+                    <div class="theme-preview" :style="{ background: chatThemes[chatThemeName].codeBg }">
+                      <span class="theme-preview-dot" :style="{ color: chatThemes[chatThemeName].primary }">*</span>
+                      <span class="theme-preview-fn" :style="{ color: chatThemes[chatThemeName].primary }">fn</span>
+                      <span class="theme-preview-text" :style="{ color: chatThemes[chatThemeName].textSub }">text</span>
                     </div>
-                    <div class="theme-name">{{ t.displayName }}</div>
+                    <div class="theme-name">{{ chatThemes[chatThemeName].displayName }}</div>
                   </div>
                 </div>
               </div>
