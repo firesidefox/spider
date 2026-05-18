@@ -97,7 +97,10 @@ const THEME_KEY = 'spider-chat-theme'
 const DENSITY_KEY = 'spider-chat-density'
 
 export function getSavedChatTheme(): ChatThemeName {
-  return (localStorage.getItem(THEME_KEY) as ChatThemeName) || 'dark'
+  const saved = localStorage.getItem(THEME_KEY)
+  return (saved && (Object.keys(chatThemes) as ChatThemeName[]).includes(saved as ChatThemeName))
+    ? saved as ChatThemeName
+    : 'dark'
 }
 
 export function saveChatTheme(name: ChatThemeName) {
@@ -105,7 +108,10 @@ export function saveChatTheme(name: ChatThemeName) {
 }
 
 export function getSavedChatDensity(): ChatDensityName {
-  return (localStorage.getItem(DENSITY_KEY) as ChatDensityName) || 'compact'
+  const saved = localStorage.getItem(DENSITY_KEY)
+  return (saved && (Object.keys(densityPresets) as ChatDensityName[]).includes(saved as ChatDensityName))
+    ? saved as ChatDensityName
+    : 'compact'
 }
 
 export function saveChatDensity(name: ChatDensityName) {
