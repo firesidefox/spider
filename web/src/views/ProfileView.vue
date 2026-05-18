@@ -21,6 +21,9 @@
         <div class="nav-row" :class="{ selected: activeTab === 'logs' }" @click="activeTab = 'logs'; loadLogs()">
           <span class="nav-icon">📋</span><span class="nav-label">操作日志</span>
         </div>
+        <div class="nav-row" :class="{ selected: activeTab === 'chat-theme' }" @click="activeTab = 'chat-theme'">
+          <span class="nav-icon">🎨</span><span class="nav-label">对话框主题</span>
+        </div>
         <template v-if="isAdmin">
           <div class="nav-section-label">管理</div>
           <div class="nav-row" :class="{ selected: activeTab === 'users' }" @click="activeTab = 'users'">
@@ -190,6 +193,43 @@
                 </tr>
               </tbody>
             </table>
+          </div>
+        </template>
+
+        <template v-if="activeTab === 'chat-theme'">
+          <div class="section-card">
+            <div class="section-title">对话框主题</div>
+            <div class="field-group">
+              <div class="field-label">配色方案</div>
+              <div class="theme-cards">
+                <div
+                  v-for="t in Object.values(chatThemes)"
+                  :key="t.name"
+                  class="theme-card"
+                  :class="{ selected: chatThemeName === t.name }"
+                  @click="selectChatTheme(t.name)"
+                >
+                  <div class="theme-preview" :style="{ background: t.codeBg }">
+                    <span class="theme-preview-dot" :style="{ color: t.primary }">*</span>
+                    <span class="theme-preview-fn" :style="{ color: t.primary }">fn</span>
+                    <span class="theme-preview-text" :style="{ color: t.textSub }">text</span>
+                  </div>
+                  <div class="theme-name">{{ t.displayName }}</div>
+                </div>
+              </div>
+            </div>
+            <div class="field-group">
+              <div class="field-label">布局密度</div>
+              <div class="density-btns">
+                <button
+                  v-for="d in (['compact', 'comfortable', 'spacious'] as ChatDensityName[])"
+                  :key="d"
+                  class="density-btn"
+                  :class="{ selected: chatDensityName === d }"
+                  @click="selectChatDensity(d)"
+                >{{ ({ compact: '紧凑', comfortable: '舒适', spacious: '宽松' } as Record<ChatDensityName, string>)[d] }}</button>
+              </div>
+            </div>
           </div>
         </template>
 
@@ -777,6 +817,12 @@ import UsersPanel from './UsersPanel.vue'
 import AuditView from './AuditView.vue'
 import InstallPanel from './InstallPanel.vue'
 import SkillsPanel from './SkillsPanel.vue'
+import {
+  chatThemes, densityPresets,
+  getSavedChatTheme, saveChatTheme,
+  getSavedChatDensity, saveChatDensity,
+  type ChatThemeName, type ChatDensityName,
+} from '../chatTheme'
 
 const { currentUser, isAdmin } = useAuth()
 const route = useRoute()
@@ -788,18 +834,31 @@ const roleLabel = computed(() => {
 })
 
 const allowedTabs = computed(() => {
-  const base = ['info', 'tokens', 'ssh-keys', 'logs']
+  const base = ['info', 'tokens', 'ssh-keys', 'logs', 'chat-theme']
   return isAdmin.value ? [...base, 'users', 'audit', 'install', 'skills', 'agent', 'kb', 'settings', 'notify'] : base
 })
 
 const queryTab = route.query.tab as string
 const initialTab = allowedTabs.value.includes(queryTab) ? queryTab : 'info'
-const activeTab = ref<'info' | 'tokens' | 'ssh-keys' | 'logs' | 'users' | 'audit' | 'install' | 'skills' | 'agent' | 'kb' | 'settings' | 'notify'>(initialTab)
+const activeTab = ref<'info' | 'tokens' | 'ssh-keys' | 'logs' | 'chat-theme' | 'users' | 'audit' | 'install' | 'skills' | 'agent' | 'kb' | 'settings' | 'notify'>(initialTab)
 watch(activeTab, (tab) => router.replace({ query: { tab } }))
 const tabTitle = computed(() => ({
   info: '基本信息', tokens: '访问令牌', 'ssh-keys': 'SSH Keys', logs: '操作日志',
   users: '用户管理', install: '安装', agent: '智能体', kb: '知识库', settings: '偏好设置', notify: '通知渠道',
 }[activeTab.value]))
+
+const chatThemeName = ref<ChatThemeName>(getSavedChatTheme())
+const chatDensityName = ref<ChatDensityName>(getSavedChatDensity())
+
+function selectChatTheme(name: ChatThemeName) {
+  chatThemeName.value = name
+  saveChatTheme(name)
+}
+
+function selectChatDensity(name: ChatDensityName) {
+  chatDensityName.value = name
+  saveChatDensity(name)
+}
 
 const pw = ref({ old: '', new1: '', new2: '' })
 const pwError = ref('')
@@ -1794,4 +1853,12 @@ async function handleAddChannel() {
 .emb-chip:hover { border-color: var(--primary); color: var(--primary); }
 .emb-chip.active { background: var(--primary); color: #fff; border-color: var(--primary); }
 .emb-edit-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.theme-cards { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+.theme-card { cursor: pointer; border: 2px solid var(--border); border-radius: 8px; overflow: hidden; width: 100px; }
+.theme-card.selected { border-color: var(--primary); }
+.theme-preview { display: flex; align-items: center; gap: 6px; padding: 8px 10px; font-family: 'SF Mono', monospace; font-size: 11px; }
+.theme-name { font-size: 11px; color: var(--text-sub); padding: 5px 8px; text-align: center; background: var(--card-bg); }
+.density-btns { display: flex; gap: 8px; margin-top: 8px; }
+.density-btn { padding: 5px 16px; border: 1px solid var(--border); border-radius: 4px; background: transparent; color: var(--text-sub); cursor: pointer; font-size: 12px; }
+.density-btn.selected { border-color: var(--primary); color: var(--primary); background: var(--row-hover); }
 </style>
