@@ -18,6 +18,8 @@ export interface TopologyNode {
   host_name?: string
   ip?: string
   notes: string
+  pos_x: number
+  pos_y: number
   created_at: string
   updated_at: string
 }
@@ -80,7 +82,7 @@ export async function createNode(
 export async function updateNode(
   topoID: string,
   nodeID: string,
-  req: { layer: string; name: string; role?: string; host_id?: string; notes?: string }
+  req: { layer: string; name: string; role?: string; host_id?: string; notes?: string; pos_x?: number; pos_y?: number }
 ): Promise<TopologyNode> {
   const r = await fetch(`${BASE}/${topoID}/nodes/${nodeID}`, {
     method: 'PUT',
@@ -119,4 +121,16 @@ export async function importYAML(topoID: string, yamlText: string): Promise<Topo
   })
   if (!r.ok) throw new Error(await r.text())
   return r.json()
+}
+
+export async function exportYAML(topoID: string): Promise<void> {
+  const r = await fetch(`${BASE}/${topoID}/export`, { headers: authHeaders() })
+  if (!r.ok) throw new Error(await r.text())
+  const blob = await r.blob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = r.headers.get('Content-Disposition')?.match(/filename="(.+)"/)?.[1] ?? 'topology.yaml'
+  a.click()
+  URL.revokeObjectURL(url)
 }

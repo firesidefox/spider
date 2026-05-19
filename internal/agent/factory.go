@@ -261,6 +261,7 @@ func (f *Factory) buildRegistryWithHosts(conversationID string, selectedHostIDs 
 	}
 	if f.TopologyStore != nil {
 		registry.Register(NewGetTopologyTool(f.TopologyStore))
+		registry.Register(NewGetTopologyContextTool(f.TopologyStore))
 	}
 	if f.TaskStore != nil {
 		registry.Register(NewCreateTaskTool(f.TaskStore, conversationID))

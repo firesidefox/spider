@@ -24,13 +24,25 @@
         <span class="topo-toolbar-name">{{ activeTopo.name }}</span>
         <div class="topo-toolbar-sep"></div>
         <button class="topo-btn-sm" @click="openAddNode">＋ 添加节点</button>
+        <button class="topo-btn-sm" :class="{ 'topo-btn-active': linkMode }" @click="toggleLinkMode">🔗 连线</button>
         <button class="topo-btn-sm" @click="showImportYaml = true">⬆ 导入 YAML</button>
+        <button class="topo-btn-sm" @click="doExportYaml">⬇ 导出 YAML</button>
         <div style="flex:1"></div>
         <button class="topo-btn-sm topo-btn-danger" @click="doDeleteTopo">删除拓扑</button>
       </div>
       <div v-if="loadError" class="topo-canvas-error">{{ loadError }}</div>
       <div v-else-if="!activeTopo" class="topo-canvas-empty">选择或创建一个拓扑</div>
-      <div v-else ref="cyContainer" class="topo-cy"></div>
+      <div v-else class="topo-cy-wrap">
+        <div class="topo-layer-axis" v-if="layerAxisItems.length > 0">
+          <div
+            v-for="item in layerAxisItems"
+            :key="item.layer"
+            class="topo-layer-label"
+            :style="{ top: item.top + 'px', color: item.color }"
+          >{{ item.layer }}</div>
+        </div>
+        <div ref="cyContainer" class="topo-cy"></div>
+      </div>
     </div>
 
     <!-- Right: node detail -->
@@ -144,7 +156,7 @@ import dagre from 'cytoscape-dagre'
 import type { TopologyFull, Topology, TopologyNode } from '../api/topology'
 import {
   listTopologies, getTopologyFull, createTopology, deleteTopology,
-  createNode, updateNode, deleteNode, importYAML,
+  createNode, updateNode, deleteNode, createEdge, deleteEdge, importYAML, exportYAML,
 } from '../api/topology'
 import type { Host } from '../api/hosts'
 import { listHosts } from '../api/hosts'
@@ -176,9 +188,24 @@ const showImportYaml = ref(false)
 const yamlTab = ref(0)
 const yamlText = ref('')
 
-onBeforeUnmount(() => { if (cy) { cy.destroy(); cy = null } })
+// link mode (edge creation)
+const linkMode = ref(false)
+const linkSource = ref<string | null>(null)
+
+// layer axis
+interface LayerAxisItem { layer: string; color: string; top: number }
+const layerAxisItems = ref<LayerAxisItem[]>([])
+
+let themeObserver: MutationObserver | null = null
+
+onBeforeUnmount(() => {
+  if (cy) { cy.destroy(); cy = null }
+  themeObserver?.disconnect()
+})
 
 onMounted(async () => {
+  themeObserver = new MutationObserver(() => { if (activeTopo.value) renderGraph() })
+  themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['style'] })
   topologies.value = await listTopologies()
   if (topologies.value.length > 0) await selectTopo(topologies.value[0])
 })
@@ -285,17 +312,31 @@ async function doDeleteNode() {
   }
 }
 
+async function doExportYaml() {
+  if (!activeTopo.value) return
+  try {
+    await exportYAML(activeTopo.value.id)
+  } catch (e: any) {
+    loadError.value = e.message ?? 'Export failed'
+  }
+}
+
+function toggleLinkMode() {
+  linkMode.value = !linkMode.value
+  linkSource.value = null
+  if (cy) cy.container()!.style.cursor = linkMode.value ? 'crosshair' : ''
+}
+
 async function doImportYaml() {
   if (!activeTopo.value || !yamlText.value.trim()) return
   saving.value = true
   dialogError.value = ''
+  const topoRef = activeTopo.value
   try {
-    activeTopo.value = await importYAML(activeTopo.value.id, yamlText.value)
+    await importYAML(topoRef.id, yamlText.value)
     showImportYaml.value = false
     yamlText.value = ''
-    activeNode.value = null
-    await nextTick()
-    renderGraph()
+    await selectTopo(topoRef)
   } catch (e: any) {
     dialogError.value = e.message ?? 'Import failed'
   } finally {
@@ -331,25 +372,33 @@ function renderGraph() {
   if (cy) { cy.destroy(); cy = null }
 
   const topo = activeTopo.value
+  const cs = getComputedStyle(document.documentElement)
+  const surfaceColor = cs.getPropertyValue('--surface').trim() || '#ffffff'
+  const textColor = cs.getPropertyValue('--text').trim() || '#111827'
+  const borderColor = cs.getPropertyValue('--border').trim() || '#d8dce8'
+  const bgColor = cs.getPropertyValue('--bg').trim() || '#f0f2f8'
+
   const elements: cytoscape.ElementDefinition[] = []
 
   for (const node of topo.nodes) {
     const color = layerColor(node.layer)
     const bound = !!node.host_id
-    const label = (node.host_name || node.name).length > 10
-      ? (node.host_name || node.name).slice(0, 10) + '…'
+    const label = (node.host_name || node.name).length > 12
+      ? (node.host_name || node.name).slice(0, 12) + '…'
       : (node.host_name || node.name)
+    const hasPos = node.pos_x !== 0 || node.pos_y !== 0
     elements.push({
       data: { id: node.id, label, bound, color, nodeRef: node },
+      ...(hasPos ? { position: { x: node.pos_x, y: node.pos_y } } : {}),
     })
   }
+  const allHavePos = topo.nodes.length > 0 && topo.nodes.every(n => n.pos_x !== 0 || n.pos_y !== 0)
 
   for (const edge of topo.edges) {
     const fromNode = topo.nodes.find(n => n.id === edge.from_node)
-    const color = fromNode ? layerColor(fromNode.layer) : '#1f2937'
-    const bound = !!fromNode?.host_id
+    const color = fromNode ? layerColor(fromNode.layer) : borderColor
     elements.push({
-      data: { id: edge.id, source: edge.from_node, target: edge.to_node, color, bound },
+      data: { id: edge.id, source: edge.from_node, target: edge.to_node, color },
     })
   }
 
@@ -360,17 +409,19 @@ function renderGraph() {
       {
         selector: 'node',
         style: {
-          'background-color': (ele: any) => ele.data('bound') ? ele.data('color') : '#1a1a1a',
-          'border-color': (ele: any) => ele.data('bound') ? ele.data('color') : '#374151',
-          'border-width': 2,
+          'background-color': (ele: any) => ele.data('bound') ? ele.data('color') : surfaceColor,
+          'border-color': (ele: any) => ele.data('color'),
+          'border-width': (ele: any) => ele.data('bound') ? 0 : 2,
           'label': 'data(label)',
-          'color': (ele: any) => ele.data('bound') ? '#fff' : '#374151',
+          'color': (ele: any) => ele.data('bound') ? '#ffffff' : textColor,
           'font-size': 11,
+          'font-weight': '500',
           'text-valign': 'center',
           'text-halign': 'center',
-          'width': 100,
-          'height': 36,
+          'width': 110,
+          'height': 38,
           'shape': 'roundrectangle',
+          'text-outline-width': 0,
         },
       },
       {
@@ -380,24 +431,104 @@ function renderGraph() {
           'target-arrow-color': 'data(color)',
           'target-arrow-shape': 'triangle',
           'curve-style': 'bezier',
-          'line-style': (ele: any) => ele.data('bound') ? 'solid' : 'dashed',
-          'opacity': 0.6,
+          'line-style': 'solid',
+          'opacity': 0.75,
           'width': 1.5,
         },
       },
       {
         selector: 'node:selected',
-        style: { 'border-width': 3, 'border-color': '#fff' },
+        style: { 'border-width': 3, 'border-color': cs.getPropertyValue('--primary').trim() || '#6366f1' },
       },
     ],
-    layout: { name: 'dagre', rankDir: 'TB', nodeSep: 40, rankSep: 60 } as any,
+    layout: allHavePos
+      ? { name: 'preset' }
+      : { name: 'dagre', rankDir: 'TB', nodeSep: 50, rankSep: 70 } as any,
   })
 
-  cy.on('tap', 'node', (evt) => {
-    activeNode.value = evt.target.data('nodeRef') as TopologyNode
+  const updateLayerAxis = () => {
+    if (!cy) return
+    const pan = cy.pan()
+    const zoom = cy.zoom()
+    const layerMap = new Map<string, { color: string; ys: number[] }>()
+    cy.nodes().forEach((n: any) => {
+      const nodeRef = n.data('nodeRef') as TopologyNode
+      const layer = nodeRef.layer || ''
+      if (!layer) return
+      const renderedY = n.position().y * zoom + pan.y
+      if (!layerMap.has(layer)) layerMap.set(layer, { color: layerColor(layer), ys: [] })
+      layerMap.get(layer)!.ys.push(renderedY)
+    })
+    const items: LayerAxisItem[] = []
+    layerMap.forEach(({ color, ys }, layer) => {
+      const minY = Math.min(...ys)
+      const maxY = Math.max(...ys)
+      items.push({ layer, color, top: (minY + maxY) / 2 - 10 })
+    })
+    items.sort((a, b) => a.top - b.top)
+    layerAxisItems.value = items
+  }
+
+  cy.on('layoutstop', updateLayerAxis)
+  cy.on('pan zoom', updateLayerAxis)
+  // trigger after layout runs (dagre is async via requestAnimationFrame)
+  setTimeout(updateLayerAxis, 50)
+
+  cy.on('tap', 'node', async (evt) => {
+    const node = evt.target
+    const nodeId = node.id()
+    if (linkMode.value) {
+      if (!linkSource.value) {
+        linkSource.value = nodeId
+        node.style('border-color', '#22c55e')
+      } else if (linkSource.value !== nodeId) {
+        try {
+          await createEdge(activeTopo.value!.id, linkSource.value, nodeId)
+          activeTopo.value = await getTopologyFull(activeTopo.value!.id)
+          await nextTick()
+          renderGraph()
+        } catch (e: any) {
+          loadError.value = e.message ?? 'Failed to create edge'
+        }
+        linkSource.value = null
+      }
+    } else {
+      activeNode.value = node.data('nodeRef') as TopologyNode
+    }
   })
   cy.on('tap', (evt) => {
-    if (evt.target === cy) activeNode.value = null
+    if (evt.target === cy) {
+      activeNode.value = null
+      if (linkMode.value) linkSource.value = null
+    }
+  })
+  cy.on('cxttap', 'edge', async (evt) => {
+    const edgeId = evt.target.id()
+    if (!confirm('删除此连线？')) return
+    try {
+      await deleteEdge(activeTopo.value!.id, edgeId)
+      activeTopo.value = await getTopologyFull(activeTopo.value!.id)
+      await nextTick()
+      renderGraph()
+    } catch (e: any) {
+      loadError.value = e.message ?? 'Failed to delete edge'
+    }
+  })
+  cy.on('dragfree', 'node', async (evt) => {
+    const node = evt.target
+    const pos = node.position()
+    const nodeRef = node.data('nodeRef') as TopologyNode
+    try {
+      await updateNode(activeTopo.value!.id, nodeRef.id, {
+        layer: nodeRef.layer, name: nodeRef.name, role: nodeRef.role,
+        host_id: nodeRef.host_id || undefined,
+        pos_x: pos.x, pos_y: pos.y,
+      })
+      nodeRef.pos_x = pos.x
+      nodeRef.pos_y = pos.y
+    } catch (e: any) {
+      console.warn('Failed to save position:', e)
+    }
   })
 }
 </script>
@@ -427,8 +558,6 @@ function renderGraph() {
 .topo-item:hover { background: var(--surface); color: var(--text); }
 .topo-item.active { background: var(--surface); color: var(--text); }
 .topo-empty { padding: 12px; font-size: 12px; color: var(--label); text-align: center; }
-
-.topo-canvas-wrap { flex: 1; min-width: 0; position: relative; display: flex; flex-direction: column; }
 
 .topo-detail {
   width: 0; overflow: hidden; transition: width .2s; border-left: 1px solid var(--border);
@@ -470,6 +599,18 @@ function renderGraph() {
 .topo-btn-secondary:hover { border-color: var(--text-sub); color: var(--text); }
 
 .topo-canvas-wrap { flex: 1; min-width: 0; position: relative; display: flex; flex-direction: column; }
+.topo-cy-wrap { flex: 1; min-height: 0; position: relative; display: flex; }
+.topo-layer-axis {
+  position: absolute; left: 0; top: 0; bottom: 0; width: 72px;
+  pointer-events: none; z-index: 10;
+}
+.topo-layer-label {
+  position: absolute; left: 8px; right: 4px;
+  font-size: 11px; font-weight: 600; letter-spacing: .04em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  opacity: 0.85;
+}
+.topo-cy { flex: 1; min-height: 0; }
 .topo-toolbar {
   display: flex; align-items: center; gap: 8px; padding: 8px 14px;
   border-bottom: 1px solid var(--border); background: var(--surface); flex-shrink: 0;
@@ -482,6 +623,7 @@ function renderGraph() {
   white-space: nowrap;
 }
 .topo-btn-sm:hover { background: var(--hover); color: var(--text); }
+.topo-btn-active { background: var(--primary) !important; color: #fff !important; border-color: var(--primary) !important; }
 .topo-btn-danger { color: var(--red); border-color: rgba(248,113,113,.3); background: none; }
 .topo-btn-danger:hover { background: rgba(248,113,113,.08); border-color: var(--red); }
 .topo-detail-actions { display: flex; gap: 6px; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); }

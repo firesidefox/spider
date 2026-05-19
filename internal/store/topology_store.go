@@ -87,7 +87,8 @@ func (s *TopologyStore) Delete(id string) error {
 func (s *TopologyStore) ListNodes(topologyID string) ([]*models.TopologyNode, error) {
 	rows, err := s.db.Query(
 		`SELECT n.id, n.topology_id, n.layer, n.name, n.role,
-		        COALESCE(n.host_id,''), n.notes, n.created_at, n.updated_at,
+		        COALESCE(n.host_id,''), n.notes, n.pos_x, n.pos_y,
+		        n.created_at, n.updated_at,
 		        COALESCE(h.name,''), COALESCE(h.ip,'')
 		 FROM topology_nodes n
 		 LEFT JOIN hosts h ON h.id = n.host_id
@@ -102,7 +103,8 @@ func (s *TopologyStore) ListNodes(topologyID string) ([]*models.TopologyNode, er
 	for rows.Next() {
 		var n models.TopologyNode
 		if err := rows.Scan(&n.ID, &n.TopologyID, &n.Layer, &n.Name, &n.Role,
-			&n.HostID, &n.Notes, &n.CreatedAt, &n.UpdatedAt, &n.HostName, &n.IP); err != nil {
+			&n.HostID, &n.Notes, &n.PosX, &n.PosY,
+			&n.CreatedAt, &n.UpdatedAt, &n.HostName, &n.IP); err != nil {
 			return nil, err
 		}
 		list = append(list, &n)
@@ -128,11 +130,13 @@ func (s *TopologyStore) CreateNode(topologyID string, req *models.CreateNodeRequ
 	var n models.TopologyNode
 	err = s.db.QueryRow(
 		`SELECT n.id, n.topology_id, n.layer, n.name, n.role,
-		        COALESCE(n.host_id,''), n.notes, n.created_at, n.updated_at,
+		        COALESCE(n.host_id,''), n.notes, n.pos_x, n.pos_y,
+		        n.created_at, n.updated_at,
 		        COALESCE(h.name,''), COALESCE(h.ip,'')
 		 FROM topology_nodes n LEFT JOIN hosts h ON h.id = n.host_id WHERE n.id = ?`, id,
 	).Scan(&n.ID, &n.TopologyID, &n.Layer, &n.Name, &n.Role,
-		&n.HostID, &n.Notes, &n.CreatedAt, &n.UpdatedAt, &n.HostName, &n.IP)
+		&n.HostID, &n.Notes, &n.PosX, &n.PosY,
+		&n.CreatedAt, &n.UpdatedAt, &n.HostName, &n.IP)
 	return &n, err
 }
 
@@ -142,9 +146,20 @@ func (s *TopologyStore) UpdateNode(id string, req *models.UpdateNodeRequest) (*m
 	if req.HostID != "" {
 		hostID = &req.HostID
 	}
+	var posX, posY float64
+	if req.PosX != nil || req.PosY != nil {
+		if req.PosX != nil {
+			posX = *req.PosX
+		}
+		if req.PosY != nil {
+			posY = *req.PosY
+		}
+	} else {
+		s.db.QueryRow(`SELECT pos_x, pos_y FROM topology_nodes WHERE id = ?`, id).Scan(&posX, &posY)
+	}
 	_, err := s.db.Exec(
-		`UPDATE topology_nodes SET layer=?, name=?, role=?, host_id=?, notes=?, updated_at=? WHERE id=?`,
-		req.Layer, req.Name, req.Role, hostID, req.Notes, now, id,
+		`UPDATE topology_nodes SET layer=?, name=?, role=?, host_id=?, notes=?, pos_x=?, pos_y=?, updated_at=? WHERE id=?`,
+		req.Layer, req.Name, req.Role, hostID, req.Notes, posX, posY, now, id,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("update node: %w", err)
@@ -152,11 +167,13 @@ func (s *TopologyStore) UpdateNode(id string, req *models.UpdateNodeRequest) (*m
 	var n models.TopologyNode
 	err = s.db.QueryRow(
 		`SELECT n.id, n.topology_id, n.layer, n.name, n.role,
-		        COALESCE(n.host_id,''), n.notes, n.created_at, n.updated_at,
+		        COALESCE(n.host_id,''), n.notes, n.pos_x, n.pos_y,
+		        n.created_at, n.updated_at,
 		        COALESCE(h.name,''), COALESCE(h.ip,'')
 		 FROM topology_nodes n LEFT JOIN hosts h ON h.id = n.host_id WHERE n.id = ?`, id,
 	).Scan(&n.ID, &n.TopologyID, &n.Layer, &n.Name, &n.Role,
-		&n.HostID, &n.Notes, &n.CreatedAt, &n.UpdatedAt, &n.HostName, &n.IP)
+		&n.HostID, &n.Notes, &n.PosX, &n.PosY,
+		&n.CreatedAt, &n.UpdatedAt, &n.HostName, &n.IP)
 	return &n, err
 }
 

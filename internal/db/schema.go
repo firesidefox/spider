@@ -358,6 +358,8 @@ func migrate(db *sql.DB) error {
 	// migrate existing topology_nodes: add layer, drop group_id
 	db.Exec("ALTER TABLE topology_nodes ADD COLUMN layer TEXT NOT NULL DEFAULT ''")
 	db.Exec("ALTER TABLE topology_nodes DROP COLUMN group_id")
+	db.Exec("ALTER TABLE topology_nodes ADD COLUMN pos_x REAL NOT NULL DEFAULT 0")
+	db.Exec("ALTER TABLE topology_nodes ADD COLUMN pos_y REAL NOT NULL DEFAULT 0")
 	// Task automation tables
 	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS tasks (
 		id                   TEXT PRIMARY KEY,

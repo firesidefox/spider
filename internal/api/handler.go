@@ -624,6 +624,15 @@ func NewRouter(app *mcppkg.App) http.Handler {
 			}
 			return
 		}
+		if strings.HasSuffix(path, "/export") {
+			topoID := idFromTopoPath(strings.TrimSuffix(path, "/export"))
+			if r.Method == http.MethodGet {
+				exportTopologyYAML(app, w, r, topoID)
+			} else {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			}
+			return
+		}
 		if i := strings.Index(path, "/nodes/"); i != -1 {
 			nid := path[i+len("/nodes/"):]
 			switch r.Method {

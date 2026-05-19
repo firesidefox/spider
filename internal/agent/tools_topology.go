@@ -39,7 +39,13 @@ func (t *GetTopologyTool) InputSchema() map[string]any {
 	}
 }
 
-func (t *GetTopologyTool) SystemPromptSection() string { return "" }
+const getTopologyPrompt = `## GetTopology
+
+**When to use:** When you need the full topology structure — listing all nodes, understanding the overall network layout, or when you don't know the target host name yet.
+
+**When NOT to use:** When you already know the host name and need its network position or upstream path — use GetTopologyContext instead, it returns a focused result without noise.`
+
+func (t *GetTopologyTool) SystemPromptSection() string { return getTopologyPrompt }
 
 func (t *GetTopologyTool) Execute(ctx context.Context, input map[string]any) (*ToolResult, error) {
 	id, _ := input["topology_id"].(string)

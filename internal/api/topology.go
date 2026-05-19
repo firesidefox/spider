@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -175,13 +176,7 @@ func idFromTopoPath(path string) string {
 
 type topoYAML struct {
 	Name    string       `yaml:"name"`
-	Layers  []layerYAML  `yaml:"layers"`
 	Devices []deviceYAML `yaml:"devices"`
-}
-
-type layerYAML struct {
-	Name  string `yaml:"name"`
-	Color string `yaml:"color"`
 }
 
 type deviceYAML struct {
@@ -266,4 +261,41 @@ func importTopologyYAML(app *mcppkg.App, w http.ResponseWriter, r *http.Request,
 		return
 	}
 	writeJSON(w, http.StatusOK, full)
+}
+
+func exportTopologyYAML(app *mcppkg.App, w http.ResponseWriter, r *http.Request, topoID string) {
+	full, err := app.TopologyStore.GetFull(topoID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "topology not found")
+		return
+	}
+	nodeByID := map[string]string{}
+	for _, n := range full.Nodes {
+		nodeByID[n.ID] = n.Name
+	}
+	upstreamMap := map[string][]string{}
+	for _, e := range full.Edges {
+		upstreamMap[e.ToNode] = append(upstreamMap[e.ToNode], nodeByID[e.FromNode])
+	}
+	var out topoYAML
+	out.Name = full.Name
+	for _, n := range full.Nodes {
+		dev := deviceYAML{
+			Name:     n.Name,
+			Layer:    n.Layer,
+			Role:     n.Role,
+			IP:       n.IP,
+			Upstream: upstreamMap[n.ID],
+		}
+		out.Devices = append(out.Devices, dev)
+	}
+	data, err := yaml.Marshal(&out)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	base := strings.ReplaceAll(full.Name, " ", "-")
+	w.Header().Set("Content-Type", "application/x-yaml; charset=utf-8")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s.yaml"`, base))
+	w.Write(data)
 }

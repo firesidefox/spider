@@ -19,9 +19,26 @@
           </div>
         </div>
       </div>
-      <button class="theme-toggle" @click="toggleTheme" :title="isDark ? '切换亮色' : '切换暗色'">
-        {{ isDark ? '☀️' : '🌙' }}
-      </button>
+      <div class="theme-dropdown-wrap" @click.stop="showThemeMenu = !showThemeMenu">
+        <button class="theme-toggle">
+          {{ themeMode === 'light' ? '☀️' : themeMode === 'dark' ? '🌙' : '🖥' }}
+        </button>
+        <div v-if="showThemeMenu" class="theme-dropdown">
+          <button class="theme-option" :class="{ active: themeMode === 'light' }" @click.stop="setTheme('light')">
+            <span class="theme-option-icon">☀️</span>
+            <span class="theme-option-text"><strong>浅色模式</strong><small>始终使用浅色主题</small></span>
+          </button>
+          <button class="theme-option" :class="{ active: themeMode === 'dark' }" @click.stop="setTheme('dark')">
+            <span class="theme-option-icon">🌙</span>
+            <span class="theme-option-text"><strong>深色模式</strong><small>始终使用深色主题</small></span>
+          </button>
+          <button class="theme-option" :class="{ active: themeMode === 'system' }" @click.stop="setTheme('system')">
+            <span class="theme-option-icon">🖥</span>
+            <span class="theme-option-text"><strong>自动模式</strong><small>跟随系统主题设置</small></span>
+          </button>
+          <div v-if="themeMode === 'system'" class="theme-system-hint">当前跟随系统：{{ systemIsDark ? '深色' : '浅色' }}</div>
+        </div>
+      </div>
     </header>
     <main class="main">
       <KeepAlive include="ChatView">
@@ -33,16 +50,32 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watchEffect, provide, onMounted, onUnmounted, KeepAlive } from 'vue'
+import { ref, computed, watchEffect, provide, onMounted, onUnmounted, KeepAlive } from 'vue'
 import { themes, getSavedTheme, saveTheme, type Theme } from './theme'
 
-const theme = ref<Theme>(getSavedTheme())
-const isDark = ref(theme.value === 'dark')
+const themeMode = ref<Theme>(getSavedTheme())
+const systemIsDark = ref(window.matchMedia('(prefers-color-scheme: dark)').matches)
+const showThemeMenu = ref(false)
 
-function toggleTheme() {
-  theme.value = theme.value === 'dark' ? 'light' : 'dark'
-  isDark.value = theme.value === 'dark'
-  saveTheme(theme.value)
+let mql: MediaQueryList
+onMounted(() => {
+  mql = window.matchMedia('(prefers-color-scheme: dark)')
+  systemIsDark.value = mql.matches
+  mql.addEventListener('change', onSystemChange)
+})
+onUnmounted(() => { mql?.removeEventListener('change', onSystemChange) })
+function onSystemChange(e: MediaQueryListEvent) { systemIsDark.value = e.matches }
+
+const resolvedTheme = computed(() => {
+  if (themeMode.value === 'system') return systemIsDark.value ? 'dark' : 'light'
+  return themeMode.value
+})
+const isDark = computed(() => resolvedTheme.value === 'dark')
+
+function setTheme(mode: Theme) {
+  themeMode.value = mode
+  saveTheme(mode)
+  showThemeMenu.value = false
 }
 
 provide('isDark', () => isDark.value)
@@ -58,9 +91,9 @@ const { currentUser, isAdmin, clearUser } = useAuth()
 
 const showUserMenu = ref(false)
 
-function closeUserMenu() { showUserMenu.value = false }
-onMounted(() => document.addEventListener('click', closeUserMenu))
-onUnmounted(() => document.removeEventListener('click', closeUserMenu))
+function closeMenus() { showUserMenu.value = false; showThemeMenu.value = false }
+onMounted(() => document.addEventListener('click', closeMenus))
+onUnmounted(() => document.removeEventListener('click', closeMenus))
 
 async function handleLogout() {
   await logout().catch(() => {})
@@ -69,7 +102,7 @@ async function handleLogout() {
 }
 
 watchEffect(() => {
-  const c = themes[theme.value]
+  const c = themes[resolvedTheme.value]
   const root = document.documentElement
   root.style.setProperty('--bg', c.bg)
   root.style.setProperty('--nav', c.nav)
@@ -159,6 +192,11 @@ body {
   border-bottom-color: var(--primary);
 }
 
+.theme-dropdown-wrap {
+  position: relative;
+  align-self: center;
+  flex-shrink: 0;
+}
 .theme-toggle {
   background: none;
   border: 1px solid var(--border);
@@ -171,10 +209,49 @@ body {
   align-items: center;
   justify-content: center;
   transition: background 0.15s;
-  flex-shrink: 0;
-  align-self: center;
 }
 .theme-toggle:hover { background: var(--row-hover); }
+.theme-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 8px;
+  min-width: 200px;
+  box-shadow: var(--card-shadow);
+  z-index: 100;
+}
+.theme-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  background: none;
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--text);
+  font-size: 14px;
+  text-align: left;
+}
+.theme-option:hover { background: var(--row-hover); }
+.theme-option.active { background: var(--row-hover); font-weight: 600; }
+.theme-option-icon { font-size: 18px; flex-shrink: 0; }
+.theme-option-text { display: flex; flex-direction: column; gap: 2px; }
+.theme-option-text strong { font-size: 14px; font-weight: 500; }
+.theme-option.active .theme-option-text strong { font-weight: 700; }
+.theme-option-text small { font-size: 12px; color: var(--muted); }
+.theme-system-hint {
+  padding: 8px 12px 4px;
+  font-size: 12px;
+  color: var(--muted);
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+}
 
 .main {
   flex: 1;

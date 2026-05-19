@@ -1,4 +1,4 @@
-export type Theme = 'dark' | 'light'
+export type Theme = 'dark' | 'light' | 'system'
 
 export interface ThemeTokens {
   bg: string
@@ -83,7 +83,9 @@ export const themes = { dark, light }
 const STORAGE_KEY = 'spider-theme'
 
 export function getSavedTheme(): Theme {
-  return (localStorage.getItem(STORAGE_KEY) as Theme) || 'dark'
+  const v = localStorage.getItem(STORAGE_KEY)
+  if (v === 'dark' || v === 'light' || v === 'system') return v
+  return 'system'
 }
 
 export function saveTheme(t: Theme) {

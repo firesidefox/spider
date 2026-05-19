@@ -18,6 +18,8 @@ type TopologyNode struct {
 	Role       string    `json:"role"`
 	HostID     string    `json:"host_id,omitempty"`
 	Notes      string    `json:"notes"`
+	PosX       float64   `json:"pos_x"`
+	PosY       float64   `json:"pos_y"`
 	CreatedAt  time.Time `json:"created_at"`
 	UpdatedAt  time.Time `json:"updated_at"`
 	HostName   string    `json:"host_name,omitempty"`
@@ -57,11 +59,13 @@ type CreateNodeRequest struct {
 }
 
 type UpdateNodeRequest struct {
-	Layer  string `json:"layer"`
-	Name   string `json:"name"`
-	Role   string `json:"role"`
-	HostID string `json:"host_id"`
-	Notes  string `json:"notes"`
+	Layer  string   `json:"layer"`
+	Name   string   `json:"name"`
+	Role   string   `json:"role"`
+	HostID string   `json:"host_id"`
+	Notes  string   `json:"notes"`
+	PosX   *float64 `json:"pos_x,omitempty"`
+	PosY   *float64 `json:"pos_y,omitempty"`
 }
 
 type CreateEdgeRequest struct {

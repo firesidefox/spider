@@ -216,9 +216,12 @@ function formatDuration(ms: number) {
               <div v-for="call in item.calls" :key="call.id" class="sub-line">
                 <span class="hook">└</span>
                 <span class="sub-fn" :class="{ 'is-error': call.isError }">{{ call.name }}</span>
+                <template v-if="call.durationMs != null">
+                  <span class="sub-arrow">→</span>
+                  <span :class="call.isError ? 'res-err' : 'res-ok'">{{ exploreResult(call) }}</span>
+                </template>
                 <span class="sub-param">{{ exploreParam(call) }}</span>
                 <template v-if="call.durationMs != null">
-                  <span :class="call.isError ? 'res-err' : 'res-ok'">{{ exploreResult(call) }}</span>
                   <span class="dur">{{ formatDuration(call.durationMs) }}</span>
                 </template>
                 <span v-else-if="isStreaming" class="streaming-dots">···</span>
@@ -290,7 +293,7 @@ function formatDuration(ms: number) {
 .block-body { flex: 1; min-width: 0; }
 
 /* Gutter dot (the * status icon) */
-.dot { color: var(--ct-primary, var(--primary)); font-weight: bold; font-size: 18px; line-height: 1.2; display: inline-block; }
+.dot { color: var(--ct-primary, var(--primary)); font-weight: bold; font-size: 15px; line-height: 1.2; display: inline-block; }
 .dot.pulsing { animation: dot-pulse 1.5s ease-in-out infinite; }
 .dot.dot-err { color: var(--ct-red, var(--red)); }
 @keyframes dot-pulse { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
@@ -342,15 +345,16 @@ function formatDuration(ms: number) {
 .sub-line-full { align-items: flex-start; }
 .hook { color: var(--ct-label-color, var(--label)); font-size: 11px; flex-shrink: 0; margin-top: 1px; }
 .sub-text { color: var(--ct-text-sub, var(--text-sub)); font-size: 11px; }
+.sub-arrow { color: var(--ct-label-color, var(--label)); font-size: 11px; flex-shrink: 0; }
 .sub-fn { color: var(--ct-text-sub, var(--text-sub)); font-size: 11.5px; font-weight: 500; flex-shrink: 0; }
 .sub-fn.is-error { color: var(--ct-red, var(--red)); }
-.sub-param { color: var(--ct-label-color, var(--label)); font-size: 11px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sub-param { color: var(--ct-label-color, var(--label)); font-size: 11px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-left: 6px; }
 .hk-line { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0; }
 .hk-fn { color: var(--ct-label-color, var(--label)); font-weight: 500; font-size: 12px; }
 .hk-paren { color: var(--ct-label-color, var(--label)); font-size: 12px; }
 .hk-arg { color: var(--ct-primary, var(--primary)); font-size: 11.5px; }
-.res-ok { color: var(--ct-green, var(--green)); font-size: 11px; }
-.res-err { color: var(--ct-red, var(--red)); font-size: 11px; }
+.res-ok { color: var(--ct-green, var(--green)); font-size: 11px; flex-shrink: 0; }
+.res-err { color: var(--ct-red, var(--red)); font-size: 11px; flex-shrink: 0; }
 .act-output-pre { margin: 0; font-family: inherit; font-size: 11px; white-space: pre-wrap; word-break: break-all; line-height: 1.55; }
 
 /* confirm-bar uses global theme vars intentionally — system UI, not chat content */
