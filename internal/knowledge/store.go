@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -298,6 +299,69 @@ func (s *Store) CatalogSections(ctx context.Context, scope Scope) ([]Section, er
 			return nil, err
 		}
 		out = append(out, sec)
+	}
+	return out, rows.Err()
+}
+
+// CatalogEntries returns lightweight entry summaries for a given section.
+func (s *Store) CatalogEntries(ctx context.Context, sectionID int) ([]EntrySummary, error) {
+	query := `
+		SELECT id, title, summary
+		FROM knowledge_entries
+		WHERE section_id = ?
+		ORDER BY position`
+
+	rows, err := s.db.QueryContext(ctx, query, sectionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []EntrySummary
+	for rows.Next() {
+		var e EntrySummary
+		if err := rows.Scan(&e.ID, &e.Title, &e.Summary); err != nil {
+			return nil, err
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}
+
+// FetchEntries returns full entry content for specific entry IDs.
+func (s *Store) FetchEntries(ctx context.Context, entryIDs []int) ([]Entry, error) {
+	// Handle empty input
+	if len(entryIDs) == 0 {
+		return []Entry{}, nil
+	}
+
+	// Build IN clause dynamically
+	placeholders := make([]string, len(entryIDs))
+	args := make([]interface{}, len(entryIDs))
+	for i, id := range entryIDs {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+
+	query := fmt.Sprintf(`
+		SELECT id, title, content
+		FROM knowledge_entries
+		WHERE id IN (%s)
+		ORDER BY position`, strings.Join(placeholders, ","))
+
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []Entry
+	for rows.Next() {
+		var e Entry
+		if err := rows.Scan(&e.ID, &e.Title, &e.Content); err != nil {
+			return nil, err
+		}
+		out = append(out, e)
 	}
 	return out, rows.Err()
 }

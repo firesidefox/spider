@@ -573,3 +573,105 @@ func TestSectionEntryCount(t *testing.T) {
 		t.Fatalf("expected Section3 to have 0 entries, got %d", sections[2].EntryCount)
 	}
 }
+
+func TestCatalogEntries(t *testing.T) {
+	db := newTestDB(t)
+	s := knowledge.NewStore(db)
+	ctx := context.Background()
+
+	kb, _ := s.CreateKB(ctx, "AISG")
+	g, _ := s.CreateGroup(ctx, kb.ID, "v706")
+
+	// Insert document
+	res, _ := db.ExecContext(ctx, `INSERT INTO knowledge_documents
+		(group_id, name, doc_type, raw_content, filename, status, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+		g.ID, "Doc1", "markdown", "content1", "doc1.md", "ready")
+	docID, _ := res.LastInsertId()
+
+	// Create section
+	sec, _ := s.CreateSection(ctx, int(docID), "Section1", "summary1", 0)
+
+	// Create 3 entries in the section
+	e1, _ := s.CreateEntry(ctx, int(docID), &sec.ID, "Entry1", "Summary of entry 1", "Full content 1", []byte("emb1"), 0)
+	e2, _ := s.CreateEntry(ctx, int(docID), &sec.ID, "Entry2", "Summary of entry 2", "Full content 2", []byte("emb2"), 1)
+	e3, _ := s.CreateEntry(ctx, int(docID), &sec.ID, "Entry3", "Summary of entry 3", "Full content 3", []byte("emb3"), 2)
+
+	// Call CatalogEntries
+	entries, err := s.CatalogEntries(ctx, sec.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify returns 3 entries
+	if len(entries) != 3 {
+		t.Fatalf("expected 3 entries, got %d", len(entries))
+	}
+
+	// Verify correct title and summary (not full content)
+	if entries[0].ID != e1.ID || entries[0].Title != "Entry1" || entries[0].Summary != "Summary of entry 1" {
+		t.Fatalf("entry 0 mismatch: got ID=%d Title=%s Summary=%s", entries[0].ID, entries[0].Title, entries[0].Summary)
+	}
+	if entries[1].ID != e2.ID || entries[1].Title != "Entry2" || entries[1].Summary != "Summary of entry 2" {
+		t.Fatalf("entry 1 mismatch: got ID=%d Title=%s Summary=%s", entries[1].ID, entries[1].Title, entries[1].Summary)
+	}
+	if entries[2].ID != e3.ID || entries[2].Title != "Entry3" || entries[2].Summary != "Summary of entry 3" {
+		t.Fatalf("entry 2 mismatch: got ID=%d Title=%s Summary=%s", entries[2].ID, entries[2].Title, entries[2].Summary)
+	}
+}
+
+func TestFetchEntries(t *testing.T) {
+	db := newTestDB(t)
+	s := knowledge.NewStore(db)
+	ctx := context.Background()
+
+	kb, _ := s.CreateKB(ctx, "AISG")
+	g, _ := s.CreateGroup(ctx, kb.ID, "v706")
+
+	// Insert document
+	res, _ := db.ExecContext(ctx, `INSERT INTO knowledge_documents
+		(group_id, name, doc_type, raw_content, filename, status, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+		g.ID, "Doc1", "markdown", "content1", "doc1.md", "ready")
+	docID, _ := res.LastInsertId()
+
+	// Create section
+	sec, _ := s.CreateSection(ctx, int(docID), "Section1", "summary1", 0)
+
+	// Create 2 entries with full content
+	e1, _ := s.CreateEntry(ctx, int(docID), &sec.ID, "Entry1", "Summary 1", "Full content of entry 1", []byte("emb1"), 0)
+	e2, _ := s.CreateEntry(ctx, int(docID), &sec.ID, "Entry2", "Summary 2", "Full content of entry 2", []byte("emb2"), 1)
+
+	// Test: Fetch specific entries
+	entries, err := s.FetchEntries(ctx, []int{e1.ID, e2.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 2 {
+		t.Fatalf("expected 2 entries, got %d", len(entries))
+	}
+	if entries[0].ID != e1.ID || entries[0].Title != "Entry1" || entries[0].Content != "Full content of entry 1" {
+		t.Fatalf("entry 0 mismatch: got ID=%d Title=%s Content=%s", entries[0].ID, entries[0].Title, entries[0].Content)
+	}
+	if entries[1].ID != e2.ID || entries[1].Title != "Entry2" || entries[1].Content != "Full content of entry 2" {
+		t.Fatalf("entry 1 mismatch: got ID=%d Title=%s Content=%s", entries[1].ID, entries[1].Title, entries[1].Content)
+	}
+
+	// Test: Empty input returns empty slice
+	emptyEntries, err := s.FetchEntries(ctx, []int{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(emptyEntries) != 0 {
+		t.Fatalf("expected empty slice for empty input, got %d entries", len(emptyEntries))
+	}
+
+	// Test: Non-existent IDs return empty slice
+	nonExistent, err := s.FetchEntries(ctx, []int{99999, 88888})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(nonExistent) != 0 {
+		t.Fatalf("expected empty slice for non-existent IDs, got %d entries", len(nonExistent))
+	}
+}
