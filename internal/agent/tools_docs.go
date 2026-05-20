@@ -2,164 +2,272 @@ package agent
 
 import (
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"math"
 
+	"github.com/spiderai/spider/internal/knowledge"
 	"github.com/spiderai/spider/internal/rag"
-	"github.com/spiderai/spider/internal/store"
 )
 
 type SearchDocsTool struct {
-	ragStore *rag.Store
-	docStore *store.DocumentStore
+	knowledgeStore *knowledge.Store
+	embedder       rag.Embedder
 }
 
-func NewSearchDocsTool(ragStore *rag.Store, docStore *store.DocumentStore) *SearchDocsTool {
-	return &SearchDocsTool{ragStore: ragStore, docStore: docStore}
+func NewSearchDocsTool(knowledgeStore *knowledge.Store, embedder rag.Embedder) *SearchDocsTool {
+	return &SearchDocsTool{
+		knowledgeStore: knowledgeStore,
+		embedder:       embedder,
+	}
 }
 
 func (t *SearchDocsTool) DefaultRiskLevel() RiskLevel              { return RiskL1 }
 func (t *SearchDocsTool) IsConcurrencySafe(_ map[string]any) bool { return true }
-func (t *SearchDocsTool) Name() string                { return "SearchDocs" }
+func (t *SearchDocsTool) Name() string                             { return "SearchDocs" }
 
 func (t *SearchDocsTool) Description() string {
-	return "Search documentation for CLI commands, API references, and troubleshooting guides. Read-only. No side effects. Use freely in Explore phase."
+	return "Search knowledge base for API endpoints, CLI commands, and documentation. Read-only. No side effects. Use freely in Explore phase."
 }
 
 func (t *SearchDocsTool) SystemPromptSection() string {
-	return `## SearchDocs — Knowledge Base
+	return `## SearchDocs — Hierarchical Knowledge Retrieval
 
 **When to use:**
-- Before running vendor-specific CLI commands — syntax varies by vendor/version
 - Before calling any API endpoint — need correct path, params, auth
-- When troubleshooting an unfamiliar error or behavior
+- Before running vendor-specific CLI commands — syntax varies by vendor/version
+- When troubleshooting unfamiliar errors or behaviors
 
 **When NOT to use:**
-- Universal commands (df -h, ps aux, ls, grep) — no need to look these up
+- Universal commands (df, ps, ls, grep) — no need to look these up
 - Purely informational tasks (listing hosts, checking task status)
 
-**Rules:**
-- Query with operation intent, not just keywords (e.g., "huawei 查看内存占用" not "memory")
-- For API calls: get group_id from face.knowledge_sources, then SearchDocs to find the endpoint
+**Four modes:**
 
-**For full-text documents (no embedding):**
-1. Call SearchDocs with catalog=true and group_id to list available documents (ID + title).
-2. Pick relevant documents by ID.
-3. Call SearchDocs with doc_ids=[...] to fetch full content.`
+1. **sections** — List chapters in a knowledge scope (kb/group/document)
+   - Returns: [{section_id, name, summary, entry_count}]
+   - Use: Get overview of available topics
+
+2. **entries** — List entries in a section
+   - Returns: [{entry_id, title, summary}]
+   - Use: Browse specific chapter contents
+
+3. **fetch** — Get full content of specific entries
+   - Returns: [{title, content}]
+   - Use: Read the actual documentation
+
+4. **search** — Vector search when catalog navigation fails
+   - Returns: [{title, content}] (top-K matches)
+   - Use: When entry_count ≥ 500 or catalog doesn't help
+
+**Typical workflow:**
+1. Get scope from face.knowledge_sources: [{"type":"group","id":3}]
+2. SearchDocs mode=sections, scope_type=group, scope_id=3
+3. Pick relevant section_id from results
+4. SearchDocs mode=entries, section_id=N
+5. Pick relevant entry_ids
+6. SearchDocs mode=fetch, entry_ids=[...]
+
+**Fallback to search:**
+- If sections returns total_entries ≥ 500, use mode=search instead
+- If catalog navigation doesn't find what you need, use mode=search`
 }
 
 func (t *SearchDocsTool) InputSchema() map[string]any {
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
-			"query":     map[string]any{"type": "string", "description": "Search query"},
-			"vendor":    map[string]any{"type": "string", "description": "Device vendor (e.g. huawei, cisco)"},
-			"group_ids": map[string]any{"type": "array", "items": map[string]any{"type": "integer"}, "description": "Search within these document groups. Get from face.knowledge_sources where type=group."},
-			"doc_ids":   map[string]any{"type": "array", "items": map[string]any{"type": "integer"}, "description": "Fetch full content of specific documents by IDs. Get from face.knowledge_sources where type=doc."},
-			"catalog":   map[string]any{"type": "boolean", "description": "List document titles in a group without fetching full content. Use with group_id to browse available documents before deciding which to read."},
-			"group_id":  map[string]any{"type": "integer", "description": "Group ID to list when catalog=true."},
+			"mode": map[string]any{
+				"type":        "string",
+				"enum":        []string{"sections", "entries", "fetch", "search"},
+				"description": "Operation mode",
+			},
+			"scope_type": map[string]any{
+				"type":        "string",
+				"enum":        []string{"kb", "group", "document"},
+				"description": "Scope type for sections/search mode",
+			},
+			"scope_id": map[string]any{
+				"type":        "integer",
+				"description": "Scope ID for sections/search mode",
+			},
+			"section_id": map[string]any{
+				"type":        "integer",
+				"description": "Section ID for entries mode",
+			},
+			"entry_ids": map[string]any{
+				"type":        "array",
+				"items":       map[string]any{"type": "integer"},
+				"description": "Entry IDs for fetch mode",
+			},
+			"query": map[string]any{
+				"type":        "string",
+				"description": "Search query for search mode",
+			},
 		},
-		"required": []string{},
+		"required": []string{"mode"},
 	}
 }
 
 func (t *SearchDocsTool) Execute(ctx context.Context, input map[string]any) (*ToolResult, error) {
-	if catalog, _ := input["catalog"].(bool); catalog {
-		if t.docStore == nil {
-			return &ToolResult{Content: "doc store unavailable", IsError: true, RiskLevel: RiskL1}, nil
-		}
-		groupID := toInt(input["group_id"])
-		if groupID == 0 {
-			return &ToolResult{Content: "group_id is required when catalog=true", IsError: true, RiskLevel: RiskL1}, nil
-		}
-		docs, err := t.docStore.ListByGroup(groupID)
-		if err != nil {
-			return &ToolResult{Content: fmt.Sprintf("list group: %v", err), IsError: true, RiskLevel: RiskL1}, nil
-		}
-		type entry struct {
-			ID         int    `json:"id"`
-			Title      string `json:"title"`
-			SourceFile string `json:"source_file"`
-		}
-		entries := make([]entry, len(docs))
-		for i, d := range docs {
-			entries[i] = entry{ID: d.ID, Title: d.Title, SourceFile: d.SourceFile}
-		}
-		b, _ := json.Marshal(entries)
-		return &ToolResult{Content: string(b), RiskLevel: RiskL1, Summary: fmt.Sprintf("found %d results", len(entries))}, nil
+	mode, _ := input["mode"].(string)
+	if mode == "" {
+		return &ToolResult{Content: "mode is required", IsError: true, RiskLevel: RiskL1}, nil
 	}
 
-	query, _ := input["query"].(string)
-	if query == "" {
-		return &ToolResult{Content: "query is required", IsError: true, RiskLevel: RiskL1}, nil
+	switch mode {
+	case "sections":
+		return t.executeSections(ctx, input)
+	case "entries":
+		return t.executeEntries(ctx, input)
+	case "fetch":
+		return t.executeFetch(ctx, input)
+	case "search":
+		return t.executeSearch(ctx, input)
+	default:
+		return &ToolResult{Content: fmt.Sprintf("invalid mode: %s", mode), IsError: true, RiskLevel: RiskL1}, nil
+	}
+}
+
+func (t *SearchDocsTool) executeSections(ctx context.Context, input map[string]any) (*ToolResult, error) {
+	scopeType, _ := input["scope_type"].(string)
+	scopeID := toInt(input["scope_id"])
+	if scopeType == "" || scopeID == 0 {
+		return &ToolResult{Content: "scope_type and scope_id are required for sections mode", IsError: true, RiskLevel: RiskL1}, nil
 	}
 
-	// doc_ids: fetch multiple documents, skip vector search
-	if docIDsRaw, ok := input["doc_ids"]; ok && docIDsRaw != nil {
-		docIDs := toIntSlice(docIDsRaw)
-		if len(docIDs) > 0 && t.docStore != nil {
-			type result struct {
-				Title      string   `json:"title"`
-				Content    string   `json:"content"`
-				Tags       []string `json:"tags"`
-				SourceFile string   `json:"source_file"`
-			}
-			results := make([]result, 0, len(docIDs))
-			for _, id := range docIDs {
-				doc, err := t.docStore.GetByID(id)
-				if err != nil {
-					return &ToolResult{Content: fmt.Sprintf("get document %d: %v", id, err), IsError: true, RiskLevel: RiskL1}, nil
-				}
-				if doc == nil {
-					continue
-				}
-				results = append(results, result{
-					Title:      doc.Title,
-					Content:    doc.Content,
-					Tags:       doc.Tags,
-					SourceFile: doc.SourceFile,
-				})
-			}
-			b, _ := json.Marshal(results)
-			return &ToolResult{Content: string(b), RiskLevel: RiskL1, Summary: fmt.Sprintf("found %d results", len(results))}, nil
-		}
-	}
-
-	if t.ragStore == nil {
-		return &ToolResult{Content: "search unavailable: embedding not configured", IsError: true, RiskLevel: RiskL1}, nil
-	}
-
-	// group_ids: search within multiple groups
-	var groupIDs []int
-	if gidsRaw, ok := input["group_ids"]; ok && gidsRaw != nil {
-		groupIDs = toIntSlice(gidsRaw)
-	}
-
-	docs, err := t.ragStore.SearchByGroups(ctx, query, groupIDs, 5)
+	sections, err := t.knowledgeStore.CatalogSections(ctx, knowledge.Scope{Type: scopeType, ID: scopeID})
 	if err != nil {
-		return &ToolResult{Content: fmt.Sprintf("search error: %v", err), IsError: true, RiskLevel: RiskL1}, nil
+		return &ToolResult{Content: fmt.Sprintf("catalog sections: %v", err), IsError: true, RiskLevel: RiskL1}, nil
 	}
 
 	type result struct {
-		Title      string   `json:"title"`
-		Content    string   `json:"content"`
-		Tags       []string `json:"tags"`
-		SourceFile string   `json:"source_file"`
+		SectionID  int    `json:"section_id"`
+		Name       string `json:"name"`
+		Summary    string `json:"summary"`
+		EntryCount int    `json:"entry_count"`
 	}
-	results := make([]result, 0, len(docs))
-	for _, d := range docs {
-		results = append(results, result{
-			Title:      d.Title,
-			Content:    d.Content,
-			Tags:       d.Tags,
-			SourceFile: d.SourceFile,
-		})
+	results := make([]result, len(sections))
+	totalEntries := 0
+	for i, s := range sections {
+		results[i] = result{
+			SectionID:  s.ID,
+			Name:       s.Name,
+			Summary:    s.Summary,
+			EntryCount: s.EntryCount,
+		}
+		totalEntries += s.EntryCount
 	}
-	b, err := json.Marshal(results)
+
+	b, _ := json.Marshal(map[string]any{
+		"sections":      results,
+		"total_entries": totalEntries,
+	})
+
+	summary := fmt.Sprintf("found %d sections, %d total entries", len(sections), totalEntries)
+	if totalEntries >= 500 {
+		summary += " (consider using mode=search for large result sets)"
+	}
+
+	return &ToolResult{Content: string(b), RiskLevel: RiskL1, Summary: summary}, nil
+}
+
+func (t *SearchDocsTool) executeEntries(ctx context.Context, input map[string]any) (*ToolResult, error) {
+	sectionID := toInt(input["section_id"])
+	if sectionID == 0 {
+		return &ToolResult{Content: "section_id is required for entries mode", IsError: true, RiskLevel: RiskL1}, nil
+	}
+
+	entries, err := t.knowledgeStore.CatalogEntries(ctx, sectionID)
 	if err != nil {
-		return &ToolResult{Content: fmt.Sprintf("marshal error: %v", err), IsError: true, RiskLevel: RiskL1}, nil
+		return &ToolResult{Content: fmt.Sprintf("catalog entries: %v", err), IsError: true, RiskLevel: RiskL1}, nil
 	}
-	return &ToolResult{Content: string(b), RiskLevel: RiskL1, Summary: fmt.Sprintf("found %d results", len(results))}, nil
+
+	type result struct {
+		EntryID int    `json:"entry_id"`
+		Title   string `json:"title"`
+		Summary string `json:"summary"`
+	}
+	results := make([]result, len(entries))
+	for i, e := range entries {
+		results[i] = result{EntryID: e.ID, Title: e.Title, Summary: e.Summary}
+	}
+
+	b, _ := json.Marshal(results)
+	return &ToolResult{Content: string(b), RiskLevel: RiskL1, Summary: fmt.Sprintf("found %d entries", len(entries))}, nil
+}
+
+func (t *SearchDocsTool) executeFetch(ctx context.Context, input map[string]any) (*ToolResult, error) {
+	entryIDsRaw, ok := input["entry_ids"]
+	if !ok {
+		return &ToolResult{Content: "entry_ids is required for fetch mode", IsError: true, RiskLevel: RiskL1}, nil
+	}
+	entryIDs := toIntSlice(entryIDsRaw)
+	if len(entryIDs) == 0 {
+		return &ToolResult{Content: "entry_ids cannot be empty", IsError: true, RiskLevel: RiskL1}, nil
+	}
+
+	entries, err := t.knowledgeStore.FetchEntries(ctx, entryIDs)
+	if err != nil {
+		return &ToolResult{Content: fmt.Sprintf("fetch entries: %v", err), IsError: true, RiskLevel: RiskL1}, nil
+	}
+
+	type result struct {
+		Title   string `json:"title"`
+		Content string `json:"content"`
+	}
+	results := make([]result, len(entries))
+	for i, e := range entries {
+		results[i] = result{Title: e.Title, Content: e.Content}
+	}
+
+	b, _ := json.Marshal(results)
+	return &ToolResult{Content: string(b), RiskLevel: RiskL1, Summary: fmt.Sprintf("fetched %d entries", len(entries))}, nil
+}
+
+func (t *SearchDocsTool) executeSearch(ctx context.Context, input map[string]any) (*ToolResult, error) {
+	query, _ := input["query"].(string)
+	scopeType, _ := input["scope_type"].(string)
+	scopeID := toInt(input["scope_id"])
+
+	if query == "" || scopeType == "" || scopeID == 0 {
+		return &ToolResult{Content: "query, scope_type, and scope_id are required for search mode", IsError: true, RiskLevel: RiskL1}, nil
+	}
+
+	if t.embedder == nil {
+		return &ToolResult{Content: "search unavailable: embedder not configured", IsError: true, RiskLevel: RiskL1}, nil
+	}
+
+	// Generate query embedding
+	embedding, err := t.embedder.Embed(ctx, query)
+	if err != nil {
+		return &ToolResult{Content: fmt.Sprintf("generate embedding: %v", err), IsError: true, RiskLevel: RiskL1}, nil
+	}
+
+	// Convert float32 slice to byte array (float32 little-endian)
+	embBytes := make([]byte, len(embedding)*4)
+	for i, f := range embedding {
+		bits := math.Float32bits(f)
+		binary.LittleEndian.PutUint32(embBytes[i*4:], bits)
+	}
+
+	entries, err := t.knowledgeStore.Search(ctx, embBytes, knowledge.Scope{Type: scopeType, ID: scopeID}, 5)
+	if err != nil {
+		return &ToolResult{Content: fmt.Sprintf("search: %v", err), IsError: true, RiskLevel: RiskL1}, nil
+	}
+
+	type result struct {
+		Title   string `json:"title"`
+		Content string `json:"content"`
+	}
+	results := make([]result, len(entries))
+	for i, e := range entries {
+		results[i] = result{Title: e.Title, Content: e.Content}
+	}
+
+	b, _ := json.Marshal(results)
+	return &ToolResult{Content: string(b), RiskLevel: RiskL1, Summary: fmt.Sprintf("found %d results", len(entries))}, nil
 }
 
 // toInt converts float64 (JSON number) or int to int.

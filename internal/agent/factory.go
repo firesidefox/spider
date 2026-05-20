@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/spiderai/spider/internal/config"
+	"github.com/spiderai/spider/internal/knowledge"
 	"github.com/spiderai/spider/internal/llm"
 	"github.com/spiderai/spider/internal/logger"
 	"github.com/spiderai/spider/internal/permission"
@@ -34,6 +35,8 @@ type Factory struct {
 	DataDir        string
 	DocStore       *store.DocumentStore
 	RagStore       *rag.Store
+	KnowledgeStore *knowledge.Store
+	Embedder       rag.Embedder
 	TaskStore      *store.TaskStore
 	DisableSearchDocs            bool
 	PerToolResultMaxChars        int
@@ -246,15 +249,15 @@ func (f *Factory) buildRegistry(conversationID string) *ToolRegistry {
 
 func (f *Factory) buildRegistryWithHosts(conversationID string, selectedHostIDs []string) *ToolRegistry {
 	registry := NewToolRegistry()
-	listTool := NewListHostsTool(f.Hosts, f.AccessFaces)
+	listTool := NewGetHostsTool(f.Hosts, f.AccessFaces)
 	listTool.selectedHostIDs = selectedHostIDs
 	registry.Register(listTool)
 	registry.Register(NewExecuteCLITool(f.Hosts, f.AccessFaces, f.SSHPool, f.Logs, f.SSHKeys))
 	registry.Register(NewBatchExecuteTool(f.Hosts, f.AccessFaces, f.SSHPool, f.Logs, f.SSHKeys))
 	registry.Register(NewVerifyTool(f.Hosts, f.AccessFaces, f.SSHPool, f.SSHKeys))
 	registry.Register(NewCallRESTAPITool(f.AccessFaces))
-	if !f.DisableSearchDocs {
-		registry.Register(NewSearchDocsTool(f.RagStore, f.DocStore))
+	if !f.DisableSearchDocs && f.KnowledgeStore != nil {
+		registry.Register(NewSearchDocsTool(f.KnowledgeStore, f.Embedder))
 	}
 	if f.TodoStore != nil {
 		registry.Register(NewTodoTool(f.TodoStore, f.SSEBroadcaster, conversationID))
