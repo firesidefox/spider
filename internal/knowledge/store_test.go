@@ -3,6 +3,8 @@ package knowledge_test
 import (
 	"context"
 	"database/sql"
+	"encoding/binary"
+	"math"
 	"testing"
 
 	_ "modernc.org/sqlite"
@@ -673,5 +675,96 @@ func TestFetchEntries(t *testing.T) {
 	}
 	if len(nonExistent) != 0 {
 		t.Fatalf("expected empty slice for non-existent IDs, got %d entries", len(nonExistent))
+	}
+}
+
+func TestSearch(t *testing.T) {
+	db := newTestDB(t)
+	s := knowledge.NewStore(db)
+	ctx := context.Background()
+
+	kb, _ := s.CreateKB(ctx, "AISG")
+	g, _ := s.CreateGroup(ctx, kb.ID, "v706")
+
+	// Insert document
+	res, _ := db.ExecContext(ctx, `INSERT INTO knowledge_documents
+		(group_id, name, doc_type, raw_content, filename, status, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+		g.ID, "Doc1", "markdown", "content1", "doc1.md", "ready")
+	docID, _ := res.LastInsertId()
+
+	// Create section
+	sec, _ := s.CreateSection(ctx, int(docID), "Section1", "summary1", 0)
+
+	// Create 2 entries with mock embeddings (16 bytes = 4 floats)
+	// Vector 1: [1.0, 0.0, 0.0, 0.0] - should be closer to query [1.0, 0.0, 0.0, 0.0]
+	emb1 := make([]byte, 16)
+	binary.LittleEndian.PutUint32(emb1[0:4], math.Float32bits(1.0))
+	binary.LittleEndian.PutUint32(emb1[4:8], math.Float32bits(0.0))
+	binary.LittleEndian.PutUint32(emb1[8:12], math.Float32bits(0.0))
+	binary.LittleEndian.PutUint32(emb1[12:16], math.Float32bits(0.0))
+
+	// Vector 2: [0.0, 1.0, 0.0, 0.0] - should be farther from query
+	emb2 := make([]byte, 16)
+	binary.LittleEndian.PutUint32(emb2[0:4], math.Float32bits(0.0))
+	binary.LittleEndian.PutUint32(emb2[4:8], math.Float32bits(1.0))
+	binary.LittleEndian.PutUint32(emb2[8:12], math.Float32bits(0.0))
+	binary.LittleEndian.PutUint32(emb2[12:16], math.Float32bits(0.0))
+
+	e1, _ := s.CreateEntry(ctx, int(docID), &sec.ID, "Entry1", "Summary 1", "Full content of entry 1", emb1, 0)
+	_, _ = s.CreateEntry(ctx, int(docID), &sec.ID, "Entry2", "Summary 2", "Full content of entry 2", emb2, 1)
+
+	// Query embedding: [1.0, 0.0, 0.0, 0.0] - should match e1 better
+	queryEmb := make([]byte, 16)
+	binary.LittleEndian.PutUint32(queryEmb[0:4], math.Float32bits(1.0))
+	binary.LittleEndian.PutUint32(queryEmb[4:8], math.Float32bits(0.0))
+	binary.LittleEndian.PutUint32(queryEmb[8:12], math.Float32bits(0.0))
+	binary.LittleEndian.PutUint32(queryEmb[12:16], math.Float32bits(0.0))
+
+	// Test: Search within group scope
+	entries, err := s.Search(ctx, queryEmb, knowledge.Scope{Type: "group", ID: g.ID}, 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) < 1 {
+		t.Fatalf("expected at least 1 entry, got %d", len(entries))
+	}
+	// First result should be e1 (exact match)
+	if entries[0].ID != e1.ID {
+		t.Fatalf("expected first result to be e1 (ID=%d), got ID=%d", e1.ID, entries[0].ID)
+	}
+	// Verify full content is returned
+	if entries[0].Content != "Full content of entry 1" {
+		t.Fatalf("expected full content, got: %s", entries[0].Content)
+	}
+
+	// Test: Empty query embedding returns error
+	_, err = s.Search(ctx, []byte{}, knowledge.Scope{Type: "group", ID: g.ID}, 5)
+	if err == nil {
+		t.Fatal("expected error for empty query embedding")
+	}
+
+	// Test: Invalid scope type returns error
+	_, err = s.Search(ctx, queryEmb, knowledge.Scope{Type: "invalid", ID: g.ID}, 5)
+	if err == nil {
+		t.Fatal("expected error for invalid scope type")
+	}
+
+	// Test: Search within kb scope
+	kbEntries, err := s.Search(ctx, queryEmb, knowledge.Scope{Type: "kb", ID: kb.ID}, 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(kbEntries) < 1 {
+		t.Fatalf("expected at least 1 entry in kb scope, got %d", len(kbEntries))
+	}
+
+	// Test: Search within document scope
+	docEntries, err := s.Search(ctx, queryEmb, knowledge.Scope{Type: "document", ID: int(docID)}, 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(docEntries) < 1 {
+		t.Fatalf("expected at least 1 entry in document scope, got %d", len(docEntries))
 	}
 }

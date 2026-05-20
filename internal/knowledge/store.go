@@ -3,7 +3,10 @@ package knowledge
 import (
 	"context"
 	"database/sql"
+	"encoding/binary"
 	"fmt"
+	"math"
+	"sort"
 	"strings"
 	"time"
 )
@@ -364,4 +367,125 @@ func (s *Store) FetchEntries(ctx context.Context, entryIDs []int) ([]Entry, erro
 		out = append(out, e)
 	}
 	return out, rows.Err()
+}
+
+// Search performs vector similarity search within a given scope.
+// Returns top-K entries sorted by cosine similarity to the query embedding.
+func (s *Store) Search(ctx context.Context, queryEmb []byte, scope Scope, topK int) ([]Entry, error) {
+	// Validate query embedding
+	if len(queryEmb) == 0 {
+		return nil, fmt.Errorf("query embedding cannot be empty")
+	}
+
+	// Build query based on scope type
+	var query string
+	var args []interface{}
+
+	switch scope.Type {
+	case "kb":
+		query = `
+			SELECT e.id, e.document_id, e.section_id, e.title, e.summary, e.content, e.embedding, e.position
+			FROM knowledge_entries e
+			JOIN knowledge_documents d ON e.document_id = d.id
+			JOIN knowledge_groups g ON d.group_id = g.id
+			WHERE g.kb_id = ? AND e.embedding IS NOT NULL`
+		args = []interface{}{scope.ID}
+
+	case "group":
+		query = `
+			SELECT e.id, e.document_id, e.section_id, e.title, e.summary, e.content, e.embedding, e.position
+			FROM knowledge_entries e
+			JOIN knowledge_documents d ON e.document_id = d.id
+			WHERE d.group_id = ? AND e.embedding IS NOT NULL`
+		args = []interface{}{scope.ID}
+
+	case "document":
+		query = `
+			SELECT e.id, e.document_id, e.section_id, e.title, e.summary, e.content, e.embedding, e.position
+			FROM knowledge_entries e
+			WHERE e.document_id = ? AND e.embedding IS NOT NULL`
+		args = []interface{}{scope.ID}
+
+	default:
+		return nil, fmt.Errorf("invalid scope type: %s", scope.Type)
+	}
+
+	// Execute query
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	// Collect entries with similarity scores
+	type entryWithScore struct {
+		entry Entry
+		score float64
+	}
+	var candidates []entryWithScore
+
+	for rows.Next() {
+		var e Entry
+		if err := rows.Scan(&e.ID, &e.DocumentID, &e.SectionID, &e.Title, &e.Summary, &e.Content, &e.Embedding, &e.Position); err != nil {
+			return nil, err
+		}
+
+		// Compute cosine similarity
+		score := cosineSimilarity(queryEmb, e.Embedding)
+		candidates = append(candidates, entryWithScore{entry: e, score: score})
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Sort by score descending
+	sort.Slice(candidates, func(i, j int) bool {
+		return candidates[i].score > candidates[j].score
+	})
+
+	// Return top K
+	limit := topK
+	if limit > len(candidates) {
+		limit = len(candidates)
+	}
+
+	out := make([]Entry, limit)
+	for i := 0; i < limit; i++ {
+		out[i] = candidates[i].entry
+	}
+
+	return out, nil
+}
+
+// cosineSimilarity computes the cosine similarity between two embedding vectors.
+// Embeddings are stored as little-endian float32 byte arrays.
+func cosineSimilarity(a, b []byte) float64 {
+	if len(a) != len(b) || len(a)%4 != 0 {
+		return 0.0
+	}
+
+	n := len(a) / 4
+	var dotProduct, normA, normB float64
+
+	for i := 0; i < n; i++ {
+		valA := float64(bytesToFloat32(a[i*4 : (i+1)*4]))
+		valB := float64(bytesToFloat32(b[i*4 : (i+1)*4]))
+
+		dotProduct += valA * valB
+		normA += valA * valA
+		normB += valB * valB
+	}
+
+	if normA == 0 || normB == 0 {
+		return 0.0
+	}
+
+	return dotProduct / (math.Sqrt(normA) * math.Sqrt(normB))
+}
+
+// bytesToFloat32 converts 4 bytes (little-endian) to float32.
+func bytesToFloat32(b []byte) float32 {
+	bits := binary.LittleEndian.Uint32(b)
+	return math.Float32frombits(bits)
 }
