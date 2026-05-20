@@ -574,6 +574,16 @@ func NewRouter(app *mcppkg.App) http.Handler {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	})
 
+	mux.HandleFunc("/api/v1/knowledge-documents/import", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				importKnowledgeDocument(app.KnowledgeStore, app, w, r)
+			})).ServeHTTP(w, r)
+			return
+		}
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	})
+
 	// Permission approvals API (operator or above)
 	mux.HandleFunc("/api/v1/approvals", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet {

@@ -3,10 +3,14 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 
 	"github.com/spiderai/spider/internal/knowledge"
+	mcppkg "github.com/spiderai/spider/internal/mcp"
+	"github.com/spiderai/spider/internal/rag"
 )
 
 // kbStore is the subset of knowledge.KnowledgePlugin used by these handlers.
@@ -159,4 +163,61 @@ func deleteDocuments(s docStore, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func importKnowledgeDocument(ks *knowledge.Store, app *mcppkg.App, w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseMultipartForm(32 << 20); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid multipart form")
+		return
+	}
+	groupIDStr := r.FormValue("group_id")
+	groupID, err := strconv.Atoi(groupIDStr)
+	if err != nil || groupID <= 0 {
+		writeError(w, http.StatusBadRequest, "group_id is required")
+		return
+	}
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "file is required")
+		return
+	}
+	defer file.Close()
+	content, err := io.ReadAll(file)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to read file")
+		return
+	}
+
+	// Get LLM client from AgentFactory
+	if app.AgentFactory == nil {
+		writeError(w, http.StatusServiceUnavailable, "LLM provider not configured")
+		return
+	}
+	llmClient := app.AgentFactory.LLMClient
+
+	// Get embedder from RagConfigStore
+	var embedder rag.Embedder
+	cfg, err := app.RagConfigStore.Get()
+	if err == nil && cfg != nil && cfg.Model != "" {
+		embedder, err = rag.NewEmbedder(cfg.Type, cfg.APIKey, cfg.Model, cfg.BaseURL, 0)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, fmt.Sprintf("failed to create embedder: %v", err))
+			return
+		}
+	}
+
+	req := knowledge.ImportRequest{
+		GroupID:   groupID,
+		Name:      header.Filename,
+		Content:   content,
+		Filename:  header.Filename,
+		LLMClient: llmClient,
+		Embedder:  embedder,
+	}
+	result, err := ks.ImportDocument(r.Context(), req)
+	if err != nil {
+		writeError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusCreated, result)
 }
