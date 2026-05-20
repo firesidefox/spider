@@ -440,3 +440,47 @@ func TestEntryCRUD(t *testing.T) {
 		t.Fatalf("expected 0 entries for non-existent document, got %d", len(entries))
 	}
 }
+
+func TestSectionEntryCount(t *testing.T) {
+	db := newTestDB(t)
+	s := knowledge.NewStore(db)
+	ctx := context.Background()
+
+	kb, _ := s.CreateKB(ctx, "AISG")
+	g, _ := s.CreateGroup(ctx, kb.ID, "v706")
+
+	// Insert document
+	res, _ := db.ExecContext(ctx, `INSERT INTO knowledge_documents
+		(group_id, name, doc_type, raw_content, filename, status, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+		g.ID, "Doc1", "markdown", "content1", "doc1.md", "ready")
+	docID, _ := res.LastInsertId()
+
+	// Create sections
+	sec1, _ := s.CreateSection(ctx, int(docID), "Section1", "summary1", 0)
+	sec2, _ := s.CreateSection(ctx, int(docID), "Section2", "summary2", 1)
+	_, _ = s.CreateSection(ctx, int(docID), "Section3", "summary3", 2)
+
+	// Create entries: 2 in sec1, 1 in sec2, 0 in sec3
+	s.CreateEntry(ctx, int(docID), &sec1.ID, "Entry1", "sum1", "content1", []byte("emb1"), 0)
+	s.CreateEntry(ctx, int(docID), &sec1.ID, "Entry2", "sum2", "content2", []byte("emb2"), 1)
+	s.CreateEntry(ctx, int(docID), &sec2.ID, "Entry3", "sum3", "content3", []byte("emb3"), 0)
+
+	// List sections and verify EntryCount
+	sections, err := s.ListSections(ctx, int(docID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sections) != 3 {
+		t.Fatalf("expected 3 sections, got %d", len(sections))
+	}
+	if sections[0].EntryCount != 2 {
+		t.Fatalf("expected Section1 to have 2 entries, got %d", sections[0].EntryCount)
+	}
+	if sections[1].EntryCount != 1 {
+		t.Fatalf("expected Section2 to have 1 entry, got %d", sections[1].EntryCount)
+	}
+	if sections[2].EntryCount != 0 {
+		t.Fatalf("expected Section3 to have 0 entries, got %d", sections[2].EntryCount)
+	}
+}

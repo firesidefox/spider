@@ -75,6 +75,7 @@ type Section struct {
 	Name       string
 	Summary    string
 	Position   int
+	EntryCount int
 }
 
 // EntrySummary provides a lightweight view of an entry.

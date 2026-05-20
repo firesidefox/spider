@@ -170,10 +170,12 @@ func (s *Store) CreateSection(ctx context.Context, documentID int, name, summary
 
 func (s *Store) ListSections(ctx context.Context, documentID int) ([]Section, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, document_id, name, summary, position
-		FROM knowledge_sections
-		WHERE document_id = ?
-		ORDER BY position`, documentID)
+		SELECT s.id, s.document_id, s.name, s.summary, s.position, COUNT(e.id) as entry_count
+		FROM knowledge_sections s
+		LEFT JOIN knowledge_entries e ON e.section_id = s.id
+		WHERE s.document_id = ?
+		GROUP BY s.id, s.document_id, s.name, s.summary, s.position
+		ORDER BY s.position`, documentID)
 	if err != nil {
 		return nil, err
 	}
@@ -182,7 +184,7 @@ func (s *Store) ListSections(ctx context.Context, documentID int) ([]Section, er
 	var out []Section
 	for rows.Next() {
 		var sec Section
-		if err := rows.Scan(&sec.ID, &sec.DocumentID, &sec.Name, &sec.Summary, &sec.Position); err != nil {
+		if err := rows.Scan(&sec.ID, &sec.DocumentID, &sec.Name, &sec.Summary, &sec.Position, &sec.EntryCount); err != nil {
 			return nil, err
 		}
 		out = append(out, sec)
