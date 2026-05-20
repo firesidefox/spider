@@ -118,3 +118,45 @@ func deleteKBGroup(s kbStore, w http.ResponseWriter, r *http.Request, idStr stri
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
+
+type docStore interface {
+	ListDocuments(ctx context.Context, groupID int) ([]knowledge.Document, error)
+	GetDocument(ctx context.Context, docID int) (*knowledge.Document, error)
+	DeleteDocuments(ctx context.Context, docIDs []int) error
+}
+
+func listGroupDocuments(s docStore, w http.ResponseWriter, r *http.Request, groupIDStr string) {
+	groupID, err := strconv.Atoi(groupIDStr)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid group id")
+		return
+	}
+	docs, err := s.ListDocuments(r.Context(), groupID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if docs == nil {
+		docs = []knowledge.Document{}
+	}
+	writeJSON(w, http.StatusOK, docs)
+}
+
+func deleteDocuments(s docStore, w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		IDs []int `json:"ids"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+	if len(body.IDs) == 0 {
+		writeError(w, http.StatusBadRequest, "ids is required and must be non-empty")
+		return
+	}
+	if err := s.DeleteDocuments(r.Context(), body.IDs); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}

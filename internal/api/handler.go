@@ -490,6 +490,90 @@ func NewRouter(app *mcppkg.App) http.Handler {
 		}
 	})
 
+	// Knowledge bases
+	mux.HandleFunc("/api/v1/knowledge-bases", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			listKBs(app.KnowledgeStore, w, r)
+		case http.MethodPost:
+			operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				createKB(app.KnowledgeStore, w, r)
+			})).ServeHTTP(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+	mux.HandleFunc("/api/v1/knowledge-bases/", func(w http.ResponseWriter, r *http.Request) {
+		rest := r.URL.Path[len("/api/v1/knowledge-bases/"):]
+		id := rest
+		sub := ""
+		if idx := indexOf(rest, '/'); idx >= 0 {
+			id = rest[:idx]
+			sub = rest[idx+1:]
+		}
+		if sub == "" {
+			if r.Method == http.MethodDelete {
+				operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					deleteKB(app.KnowledgeStore, w, r, id)
+				})).ServeHTTP(w, r)
+				return
+			}
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		if sub == "groups" {
+			switch r.Method {
+			case http.MethodGet:
+				listKBGroups(app.KnowledgeStore, w, r, id)
+			case http.MethodPost:
+				operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					createKBGroup(app.KnowledgeStore, w, r, id)
+				})).ServeHTTP(w, r)
+			default:
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			}
+			return
+		}
+		http.NotFound(w, r)
+	})
+	// Knowledge groups
+	mux.HandleFunc("/api/v1/knowledge-groups/", func(w http.ResponseWriter, r *http.Request) {
+		rest := r.URL.Path[len("/api/v1/knowledge-groups/"):]
+		id := rest
+		sub := ""
+		if idx := indexOf(rest, '/'); idx >= 0 {
+			id = rest[:idx]
+			sub = rest[idx+1:]
+		}
+		if sub == "" {
+			if r.Method == http.MethodDelete {
+				operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					deleteKBGroup(app.KnowledgeStore, w, r, id)
+				})).ServeHTTP(w, r)
+				return
+			}
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		if sub == "documents" {
+			if r.Method == http.MethodGet {
+				listGroupDocuments(app.KnowledgeStore, w, r, id)
+				return
+			}
+		}
+		http.NotFound(w, r)
+	})
+	// Knowledge documents
+	mux.HandleFunc("/api/v1/knowledge-documents", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodDelete {
+			operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				deleteDocuments(app.KnowledgeStore, w, r)
+			})).ServeHTTP(w, r)
+			return
+		}
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	})
+
 	// Permission approvals API (operator or above)
 	mux.HandleFunc("/api/v1/approvals", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet {

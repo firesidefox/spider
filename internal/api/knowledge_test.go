@@ -13,13 +13,15 @@ import (
 
 // mockKBStore is an in-memory implementation of kbStore for tests.
 type mockKBStore struct {
-	kbs    []knowledge.KnowledgeBase
-	groups []knowledge.Group
-	nextKB int
-	nextGr int
+	kbs      []knowledge.KnowledgeBase
+	groups   []knowledge.Group
+	docs     []knowledge.Document
+	nextKB   int
+	nextGr   int
+	nextDoc  int
 }
 
-func newMockKBStore() *mockKBStore { return &mockKBStore{nextKB: 1, nextGr: 1} }
+func newMockKBStore() *mockKBStore { return &mockKBStore{nextKB: 1, nextGr: 1, nextDoc: 1} }
 
 func (m *mockKBStore) CreateKB(_ context.Context, name string) (*knowledge.KnowledgeBase, error) {
 	kb := knowledge.KnowledgeBase{ID: m.nextKB, Name: name}
@@ -64,6 +66,37 @@ func (m *mockKBStore) DeleteGroup(_ context.Context, groupID int) error {
 		if g.ID == groupID {
 			m.groups = append(m.groups[:i], m.groups[i+1:]...)
 			return nil
+		}
+	}
+	return nil
+}
+
+func (m *mockKBStore) ListDocuments(_ context.Context, groupID int) ([]knowledge.Document, error) {
+	var out []knowledge.Document
+	for _, d := range m.docs {
+		if d.GroupID == groupID {
+			out = append(out, d)
+		}
+	}
+	return out, nil
+}
+
+func (m *mockKBStore) GetDocument(_ context.Context, docID int) (*knowledge.Document, error) {
+	for _, d := range m.docs {
+		if d.ID == docID {
+			return &d, nil
+		}
+	}
+	return nil, nil
+}
+
+func (m *mockKBStore) DeleteDocuments(_ context.Context, docIDs []int) error {
+	for _, id := range docIDs {
+		for i, d := range m.docs {
+			if d.ID == id {
+				m.docs = append(m.docs[:i], m.docs[i+1:]...)
+				break
+			}
 		}
 	}
 	return nil
@@ -152,5 +185,41 @@ func TestDeleteKBGroup(t *testing.T) {
 	}
 	if len(s.groups) != 0 {
 		t.Fatalf("expected group deleted, got %+v", s.groups)
+	}
+}
+
+func TestListGroupDocuments(t *testing.T) {
+	s := newMockKBStore()
+	s.docs = []knowledge.Document{
+		{ID: 1, GroupID: 1, Name: "doc1"},
+		{ID: 2, GroupID: 2, Name: "doc2"},
+	}
+	w := httptest.NewRecorder()
+	listGroupDocuments(s, w, httptest.NewRequest(http.MethodGet, "/", nil), "1")
+	if w.Code != http.StatusOK {
+		t.Fatalf("want 200, got %d", w.Code)
+	}
+	var docs []knowledge.Document
+	json.NewDecoder(w.Body).Decode(&docs)
+	if len(docs) != 1 || docs[0].Name != "doc1" {
+		t.Fatalf("unexpected docs: %+v", docs)
+	}
+}
+
+func TestDeleteDocuments(t *testing.T) {
+	s := newMockKBStore()
+	s.docs = []knowledge.Document{
+		{ID: 1, GroupID: 1, Name: "doc1"},
+		{ID: 2, GroupID: 1, Name: "doc2"},
+		{ID: 3, GroupID: 1, Name: "doc3"},
+	}
+	body := bytes.NewBufferString(`{"ids":[1,2]}`)
+	w := httptest.NewRecorder()
+	deleteDocuments(s, w, httptest.NewRequest(http.MethodDelete, "/", body))
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("want 204, got %d", w.Code)
+	}
+	if len(s.docs) != 1 || s.docs[0].ID != 3 {
+		t.Fatalf("expected docs 1,2 deleted, got %+v", s.docs)
 	}
 }
