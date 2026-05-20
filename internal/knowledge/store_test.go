@@ -121,3 +121,205 @@ func TestCascadeDelete(t *testing.T) {
 		t.Fatalf("expected groups to be cascade deleted, found %d", count)
 	}
 }
+
+func TestListDocuments(t *testing.T) {
+	s := knowledge.NewStore(newTestDB(t))
+	ctx := context.Background()
+
+	kb, _ := s.CreateKB(ctx, "AISG")
+	g, _ := s.CreateGroup(ctx, kb.ID, "v706")
+
+	// Empty list
+	docs, err := s.ListDocuments(ctx, g.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(docs) != 0 {
+		t.Fatalf("expected 0 documents, got %d", len(docs))
+	}
+
+	// Create documents directly via SQL for testing
+	db := newTestDB(t)
+	s2 := knowledge.NewStore(db)
+	kb2, _ := s2.CreateKB(ctx, "AISG")
+	g2, _ := s2.CreateGroup(ctx, kb2.ID, "v706")
+
+	_, err = db.ExecContext(ctx, `INSERT INTO knowledge_documents
+		(group_id, name, doc_type, raw_content, filename, status, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+		g2.ID, "API Spec", "openapi", "content1", "api.yaml", "ready")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = db.ExecContext(ctx, `INSERT INTO knowledge_documents
+		(group_id, name, doc_type, raw_content, filename, status, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+		g2.ID, "Guide", "markdown", "content2", "guide.md", "pending")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// List documents
+	docs, err = s2.ListDocuments(ctx, g2.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(docs) != 2 {
+		t.Fatalf("expected 2 documents, got %d", len(docs))
+	}
+	if docs[0].Name != "API Spec" || docs[1].Name != "Guide" {
+		t.Fatalf("unexpected document names: %s, %s", docs[0].Name, docs[1].Name)
+	}
+}
+
+func TestGetDocument(t *testing.T) {
+	db := newTestDB(t)
+	s := knowledge.NewStore(db)
+	ctx := context.Background()
+
+	kb, _ := s.CreateKB(ctx, "AISG")
+	g, _ := s.CreateGroup(ctx, kb.ID, "v706")
+
+	// Insert a document
+	res, err := db.ExecContext(ctx, `INSERT INTO knowledge_documents
+		(group_id, name, doc_type, raw_content, filename, status, entry_count, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+		g.ID, "API Spec", "openapi", "content", "api.yaml", "ready", 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	docID, _ := res.LastInsertId()
+
+	// Get existing document
+	doc, err := s.GetDocument(ctx, int(docID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if doc.Name != "API Spec" || doc.DocType != "openapi" || doc.EntryCount != 5 {
+		t.Fatalf("unexpected document: %+v", doc)
+	}
+
+	// Get non-existent document
+	_, err = s.GetDocument(ctx, 99999)
+	if err == nil {
+		t.Fatal("expected error for non-existent document")
+	}
+}
+
+func TestDeleteDocuments(t *testing.T) {
+	db := newTestDB(t)
+	s := knowledge.NewStore(db)
+	ctx := context.Background()
+
+	kb, _ := s.CreateKB(ctx, "AISG")
+	g, _ := s.CreateGroup(ctx, kb.ID, "v706")
+
+	// Insert documents
+	res1, _ := db.ExecContext(ctx, `INSERT INTO knowledge_documents
+		(group_id, name, doc_type, raw_content, filename, status, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+		g.ID, "Doc1", "markdown", "content1", "doc1.md", "ready")
+	docID1, _ := res1.LastInsertId()
+
+	res2, _ := db.ExecContext(ctx, `INSERT INTO knowledge_documents
+		(group_id, name, doc_type, raw_content, filename, status, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+		g.ID, "Doc2", "markdown", "content2", "doc2.md", "ready")
+	docID2, _ := res2.LastInsertId()
+
+	// Delete single document
+	err := s.DeleteDocuments(ctx, []int{int(docID1)})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	docs, _ := s.ListDocuments(ctx, g.ID)
+	if len(docs) != 1 || docs[0].Name != "Doc2" {
+		t.Fatalf("expected 1 document after delete, got %d", len(docs))
+	}
+
+	// Delete multiple documents
+	res3, _ := db.ExecContext(ctx, `INSERT INTO knowledge_documents
+		(group_id, name, doc_type, raw_content, filename, status, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+		g.ID, "Doc3", "markdown", "content3", "doc3.md", "ready")
+	docID3, _ := res3.LastInsertId()
+
+	err = s.DeleteDocuments(ctx, []int{int(docID2), int(docID3)})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	docs, _ = s.ListDocuments(ctx, g.ID)
+	if len(docs) != 0 {
+		t.Fatalf("expected 0 documents after delete, got %d", len(docs))
+	}
+}
+
+func TestDeleteDocumentsCascade(t *testing.T) {
+	db := newTestDB(t)
+	s := knowledge.NewStore(db)
+	ctx := context.Background()
+
+	kb, _ := s.CreateKB(ctx, "AISG")
+	g, _ := s.CreateGroup(ctx, kb.ID, "v706")
+
+	// Insert document
+	res, _ := db.ExecContext(ctx, `INSERT INTO knowledge_documents
+		(group_id, name, doc_type, raw_content, filename, status, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+		g.ID, "Doc1", "markdown", "content1", "doc1.md", "ready")
+	docID, _ := res.LastInsertId()
+
+	// Insert sections
+	res1, _ := db.ExecContext(ctx, `INSERT INTO knowledge_sections
+		(document_id, name, summary, position) VALUES (?, ?, ?, ?)`,
+		docID, "Section1", "summary1", 0)
+	sectionID1, _ := res1.LastInsertId()
+
+	res2, _ := db.ExecContext(ctx, `INSERT INTO knowledge_sections
+		(document_id, name, summary, position) VALUES (?, ?, ?, ?)`,
+		docID, "Section2", "summary2", 1)
+	sectionID2, _ := res2.LastInsertId()
+
+	// Insert entries
+	db.ExecContext(ctx, `INSERT INTO knowledge_entries
+		(document_id, section_id, title, summary, content, position)
+		VALUES (?, ?, ?, ?, ?, ?)`,
+		docID, sectionID1, "Entry1", "sum1", "content1", 0)
+
+	db.ExecContext(ctx, `INSERT INTO knowledge_entries
+		(document_id, section_id, title, summary, content, position)
+		VALUES (?, ?, ?, ?, ?, ?)`,
+		docID, sectionID2, "Entry2", "sum2", "content2", 0)
+
+	// Verify sections and entries exist
+	var sectionCount, entryCount int
+	db.QueryRowContext(ctx, `SELECT COUNT(*) FROM knowledge_sections WHERE document_id = ?`, docID).Scan(&sectionCount)
+	db.QueryRowContext(ctx, `SELECT COUNT(*) FROM knowledge_entries WHERE document_id = ?`, docID).Scan(&entryCount)
+
+	if sectionCount != 2 {
+		t.Fatalf("expected 2 sections, got %d", sectionCount)
+	}
+	if entryCount != 2 {
+		t.Fatalf("expected 2 entries, got %d", entryCount)
+	}
+
+	// Delete document
+	err := s.DeleteDocuments(ctx, []int{int(docID)})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify cascade delete
+	db.QueryRowContext(ctx, `SELECT COUNT(*) FROM knowledge_sections WHERE document_id = ?`, docID).Scan(&sectionCount)
+	db.QueryRowContext(ctx, `SELECT COUNT(*) FROM knowledge_entries WHERE document_id = ?`, docID).Scan(&entryCount)
+
+	if sectionCount != 0 {
+		t.Fatalf("expected sections to be cascade deleted, found %d", sectionCount)
+	}
+	if entryCount != 0 {
+		t.Fatalf("expected entries to be cascade deleted, found %d", entryCount)
+	}
+}
