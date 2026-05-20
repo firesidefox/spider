@@ -22,7 +22,10 @@ func (s *Store) CreateKB(ctx context.Context, name string) (*KnowledgeBase, erro
 	if err != nil {
 		return nil, fmt.Errorf("create kb: %w", err)
 	}
-	id, _ := res.LastInsertId()
+	id, err := res.LastInsertId()
+	if err != nil {
+		return nil, fmt.Errorf("get last insert id: %w", err)
+	}
 	return &KnowledgeBase{ID: int(id), Name: name, CreatedAt: now}, nil
 }
 
@@ -55,7 +58,10 @@ func (s *Store) CreateGroup(ctx context.Context, kbID int, name string) (*Group,
 	if err != nil {
 		return nil, fmt.Errorf("create group: %w", err)
 	}
-	id, _ := res.LastInsertId()
+	id, err := res.LastInsertId()
+	if err != nil {
+		return nil, fmt.Errorf("get last insert id: %w", err)
+	}
 	return &Group{ID: int(id), KBID: kbID, Name: name, CreatedAt: now}, nil
 }
 
