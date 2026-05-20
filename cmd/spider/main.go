@@ -19,6 +19,7 @@ import (
 	apipkg "github.com/spiderai/spider/internal/api"
 	"github.com/spiderai/spider/internal/agent"
 	"github.com/spiderai/spider/internal/auth"
+	"github.com/spiderai/spider/internal/knowledge"
 	"github.com/spiderai/spider/internal/logger"
 	mcppkg "github.com/spiderai/spider/internal/mcp"
 	"github.com/spiderai/spider/internal/monitor"
@@ -250,6 +251,7 @@ func serve(cfgFile, addrOverride, dataDirOverride string, debug bool) error {
 	app.MsgStore = store.NewMessageStore(database)
 	app.DocStore = store.NewDocumentStore(database)
 	app.GroupStore = store.NewGroupStore(database)
+	app.KnowledgeStore = knowledge.NewStore(database)
 	ps := store.NewProviderStore(database, cm)
 	app.ProviderStore = ps
 	app.RagConfigStore = store.NewRagConfigStore(database, cm)

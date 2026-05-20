@@ -18,6 +18,7 @@ import (
 	"github.com/spiderai/spider/internal/monitor"
 	"github.com/spiderai/spider/internal/auth"
 	"github.com/spiderai/spider/internal/config"
+	"github.com/spiderai/spider/internal/knowledge"
 	"github.com/spiderai/spider/internal/logger"
 	"github.com/spiderai/spider/internal/permission"
 	"github.com/spiderai/spider/internal/rag"
@@ -52,6 +53,7 @@ type App struct {
 	TaskStore      *store.TaskStore
 	TaskRunStore   *store.TaskRunStore
 	NotifyChannelStore *store.NotifyChannelStore
+	KnowledgeStore *knowledge.Store
 	AgentFactory   *agent.Factory // nil if LLM not configured
 	Executor       *scheduler.Executor
 
@@ -107,6 +109,7 @@ func (a *App) NewAgentFactory() (*agent.Factory, error) {
 	f.TopologyStore = a.TopologyStore
 	f.SSEBroadcaster = a
 	f.DocStore = a.DocStore
+	f.KnowledgeStore = a.KnowledgeStore
 	if rs, err := a.GetOrBuildRagStore(); err == nil {
 		f.RagStore = rs
 	}
