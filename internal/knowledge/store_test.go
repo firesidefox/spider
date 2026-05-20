@@ -4,12 +4,15 @@ import (
 	"context"
 	"database/sql"
 	"encoding/binary"
+	"encoding/json"
 	"math"
 	"testing"
 
 	_ "modernc.org/sqlite"
 	"github.com/spiderai/spider/internal/db"
 	"github.com/spiderai/spider/internal/knowledge"
+	"github.com/spiderai/spider/internal/llm"
+	"github.com/spiderai/spider/internal/rag"
 )
 
 func newTestDB(t *testing.T) *sql.DB {
@@ -766,5 +769,178 @@ func TestSearch(t *testing.T) {
 	}
 	if len(docEntries) < 1 {
 		t.Fatalf("expected at least 1 entry in document scope, got %d", len(docEntries))
+	}
+}
+
+// mockLLMClient returns a fixed JSON clustering response for any input.
+type mockLLMClient struct {
+	response string
+}
+
+func (m *mockLLMClient) Chat(ctx context.Context, req *llm.ChatRequest) (string, error) {
+	return m.response, nil
+}
+
+func (m *mockLLMClient) ChatStream(ctx context.Context, req *llm.ChatRequest) (<-chan llm.StreamEvent, error) {
+	ch := make(chan llm.StreamEvent)
+	close(ch)
+	return ch, nil
+}
+
+func (m *mockLLMClient) CountTokens(ctx context.Context, msgs []llm.Message) (int, error) {
+	return 0, nil
+}
+
+// mockEmbedder returns a fixed 3-dim embedding for any text.
+type mockEmbedder struct{}
+
+func (e *mockEmbedder) Embed(ctx context.Context, text string) ([]float32, error) {
+	return []float32{0.1, 0.2, 0.3}, nil
+}
+
+func (e *mockEmbedder) EmbedBatch(ctx context.Context, texts []string) ([][]float32, error) {
+	out := make([][]float32, len(texts))
+	for i := range texts {
+		out[i] = []float32{0.1, 0.2, 0.3}
+	}
+	return out, nil
+}
+
+func (e *mockEmbedder) Dimensions() int { return 3 }
+
+// Compile-time checks that mocks satisfy interfaces.
+var _ llm.Client = (*mockLLMClient)(nil)
+var _ rag.Embedder = (*mockEmbedder)(nil)
+
+func TestImportDocumentOpenAPI(t *testing.T) {
+	s := knowledge.NewStore(newTestDB(t))
+	ctx := context.Background()
+
+	kb, _ := s.CreateKB(ctx, "TestKB")
+	g, _ := s.CreateGroup(ctx, kb.ID, "TestGroup")
+
+	content := []byte(`openapi: "3.0.0"
+info:
+  title: Test API
+  version: "1.0"
+paths:
+  /users:
+    get:
+      summary: List users
+      operationId: listUsers
+  /users/{id}:
+    get:
+      summary: Get user by ID
+      operationId: getUser
+`)
+
+	req := knowledge.ImportRequest{
+		GroupID:  g.ID,
+		Name:     "Test API",
+		Content:  content,
+		Filename: "api.yaml",
+		Embedder: &mockEmbedder{},
+	}
+
+	result, err := s.ImportDocument(ctx, req)
+	if err != nil {
+		t.Fatalf("ImportDocument failed: %v", err)
+	}
+
+	if result.DocumentID == 0 {
+		t.Fatal("expected non-zero DocumentID")
+	}
+	if result.EntryCount != 2 {
+		t.Fatalf("expected 2 entries, got %d", result.EntryCount)
+	}
+	if result.SectionCount != 1 {
+		t.Fatalf("expected 1 section (no LLM), got %d", result.SectionCount)
+	}
+
+	doc, err := s.GetDocument(ctx, result.DocumentID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if doc.Status != "ready" {
+		t.Fatalf("expected status=ready, got %s", doc.Status)
+	}
+	if doc.EntryCount != 2 {
+		t.Fatalf("expected entry_count=2, got %d", doc.EntryCount)
+	}
+}
+
+// sequentialLLMClient returns responses in order, cycling through the list.
+type sequentialLLMClient struct {
+	responses []string
+	idx       int
+}
+
+func (m *sequentialLLMClient) Chat(ctx context.Context, req *llm.ChatRequest) (string, error) {
+	r := m.responses[m.idx%len(m.responses)]
+	m.idx++
+	return r, nil
+}
+
+func (m *sequentialLLMClient) ChatStream(ctx context.Context, req *llm.ChatRequest) (<-chan llm.StreamEvent, error) {
+	ch := make(chan llm.StreamEvent)
+	close(ch)
+	return ch, nil
+}
+
+func (m *sequentialLLMClient) CountTokens(ctx context.Context, msgs []llm.Message) (int, error) {
+	return 0, nil
+}
+
+func TestImportDocumentMarkdown(t *testing.T) {
+	s := knowledge.NewStore(newTestDB(t))
+	ctx := context.Background()
+
+	kb, _ := s.CreateKB(ctx, "TestKB")
+	g, _ := s.CreateGroup(ctx, kb.ID, "TestGroup")
+
+	// First call: markdown parse response; second call: clustering response.
+	parseResp, _ := json.Marshal(map[string]interface{}{
+		"entries": []map[string]string{
+			{"title": "Introduction", "summary": "Intro section", "content": "# Introduction\nWelcome."},
+			{"title": "Setup", "summary": "Setup guide", "content": "## Setup\nRun npm install."},
+		},
+	})
+	clusterResp, _ := json.Marshal(map[string]interface{}{
+		"sections": []map[string]interface{}{
+			{"name": "Getting Started", "summary": "Intro and setup", "entry_ids": []int{0, 1}},
+		},
+	})
+
+	mockLLM := &sequentialLLMClient{
+		responses: []string{string(parseResp), string(clusterResp)},
+	}
+
+	content := []byte("# Introduction\nWelcome.\n\n## Setup\nRun npm install.\n")
+	req := knowledge.ImportRequest{
+		GroupID:   g.ID,
+		Name:      "Guide",
+		Content:   content,
+		Filename:  "guide.md",
+		LLMClient: mockLLM,
+	}
+
+	result, err := s.ImportDocument(ctx, req)
+	if err != nil {
+		t.Fatalf("ImportDocument failed: %v", err)
+	}
+
+	if result.EntryCount != 2 {
+		t.Fatalf("expected 2 entries, got %d", result.EntryCount)
+	}
+	if result.SectionCount != 1 {
+		t.Fatalf("expected 1 section, got %d", result.SectionCount)
+	}
+
+	doc, err := s.GetDocument(ctx, result.DocumentID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if doc.Status != "ready" {
+		t.Fatalf("expected status=ready, got %s", doc.Status)
 	}
 }

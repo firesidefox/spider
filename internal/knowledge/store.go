@@ -489,3 +489,184 @@ func bytesToFloat32(b []byte) float32 {
 	bits := binary.LittleEndian.Uint32(b)
 	return math.Float32frombits(bits)
 }
+
+// float32SliceToBytes encodes a float32 slice as little-endian bytes.
+func float32SliceToBytes(floats []float32) []byte {
+	out := make([]byte, len(floats)*4)
+	for i, f := range floats {
+		bits := math.Float32bits(f)
+		out[i*4] = byte(bits)
+		out[i*4+1] = byte(bits >> 8)
+		out[i*4+2] = byte(bits >> 16)
+		out[i*4+3] = byte(bits >> 24)
+	}
+	return out
+}
+
+// makeRange returns a slice of ints [start, end).
+func makeRange(start, end int) []int {
+	result := make([]int, end-start)
+	for i := range result {
+		result[i] = start + i
+	}
+	return result
+}
+
+func (s *Store) updateDocumentEntryCount(ctx context.Context, docID, count int) error {
+	_, err := s.db.ExecContext(ctx,
+		`UPDATE knowledge_documents SET entry_count = ?, updated_at = ? WHERE id = ?`,
+		count, time.Now().UTC(), docID)
+	return err
+}
+
+func (s *Store) setDocumentStatus(ctx context.Context, docID int, status, errorMsg string) error {
+	_, err := s.db.ExecContext(ctx,
+		`UPDATE knowledge_documents SET status = ?, error_msg = ?, updated_at = ? WHERE id = ?`,
+		status, errorMsg, time.Now().UTC(), docID)
+	return err
+}
+
+// createDocument inserts a new document record and returns it.
+func (s *Store) createDocument(ctx context.Context, groupID int, name, docType, rawContent, filename, status string) (*Document, error) {
+	now := time.Now().UTC()
+	res, err := s.db.ExecContext(ctx,
+		`INSERT INTO knowledge_documents (group_id, name, doc_type, raw_content, filename, status, error_msg, entry_count, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, '', 0, ?, ?)`,
+		groupID, name, docType, rawContent, filename, status, now, now)
+	if err != nil {
+		return nil, fmt.Errorf("create document: %w", err)
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return nil, fmt.Errorf("get last insert id: %w", err)
+	}
+	return &Document{
+		ID: int(id), GroupID: groupID, Name: name, DocType: docType,
+		RawContent: rawContent, Filename: filename, Status: status,
+		CreatedAt: now, UpdatedAt: now,
+	}, nil
+}
+
+// ImportDocument orchestrates the parse → cluster → embed → write pipeline.
+func (s *Store) ImportDocument(ctx context.Context, req ImportRequest) (*ImportResult, error) {
+	// Determine doc type
+	docType := req.DocType
+	if docType == "" {
+		docType = string(DetectDocType(req.Content, req.Filename))
+	}
+
+	// Create document record with status "indexing"
+	doc, err := s.createDocument(ctx, req.GroupID, req.Name, docType, string(req.Content), req.Filename, "indexing")
+	if err != nil {
+		return nil, fmt.Errorf("import document: %w", err)
+	}
+
+	result, err := s.runImportPipeline(ctx, doc, req)
+	if err != nil {
+		_ = s.setDocumentStatus(ctx, doc.ID, "error", err.Error())
+		return nil, err
+	}
+	return result, nil
+}
+
+// runImportPipeline executes parse → cluster → embed → write for an already-created document.
+func (s *Store) runImportPipeline(ctx context.Context, doc *Document, req ImportRequest) (*ImportResult, error) {
+	// Parse entries
+	entries, err := s.parseEntries(ctx, doc.DocType, req)
+	if err != nil {
+		return nil, fmt.Errorf("parse: %w", err)
+	}
+
+	// Cluster into sections
+	sections, err := s.clusterToSections(ctx, entries, req)
+	if err != nil {
+		return nil, fmt.Errorf("cluster: %w", err)
+	}
+
+	// Write sections and entries to DB
+	result, err := s.writeSectionsAndEntries(ctx, doc.ID, entries, sections, req)
+	if err != nil {
+		return nil, fmt.Errorf("write: %w", err)
+	}
+
+	// Update document status
+	if err := s.updateDocumentEntryCount(ctx, doc.ID, result.EntryCount); err != nil {
+		return nil, err
+	}
+	if err := s.setDocumentStatus(ctx, doc.ID, "ready", ""); err != nil {
+		return nil, err
+	}
+
+	result.DocumentID = doc.ID
+	return result, nil
+}
+
+// parseEntries selects the right parser and returns parsed entries.
+func (s *Store) parseEntries(ctx context.Context, docType string, req ImportRequest) ([]ParsedEntry, error) {
+	var parser Parser
+	switch docType {
+	case string(DocTypeOpenAPI):
+		parser = &OpenAPIParser{}
+	case string(DocTypeMarkdown):
+		if req.LLMClient == nil {
+			return nil, fmt.Errorf("LLMClient required for markdown parsing")
+		}
+		parser = NewMarkdownParser(req.LLMClient)
+	default:
+		return nil, fmt.Errorf("unsupported doc type: %s", docType)
+	}
+	return parser.Parse(ctx, req.Content, req.Filename)
+}
+
+// clusterToSections groups entries into sections using LLM, or returns a single catch-all section.
+func (s *Store) clusterToSections(ctx context.Context, entries []ParsedEntry, req ImportRequest) (*ClusterResult, error) {
+	if req.LLMClient == nil {
+		// No LLM: single section containing all entries
+		ids := makeRange(0, len(entries))
+		return &ClusterResult{
+			Sections: []ClusteredSection{{Name: "All Entries", Summary: "", EntryIDs: ids}},
+		}, nil
+	}
+	return ClusterEntries(ctx, req.LLMClient, entries)
+}
+
+// writeSectionsAndEntries persists sections and entries to the DB, generating embeddings if available.
+func (s *Store) writeSectionsAndEntries(ctx context.Context, docID int, entries []ParsedEntry, cluster *ClusterResult, req ImportRequest) (*ImportResult, error) {
+	result := &ImportResult{}
+
+	for pos, cs := range cluster.Sections {
+		sec, err := s.CreateSection(ctx, docID, cs.Name, cs.Summary, pos)
+		if err != nil {
+			return nil, err
+		}
+		result.Sections = append(result.Sections, *sec)
+
+		for entryPos, entryIdx := range cs.EntryIDs {
+			if entryIdx < 0 || entryIdx >= len(entries) {
+				continue
+			}
+			e := entries[entryIdx]
+
+			var embedding []byte
+			if req.Embedder != nil && e.Summary != "" {
+				vec, err := req.Embedder.Embed(ctx, e.Summary)
+				if err != nil {
+					return nil, fmt.Errorf("embed entry %d: %w", entryIdx, err)
+				}
+				embedding = float32SliceToBytes(vec)
+			}
+
+			secID := sec.ID
+			if _, err := s.CreateEntry(ctx, docID, &secID, e.Title, e.Summary, e.Content, embedding, entryPos); err != nil {
+				return nil, err
+			}
+			result.EntryCount++
+		}
+	}
+
+	result.SectionCount = len(cluster.Sections)
+	return result, nil
+}
+
+// Ensure Store implements KnowledgePlugin (compile-time check).
+var _ KnowledgePlugin = (*Store)(nil)

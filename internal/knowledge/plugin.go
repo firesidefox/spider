@@ -3,6 +3,9 @@ package knowledge
 import (
 	"context"
 	"time"
+
+	"github.com/spiderai/spider/internal/llm"
+	"github.com/spiderai/spider/internal/rag"
 )
 
 // KnowledgePlugin defines the interface for knowledge base operations.
@@ -26,7 +29,7 @@ type KnowledgePlugin interface {
 	CatalogSections(ctx context.Context, scope Scope) ([]Section, error)
 	CatalogEntries(ctx context.Context, sectionID int) ([]EntrySummary, error)
 	FetchEntries(ctx context.Context, entryIDs []int) ([]Entry, error)
-	Search(ctx context.Context, query string, scope Scope, topK int) ([]Entry, error)
+	Search(ctx context.Context, queryEmb []byte, scope Scope, topK int) ([]Entry, error)
 
 	// Import
 	ImportDocument(ctx context.Context, req ImportRequest) (*ImportResult, error)
@@ -99,10 +102,13 @@ type Entry struct {
 
 // ImportRequest specifies parameters for importing a document.
 type ImportRequest struct {
-	GroupID  int
-	Name     string
-	Content  []byte
-	Filename string
+	GroupID   int
+	Name      string
+	Content   []byte
+	Filename  string
+	DocType   string       // "openapi" | "markdown" — if empty, auto-detect
+	LLMClient llm.Client   // required for markdown parsing and clustering
+	Embedder  rag.Embedder // optional, for generating embeddings
 }
 
 // ImportResult contains the outcome of a document import.
