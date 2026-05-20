@@ -323,3 +323,120 @@ func TestDeleteDocumentsCascade(t *testing.T) {
 		t.Fatalf("expected entries to be cascade deleted, found %d", entryCount)
 	}
 }
+
+func TestSectionCRUD(t *testing.T) {
+	db := newTestDB(t)
+	s := knowledge.NewStore(db)
+	ctx := context.Background()
+
+	kb, _ := s.CreateKB(ctx, "AISG")
+	g, _ := s.CreateGroup(ctx, kb.ID, "v706")
+
+	// Insert document
+	res, _ := db.ExecContext(ctx, `INSERT INTO knowledge_documents
+		(group_id, name, doc_type, raw_content, filename, status, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+		g.ID, "Doc1", "markdown", "content1", "doc1.md", "ready")
+	docID, _ := res.LastInsertId()
+
+	// Create sections
+	sec1, err := s.CreateSection(ctx, int(docID), "Introduction", "Intro summary", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sec1.DocumentID != int(docID) || sec1.Name != "Introduction" || sec1.Summary != "Intro summary" || sec1.Position != 0 {
+		t.Fatalf("unexpected section: %+v", sec1)
+	}
+
+	_, err = s.CreateSection(ctx, int(docID), "Conclusion", "Conclusion summary", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// List sections
+	sections, err := s.ListSections(ctx, int(docID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sections) != 2 {
+		t.Fatalf("expected 2 sections, got %d", len(sections))
+	}
+	if sections[0].Name != "Introduction" || sections[1].Name != "Conclusion" {
+		t.Fatalf("unexpected section order: %s, %s", sections[0].Name, sections[1].Name)
+	}
+
+	// Empty list for non-existent document
+	sections, err = s.ListSections(ctx, 99999)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sections) != 0 {
+		t.Fatalf("expected 0 sections for non-existent document, got %d", len(sections))
+	}
+}
+
+func TestEntryCRUD(t *testing.T) {
+	db := newTestDB(t)
+	s := knowledge.NewStore(db)
+	ctx := context.Background()
+
+	kb, _ := s.CreateKB(ctx, "AISG")
+	g, _ := s.CreateGroup(ctx, kb.ID, "v706")
+
+	// Insert document
+	res, _ := db.ExecContext(ctx, `INSERT INTO knowledge_documents
+		(group_id, name, doc_type, raw_content, filename, status, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+		g.ID, "Doc1", "markdown", "content1", "doc1.md", "ready")
+	docID, _ := res.LastInsertId()
+
+	// Create section
+	sec, _ := s.CreateSection(ctx, int(docID), "Section1", "summary", 0)
+
+	// Create entry with section
+	entry1, err := s.CreateEntry(ctx, int(docID), &sec.ID, "Entry 1", "Summary 1", "Content 1", []byte("embedding1"), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if entry1.DocumentID != int(docID) || entry1.SectionID == nil || *entry1.SectionID != sec.ID {
+		t.Fatalf("unexpected entry: %+v", entry1)
+	}
+	if entry1.Title != "Entry 1" || entry1.Summary != "Summary 1" || entry1.Content != "Content 1" || entry1.Position != 0 {
+		t.Fatalf("unexpected entry fields: %+v", entry1)
+	}
+
+	// Create entry without section (nil sectionID)
+	entry2, err := s.CreateEntry(ctx, int(docID), nil, "Entry 2", "Summary 2", "Content 2", []byte("embedding2"), 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if entry2.SectionID != nil {
+		t.Fatalf("expected nil sectionID, got %v", entry2.SectionID)
+	}
+
+	// List entries
+	entries, err := s.ListEntries(ctx, int(docID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 2 {
+		t.Fatalf("expected 2 entries, got %d", len(entries))
+	}
+	if entries[0].Title != "Entry 1" || entries[1].Title != "Entry 2" {
+		t.Fatalf("unexpected entry order: %s, %s", entries[0].Title, entries[1].Title)
+	}
+
+	// Verify ordering by position
+	if entries[0].Position != 0 || entries[1].Position != 1 {
+		t.Fatalf("unexpected positions: %d, %d", entries[0].Position, entries[1].Position)
+	}
+
+	// Empty list for non-existent document
+	entries, err = s.ListEntries(ctx, 99999)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("expected 0 entries for non-existent document, got %d", len(entries))
+	}
+}

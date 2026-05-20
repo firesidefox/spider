@@ -147,3 +147,91 @@ func (s *Store) DeleteDocuments(ctx context.Context, docIDs []int) error {
 	_, err := s.db.ExecContext(ctx, query, args...)
 	return err
 }
+
+func (s *Store) CreateSection(ctx context.Context, documentID int, name, summary string, position int) (*Section, error) {
+	res, err := s.db.ExecContext(ctx,
+		`INSERT INTO knowledge_sections (document_id, name, summary, position) VALUES (?, ?, ?, ?)`,
+		documentID, name, summary, position)
+	if err != nil {
+		return nil, fmt.Errorf("create section: %w", err)
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return nil, fmt.Errorf("get last insert id: %w", err)
+	}
+	return &Section{
+		ID:         int(id),
+		DocumentID: documentID,
+		Name:       name,
+		Summary:    summary,
+		Position:   position,
+	}, nil
+}
+
+func (s *Store) ListSections(ctx context.Context, documentID int) ([]Section, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, document_id, name, summary, position
+		FROM knowledge_sections
+		WHERE document_id = ?
+		ORDER BY position`, documentID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []Section
+	for rows.Next() {
+		var sec Section
+		if err := rows.Scan(&sec.ID, &sec.DocumentID, &sec.Name, &sec.Summary, &sec.Position); err != nil {
+			return nil, err
+		}
+		out = append(out, sec)
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) CreateEntry(ctx context.Context, documentID int, sectionID *int, title, summary, content string, embedding []byte, position int) (*Entry, error) {
+	res, err := s.db.ExecContext(ctx,
+		`INSERT INTO knowledge_entries (document_id, section_id, title, summary, content, embedding, position)
+		VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		documentID, sectionID, title, summary, content, embedding, position)
+	if err != nil {
+		return nil, fmt.Errorf("create entry: %w", err)
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return nil, fmt.Errorf("get last insert id: %w", err)
+	}
+	return &Entry{
+		ID:         int(id),
+		DocumentID: documentID,
+		SectionID:  sectionID,
+		Title:      title,
+		Summary:    summary,
+		Content:    content,
+		Embedding:  embedding,
+		Position:   position,
+	}, nil
+}
+
+func (s *Store) ListEntries(ctx context.Context, documentID int) ([]Entry, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, document_id, section_id, title, summary, content, embedding, position
+		FROM knowledge_entries
+		WHERE document_id = ?
+		ORDER BY position`, documentID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []Entry
+	for rows.Next() {
+		var e Entry
+		if err := rows.Scan(&e.ID, &e.DocumentID, &e.SectionID, &e.Title, &e.Summary, &e.Content, &e.Embedding, &e.Position); err != nil {
+			return nil, err
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}
