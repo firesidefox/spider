@@ -10,6 +10,7 @@ import (
 	"github.com/spiderai/spider/internal/logger"
 	"github.com/spiderai/spider/internal/models"
 	mcppkg "github.com/spiderai/spider/internal/mcp"
+	"github.com/spiderai/spider/internal/rag"
 )
 
 // NewRouter 注册所有 /api/v1 路由，返回 http.Handler。
@@ -574,17 +575,23 @@ func NewRouter(app *mcppkg.App) http.Handler {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	})
 
+	// Build embedder once at startup; nil if RAG not configured.
+	var kbEmbedder rag.Embedder
+	if cfg, err := app.RagConfigStore.Get(); err == nil && cfg != nil && cfg.Model != "" {
+		if emb, err := rag.NewEmbedder(cfg.Type, cfg.APIKey, cfg.Model, cfg.BaseURL, 0); err == nil {
+			kbEmbedder = emb
+		}
+	}
+
 	mux.HandleFunc("/api/v1/knowledge-documents/import", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
 			operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				importKnowledgeDocument(app.KnowledgeStore, app, w, r)
+				importKnowledgeDocument(app.KnowledgeStore, app, kbEmbedder, w, r)
 			})).ServeHTTP(w, r)
 			return
 		}
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	})
-
-	// Permission approvals API (operator or above)
 	mux.HandleFunc("/api/v1/approvals", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet {
 			operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

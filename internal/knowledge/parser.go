@@ -40,7 +40,7 @@ func DetectDocType(content []byte, filename string) DocType {
 
 	// Check JSON for OpenAPI
 	if strings.Contains(filename, ".json") {
-		if contains(contentStr, `"openapi"`) || contains(contentStr, `"swagger"`) {
+		if strings.Contains(contentStr, `"openapi"`) || strings.Contains(contentStr, `"swagger"`) {
 			return DocTypeOpenAPI
 		}
 	}
@@ -55,33 +55,14 @@ func DetectDocType(content []byte, filename string) DocType {
 
 // hasYAMLMarker checks if content contains a YAML key at the start of a line.
 func hasYAMLMarker(content, marker string) bool {
-	idx := indexOf(content, marker)
+	idx := strings.Index(content, marker)
 	if idx == -1 {
 		return false
 	}
-	// Check if marker is at start of line (after newline or at position 0)
 	if idx == 0 {
 		return true
 	}
 	return content[idx-1] == '\n'
-}
-
-// contains checks if s contains substr.
-func contains(s, substr string) bool {
-	return strings.Contains(s, substr)
-}
-
-// indexOf returns the index of substr in s, or -1 if not found.
-func indexOf(s, substr string) int {
-	return strings.Index(s, substr)
-}
-
-// min returns the minimum of two integers.
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }
 
 // OpenAPIParser extracts entries from OpenAPI/Swagger documents.

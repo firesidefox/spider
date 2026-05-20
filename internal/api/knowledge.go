@@ -3,7 +3,6 @@ package api
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"strconv"
@@ -165,8 +164,10 @@ func deleteDocuments(s docStore, w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func importKnowledgeDocument(ks *knowledge.Store, app *mcppkg.App, w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseMultipartForm(32 << 20); err != nil {
+func importKnowledgeDocument(ks *knowledge.Store, app *mcppkg.App, embedder rag.Embedder, w http.ResponseWriter, r *http.Request) {
+	const maxUploadBytes = 32 << 20 // 32 MB
+	r.Body = http.MaxBytesReader(w, r.Body, maxUploadBytes)
+	if err := r.ParseMultipartForm(maxUploadBytes); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid multipart form")
 		return
 	}
@@ -194,17 +195,6 @@ func importKnowledgeDocument(ks *knowledge.Store, app *mcppkg.App, w http.Respon
 		return
 	}
 	llmClient := app.AgentFactory.LLMClient
-
-	// Get embedder from RagConfigStore
-	var embedder rag.Embedder
-	cfg, err := app.RagConfigStore.Get()
-	if err == nil && cfg != nil && cfg.Model != "" {
-		embedder, err = rag.NewEmbedder(cfg.Type, cfg.APIKey, cfg.Model, cfg.BaseURL, 0)
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, fmt.Sprintf("failed to create embedder: %v", err))
-			return
-		}
-	}
 
 	req := knowledge.ImportRequest{
 		GroupID:   groupID,

@@ -68,12 +68,25 @@ func ClusterEntries(ctx context.Context, client llm.Client, entries []ParsedEntr
 	result := &ClusterResult{
 		Sections: make([]ClusteredSection, 0, len(resp.Sections)),
 	}
+	seen := make(map[int]bool, len(entries))
 	for _, s := range resp.Sections {
+		for _, id := range s.EntryIDs {
+			if id < 0 || id >= len(entries) {
+				return nil, fmt.Errorf("clustering: entry_id %d out of range (have %d entries)", id, len(entries))
+			}
+			if seen[id] {
+				return nil, fmt.Errorf("clustering: entry_id %d appears in multiple sections", id)
+			}
+			seen[id] = true
+		}
 		result.Sections = append(result.Sections, ClusteredSection{
 			Name:     s.Name,
 			Summary:  s.Summary,
 			EntryIDs: s.EntryIDs,
 		})
+	}
+	if len(seen) != len(entries) {
+		return nil, fmt.Errorf("clustering: %d entries provided but only %d assigned to sections", len(entries), len(seen))
 	}
 	return result, nil
 }
