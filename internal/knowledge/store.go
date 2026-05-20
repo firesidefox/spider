@@ -237,3 +237,67 @@ func (s *Store) ListEntries(ctx context.Context, documentID int) ([]Entry, error
 	}
 	return out, rows.Err()
 }
+
+// CatalogSections returns all sections within a given scope (kb, group, or document)
+// with entry counts computed via LEFT JOIN.
+func (s *Store) CatalogSections(ctx context.Context, scope Scope) ([]Section, error) {
+	var query string
+	var args []interface{}
+
+	switch scope.Type {
+	case "kb":
+		// JOIN through documents and groups to filter by kb_id
+		query = `
+			SELECT s.id, s.document_id, s.name, s.summary, s.position, COUNT(e.id) as entry_count
+			FROM knowledge_sections s
+			INNER JOIN knowledge_documents d ON s.document_id = d.id
+			INNER JOIN knowledge_groups g ON d.group_id = g.id
+			LEFT JOIN knowledge_entries e ON e.section_id = s.id
+			WHERE g.kb_id = ?
+			GROUP BY s.id, s.document_id, s.name, s.summary, s.position
+			ORDER BY s.position`
+		args = []interface{}{scope.ID}
+
+	case "group":
+		// JOIN through documents to filter by group_id
+		query = `
+			SELECT s.id, s.document_id, s.name, s.summary, s.position, COUNT(e.id) as entry_count
+			FROM knowledge_sections s
+			INNER JOIN knowledge_documents d ON s.document_id = d.id
+			LEFT JOIN knowledge_entries e ON e.section_id = s.id
+			WHERE d.group_id = ?
+			GROUP BY s.id, s.document_id, s.name, s.summary, s.position
+			ORDER BY s.position`
+		args = []interface{}{scope.ID}
+
+	case "document":
+		// Direct filter on document_id
+		query = `
+			SELECT s.id, s.document_id, s.name, s.summary, s.position, COUNT(e.id) as entry_count
+			FROM knowledge_sections s
+			LEFT JOIN knowledge_entries e ON e.section_id = s.id
+			WHERE s.document_id = ?
+			GROUP BY s.id, s.document_id, s.name, s.summary, s.position
+			ORDER BY s.position`
+		args = []interface{}{scope.ID}
+
+	default:
+		return nil, fmt.Errorf("invalid scope type: %s", scope.Type)
+	}
+
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []Section
+	for rows.Next() {
+		var sec Section
+		if err := rows.Scan(&sec.ID, &sec.DocumentID, &sec.Name, &sec.Summary, &sec.Position, &sec.EntryCount); err != nil {
+			return nil, err
+		}
+		out = append(out, sec)
+	}
+	return out, rows.Err()
+}

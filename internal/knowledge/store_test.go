@@ -441,6 +441,95 @@ func TestEntryCRUD(t *testing.T) {
 	}
 }
 
+func TestCatalogSections(t *testing.T) {
+	db := newTestDB(t)
+	s := knowledge.NewStore(db)
+	ctx := context.Background()
+
+	// Create KB with 2 groups
+	kb, _ := s.CreateKB(ctx, "AISG")
+	g1, _ := s.CreateGroup(ctx, kb.ID, "v706")
+	g2, _ := s.CreateGroup(ctx, kb.ID, "v808")
+
+	// Create 2 documents: doc1 in g1, doc2 in g2
+	res1, _ := db.ExecContext(ctx, `INSERT INTO knowledge_documents
+		(group_id, name, doc_type, raw_content, filename, status, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+		g1.ID, "Doc1", "markdown", "content1", "doc1.md", "ready")
+	doc1ID, _ := res1.LastInsertId()
+
+	res2, _ := db.ExecContext(ctx, `INSERT INTO knowledge_documents
+		(group_id, name, doc_type, raw_content, filename, status, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+		g2.ID, "Doc2", "markdown", "content2", "doc2.md", "ready")
+	doc2ID, _ := res2.LastInsertId()
+
+	// Create sections: 2 in doc1, 1 in doc2
+	sec1, _ := s.CreateSection(ctx, int(doc1ID), "Introduction", "intro summary", 0)
+	sec2, _ := s.CreateSection(ctx, int(doc1ID), "Conclusion", "conclusion summary", 1)
+	_, _ = s.CreateSection(ctx, int(doc2ID), "Overview", "overview summary", 0)
+
+	// Create entries: 2 in sec1, 1 in sec2, 0 in sec3
+	s.CreateEntry(ctx, int(doc1ID), &sec1.ID, "Entry1", "sum1", "content1", []byte("emb1"), 0)
+	s.CreateEntry(ctx, int(doc1ID), &sec1.ID, "Entry2", "sum2", "content2", []byte("emb2"), 1)
+	s.CreateEntry(ctx, int(doc1ID), &sec2.ID, "Entry3", "sum3", "content3", []byte("emb3"), 0)
+
+	// Test scope: kb (should return all 3 sections)
+	sections, err := s.CatalogSections(ctx, knowledge.Scope{Type: "kb", ID: kb.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sections) != 3 {
+		t.Fatalf("kb scope: expected 3 sections, got %d", len(sections))
+	}
+
+	// Verify entry counts by section name (order may vary by position across documents)
+	sectionMap := make(map[string]int)
+	for _, sec := range sections {
+		sectionMap[sec.Name] = sec.EntryCount
+	}
+
+	if sectionMap["Introduction"] != 2 {
+		t.Fatalf("kb scope: expected Introduction to have 2 entries, got %d", sectionMap["Introduction"])
+	}
+	if sectionMap["Conclusion"] != 1 {
+		t.Fatalf("kb scope: expected Conclusion to have 1 entry, got %d", sectionMap["Conclusion"])
+	}
+	if sectionMap["Overview"] != 0 {
+		t.Fatalf("kb scope: expected Overview to have 0 entries, got %d", sectionMap["Overview"])
+	}
+
+	// Test scope: group (should return 2 sections for g1)
+	sections, err = s.CatalogSections(ctx, knowledge.Scope{Type: "group", ID: g1.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sections) != 2 {
+		t.Fatalf("group scope: expected 2 sections, got %d", len(sections))
+	}
+	if sections[0].Name != "Introduction" || sections[1].Name != "Conclusion" {
+		t.Fatalf("group scope: unexpected section names: %s, %s", sections[0].Name, sections[1].Name)
+	}
+
+	// Test scope: document (should return 2 sections for doc1)
+	sections, err = s.CatalogSections(ctx, knowledge.Scope{Type: "document", ID: int(doc1ID)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sections) != 2 {
+		t.Fatalf("document scope: expected 2 sections, got %d", len(sections))
+	}
+	if sections[0].Name != "Introduction" || sections[1].Name != "Conclusion" {
+		t.Fatalf("document scope: unexpected section names: %s, %s", sections[0].Name, sections[1].Name)
+	}
+
+	// Test invalid scope type
+	_, err = s.CatalogSections(ctx, knowledge.Scope{Type: "invalid", ID: 1})
+	if err == nil {
+		t.Fatal("expected error for invalid scope type")
+	}
+}
+
 func TestSectionEntryCount(t *testing.T) {
 	db := newTestDB(t)
 	s := knowledge.NewStore(db)
