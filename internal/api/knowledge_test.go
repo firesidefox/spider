@@ -91,14 +91,17 @@ func (m *mockKBStore) GetDocument(_ context.Context, docID int) (*knowledge.Docu
 }
 
 func (m *mockKBStore) DeleteDocuments(_ context.Context, docIDs []int) error {
+	toDelete := make(map[int]bool, len(docIDs))
 	for _, id := range docIDs {
-		for i, d := range m.docs {
-			if d.ID == id {
-				m.docs = append(m.docs[:i], m.docs[i+1:]...)
-				break
-			}
+		toDelete[id] = true
+	}
+	filtered := m.docs[:0]
+	for _, d := range m.docs {
+		if !toDelete[d.ID] {
+			filtered = append(filtered, d)
 		}
 	}
+	m.docs = filtered
 	return nil
 }
 

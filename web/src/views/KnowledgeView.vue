@@ -153,14 +153,14 @@ function toggleKB(id: number) {
   const s = new Set(collapsedKBs.value)
   s.has(id) ? s.delete(id) : s.add(id)
   collapsedKBs.value = s
-  if (!s.has(id)) loadGroups(id)
+  if (!s.has(id) && !groupsByKB.value[id]) loadGroups(id)
 }
 
 function toggleGroup(id: number) {
   const s = new Set(collapsedGroups.value)
   s.has(id) ? s.delete(id) : s.add(id)
   collapsedGroups.value = s
-  if (!s.has(id)) loadDocs(id)
+  if (!s.has(id) && !docsByGroup.value[id]) loadDocs(id)
 }
 
 async function loadKBs() {
@@ -249,20 +249,24 @@ function onDrop(e: DragEvent) {
 async function doImport() {
   importing.value = true
   importErr.value = ''
-  let anyError = false
-  for (const item of importFiles.value) {
-    item.status = 'pending'
-    item.statusText = '导入中…'
-    try {
-      await importDocument(importGroupID.value, item.file)
-      item.status = 'ok'
-      item.statusText = '成功'
-    } catch (e: any) {
-      item.status = 'error'
-      item.statusText = e.message ?? '失败'
-      anyError = true
-    }
-  }
+
+  const results = await Promise.allSettled(
+    importFiles.value.map(async item => {
+      item.status = 'pending'
+      item.statusText = '导入中…'
+      try {
+        await importDocument(importGroupID.value, item.file)
+        item.status = 'ok'
+        item.statusText = '成功'
+      } catch (e: any) {
+        item.status = 'error'
+        item.statusText = e.message ?? '失败'
+        throw e
+      }
+    })
+  )
+
+  const anyError = results.some(r => r.status === 'rejected')
   importing.value = false
   await loadDocs(importGroupID.value)
   if (!anyError) {
