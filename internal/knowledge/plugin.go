@@ -43,32 +43,32 @@ type Scope struct {
 
 // KnowledgeBase represents a knowledge base.
 type KnowledgeBase struct {
-	ID        int
-	Name      string
-	CreatedAt time.Time
+	ID        int       `json:"id"`
+	Name      string    `json:"name"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 // Group represents a document group within a knowledge base.
 type Group struct {
-	ID        int
-	KBID      int
-	Name      string
-	CreatedAt time.Time
+	ID        int       `json:"id"`
+	KBID      int       `json:"kb_id"`
+	Name      string    `json:"name"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 // Document represents an imported document.
 type Document struct {
-	ID          int
-	GroupID     int
-	Name        string
-	DocType     string // "openapi" | "markdown"
-	RawContent  string
-	Filename    string
-	Status      string // "pending" | "indexing" | "ready" | "error"
-	ErrorMsg    string
-	EntryCount  int
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	ID          int       `json:"id"`
+	GroupID     int       `json:"group_id"`
+	Name        string    `json:"name"`
+	DocType     string    `json:"doc_type"` // "openapi" | "markdown"
+	RawContent  string    `json:"raw_content"`
+	Filename    string    `json:"filename"`
+	Status      string    `json:"status"` // "pending" | "indexing" | "ready" | "error"
+	ErrorMsg    string    `json:"error_msg"`
+	EntryCount  int       `json:"entry_count"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 // Section represents a logical section within a document.
