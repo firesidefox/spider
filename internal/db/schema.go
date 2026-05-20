@@ -443,5 +443,53 @@ func migrate(db *sql.DB) error {
 	db.Exec(`ALTER TABLE users ADD COLUMN ui_prefs TEXT NOT NULL DEFAULT '{}'`)
 	db.Exec(`ALTER TABLE todo_tasks ADD COLUMN seq INTEGER NOT NULL DEFAULT 0`)
 	db.Exec(`CREATE INDEX IF NOT EXISTS idx_todo_tasks_conv ON todo_tasks(conversation_id)`)
+
+	// Knowledge base tables
+	db.Exec(`CREATE TABLE IF NOT EXISTS knowledge_bases (
+		id         INTEGER PRIMARY KEY AUTOINCREMENT,
+		name       TEXT NOT NULL,
+		created_at DATETIME NOT NULL
+	)`)
+	db.Exec(`CREATE TABLE IF NOT EXISTS knowledge_groups (
+		id         INTEGER PRIMARY KEY AUTOINCREMENT,
+		kb_id      INTEGER NOT NULL REFERENCES knowledge_bases(id) ON DELETE CASCADE,
+		name       TEXT NOT NULL,
+		created_at DATETIME NOT NULL
+	)`)
+	db.Exec(`CREATE TABLE IF NOT EXISTS knowledge_documents (
+		id          INTEGER PRIMARY KEY AUTOINCREMENT,
+		group_id    INTEGER NOT NULL REFERENCES knowledge_groups(id) ON DELETE CASCADE,
+		name        TEXT NOT NULL,
+		doc_type    TEXT NOT NULL CHECK(doc_type IN ('openapi','markdown')),
+		raw_content TEXT NOT NULL DEFAULT '',
+		filename    TEXT NOT NULL DEFAULT '',
+		status      TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','indexing','ready','error')),
+		error_msg   TEXT NOT NULL DEFAULT '',
+		entry_count INTEGER NOT NULL DEFAULT 0,
+		created_at  DATETIME NOT NULL,
+		updated_at  DATETIME NOT NULL
+	)`)
+	db.Exec(`CREATE TABLE IF NOT EXISTS knowledge_sections (
+		id          INTEGER PRIMARY KEY AUTOINCREMENT,
+		document_id INTEGER NOT NULL REFERENCES knowledge_documents(id) ON DELETE CASCADE,
+		name        TEXT NOT NULL,
+		summary     TEXT NOT NULL DEFAULT '',
+		position    INTEGER NOT NULL DEFAULT 0
+	)`)
+	db.Exec(`CREATE TABLE IF NOT EXISTS knowledge_entries (
+		id          INTEGER PRIMARY KEY AUTOINCREMENT,
+		document_id INTEGER NOT NULL REFERENCES knowledge_documents(id) ON DELETE CASCADE,
+		section_id  INTEGER REFERENCES knowledge_sections(id) ON DELETE SET NULL,
+		title       TEXT NOT NULL,
+		summary     TEXT NOT NULL DEFAULT '',
+		content     TEXT NOT NULL,
+		embedding   BLOB,
+		position    INTEGER NOT NULL DEFAULT 0
+	)`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_kb_groups_kb_id ON knowledge_groups(kb_id)`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_kb_docs_group_id ON knowledge_documents(group_id)`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_kb_sections_doc_id ON knowledge_sections(document_id)`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_kb_entries_doc_id ON knowledge_entries(document_id)`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_kb_entries_section_id ON knowledge_entries(section_id)`)
 	return nil
 }
