@@ -29,14 +29,19 @@ const callAPIPromptSection = `### CallAPI (GET: read-only; POST/PUT/DELETE: has 
 
 **When NOT to use:** Do not call mutating methods before the user has confirmed the plan.
 
+**URL construction:**
+- Always pass face_id (from GetHosts result)
+- Pass relative path in url (e.g., /api/cpu/trend?duration=1h)
+- Tool auto-constructs full URL: scheme://IP:port + base_url + your path
+
 **Workflow for API calls:**
-1. ListHosts → find host with "api" access face
+1. GetHosts → find host with "api" access face
 2. SearchDocs with group_id from face.knowledge_sources → find correct endpoint, params, auth
-3. CallAPI
+3. CallAPI with face_id + relative path
 
 <example>
 User: Push a new ACL rule via the firewall API.
-Assistant: ListHosts → find gateway (api face, knowledge_sources group_id=3) → SearchDocs catalog=true group_id=3 → SearchDocs query="ACL rule create" → confirm request body with user → CallAPI POST
+Assistant: GetHosts → find gateway (api face, knowledge_sources group_id=3) → SearchDocs catalog=true group_id=3 → SearchDocs query="ACL rule create" → confirm request body with user → CallAPI POST face_id="xxx" url="/api/acl/rules"
 </example>`
 
 type CallRESTAPITool struct {
@@ -69,14 +74,14 @@ func (t *CallRESTAPITool) InputSchema() map[string]any {
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
-			"url":     map[string]any{"type": "string", "description": "Full URL to call"},
+			"face_id": map[string]any{"type": "string", "description": "Access face ID from GetHosts. Required for auto URL construction and auth injection."},
+			"url":     map[string]any{"type": "string", "description": "Relative path starting with / (e.g., /api/cpu/trend?duration=1h). Tool constructs full URL from face config."},
 			"method":  map[string]any{"type": "string", "description": "HTTP method", "enum": []string{"GET", "POST", "PUT", "DELETE", "PATCH"}},
 			"headers": map[string]any{"type": "object", "description": "HTTP headers"},
 			"body":    map[string]any{"type": "string", "description": "Request body"},
-		"face_id": map[string]any{"type": "string", "description": "Optional. Access face ID. If provided, auth headers are injected automatically from the stored credentials."},
 			"intent":  map[string]any{"type": "string", "description": "What you are trying to achieve with this API call (goal only). Required for POST/PUT/DELETE/PATCH."},
-			},
-		"required": []string{"method", "intent"},
+		},
+		"required": []string{"face_id", "url", "method", "intent"},
 	}
 }
 
@@ -100,7 +105,16 @@ func (t *CallRESTAPITool) Execute(ctx context.Context, input map[string]any) (*T
 		}
 	}
 	if face != nil && strings.HasPrefix(url, "/") {
-		url = face.BaseURL + url
+		// If base_url is already a full URL (legacy rows), use it directly.
+		if strings.HasPrefix(face.BaseURL, "http://") || strings.HasPrefix(face.BaseURL, "https://") {
+			url = strings.TrimRight(face.BaseURL, "/") + url
+		} else {
+			scheme := face.RESTScheme
+			if scheme == "" {
+				scheme = "http"
+			}
+			url = scheme + "://" + face.IP + ":" + strconv.Itoa(face.Port) + face.BaseURL + url
+		}
 	}
 
 	if url == "" {
