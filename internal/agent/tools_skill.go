@@ -35,6 +35,9 @@ func (t *InvokeSkillTool) InputSchema() map[string]any {
 }
 
 func (t *InvokeSkillTool) Execute(_ context.Context, input map[string]any) (*ToolResult, error) {
+	if t.manager == nil {
+		return &ToolResult{Content: "skill manager not configured", IsError: true, RiskLevel: RiskL1}, nil
+	}
 	name, _ := input["name"].(string)
 	if name == "" {
 		return &ToolResult{Content: "missing required field: name", IsError: true, RiskLevel: RiskL1, Summary: "failed to load skill: missing name"}, nil

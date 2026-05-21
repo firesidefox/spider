@@ -49,6 +49,9 @@ func (t *TodoTool) InputSchema() map[string]any {
 }
 
 func (t *TodoTool) Execute(_ context.Context, input map[string]any) (*ToolResult, error) {
+	if t.store == nil {
+		return &ToolResult{Content: "todo store not configured", IsError: true, RiskLevel: RiskL1}, nil
+	}
 	action, _ := input["action"].(string)
 	switch action {
 	case "create":

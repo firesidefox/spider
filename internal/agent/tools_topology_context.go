@@ -75,6 +75,9 @@ type topologyContextResult struct {
 }
 
 func (t *GetTopologyContextTool) Execute(_ context.Context, input map[string]any) (*ToolResult, error) {
+	if t.topos == nil {
+		return &ToolResult{Content: "topology store not configured", IsError: true, RiskLevel: RiskL1}, nil
+	}
 	hostName, _ := input["host_name"].(string)
 	hostID, _ := input["host_id"].(string)
 	topoID, _ := input["topology_id"].(string)

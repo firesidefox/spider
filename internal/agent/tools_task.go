@@ -52,6 +52,9 @@ func (t *CreateTaskTool) SystemPromptSection() string {
 
 // Execute creates the task and returns a confirmation string.
 func (t *CreateTaskTool) Execute(_ context.Context, input map[string]any) (*ToolResult, error) {
+	if t.taskStore == nil {
+		return &ToolResult{Content: "task store not configured", IsError: true, RiskLevel: RiskL1}, nil
+	}
 	name, _ := input["name"].(string)
 	goal, _ := input["goal"].(string)
 

@@ -111,6 +111,9 @@ func (t *SearchDocsTool) InputSchema() map[string]any {
 }
 
 func (t *SearchDocsTool) Execute(ctx context.Context, input map[string]any) (*ToolResult, error) {
+	if t.knowledgeStore == nil {
+		return &ToolResult{Content: "knowledge base not configured", IsError: true, RiskLevel: RiskL1}, nil
+	}
 	mode, _ := input["mode"].(string)
 	if mode == "" {
 		return &ToolResult{Content: "mode is required", IsError: true, RiskLevel: RiskL1}, nil

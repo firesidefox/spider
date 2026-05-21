@@ -48,6 +48,9 @@ const getTopologyPrompt = `## GetTopology
 func (t *GetTopologyTool) SystemPromptSection() string { return getTopologyPrompt }
 
 func (t *GetTopologyTool) Execute(ctx context.Context, input map[string]any) (*ToolResult, error) {
+	if t.topos == nil {
+		return &ToolResult{Content: "topology store not configured", IsError: true, RiskLevel: RiskL1}, nil
+	}
 	id, _ := input["topology_id"].(string)
 	name, _ := input["topology_name"].(string)
 

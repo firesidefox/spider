@@ -299,21 +299,11 @@ func (f *Factory) buildRegistryWithHosts(conversationID string, selectedHostIDs 
 	registry.Register(NewBatchExecuteTool(f.Hosts, f.AccessFaces, f.SSHPool, f.Logs, f.SSHKeys))
 	registry.Register(NewVerifyTool(f.Hosts, f.AccessFaces, f.SSHPool, f.SSHKeys))
 	registry.Register(NewCallRESTAPITool(f.AccessFaces))
-	if !f.DisableSearchDocs && f.KnowledgeStore != nil {
-		registry.Register(NewSearchDocsTool(f.KnowledgeStore, f.Embedder))
-	}
-	if f.TodoStore != nil {
-		registry.Register(NewTodoTool(f.TodoStore, f.SSEBroadcaster, conversationID))
-	}
-	if f.TopologyStore != nil {
-		registry.Register(NewGetTopologyTool(f.TopologyStore))
-		registry.Register(NewGetTopologyContextTool(f.TopologyStore))
-	}
-	if f.TaskStore != nil {
-		registry.Register(NewCreateTaskTool(f.TaskStore, conversationID))
-	}
-	if f.DataDir != "" {
-		registry.Register(NewInvokeSkillTool(f.DataDir))
-	}
+	registry.Register(NewSearchDocsTool(f.KnowledgeStore, f.Embedder))
+	registry.Register(NewTodoTool(f.TodoStore, f.SSEBroadcaster, conversationID))
+	registry.Register(NewGetTopologyTool(f.TopologyStore))
+	registry.Register(NewGetTopologyContextTool(f.TopologyStore))
+	registry.Register(NewCreateTaskTool(f.TaskStore, conversationID))
+	registry.Register(NewInvokeSkillTool(f.DataDir))
 	return registry
 }
