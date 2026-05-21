@@ -194,7 +194,7 @@ Assistant: Creates tasks: 1) Check disk usage 2) Clean up logs 3) Restart nginx 
 
 <example>
 User: What is the IP address of host web-01?
-Assistant: Calls ListHosts directly. No todo list.
+Assistant: Calls GetHosts directly. No todo list.
 </example>`
 
 func (t *TodoTool) SystemPromptSection() string {

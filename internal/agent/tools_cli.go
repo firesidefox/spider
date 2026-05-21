@@ -31,7 +31,7 @@ func (t *ExecuteCLITool) IsConcurrencySafe(_ map[string]any) bool { return false
 func (t *ExecuteCLITool) Name() string                  { return "RunCommand" }
 
 func (t *ExecuteCLITool) Description() string {
-	return `Execute a CLI command on a remote host via SSH. Has side effects. Check ListHosts "access_faces" first — do NOT call if "ssh" is absent. Always set ` + "`intent`" + ` to a short goal description (e.g. "重启 nginx 使配置生效").
+	return `Execute a CLI command on a remote host via SSH. Has side effects. Check GetHosts "access_faces" first — do NOT call if "ssh" is absent. Always set ` + "`intent`" + ` to a short goal description (e.g. "重启 nginx 使配置生效").
 Risk depends on the command:
 - Read-only commands (ls, cat, grep, ps, df, free, uname, systemctl status): safe, can use in Explore phase
 - State-changing commands (rm, kill, systemctl start|stop|restart, apt, yum, chmod, chown): use only in Act phase`

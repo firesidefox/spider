@@ -66,7 +66,7 @@ func newHostListCmd(url *string) *cobra.Command {
 		Use:   "list",
 		Short: "列出所有主机",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			hosts, err := client.New(*url).ListHosts(tag)
+			hosts, err := client.New(*url).GetHosts(tag)
 			if err != nil {
 				return err
 			}

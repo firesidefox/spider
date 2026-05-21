@@ -26,7 +26,7 @@ func New(baseURL string) *Client {
 
 // ── hosts ─────────────────────────────────────────────────────────────────────
 
-func (c *Client) ListHosts(tag string) ([]*models.Host, error) {
+func (c *Client) GetHosts(tag string) ([]*models.Host, error) {
 	u := c.base + "/api/v1/hosts"
 	if tag != "" {
 		u += "?tag=" + url.QueryEscape(tag)

@@ -246,7 +246,7 @@ func TestNewAgentPrependsEPAPrefix(t *testing.T) {
 
 func TestReadOnlyToolDescriptionsContainExploreHint(t *testing.T) {
 	tools := []Tool{
-		NewListHostsTool(nil, nil),
+		NewGetHostsTool(nil, nil),
 		NewSearchDocsTool(nil, nil),
 		NewVerifyTool(nil, nil, nil, nil),
 	}
