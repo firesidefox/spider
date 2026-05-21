@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"github.com/spiderai/spider/internal/llm"
@@ -46,8 +47,9 @@ type llmEntriesResponse struct {
 
 // parseMarkdownLLMResponse extracts entries from raw LLM JSON output.
 func parseMarkdownLLMResponse(raw string) ([]ParsedEntry, error) {
-	// Strip markdown code fences if present
 	raw = strings.TrimSpace(raw)
+
+	// Strip markdown code fences
 	if strings.HasPrefix(raw, "```") {
 		start := strings.Index(raw, "\n")
 		end := strings.LastIndex(raw, "```")
@@ -55,12 +57,39 @@ func parseMarkdownLLMResponse(raw string) ([]ParsedEntry, error) {
 			raw = strings.TrimSpace(raw[start+1 : end])
 		}
 	}
+
+	// Extract JSON object from mixed text
+	jsonStart := strings.Index(raw, "{")
+	jsonEnd := strings.LastIndex(raw, "}")
+	if jsonStart == -1 || jsonEnd == -1 || jsonEnd < jsonStart {
+		// Fallback: treat entire response as single entry
+		return []ParsedEntry{{
+			Title:   "Document Content",
+			Summary: "Full document content (LLM returned non-JSON response)",
+			Content: raw,
+		}}, nil
+	}
+	raw = raw[jsonStart : jsonEnd+1]
+
 	var resp llmEntriesResponse
 	if err := json.Unmarshal([]byte(raw), &resp); err != nil {
-		return nil, fmt.Errorf("failed to parse LLM JSON response: %w", err)
+		// Fallback: treat as single entry
+		return []ParsedEntry{{
+			Title:   "Document Content",
+			Summary: "Full document content (JSON parse failed)",
+			Content: raw,
+		}}, nil
 	}
+
+	if len(resp.Entries) == 0 {
+		return nil, fmt.Errorf("LLM returned empty entries array")
+	}
+
 	entries := make([]ParsedEntry, 0, len(resp.Entries))
 	for _, e := range resp.Entries {
+		if e.Title == "" || e.Content == "" {
+			continue // skip incomplete entries
+		}
 		entries = append(entries, ParsedEntry{Title: e.Title, Summary: e.Summary, Content: e.Content})
 	}
 	return entries, nil
@@ -71,7 +100,7 @@ func (p *MarkdownParser) parseChunk(ctx context.Context, text string) ([]ParsedE
 	prompt := buildMarkdownParsePrompt(text)
 	req := &llm.ChatRequest{
 		System: []llm.SystemBlock{
-			{Text: "You are a technical documentation parser. Return only valid JSON."},
+			{Text: "You are a technical documentation parser. You MUST respond with ONLY valid JSON. Never include explanations, markdown fences, or any text outside the JSON object."},
 		},
 		Messages: []llm.Message{
 			{Role: llm.RoleUser, Content: prompt},
@@ -82,6 +111,10 @@ func (p *MarkdownParser) parseChunk(ctx context.Context, text string) ([]ParsedE
 	if err != nil {
 		return nil, fmt.Errorf("llm chat: %w", err)
 	}
+
+	// Log response for debugging
+	slog.Debug("markdown parser LLM response", "response", truncate(resp, 500))
+
 	return parseMarkdownLLMResponse(resp)
 }
 
@@ -159,13 +192,17 @@ func buildMarkdownParsePrompt(text string) string {
 
 Each entry should be a self-contained concept: a command, flag, option, section, or topic.
 
-Return ONLY valid JSON in this exact format:
+CRITICAL: You MUST respond with ONLY a JSON object. No explanations, no markdown fences, no extra text.
+
+Required JSON format:
 {"entries": [{"title": "...", "summary": "...", "content": "..."}]}
 
-Rules:
+Fields:
 - title: short identifier (command name, section heading, etc.)
 - summary: one sentence describing what it does
 - content: the full relevant text for this entry
+
+Start your response with { and end with }
 
 Document:
 ` + text
