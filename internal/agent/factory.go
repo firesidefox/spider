@@ -242,15 +242,17 @@ func (f *Factory) BuildSystemPrompt(extraDynamic ...string) []llm.SystemBlock {
 	static.WriteString("\n\n")
 	static.WriteString(intentFieldPrompt)
 
-	dynamic := f.buildEnvironmentSection()
+	var dynamicBuilder strings.Builder
+	dynamicBuilder.WriteString(f.buildEnvironmentSection())
 	for _, extra := range extraDynamic {
-		dynamic += "\n\n" + extra
+		dynamicBuilder.WriteString("\n\n")
+		dynamicBuilder.WriteString(extra)
 	}
 
 	cacheMark := "ephemeral"
 	return []llm.SystemBlock{
 		{Text: static.String(), CacheControl: &cacheMark},
-		{Text: dynamic},
+		{Text: dynamicBuilder.String()},
 	}
 }
 
