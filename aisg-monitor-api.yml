@@ -1,0 +1,151 @@
+openapi: 3.0.3
+info:
+  title: Prometheus HTTP API、AISG v706 版本的监控接口
+  description: |
+    AISG v706 监控接口，基于 Prometheus 提供的稳定版 HTTP API，支持通过 PromQL 查询监控数据。
+    所有 API 均为 HTTP 协议，基础路径为 `/api/v1`。
+  version: "1.0"
+
+paths:
+  /api/v1/query:
+    get:
+      summary: 即时查询 (Instant Query)
+      description: 查询特定时间点（默认为当前时间）的监控数据，返回即时向量。
+      tags:
+        - Query
+      parameters:
+        - name: query
+          in: query
+          required: true
+          schema:
+            type: string
+          description: PromQL 查询表达式（需进行 URL 编码）
+        - name: time
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: 时间戳（RFC3339 或 Unix 时间戳），不填则默认为服务器当前时间
+        - name: timeout
+          in: query
+          schema:
+            type: string
+          description: 请求超时时间（如 5m）
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+        '400':
+          description: 参数错误或缺失
+        '422':
+          description: 表达式无法执行
+        '503':
+          description: 请求超时或被中断
+
+  /api/v1/query_range:
+    get:
+      summary: 范围查询 (Range Query)
+      description: 查询一段时间范围内的监控数据，返回范围向量。
+      tags:
+        - Query
+      parameters:
+        - name: query
+          in: query
+          required: true
+          schema:
+            type: string
+          description: PromQL 查询表达式
+        - name: start
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+          description: 起始时间戳
+        - name: end
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+          description: 结束时间戳
+        - name: step
+          in: query
+          required: true
+          schema:
+            type: string
+          description: 查询步长（如 15s, 1m）
+        - name: timeout
+          in: query
+          schema:
+            type: string
+          description: 请求超时时间
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+
+  /api/v1/label/__name__/values:
+    get:
+      summary: 获取所有指标名称
+      description: 返回当前 Prometheus 中收录的所有指标名称列表。
+      tags:
+        - Metadata
+      responses:
+        '200':
+          description: 获取成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+
+  /api/v1/label/{label_name}/values:
+    get:
+      summary: 获取指定标签的所有值
+      description: 返回指定标签名下的所有具体取值（如 instance, job 等）。
+      tags:
+        - Metadata
+      parameters:
+        - name: label_name
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 标签名称
+      responses:
+        '200':
+          description: 获取成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+
+components:
+  schemas:
+    ApiResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [success, error]
+          description: 请求状态
+        data:
+          type: object
+          description: 返回的具体数据，结构随接口变化（如 vector, matrix 等）
+        errorType:
+          type: string
+          description: 错误类型（仅在 status 为 error 时返回）
+        error:
+          type: string
+          description: 具体的错误信息（仅在 status 为 error 时返回）
+        warnings:
+          type: array
+          items:
+            type: string
+          description: 警告信息数组
