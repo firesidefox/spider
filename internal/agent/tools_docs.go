@@ -2,10 +2,8 @@ package agent
 
 import (
 	"context"
-	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"math"
 
 	"github.com/spiderai/spider/internal/knowledge"
 	"github.com/spiderai/spider/internal/rag"
@@ -242,20 +240,7 @@ func (t *SearchDocsTool) executeSearch(ctx context.Context, input map[string]any
 		return &ToolResult{Content: "search unavailable: embedder not configured", IsError: true, RiskLevel: RiskL1}, nil
 	}
 
-	// Generate query embedding
-	embedding, err := t.embedder.Embed(ctx, query)
-	if err != nil {
-		return &ToolResult{Content: fmt.Sprintf("generate embedding: %v", err), IsError: true, RiskLevel: RiskL1}, nil
-	}
-
-	// Convert float32 slice to byte array (float32 little-endian)
-	embBytes := make([]byte, len(embedding)*4)
-	for i, f := range embedding {
-		bits := math.Float32bits(f)
-		binary.LittleEndian.PutUint32(embBytes[i*4:], bits)
-	}
-
-	entries, err := t.knowledgeStore.Search(ctx, embBytes, knowledge.Scope{Type: scopeType, ID: scopeID}, 5)
+	entries, err := t.knowledgeStore.SearchByQuery(ctx, query, knowledge.Scope{Type: scopeType, ID: scopeID}, 5, t.embedder)
 	if err != nil {
 		return &ToolResult{Content: fmt.Sprintf("search: %v", err), IsError: true, RiskLevel: RiskL1}, nil
 	}

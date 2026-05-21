@@ -10,6 +10,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/spiderai/spider/internal/rag"
 )
 
 type Store struct {
@@ -426,6 +428,27 @@ func (s *Store) Search(ctx context.Context, queryEmb []byte, scope Scope, topK i
 	}
 
 	return out, nil
+}
+
+// SearchByQuery embeds the query string and performs vector similarity search.
+// This is the high-level interface preferred by callers; Search is the lower-level
+// path for callers that already hold a precomputed embedding.
+func (s *Store) SearchByQuery(ctx context.Context, query string, scope Scope, topK int, embedder rag.Embedder) ([]Entry, error) {
+	if query == "" {
+		return nil, fmt.Errorf("query cannot be empty")
+	}
+	if embedder == nil {
+		return nil, fmt.Errorf("embedder is required")
+	}
+	emb, err := embedder.Embed(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("embed query: %w", err)
+	}
+	buf := make([]byte, len(emb)*4)
+	for i, f := range emb {
+		binary.LittleEndian.PutUint32(buf[i*4:], math.Float32bits(f))
+	}
+	return s.Search(ctx, buf, scope, topK)
 }
 
 // cosineSimilarity computes the cosine similarity between two embedding vectors.

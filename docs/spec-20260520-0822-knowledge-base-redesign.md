@@ -9,16 +9,14 @@
 ## 1. 数据层级
 
 ```
-KnowledgeBase（知识库）
-  └── Group（组）
-        └── Document（文档）
-              └── Entry（条目）← 内部索引单元，用户只浏览
+Group（组）
+  └── Document（文档）
+        └── Entry（条目）← 内部索引单元，用户只浏览
 ```
 
 | 层级 | 说明 | 示例 |
 |------|------|------|
-| KnowledgeBase | 按厂商/项目分组的顶层容器 | AISG、F5 BIG-IP、Huawei |
-| Group | 按设备/版本分组 | AISG-v706、AISG-v808 |
+| Group | 按厂商/项目分组的顶层容器 | AISG、F5 BIG-IP、Huawei |
 | Document | 一个上传的文件 | 监控 API、CLI 手册 |
 | Entry | 一个 endpoint 或 CLI 命令 | GET /api/v1/query |
 
@@ -28,7 +26,6 @@ access face 可绑定到任意层级：
 
 | 绑定目标 | 搜索范围 |
 |----------|----------|
-| KnowledgeBase | 该知识库下所有文档 |
 | Group | 该组下所有文档 |
 | Document | 单个文档 |
 
@@ -36,8 +33,7 @@ access face 可绑定到任意层级：
 
 ```json
 [
-  {"type": "kb",       "id": 1},
-  {"type": "group",    "id": 3},
+  {"type": "group",    "id": 1},
   {"type": "document", "id": 7}
 ]
 ```
@@ -177,8 +173,7 @@ SearchDocs mode=search, query="查 CPU 趋势", scope_type="group", scope_id=3
 scope 对应 access face 的绑定目标：
 
 ```json
-{"type": "kb",       "id": 1}   // 搜索整个知识库
-{"type": "group",    "id": 3}   // 搜索该组
+{"type": "group",    "id": 1}   // 搜索整个组
 {"type": "document", "id": 7}   // 搜索单个文档
 ```
 
@@ -216,7 +211,7 @@ type KnowledgePlugin interface {
 }
 
 type Scope struct {
-    Type string // "kb" | "group" | "document"
+    Type string // "group" | "document"
     ID   int
 }
 
@@ -259,17 +254,9 @@ type ImportResult struct {
 ## 6. DB Schema
 
 ```sql
--- 知识库
-CREATE TABLE knowledge_bases (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    name       TEXT NOT NULL,
-    created_at DATETIME NOT NULL
-);
-
--- 组
+-- 组（顶层容器）
 CREATE TABLE knowledge_groups (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    kb_id      INTEGER NOT NULL REFERENCES knowledge_bases(id) ON DELETE CASCADE,
     name       TEXT NOT NULL,
     created_at DATETIME NOT NULL
 );
@@ -312,10 +299,10 @@ CREATE INDEX idx_entries_document ON knowledge_entries(document_id);
 CREATE INDEX idx_entries_section  ON knowledge_entries(section_id);
 ```
 
-`access_faces.knowledge_sources` 字段格式扩展为支持新类型：
+`access_faces.knowledge_sources` 字段格式：
 
 ```json
-[{"type":"kb","id":1}, {"type":"group","id":3}, {"type":"document","id":7}]
+[{"type":"group","id":1}, {"type":"document","id":7}]
 ```
 
 ---
@@ -326,7 +313,7 @@ CREATE INDEX idx_entries_section  ON knowledge_entries(section_id);
 SearchDocs 输入参数：
 
 mode         string   "sections" | "entries" | "fetch" | "search"
-scope_type   string   "kb" | "group" | "document"（mode=sections/search 时必填）
+scope_type   string   "group" | "document"（mode=sections/search 时必填）
 scope_id     int      对应 ID（mode=sections/search 时必填）
 section_id   int      mode=entries 时必填
 entry_ids    []int    mode=fetch 时必填

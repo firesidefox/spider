@@ -25,18 +25,21 @@ type KnowledgePlugin interface {
 	CatalogEntries(ctx context.Context, sectionID int) ([]EntrySummary, error)
 	FetchEntries(ctx context.Context, entryIDs []int) ([]Entry, error)
 	Search(ctx context.Context, queryEmb []byte, scope Scope, topK int) ([]Entry, error)
+	SearchByQuery(ctx context.Context, query string, scope Scope, topK int, embedder rag.Embedder) ([]Entry, error)
 
 	// Import
 	ImportDocument(ctx context.Context, req ImportRequest) (*ImportResult, error)
 }
 
 // Scope defines the search/retrieval scope.
+// Type "group" targets a top-level knowledge container (vendor/project).
+// Type "document" targets a single uploaded file.
 type Scope struct {
 	Type string // "group" | "document"
 	ID   int
 }
 
-// Group represents a top-level knowledge container.
+// Group represents a top-level knowledge container (vendor/project).
 type Group struct {
 	ID        int       `json:"id"`
 	Name      string    `json:"name"`
