@@ -32,60 +32,30 @@ func newTestDB(t *testing.T) *sql.DB {
 	return sqldb
 }
 
-func TestKBCRUD(t *testing.T) {
-	s := knowledge.NewStore(newTestDB(t))
-	ctx := context.Background()
-
-	kb, err := s.CreateKB(ctx, "AISG")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if kb.Name != "AISG" || kb.ID == 0 {
-		t.Fatalf("unexpected kb: %+v", kb)
-	}
-
-	kbs, err := s.ListKBs(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(kbs) != 1 || kbs[0].ID != kb.ID {
-		t.Fatalf("expected 1 kb, got %d", len(kbs))
-	}
-
-	if err := s.DeleteKB(ctx, kb.ID); err != nil {
-		t.Fatal(err)
-	}
-	kbs, _ = s.ListKBs(ctx)
-	if len(kbs) != 0 {
-		t.Fatal("expected 0 kbs after delete")
-	}
-}
-
 func TestGroupCRUD(t *testing.T) {
 	s := knowledge.NewStore(newTestDB(t))
 	ctx := context.Background()
 
-	kb, _ := s.CreateKB(ctx, "AISG")
-	g, err := s.CreateGroup(ctx, kb.ID, "v706")
+	g, err := s.CreateGroup(ctx, "AISG")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if g.KBID != kb.ID || g.Name != "v706" {
+	if g.Name != "AISG" || g.ID == 0 {
 		t.Fatalf("unexpected group: %+v", g)
 	}
 
-	groups, err := s.ListGroups(ctx, kb.ID)
+	groups, err := s.ListGroups(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(groups) != 1 {
+	if len(groups) != 1 || groups[0].ID != g.ID {
 		t.Fatalf("expected 1 group, got %d", len(groups))
 	}
 
 	if err := s.DeleteGroup(ctx, g.ID); err != nil {
 		t.Fatal(err)
 	}
-	groups, _ = s.ListGroups(ctx, kb.ID)
+	groups, _ = s.ListGroups(ctx)
 	if len(groups) != 0 {
 		t.Fatal("expected 0 groups after delete")
 	}
@@ -96,34 +66,33 @@ func TestCascadeDelete(t *testing.T) {
 	s := knowledge.NewStore(db)
 	ctx := context.Background()
 
-	kb, _ := s.CreateKB(ctx, "AISG")
-	g1, _ := s.CreateGroup(ctx, kb.ID, "v706")
-	g2, _ := s.CreateGroup(ctx, kb.ID, "v707")
+	g1, _ := s.CreateGroup(ctx, "v706")
+	_, _ = s.CreateGroup(ctx, "v707")
 
-	groups, _ := s.ListGroups(ctx, kb.ID)
+	groups, _ := s.ListGroups(ctx)
 	if len(groups) != 2 {
 		t.Fatalf("expected 2 groups, got %d", len(groups))
 	}
 
-	// Delete KB should cascade delete groups
-	if err := s.DeleteKB(ctx, kb.ID); err != nil {
+	// Delete group should cascade delete documents
+	if err := s.DeleteGroup(ctx, g1.ID); err != nil {
 		t.Fatal(err)
 	}
 
-	// Verify groups are deleted
-	groups, _ = s.ListGroups(ctx, kb.ID)
-	if len(groups) != 0 {
-		t.Fatalf("expected 0 groups after KB delete, got %d", len(groups))
+	// Verify one group remains
+	groups, _ = s.ListGroups(ctx)
+	if len(groups) != 1 {
+		t.Fatalf("expected 1 group after delete, got %d", len(groups))
 	}
 
-	// Verify we can't find the groups by ID
+	// Verify deleted group is gone
 	var count int
-	err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM knowledge_groups WHERE id IN (?, ?)`, g1.ID, g2.ID).Scan(&count)
+	err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM knowledge_groups WHERE id = ?`, g1.ID).Scan(&count)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if count != 0 {
-		t.Fatalf("expected groups to be cascade deleted, found %d", count)
+		t.Fatalf("expected group to be deleted, found %d", count)
 	}
 }
 
@@ -131,8 +100,7 @@ func TestListDocuments(t *testing.T) {
 	s := knowledge.NewStore(newTestDB(t))
 	ctx := context.Background()
 
-	kb, _ := s.CreateKB(ctx, "AISG")
-	g, _ := s.CreateGroup(ctx, kb.ID, "v706")
+	g, _ := s.CreateGroup(ctx, "v706")
 
 	// Empty list
 	docs, err := s.ListDocuments(ctx, g.ID)
@@ -146,8 +114,7 @@ func TestListDocuments(t *testing.T) {
 	// Create documents directly via SQL for testing
 	db := newTestDB(t)
 	s2 := knowledge.NewStore(db)
-	kb2, _ := s2.CreateKB(ctx, "AISG")
-	g2, _ := s2.CreateGroup(ctx, kb2.ID, "v706")
+	g2, _ := s2.CreateGroup(ctx, "v706")
 
 	_, err = db.ExecContext(ctx, `INSERT INTO knowledge_documents
 		(group_id, name, doc_type, raw_content, filename, status, created_at, updated_at)
@@ -183,8 +150,7 @@ func TestGetDocument(t *testing.T) {
 	s := knowledge.NewStore(db)
 	ctx := context.Background()
 
-	kb, _ := s.CreateKB(ctx, "AISG")
-	g, _ := s.CreateGroup(ctx, kb.ID, "v706")
+	g, _ := s.CreateGroup(ctx, "v706")
 
 	// Insert a document
 	res, err := db.ExecContext(ctx, `INSERT INTO knowledge_documents
@@ -217,8 +183,7 @@ func TestDeleteDocuments(t *testing.T) {
 	s := knowledge.NewStore(db)
 	ctx := context.Background()
 
-	kb, _ := s.CreateKB(ctx, "AISG")
-	g, _ := s.CreateGroup(ctx, kb.ID, "v706")
+	g, _ := s.CreateGroup(ctx, "v706")
 
 	// Insert documents
 	res1, _ := db.ExecContext(ctx, `INSERT INTO knowledge_documents
@@ -267,8 +232,7 @@ func TestDeleteDocumentsCascade(t *testing.T) {
 	s := knowledge.NewStore(db)
 	ctx := context.Background()
 
-	kb, _ := s.CreateKB(ctx, "AISG")
-	g, _ := s.CreateGroup(ctx, kb.ID, "v706")
+	g, _ := s.CreateGroup(ctx, "v706")
 
 	// Insert document
 	res, _ := db.ExecContext(ctx, `INSERT INTO knowledge_documents
@@ -334,8 +298,7 @@ func TestSectionCRUD(t *testing.T) {
 	s := knowledge.NewStore(db)
 	ctx := context.Background()
 
-	kb, _ := s.CreateKB(ctx, "AISG")
-	g, _ := s.CreateGroup(ctx, kb.ID, "v706")
+	g, _ := s.CreateGroup(ctx, "v706")
 
 	// Insert document
 	res, _ := db.ExecContext(ctx, `INSERT INTO knowledge_documents
@@ -385,8 +348,7 @@ func TestEntryCRUD(t *testing.T) {
 	s := knowledge.NewStore(db)
 	ctx := context.Background()
 
-	kb, _ := s.CreateKB(ctx, "AISG")
-	g, _ := s.CreateGroup(ctx, kb.ID, "v706")
+	g, _ := s.CreateGroup(ctx, "v706")
 
 	// Insert document
 	res, _ := db.ExecContext(ctx, `INSERT INTO knowledge_documents
@@ -451,10 +413,9 @@ func TestCatalogSections(t *testing.T) {
 	s := knowledge.NewStore(db)
 	ctx := context.Background()
 
-	// Create KB with 2 groups
-	kb, _ := s.CreateKB(ctx, "AISG")
-	g1, _ := s.CreateGroup(ctx, kb.ID, "v706")
-	g2, _ := s.CreateGroup(ctx, kb.ID, "v808")
+	// Create 2 groups
+	g1, _ := s.CreateGroup(ctx, "v706")
+	g2, _ := s.CreateGroup(ctx, "v808")
 
 	// Create 2 documents: doc1 in g1, doc2 in g2
 	res1, _ := db.ExecContext(ctx, `INSERT INTO knowledge_documents
@@ -479,16 +440,16 @@ func TestCatalogSections(t *testing.T) {
 	s.CreateEntry(ctx, int(doc1ID), &sec1.ID, "Entry2", "sum2", "content2", []byte("emb2"), 1)
 	s.CreateEntry(ctx, int(doc1ID), &sec2.ID, "Entry3", "sum3", "content3", []byte("emb3"), 0)
 
-	// Test scope: kb (should return all 3 sections)
-	sections, err := s.CatalogSections(ctx, knowledge.Scope{Type: "kb", ID: kb.ID})
+	// Test scope: group (should return sections from both docs in g1)
+	sections, err := s.CatalogSections(ctx, knowledge.Scope{Type: "group", ID: g1.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(sections) != 3 {
-		t.Fatalf("kb scope: expected 3 sections, got %d", len(sections))
+	if len(sections) != 2 {
+		t.Fatalf("group scope: expected 2 sections, got %d", len(sections))
 	}
 
-	// Verify entry counts by section name (order may vary by position across documents)
+	// Verify entry counts by section name
 	sectionMap := make(map[string]int)
 	for _, sec := range sections {
 		sectionMap[sec.Name] = sec.EntryCount
@@ -540,8 +501,7 @@ func TestSectionEntryCount(t *testing.T) {
 	s := knowledge.NewStore(db)
 	ctx := context.Background()
 
-	kb, _ := s.CreateKB(ctx, "AISG")
-	g, _ := s.CreateGroup(ctx, kb.ID, "v706")
+	g, _ := s.CreateGroup(ctx, "v706")
 
 	// Insert document
 	res, _ := db.ExecContext(ctx, `INSERT INTO knowledge_documents
@@ -584,8 +544,7 @@ func TestCatalogEntries(t *testing.T) {
 	s := knowledge.NewStore(db)
 	ctx := context.Background()
 
-	kb, _ := s.CreateKB(ctx, "AISG")
-	g, _ := s.CreateGroup(ctx, kb.ID, "v706")
+	g, _ := s.CreateGroup(ctx, "v706")
 
 	// Insert document
 	res, _ := db.ExecContext(ctx, `INSERT INTO knowledge_documents
@@ -630,8 +589,7 @@ func TestFetchEntries(t *testing.T) {
 	s := knowledge.NewStore(db)
 	ctx := context.Background()
 
-	kb, _ := s.CreateKB(ctx, "AISG")
-	g, _ := s.CreateGroup(ctx, kb.ID, "v706")
+	g, _ := s.CreateGroup(ctx, "v706")
 
 	// Insert document
 	res, _ := db.ExecContext(ctx, `INSERT INTO knowledge_documents
@@ -686,8 +644,7 @@ func TestSearch(t *testing.T) {
 	s := knowledge.NewStore(db)
 	ctx := context.Background()
 
-	kb, _ := s.CreateKB(ctx, "AISG")
-	g, _ := s.CreateGroup(ctx, kb.ID, "v706")
+	g, _ := s.CreateGroup(ctx, "v706")
 
 	// Insert document
 	res, _ := db.ExecContext(ctx, `INSERT INTO knowledge_documents
@@ -753,13 +710,13 @@ func TestSearch(t *testing.T) {
 		t.Fatal("expected error for invalid scope type")
 	}
 
-	// Test: Search within kb scope
-	kbEntries, err := s.Search(ctx, queryEmb, knowledge.Scope{Type: "kb", ID: kb.ID}, 5)
+	// Test: Search within group scope
+	groupEntries, err := s.Search(ctx, queryEmb, knowledge.Scope{Type: "group", ID: g.ID}, 5)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(kbEntries) < 1 {
-		t.Fatalf("expected at least 1 entry in kb scope, got %d", len(kbEntries))
+	if len(groupEntries) < 1 {
+		t.Fatalf("expected at least 1 entry in group scope, got %d", len(groupEntries))
 	}
 
 	// Test: Search within document scope
@@ -816,8 +773,7 @@ func TestImportDocumentOpenAPI(t *testing.T) {
 	s := knowledge.NewStore(newTestDB(t))
 	ctx := context.Background()
 
-	kb, _ := s.CreateKB(ctx, "TestKB")
-	g, _ := s.CreateGroup(ctx, kb.ID, "TestGroup")
+	g, _ := s.CreateGroup(ctx, "TestGroup")
 
 	content := []byte(`openapi: "3.0.0"
 info:
@@ -895,8 +851,7 @@ func TestImportDocumentMarkdown(t *testing.T) {
 	s := knowledge.NewStore(newTestDB(t))
 	ctx := context.Background()
 
-	kb, _ := s.CreateKB(ctx, "TestKB")
-	g, _ := s.CreateGroup(ctx, kb.ID, "TestGroup")
+	g, _ := s.CreateGroup(ctx, "TestGroup")
 
 	// First call: markdown parse response; second call: clustering response.
 	parseResp, _ := json.Marshal(map[string]interface{}{

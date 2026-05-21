@@ -19,46 +19,10 @@ func NewStore(db *sql.DB) *Store {
 	return &Store{db: db}
 }
 
-func (s *Store) CreateKB(ctx context.Context, name string) (*KnowledgeBase, error) {
+func (s *Store) CreateGroup(ctx context.Context, name string) (*Group, error) {
 	now := time.Now().UTC()
 	res, err := s.db.ExecContext(ctx,
-		`INSERT INTO knowledge_bases (name, created_at) VALUES (?, ?)`, name, now)
-	if err != nil {
-		return nil, fmt.Errorf("create kb: %w", err)
-	}
-	id, err := res.LastInsertId()
-	if err != nil {
-		return nil, fmt.Errorf("get last insert id: %w", err)
-	}
-	return &KnowledgeBase{ID: int(id), Name: name, CreatedAt: now}, nil
-}
-
-func (s *Store) ListKBs(ctx context.Context) ([]KnowledgeBase, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id, name, created_at FROM knowledge_bases ORDER BY id`)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var out []KnowledgeBase
-	for rows.Next() {
-		kb := KnowledgeBase{}
-		if err := rows.Scan(&kb.ID, &kb.Name, &kb.CreatedAt); err != nil {
-			return nil, err
-		}
-		out = append(out, kb)
-	}
-	return out, rows.Err()
-}
-
-func (s *Store) DeleteKB(ctx context.Context, kbID int) error {
-	_, err := s.db.ExecContext(ctx, `DELETE FROM knowledge_bases WHERE id = ?`, kbID)
-	return err
-}
-
-func (s *Store) CreateGroup(ctx context.Context, kbID int, name string) (*Group, error) {
-	now := time.Now().UTC()
-	res, err := s.db.ExecContext(ctx,
-		`INSERT INTO knowledge_groups (kb_id, name, created_at) VALUES (?, ?, ?)`, kbID, name, now)
+		`INSERT INTO knowledge_groups (name, created_at) VALUES (?, ?)`, name, now)
 	if err != nil {
 		return nil, fmt.Errorf("create group: %w", err)
 	}
@@ -66,12 +30,12 @@ func (s *Store) CreateGroup(ctx context.Context, kbID int, name string) (*Group,
 	if err != nil {
 		return nil, fmt.Errorf("get last insert id: %w", err)
 	}
-	return &Group{ID: int(id), KBID: kbID, Name: name, CreatedAt: now}, nil
+	return &Group{ID: int(id), Name: name, CreatedAt: now}, nil
 }
 
-func (s *Store) ListGroups(ctx context.Context, kbID int) ([]Group, error) {
+func (s *Store) ListGroups(ctx context.Context) ([]Group, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, kb_id, name, created_at FROM knowledge_groups WHERE kb_id = ? ORDER BY id`, kbID)
+		`SELECT id, name, created_at FROM knowledge_groups ORDER BY id`)
 	if err != nil {
 		return nil, err
 	}
@@ -79,7 +43,7 @@ func (s *Store) ListGroups(ctx context.Context, kbID int) ([]Group, error) {
 	var out []Group
 	for rows.Next() {
 		g := Group{}
-		if err := rows.Scan(&g.ID, &g.KBID, &g.Name, &g.CreatedAt); err != nil {
+		if err := rows.Scan(&g.ID, &g.Name, &g.CreatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, g)
@@ -132,23 +96,50 @@ func (s *Store) GetDocument(ctx context.Context, docID int) (*Document, error) {
 }
 
 func (s *Store) DeleteDocuments(ctx context.Context, docIDs []int) error {
+	return s.deleteByIDs(ctx, "knowledge_documents", docIDs)
+}
+
+func (s *Store) DeleteGroups(ctx context.Context, groupIDs []int) error {
+	return s.deleteByIDs(ctx, "knowledge_groups", groupIDs)
+}
+
+func (s *Store) deleteByIDs(ctx context.Context, table string, ids []int) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	placeholders := strings.Repeat("?,", len(ids))
+	placeholders = placeholders[:len(placeholders)-1]
+	args := make([]interface{}, len(ids))
+	for i, id := range ids {
+		args[i] = id
+	}
+	_, err := s.db.ExecContext(ctx,
+		fmt.Sprintf(`DELETE FROM %s WHERE id IN (%s)`, table, placeholders), args...)
+	return err
+}
+
+func (s *Store) MoveDocuments(ctx context.Context, docIDs []int, targetGroupID int) error {
 	if len(docIDs) == 0 {
 		return nil
 	}
-
-	// Build IN clause with placeholders
-	query := `DELETE FROM knowledge_documents WHERE id IN (`
-	args := make([]interface{}, len(docIDs))
-	for i, id := range docIDs {
-		if i > 0 {
-			query += ","
+	var exists int
+	if err := s.db.QueryRowContext(ctx,
+		`SELECT 1 FROM knowledge_groups WHERE id = ?`, targetGroupID).Scan(&exists); err != nil {
+		if err == sql.ErrNoRows {
+			return fmt.Errorf("target group not found: %d", targetGroupID)
 		}
-		query += "?"
-		args[i] = id
+		return err
 	}
-	query += ")"
-
-	_, err := s.db.ExecContext(ctx, query, args...)
+	placeholders := strings.Repeat("?,", len(docIDs))
+	placeholders = placeholders[:len(placeholders)-1]
+	args := make([]interface{}, 0, len(docIDs)+2)
+	args = append(args, targetGroupID, time.Now().UTC())
+	for _, id := range docIDs {
+		args = append(args, id)
+	}
+	_, err := s.db.ExecContext(ctx,
+		fmt.Sprintf(`UPDATE knowledge_documents SET group_id = ?, updated_at = ? WHERE id IN (%s)`, placeholders),
+		args...)
 	return err
 }
 
@@ -242,26 +233,13 @@ func (s *Store) ListEntries(ctx context.Context, documentID int) ([]Entry, error
 	return out, rows.Err()
 }
 
-// CatalogSections returns all sections within a given scope (kb, group, or document)
+// CatalogSections returns all sections within a given scope (group or document)
 // with entry counts computed via LEFT JOIN.
 func (s *Store) CatalogSections(ctx context.Context, scope Scope) ([]Section, error) {
 	var query string
 	var args []interface{}
 
 	switch scope.Type {
-	case "kb":
-		// JOIN through documents and groups to filter by kb_id
-		query = `
-			SELECT s.id, s.document_id, s.name, s.summary, s.position, COUNT(e.id) as entry_count
-			FROM knowledge_sections s
-			INNER JOIN knowledge_documents d ON s.document_id = d.id
-			INNER JOIN knowledge_groups g ON d.group_id = g.id
-			LEFT JOIN knowledge_entries e ON e.section_id = s.id
-			WHERE g.kb_id = ?
-			GROUP BY s.id, s.document_id, s.name, s.summary, s.position
-			ORDER BY s.position`
-		args = []interface{}{scope.ID}
-
 	case "group":
 		// JOIN through documents to filter by group_id
 		query = `
@@ -382,15 +360,6 @@ func (s *Store) Search(ctx context.Context, queryEmb []byte, scope Scope, topK i
 	var args []interface{}
 
 	switch scope.Type {
-	case "kb":
-		query = `
-			SELECT e.id, e.document_id, e.section_id, e.title, e.summary, e.content, e.embedding, e.position
-			FROM knowledge_entries e
-			JOIN knowledge_documents d ON e.document_id = d.id
-			JOIN knowledge_groups g ON d.group_id = g.id
-			WHERE g.kb_id = ? AND e.embedding IS NOT NULL`
-		args = []interface{}{scope.ID}
-
 	case "group":
 		query = `
 			SELECT e.id, e.document_id, e.section_id, e.title, e.summary, e.content, e.embedding, e.position
@@ -564,6 +533,42 @@ func (s *Store) ImportDocument(ctx context.Context, req ImportRequest) (*ImportR
 	result, err := s.runImportPipeline(ctx, doc, req)
 	if err != nil {
 		_ = s.setDocumentStatus(ctx, doc.ID, "error", err.Error())
+		return nil, err
+	}
+	return result, nil
+}
+
+// ReindexDocument re-runs the import pipeline for an existing document using
+// its stored raw_content. Existing sections/entries are removed first.
+// req.LLMClient and req.Embedder are honored; other fields are overridden
+// from the persisted document.
+func (s *Store) ReindexDocument(ctx context.Context, docID int, req ImportRequest) (*ImportResult, error) {
+	doc, err := s.GetDocument(ctx, docID)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.db.ExecContext(ctx,
+		`DELETE FROM knowledge_entries WHERE document_id = ?`, docID); err != nil {
+		return nil, fmt.Errorf("clear entries: %w", err)
+	}
+	if _, err := s.db.ExecContext(ctx,
+		`DELETE FROM knowledge_sections WHERE document_id = ?`, docID); err != nil {
+		return nil, fmt.Errorf("clear sections: %w", err)
+	}
+	if err := s.setDocumentStatus(ctx, docID, "indexing", ""); err != nil {
+		return nil, err
+	}
+	if err := s.updateDocumentEntryCount(ctx, docID, 0); err != nil {
+		return nil, err
+	}
+	req.GroupID = doc.GroupID
+	req.Name = doc.Name
+	req.Content = []byte(doc.RawContent)
+	req.Filename = doc.Filename
+	req.DocType = doc.DocType
+	result, err := s.runImportPipeline(ctx, doc, req)
+	if err != nil {
+		_ = s.setDocumentStatus(ctx, docID, "error", err.Error())
 		return nil, err
 	}
 	return result, nil

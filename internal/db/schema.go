@@ -445,15 +445,9 @@ func migrate(db *sql.DB) error {
 	db.Exec(`ALTER TABLE todo_tasks ADD COLUMN seq INTEGER NOT NULL DEFAULT 0`)
 	db.Exec(`CREATE INDEX IF NOT EXISTS idx_todo_tasks_conv ON todo_tasks(conversation_id)`)
 
-	// Knowledge base tables
-	db.Exec(`CREATE TABLE IF NOT EXISTS knowledge_bases (
-		id         INTEGER PRIMARY KEY AUTOINCREMENT,
-		name       TEXT NOT NULL,
-		created_at DATETIME NOT NULL
-	)`)
+	// Knowledge base tables (groups are the top-level container)
 	db.Exec(`CREATE TABLE IF NOT EXISTS knowledge_groups (
 		id         INTEGER PRIMARY KEY AUTOINCREMENT,
-		kb_id      INTEGER NOT NULL REFERENCES knowledge_bases(id) ON DELETE CASCADE,
 		name       TEXT NOT NULL,
 		created_at DATETIME NOT NULL
 	)`)
@@ -487,10 +481,25 @@ func migrate(db *sql.DB) error {
 		embedding   BLOB,
 		position    INTEGER NOT NULL DEFAULT 0
 	)`)
-	db.Exec(`CREATE INDEX IF NOT EXISTS idx_kb_groups_kb_id ON knowledge_groups(kb_id)`)
 	db.Exec(`CREATE INDEX IF NOT EXISTS idx_kb_docs_group_id ON knowledge_documents(group_id)`)
 	db.Exec(`CREATE INDEX IF NOT EXISTS idx_kb_sections_doc_id ON knowledge_sections(document_id)`)
 	db.Exec(`CREATE INDEX IF NOT EXISTS idx_kb_entries_doc_id ON knowledge_entries(document_id)`)
 	db.Exec(`CREATE INDEX IF NOT EXISTS idx_kb_entries_section_id ON knowledge_entries(section_id)`)
+
+	// Migrate knowledge_groups: remove kb_id column if it exists
+	var kbIDExists int
+	db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('knowledge_groups') WHERE name='kb_id'`).Scan(&kbIDExists)
+	if kbIDExists > 0 {
+		db.Exec(`
+			CREATE TABLE knowledge_groups_new (
+				id         INTEGER PRIMARY KEY AUTOINCREMENT,
+				name       TEXT NOT NULL,
+				created_at DATETIME NOT NULL
+			)`)
+		db.Exec(`INSERT INTO knowledge_groups_new (id, name, created_at) SELECT id, name, created_at FROM knowledge_groups`)
+		db.Exec(`DROP TABLE knowledge_groups`)
+		db.Exec(`ALTER TABLE knowledge_groups_new RENAME TO knowledge_groups`)
+	}
+
 	return nil
 }

@@ -3,37 +3,58 @@
     <aside class="kb-sidebar">
       <div class="sidebar-toolbar">
         <span class="sidebar-title">知识库</span>
-        <button class="btn btn-primary btn-sm" @click="showNewKB = true">+ 知识库</button>
+        <div class="sidebar-actions">
+          <button v-if="!selectMode" class="btn btn-sm" @click="enterSelectMode">选择</button>
+          <button v-else class="btn btn-sm" @click="exitSelectMode">完成</button>
+          <button v-if="!selectMode" class="btn btn-primary btn-sm" @click="showNewGroup = true">+ 分组</button>
+        </div>
+      </div>
+      <div v-if="selectMode" class="select-toolbar">
+        <span class="select-info">{{ selectionLabel }}</span>
+        <div class="select-menu-wrap">
+          <button class="btn btn-sm btn-primary" :disabled="!hasSelection" @click="editMenuOpen = !editMenuOpen">
+            编辑 ▾
+          </button>
+          <div v-if="editMenuOpen" class="edit-menu" @click.stop>
+            <button class="edit-menu-item" :disabled="!docsSelectedCount" @click="onMoveDocs">
+              移动到分组（{{ docsSelectedCount }}）
+            </button>
+            <button class="edit-menu-item" :disabled="!docsSelectedCount" @click="onReindexDocs">
+              重建索引（{{ docsSelectedCount }}）
+            </button>
+            <button class="edit-menu-item danger" :disabled="!hasSelection" @click="onBatchDelete">
+              删除选中
+            </button>
+          </div>
+        </div>
       </div>
       <div class="sidebar-list">
-        <div v-for="kb in kbs" :key="kb.id" class="kb-section">
-          <div class="kb-header" @click="toggleKB(kb.id)">
-            <span class="chevron">{{ collapsedKBs.has(kb.id) ? '▶' : '▼' }}</span>
-            <span class="kb-name">{{ kb.name }}</span>
-            <button class="del-btn" @click.stop="doDeleteKB(kb)" title="删除知识库">×</button>
+        <div v-for="group in groups" :key="group.id" class="group-section">
+          <div class="group-header" @click="toggleGroup(group.id)">
+            <input v-if="selectMode" type="checkbox" class="row-check"
+              :checked="selectedGroups.has(group.id)"
+              @click.stop="toggleSelectGroup(group.id)" />
+            <span class="chevron">{{ collapsedGroups.has(group.id) ? '▶' : '▼' }}</span>
+            <span class="group-name">{{ group.name }}</span>
+            <template v-if="!selectMode">
+              <button class="del-btn" @click.stop="doDeleteGroup(group)" title="删除分组">×</button>
+              <button class="add-btn" @click.stop="openImport(group.id)" title="导入文档">+</button>
+            </template>
           </div>
-          <template v-if="!collapsedKBs.has(kb.id)">
-            <div v-for="group in groupsByKB[kb.id] ?? []" :key="group.id" class="group-section">
-              <div class="group-header" @click="toggleGroup(group.id)">
-                <span class="chevron">{{ collapsedGroups.has(group.id) ? '▶' : '▼' }}</span>
-                <span class="group-name">{{ group.name }}</span>
-                <button class="del-btn" @click.stop="doDeleteGroup(group)" title="删除分组">×</button>
-                <button class="add-btn" @click.stop="openImport(group.id)" title="导入文档">+</button>
-              </div>
-              <template v-if="!collapsedGroups.has(group.id)">
-                <div v-for="doc in docsByGroup[group.id] ?? []" :key="doc.id"
-                  class="doc-row" :class="{ selected: activeDoc?.id === doc.id }"
-                  @click="activeDoc = doc">
-                  <span class="doc-name">{{ doc.name }}</span>
-                  <span class="doc-status" :class="doc.status">{{ doc.status }}</span>
-                </div>
-                <div v-if="!(docsByGroup[group.id]?.length)" class="group-empty">暂无文档</div>
-              </template>
+          <template v-if="!collapsedGroups.has(group.id)">
+            <div v-for="doc in docsByGroup[group.id] ?? []" :key="doc.id"
+              class="doc-row" :class="{ selected: !selectMode && activeDoc?.id === doc.id }"
+              @click="onDocRowClick(doc)">
+              <input v-if="selectMode" type="checkbox" class="row-check"
+                :checked="selectedDocs.has(doc.id)"
+                @click.stop="toggleSelectDoc(doc.id)" />
+              <span class="doc-name">{{ doc.name }}</span>
+              <span class="doc-status" :class="doc.status">{{ doc.status }}</span>
             </div>
-            <button class="add-group-btn" @click.stop="openNewGroup(kb.id)">+ 分组</button>
+            <div v-if="!(docsByGroup[group.id]?.length)" class="group-empty">暂无文档</div>
           </template>
         </div>
-        <div v-if="kbs.length === 0" class="sidebar-empty">暂无知识库</div>
+        <div v-if="groups.length === 0" class="sidebar-empty">暂无分组</div>
       </div>
     </aside>
 
@@ -43,7 +64,11 @@
           <span class="detail-title">{{ activeDoc.name }}</span>
           <span class="doc-status" :class="activeDoc.status">{{ activeDoc.status }}</span>
           <span v-if="activeDoc.entry_count" class="entry-count">{{ activeDoc.entry_count }} 条目</span>
-          <button class="btn btn-sm btn-danger" style="margin-left:auto"
+          <button class="btn btn-sm" style="margin-left:auto"
+            :disabled="reindexing" @click="doReindex(activeDoc)">
+            {{ reindexing ? '重建中…' : '重建索引' }}
+          </button>
+          <button class="btn btn-sm btn-danger"
             @click="doDeleteDoc(activeDoc)">删除</button>
         </div>
         <div v-if="activeDoc.error_msg" class="detail-error">{{ activeDoc.error_msg }}</div>
@@ -58,21 +83,6 @@
       </div>
     </div>
 
-    <!-- 新建知识库 -->
-    <div v-if="showNewKB" class="modal-overlay" @click.self="showNewKB = false">
-      <div class="modal" style="max-width:360px">
-        <h3>新建知识库</h3>
-        <div class="form-row">
-          <label>名称</label>
-          <input v-model="newKBName" class="input" @keyup.enter="doCreateKB" />
-        </div>
-        <div class="modal-footer">
-          <button class="btn" @click="showNewKB = false">取消</button>
-          <button class="btn btn-primary" :disabled="!newKBName.trim()" @click="doCreateKB">创建</button>
-        </div>
-      </div>
-    </div>
-
     <!-- 新建分组 -->
     <div v-if="showNewGroup" class="modal-overlay" @click.self="showNewGroup = false">
       <div class="modal" style="max-width:360px">
@@ -84,6 +94,29 @@
         <div class="modal-footer">
           <button class="btn" @click="showNewGroup = false">取消</button>
           <button class="btn btn-primary" :disabled="!newGroupName.trim()" @click="doCreateGroup">创建</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 移动到分组 -->
+    <div v-if="showMove" class="modal-overlay" @click.self="showMove = false">
+      <div class="modal" style="max-width:400px">
+        <h3>移动 {{ docsSelectedCount }} 个文档到</h3>
+        <div class="form-row">
+          <label>目标分组</label>
+          <select v-model.number="moveTargetGroupID" class="input">
+            <option :value="0" disabled>选择分组…</option>
+            <option v-for="g in groups" :key="g.id" :value="g.id">
+              {{ g.name }}
+            </option>
+          </select>
+        </div>
+        <div v-if="batchErr" class="err" style="margin-top:8px">{{ batchErr }}</div>
+        <div class="modal-footer">
+          <button class="btn" @click="showMove = false">取消</button>
+          <button class="btn btn-primary" :disabled="!moveTargetGroupID || batching" @click="doMove">
+            {{ batching ? '移动中…' : '移动' }}
+          </button>
         </div>
       </div>
     </div>
@@ -120,26 +153,20 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import {
-  listKBs, createKB, deleteKB,
-  listGroups, createGroup, deleteGroup,
-  listDocuments, deleteDocuments, importDocument,
-  type KnowledgeBase, type KnowledgeGroup, type KnowledgeDocument,
+  listGroups, createGroup, deleteGroup, deleteGroups,
+  listDocuments, deleteDocuments, importDocument, moveDocuments, reindexDocuments,
+  type KnowledgeGroup, type KnowledgeDocument,
 } from '../api/knowledge'
 
 const fileInputRef = ref<HTMLInputElement | null>(null)
 
-const kbs = ref<KnowledgeBase[]>([])
-const groupsByKB = ref<Record<number, KnowledgeGroup[]>>({})
+const groups = ref<KnowledgeGroup[]>([])
 const docsByGroup = ref<Record<number, KnowledgeDocument[]>>({})
 const activeDoc = ref<KnowledgeDocument | null>(null)
-const collapsedKBs = ref(new Set<number>())
 const collapsedGroups = ref(new Set<number>())
 
-const showNewKB = ref(false)
-const newKBName = ref('')
 const showNewGroup = ref(false)
 const newGroupName = ref('')
-const newGroupKBID = ref(0)
 
 const showImport = ref(false)
 const importGroupID = ref(0)
@@ -149,11 +176,57 @@ const importErr = ref('')
 interface ImportFile { file: File; status: 'pending' | 'ok' | 'error'; statusText: string }
 const importFiles = ref<ImportFile[]>([])
 
-function toggleKB(id: number) {
-  const s = new Set(collapsedKBs.value)
+const selectMode = ref(false)
+const editMenuOpen = ref(false)
+const selectedGroups = ref(new Set<number>())
+const selectedDocs = ref(new Set<number>())
+const showMove = ref(false)
+const moveTargetGroupID = ref(0)
+const batching = ref(false)
+const batchErr = ref('')
+const reindexing = ref(false)
+
+const docsSelectedCount = computed(() => selectedDocs.value.size)
+const hasSelection = computed(() =>
+  selectedDocs.value.size + selectedGroups.value.size > 0
+)
+const selectionLabel = computed(() => {
+  const d = selectedDocs.value.size, g = selectedGroups.value.size
+  if (d === 0 && g === 0) return '未选择'
+  const parts: string[] = []
+  if (g) parts.push(`${g} 分组`)
+  if (d) parts.push(`${d} 文档`)
+  return '已选 ' + parts.join(' / ')
+})
+
+function enterSelectMode() {
+  selectMode.value = true
+  editMenuOpen.value = false
+  clearSelection()
+}
+function exitSelectMode() {
+  selectMode.value = false
+  editMenuOpen.value = false
+  clearSelection()
+}
+function clearSelection() {
+  selectedGroups.value = new Set()
+  selectedDocs.value = new Set()
+}
+function toggleInSet(set: import('vue').Ref<Set<number>>, id: number) {
+  const s = new Set(set.value)
   s.has(id) ? s.delete(id) : s.add(id)
-  collapsedKBs.value = s
-  if (!s.has(id) && !groupsByKB.value[id]) loadGroups(id)
+  set.value = s
+}
+function toggleSelectGroup(id: number) { toggleInSet(selectedGroups, id) }
+function toggleSelectDoc(id: number) { toggleInSet(selectedDocs, id) }
+
+function onDocRowClick(doc: KnowledgeDocument) {
+  if (selectMode.value) {
+    toggleSelectDoc(doc.id)
+  } else {
+    activeDoc.value = doc
+  }
 }
 
 function toggleGroup(id: number) {
@@ -163,57 +236,26 @@ function toggleGroup(id: number) {
   if (!s.has(id) && !docsByGroup.value[id]) loadDocs(id)
 }
 
-async function loadKBs() {
-  kbs.value = await listKBs()
-}
-
-async function loadGroups(kbID: number) {
-  groupsByKB.value = { ...groupsByKB.value, [kbID]: await listGroups(kbID) }
+async function loadGroups() {
+  groups.value = await listGroups()
 }
 
 async function loadDocs(groupID: number) {
   docsByGroup.value = { ...docsByGroup.value, [groupID]: await listDocuments(groupID) }
 }
 
-async function doCreateKB() {
-  if (!newKBName.value.trim()) return
-  const kb = await createKB(newKBName.value.trim())
-  kbs.value.push(kb)
-  newKBName.value = ''
-  showNewKB.value = false
-}
-
-function openNewGroup(kbID: number) {
-  newGroupKBID.value = kbID
-  newGroupName.value = ''
-  showNewGroup.value = true
-}
-
 async function doCreateGroup() {
   if (!newGroupName.value.trim()) return
-  const g = await createGroup(newGroupKBID.value, newGroupName.value.trim())
-  groupsByKB.value = {
-    ...groupsByKB.value,
-    [newGroupKBID.value]: [...(groupsByKB.value[newGroupKBID.value] ?? []), g],
-  }
+  const g = await createGroup(newGroupName.value.trim())
+  groups.value.push(g)
   newGroupName.value = ''
   showNewGroup.value = false
-}
-
-async function doDeleteKB(kb: KnowledgeBase) {
-  if (!confirm(`删除知识库「${kb.name}」及其所有内容？`)) return
-  await deleteKB(kb.id)
-  kbs.value = kbs.value.filter(k => k.id !== kb.id)
-  const g = { ...groupsByKB.value }; delete g[kb.id]; groupsByKB.value = g
 }
 
 async function doDeleteGroup(group: KnowledgeGroup) {
   if (!confirm(`删除分组「${group.name}」及其所有文档？`)) return
   await deleteGroup(group.id)
-  groupsByKB.value = {
-    ...groupsByKB.value,
-    [group.kb_id]: (groupsByKB.value[group.kb_id] ?? []).filter(g => g.id !== group.id),
-  }
+  groups.value = groups.value.filter(g => g.id !== group.id)
   const d = { ...docsByGroup.value }; delete d[group.id]; docsByGroup.value = d
 }
 
@@ -275,7 +317,101 @@ async function doImport() {
   }
 }
 
-onMounted(loadKBs)
+function onMoveDocs() {
+  editMenuOpen.value = false
+  batchErr.value = ''
+  moveTargetGroupID.value = 0
+  showMove.value = true
+}
+
+async function doMove() {
+  if (!moveTargetGroupID.value) return
+  batching.value = true
+  batchErr.value = ''
+  try {
+    const ids = Array.from(selectedDocs.value)
+    await moveDocuments(ids, moveTargetGroupID.value)
+    const groupIDs = new Set<number>([moveTargetGroupID.value])
+    for (const gid of Object.keys(docsByGroup.value)) {
+      const arr = docsByGroup.value[Number(gid)] ?? []
+      if (arr.some(d => selectedDocs.value.has(d.id))) groupIDs.add(Number(gid))
+    }
+    await Promise.all(Array.from(groupIDs).map(loadDocs))
+    showMove.value = false
+    exitSelectMode()
+  } catch (e: any) {
+    batchErr.value = e.message ?? '移动失败'
+  } finally {
+    batching.value = false
+  }
+}
+
+async function onReindexDocs() {
+  editMenuOpen.value = false
+  if (!selectedDocs.value.size) return
+  if (!confirm(`重建 ${selectedDocs.value.size} 个文档的索引？`)) return
+  batching.value = true
+  try {
+    const ids = Array.from(selectedDocs.value)
+    const resp = await reindexDocuments(ids)
+    const errCount = Object.keys(resp.errors ?? {}).length
+    if (errCount) alert(`完成。${errCount} 个文档失败，详情见状态。`)
+    const groupIDs = new Set<number>()
+    for (const gid of Object.keys(docsByGroup.value)) {
+      const arr = docsByGroup.value[Number(gid)] ?? []
+      if (arr.some(d => selectedDocs.value.has(d.id))) groupIDs.add(Number(gid))
+    }
+    await Promise.all(Array.from(groupIDs).map(loadDocs))
+    exitSelectMode()
+  } catch (e: any) {
+    alert(e.message ?? '重建失败')
+  } finally {
+    batching.value = false
+  }
+}
+
+async function onBatchDelete() {
+  editMenuOpen.value = false
+  const d = selectedDocs.value.size, g = selectedGroups.value.size
+  if (!d && !g) return
+  const parts: string[] = []
+  if (g) parts.push(`${g} 个分组`)
+  if (d) parts.push(`${d} 个文档`)
+  if (!confirm(`删除 ${parts.join('、')}？此操作不可恢复。`)) return
+  batching.value = true
+  try {
+    if (d) await deleteDocuments(Array.from(selectedDocs.value))
+    if (g) await deleteGroups(Array.from(selectedGroups.value))
+    if (activeDoc.value && selectedDocs.value.has(activeDoc.value.id)) activeDoc.value = null
+    await loadGroups()
+    docsByGroup.value = {}
+    collapsedGroups.value = new Set()
+    exitSelectMode()
+  } catch (e: any) {
+    alert(e.message ?? '删除失败')
+  } finally {
+    batching.value = false
+  }
+}
+
+async function doReindex(doc: KnowledgeDocument) {
+  if (!confirm(`重建文档「${doc.name}」的索引？`)) return
+  reindexing.value = true
+  try {
+    const resp = await reindexDocuments([doc.id])
+    const err = resp.errors?.[String(doc.id)]
+    if (err) alert(`重建失败：${err}`)
+    await loadDocs(doc.group_id)
+    const fresh = (docsByGroup.value[doc.group_id] ?? []).find(d => d.id === doc.id)
+    if (fresh) activeDoc.value = fresh
+  } catch (e: any) {
+    alert(e.message ?? '重建失败')
+  } finally {
+    reindexing.value = false
+  }
+}
+
+onMounted(loadGroups)
 </script>
 
 <style scoped>
@@ -291,6 +427,28 @@ onMounted(loadKBs)
   padding: 14px 16px 12px; border-bottom: 1px solid var(--border); flex-shrink: 0;
 }
 .sidebar-title { font-size: 13px; font-weight: 700; color: var(--text); }
+.sidebar-actions { display: flex; gap: 6px; }
+.select-toolbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 12px; border-bottom: 1px solid var(--border);
+  background: rgba(99,102,241,0.06); flex-shrink: 0;
+}
+.select-info { font-size: 12px; color: var(--text-sub); }
+.select-menu-wrap { position: relative; }
+.edit-menu {
+  position: absolute; right: 0; top: 100%; margin-top: 4px;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15); min-width: 180px; z-index: 10;
+  display: flex; flex-direction: column;
+}
+.edit-menu-item {
+  text-align: left; background: none; border: none; padding: 8px 12px;
+  font-size: 13px; color: var(--text); cursor: pointer;
+}
+.edit-menu-item:hover:not(:disabled) { background: var(--row-hover); }
+.edit-menu-item:disabled { color: var(--muted); cursor: not-allowed; }
+.edit-menu-item.danger { color: #dc2626; border-top: 1px solid var(--border); }
+.row-check { margin: 0 4px 0 0; cursor: pointer; flex-shrink: 0; }
 .sidebar-list { flex: 1; overflow-y: auto; }
 .sidebar-empty { color: var(--label); font-size: 13px; padding: 32px 16px; text-align: center; }
 

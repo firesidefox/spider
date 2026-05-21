@@ -10,14 +10,9 @@ import (
 
 // KnowledgePlugin defines the interface for knowledge base operations.
 type KnowledgePlugin interface {
-	// KB management
-	CreateKB(ctx context.Context, name string) (*KnowledgeBase, error)
-	ListKBs(ctx context.Context) ([]KnowledgeBase, error)
-	DeleteKB(ctx context.Context, kbID int) error
-
-	// Group management
-	CreateGroup(ctx context.Context, kbID int, name string) (*Group, error)
-	ListGroups(ctx context.Context, kbID int) ([]Group, error)
+	// Group management (top-level container)
+	CreateGroup(ctx context.Context, name string) (*Group, error)
+	ListGroups(ctx context.Context) ([]Group, error)
 	DeleteGroup(ctx context.Context, groupID int) error
 
 	// Document management
@@ -37,21 +32,13 @@ type KnowledgePlugin interface {
 
 // Scope defines the search/retrieval scope.
 type Scope struct {
-	Type string // "kb" | "group" | "document"
+	Type string // "group" | "document"
 	ID   int
 }
 
-// KnowledgeBase represents a knowledge base.
-type KnowledgeBase struct {
-	ID        int       `json:"id"`
-	Name      string    `json:"name"`
-	CreatedAt time.Time `json:"created_at"`
-}
-
-// Group represents a document group within a knowledge base.
+// Group represents a top-level knowledge container.
 type Group struct {
 	ID        int       `json:"id"`
-	KBID      int       `json:"kb_id"`
 	Name      string    `json:"name"`
 	CreatedAt time.Time `json:"created_at"`
 }

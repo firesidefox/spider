@@ -2,15 +2,8 @@ import { authHeaders } from './auth'
 
 const BASE = '/api/v1'
 
-export interface KnowledgeBase {
-  id: number
-  name: string
-  created_at: string
-}
-
 export interface KnowledgeGroup {
   id: number
-  kb_id: number
   name: string
   created_at: string
 }
@@ -48,35 +41,13 @@ async function handleResponse<T>(r: Response): Promise<T> {
   return r.json()
 }
 
-export async function listKBs(): Promise<KnowledgeBase[]> {
-  const r = await fetch(`${BASE}/knowledge-bases`, { headers: authHeaders() })
-  return handleResponse<KnowledgeBase[]>(r)
-}
-
-export async function createKB(name: string): Promise<KnowledgeBase> {
-  const r = await fetch(`${BASE}/knowledge-bases`, {
-    method: 'POST',
-    headers: authHeaders(),
-    body: JSON.stringify({ name })
-  })
-  return handleResponse<KnowledgeBase>(r)
-}
-
-export async function deleteKB(id: number): Promise<void> {
-  const r = await fetch(`${BASE}/knowledge-bases/${id}`, {
-    method: 'DELETE',
-    headers: authHeaders()
-  })
-  await handleResponse<void>(r)
-}
-
-export async function listGroups(kbID: number): Promise<KnowledgeGroup[]> {
-  const r = await fetch(`${BASE}/knowledge-bases/${kbID}/groups`, { headers: authHeaders() })
+export async function listGroups(): Promise<KnowledgeGroup[]> {
+  const r = await fetch(`${BASE}/knowledge-groups`, { headers: authHeaders() })
   return handleResponse<KnowledgeGroup[]>(r)
 }
 
-export async function createGroup(kbID: number, name: string): Promise<KnowledgeGroup> {
-  const r = await fetch(`${BASE}/knowledge-bases/${kbID}/groups`, {
+export async function createGroup(name: string): Promise<KnowledgeGroup> {
+  const r = await fetch(`${BASE}/knowledge-groups`, {
     method: 'POST',
     headers: authHeaders(),
     body: JSON.stringify({ name })
@@ -88,6 +59,15 @@ export async function deleteGroup(id: number): Promise<void> {
   const r = await fetch(`${BASE}/knowledge-groups/${id}`, {
     method: 'DELETE',
     headers: authHeaders()
+  })
+  await handleResponse<void>(r)
+}
+
+export async function deleteGroups(ids: number[]): Promise<void> {
+  const r = await fetch(`${BASE}/knowledge-groups`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+    body: JSON.stringify({ ids })
   })
   await handleResponse<void>(r)
 }
@@ -106,6 +86,29 @@ export async function deleteDocuments(ids: number[]): Promise<void> {
   await handleResponse<void>(r)
 }
 
+export async function moveDocuments(ids: number[], groupID: number): Promise<void> {
+  const r = await fetch(`${BASE}/knowledge-documents`, {
+    method: 'PATCH',
+    headers: authHeaders(),
+    body: JSON.stringify({ ids, group_id: groupID })
+  })
+  await handleResponse<void>(r)
+}
+
+export interface ReindexResponse {
+  results: ImportResult[]
+  errors: Record<string, string>
+}
+
+export async function reindexDocuments(ids: number[]): Promise<ReindexResponse> {
+  const r = await fetch(`${BASE}/knowledge-documents/reindex`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({ ids })
+  })
+  return handleResponse<ReindexResponse>(r)
+}
+
 export async function importDocument(groupID: number, file: File): Promise<ImportResult> {
   const fd = new FormData()
   fd.append('group_id', String(groupID))
@@ -117,3 +120,4 @@ export async function importDocument(groupID: number, file: File): Promise<Impor
   })
   return handleResponse<ImportResult>(r)
 }
+
