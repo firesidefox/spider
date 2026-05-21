@@ -30,6 +30,9 @@ func (s *GroupStore) List() ([]*models.DocumentGroup, error) {
 		}
 		list = append(list, &g)
 	}
+	if list == nil {
+		list = []*models.DocumentGroup{}
+	}
 	return list, nil
 }
 
