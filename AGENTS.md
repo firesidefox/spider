@@ -1,71 +1,71 @@
 <claude-mem-context>
 # Memory Context
 
-# [spider.ai] recent context, 2026-05-15 9:17pm GMT+8
+# [spider.ai] recent context, 2026-05-21 4:36pm GMT+8
 
 Legend: 🎯session 🔴bugfix 🟣feature 🔄refactor ✅change 🔵discovery ⚖️decision
 Format: ID TIME TYPE TITLE
 Fetch details: get_observations([IDs]) | Search: mem-search skill
 
-### May 15, 2026
-4923 8:01p 🔵 spider.ai — OpenAIClient.buildMessages uses flat string content field
-4924 8:02p 🔵 spider.ai — LLM package tests pass
-4925 8:03p 🔵 spider.ai — llm and agent package tests pass clean
-4926 " 🔵 spider.ai server port 8002 already in use on startup
-S2725 spider.ai — 用户请求分析配置文件整体逻辑 (May 15 at 8:10 PM)
-4927 8:11p 🔵 spider.ai — agent.go tool input parsing code path confirmed
-4929 " 🔵 spider.ai — agent.go streaming event loop full structure confirmed
-4931 " 🔵 spider.ai — compactor.go buildAssistantMessage and parseToolResultBlock confirmed
-4933 " 🟣 spider.ai — LLM retry logic with exponential backoff added to agent.go
-4935 8:26p 🔵 spider.ai — project config files and Claude permissions confirmed
-4936 8:27p 🔵 spider.ai — API config layer structure confirmed
-4937 " 🔵 spider.ai — 用户请求分析配置文件整体逻辑
-4938 8:28p 🔵 spider.ai — 用户请求分析配置文件整体逻辑
-S2729 Fix ContentBlock JSON serialization — Claude API wire format correctness for tool_use/tool_result/text blocks (May 15 at 8:28 PM)
-4939 8:29p 🟣 ContentBlock.MarshalJSON added to llm/client.go
-4940 " 🔵 spider.ai server already running on :8002
-S2730 spider.ai — codex review triggered against main branch (May 15 at 8:29 PM)
-S2727 Fix ContentBlock JSON serialization for Claude API wire format correctness (May 15 at 8:29 PM)
-4942 8:35p 🔵 spider.ai — codex review triggered against main branch
-S2731 isTransientLLMError prefix matching refactored to range loop — easier to extend (May 15 at 8:35 PM)
-4943 8:37p 🔵 Codex review identifies two functional regressions in tool-result rendering and OpenAI retry logic
-4944 " 🔵 ChatView.vue toolIndex fallback creates orphaned map — tool_result lookup always fails
-4945 8:38p 🔴 ChatView.vue toolIndex map now persisted on message object — live tool results render correctly
-4946 " 🔴 isTransientLLMError now recognizes OpenAI error format — transient OpenAI errors retried
-4947 8:39p ✅ Frontend build passes after toolIndex and retry classifier fixes
-4948 " 🔄 isTransientLLMError prefix matching refactored to range loop — easier to extend
-S2733 spider.ai 全修 session — full diff summary of 17 changed files (May 15 at 8:39 PM)
-4949 8:43p 🔵 spider.ai app.go — no ConfigPath field in App struct
-4950 8:44p 🔵 spider.ai MCP package structure confirmed
-4951 8:46p 🔵 spider.ai MCP App struct — full dependency inventory confirmed
-4952 " ✅ config.DefaultConfigPath exported; App struct gains ConfigPath field
-4953 8:47p 🔄 settings.go saveConfig uses App.ConfigPath instead of DataDir-derived path
-4954 " 🔴 BaseURL derivation fixed for wildcard listen addresses
-4955 " 🔴 saveConfig writes to App.ConfigPath instead of DataDir/config.yaml
-4956 " 🔴 App.ConfigPath wired at startup in main.go serve()
-4957 8:48p 🟣 Settings API exposes MaxTurns and Compaction config fields
-4958 " 🟣 Settings API now reads and writes MaxTurns and Compaction config at runtime
-4959 8:49p 🔴 updateProvider clears cached models when provider credentials change
-4960 8:50p ✅ spider.ai 全修 session — full diff summary of 17 changed files
-S2734 Code review of spider.ai config save fix branch (May 15 at 8:50 PM)
-S2736 Complete host selection injection architecture: frontend to LLM system prompt (May 15 at 8:56 PM)
-4961 8:58p 🟣 spider.ai — LLM retry with exponential backoff and frontend retry banner
-4962 " 🔄 spider.ai — config path propagation and settings API expansion
-4963 " 🔄 spider.ai — ContentBlock.MarshalJSON and OpenAI message builder for tool calls
-4964 9:04p 🔵 Selected hosts injection flow: frontend to system prompt
-4965 " 🔵 Complete host selection injection flow: frontend to LLM system prompt
-4966 " 🔵 Host selection differs between ChatView and ExecView components
-4967 " 🔵 Complete host selection injection architecture: frontend to LLM system prompt
-S2738 spider.ai — 用户询问选中主机如何注入会话 (May 15 at 9:04 PM)
-4969 9:08p 🔵 spider.ai — 用户询问选中主机如何注入会话
-S2739 spider.ai — 选中主机注入方案对比：system prompt vs 工具层强制注入 (May 15 at 9:12 PM)
-4970 9:13p 🔵 Selected host injection flow — how selectedHostIds travels from frontend to backend system prompt
-4971 9:14p 🔵 Host injection flow — system prompt construction and tool execution path
-4972 9:15p ✅ Agent struct extended with selectedHostIDs field
-4974 " ✅ Agent.Run() calls injectSelectedHosts() before tool execution
-4976 " 🟣 injectSelectedHosts() implemented — auto-fills host fields in tool input at execution time
-4977 9:16p 🔄 BuildSystemPrompt() host injection removed — moved to tool layer via injectSelectedHosts()
-4978 " ✅ chat.go call site updated — selectedHostIDs now passed to NewAgent() instead of BuildSystemPrompt()
-4979 9:17p 🔵 spider.ai — go build ./... output requested
-4980 " 🔴 spider.ai — go build fails: go-build cache permission denied
+### May 21, 2026
+S3292 spider.ai knowledge Store interface — full method set confirmed (May 21 at 1:26 PM)
+S3296 spider.ai — 知识库文档管理：选择模式按钮改为编辑按钮，含批量删除和移动文档功能 (May 21 at 1:28 PM)
+S3301 spider.ai — KB vs Group 概念合并方向讨论 (May 21 at 1:28 PM)
+S3294 spider.ai — 知识库文档管理：选择模式按钮改为编辑按钮，含批量删除和移动文档功能 (May 21 at 1:28 PM)
+S3302 spider.ai — KB vs Group 概念合并：决定砍掉 Group，保留 KB (May 21 at 1:30 PM)
+S3308 spider.ai — 砍掉 Group，保留 KB 作为核心隔离单元 (May 21 at 1:31 PM)
+S3335 spider.ai — 知识库两层重构完成 (KB→Group→Doc 改为 Group→Doc) (May 21 at 1:34 PM)
+6247 1:45p 🔴 store_test.go: TestCascadeDelete and TestListDocuments updated to remove KB dependency
+6248 2:08p 🔄 KnowledgeView sidebar flattened — removed KB layer
+6249 2:10p 🔄 knowledge.ts API — removed KB layer, groups now top-level
+6250 " 🔄 KnowledgeView.vue script — stale KB state and dead code remain
+6251 " 🔄 KnowledgeView.vue — removed 新建知识库 modal from template
+6253 2:11p 🔵 移动到分组 modal still uses stale kbs/groupsByKB refs
+6255 " 🔄 KnowledgeView.vue script section fully cleaned up — KB state removed
+6256 2:15p 🔵 Backend knowledge model confirmed flat — Group top-level, Document references GroupID
+6257 2:16p 🔵 Database schema for knowledge system uses flat Group-Document hierarchy
+6258 " 🔵 Database schema confirms flat Group-Document hierarchy with no KB abstraction
+6260 2:17p ✅ Frontend build succeeds after KB layer removal from KnowledgeView.vue
+6261 " ✅ Go backend builds cleanly after KB layer removal refactor
+6262 " ✅ spider.ai test server started on port 8003 for post-refactor verification
+6263 2:18p 🔴 GET /api/v1/knowledge-groups returns "method not allowed" — auth middleware blocking unauthenticated requests
+6264 " 🔵 Port 8003 already in use — test server failed to start, curl hit existing process
+6265 " ✅ GET /api/v1/knowledge-groups returns [] — flat model API verified at runtime
+6267 " ✅ Playwright E2E test script written to verify flat KB UI hierarchy
+6268 2:19p 🔵 Login fails on port 8004 test server — console error after clicking 登录
+6269 2:20p 🔵 Login returns 401 on port 8004 — admin/admin credentials invalid for test data dir
+6270 2:21p 🔵 Login API returns "method not allowed" for POST — auth endpoint routing issue on port 8004
+6271 2:22p 🔵 Admin password is bcrypt hash — "admin" plaintext invalid for existing data dir
+6272 " 🔴 knowledge_groups table has kb_id NOT NULL column — schema mismatch with refactored code
+6274 " ✅ knowledge_groups table migrated — kb_id column removed from existing database
+6275 " ✅ knowledge_groups schema migration verified — kb_id column gone, flat schema confirmed
+6276 2:23p ✅ POST /api/v1/knowledge-groups works after migration — group created successfully
+6277 " 🔵 spider.ai uses idempotent ALTER TABLE migrations — no migration for knowledge_groups kb_id removal
+6278 2:24p ✅ Automated migration added to schema.go — removes kb_id from knowledge_groups on startup
+S3339 spider.ai — 9 knowledge refactor files staged for commit (May 21 at 2:24 PM)
+6281 3:38p 🔄 spider.ai — ListHosts renamed to GetHosts across codebase
+6282 " 🔵 spider.ai — 21 files with unstaged changes, 293 commits ahead of origin
+6284 3:40p 🔴 spider.ai — agent test build failure: stale API calls in tools_docs_test.go
+6285 " 🟣 spider.ai — RESTScheme field added to AccessFace model and store
+6286 3:41p 🔄 spider.ai — Knowledge API routes restructured: /knowledge-bases removed, /knowledge-groups promoted
+6287 " 🔵 spider.ai — knowledge.Store API: CreateKB removed, CreateGroup signature changed
+6291 " ✅ spider.ai — 9 knowledge refactor files staged for commit
+S3338 spider.ai — knowledge group batch edit feature complete, all tasks done (May 21 at 3:41 PM)
+6288 " 🔴 spider.ai — tools_docs_test.go fixed: stale CreateKB/CreateGroup calls updated
+6289 " 🔵 spider.ai — knowledge API routes confirmed in handler.go
+6290 3:42p 🟣 spider.ai — knowledge group batch edit feature complete, all tasks done
+6293 3:55p ✅ spider.ai — SearchDocs tests updated after KB layer removal
+6294 3:56p ✅ spider.ai — knowledge base docs, plans, and markdown parser test committed
+S3345 spider.ai — knowledge base docs, plans, and markdown parser test committed (May 21 at 3:56 PM)
+6296 4:28p ✅ spec review requested — system prompt cache rebuild
+6298 " 🔵 spider.ai — system prompt cache rebuild spec fully read
+6299 4:29p ✅ spider.ai — spec review: system prompt cache rebuild
+6300 4:30p ✅ spider.ai — spec review: system prompt cache rebuild
+6301 " ✅ spider.ai — spec review: system prompt cache rebuild
+6302 " 🔵 spider.ai — agent HookChain architecture confirmed
+6304 " 🔵 spider.ai — system prompt build and agent creation flow confirmed
+6305 4:31p ✅ spider.ai — spec review: system prompt cache rebuild
+6306 " 🔵 GetHostsTool filters by selectedHostIDs after listing
+6308 4:32p 🔵 spider.ai — system prompt cache rebuild spec: implementation order and test requirements
+6310 " 🔵 SearchDocsTool nil guard is on embedder, not knowledgeStore
 </claude-mem-context>

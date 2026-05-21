@@ -48,7 +48,8 @@ No explicit `---` boundary marker. Segments separated by `## Environment` headin
 
 1. **Static segment = literal constants only** — No runtime branches, map iteration, or string interpolation.
 2. **Tool registration order fixed** — Registry.All() returns deterministic slice order.
-3. **SearchDocs always registered** — Even when disabled. Actual blocking happens at hook/Execute level.
+3. **All tools always registered** — SearchDocs, Todo, Topology, Task, Skill tools registered unconditionally. Actual blocking happens at hook/Execute level when store is nil or feature disabled.
+4. **Tools array stable** — Anthropic prompt caching covers tools + system + messages prefix. Variable tool definitions fragment cache. All tools must be registered to stabilize the tools array sent to LLM.
 
 ## Design Details
 
@@ -142,11 +143,12 @@ Replace `BuildSystemPrompt()` function (line 193-243):
 //
 // DYNAMIC segment (session/environment specific):
 //   environment section (host inventory, vendor counts)
+//   + optional extraDynamic blocks (e.g., task context for headless agents)
 //
 // The static segment MUST be byte-identical across sessions with the same
 // factory configuration. Any runtime branch, map iteration, or interpolation
 // inside the static segment will fragment provider-side prefix caching.
-func (f *Factory) BuildSystemPrompt() []llm.SystemBlock {
+func (f *Factory) BuildSystemPrompt(extraDynamic ...string) []llm.SystemBlock {
     var static strings.Builder
     static.WriteString(identityPrompt)
     static.WriteString("\n\n")
@@ -171,6 +173,9 @@ func (f *Factory) BuildSystemPrompt() []llm.SystemBlock {
     static.WriteString(intentFieldPrompt)
 
     dynamic := f.buildEnvironmentSection()
+    for _, extra := range extraDynamic {
+        dynamic += "\n\n" + extra
+    }
 
     cacheMark := "ephemeral"
     return []llm.SystemBlock{
@@ -273,6 +278,11 @@ Anthropic API format:
 }
 ```
 
+**Note:** Verify current Anthropic API requirements for prompt caching. Basic 5-minute ephemeral caching works with `cache_control` alone. Extended TTL or beta features may require an `anthropic-beta` header. Check the target account/model tier and add to `setHeaders` if needed:
+```go
+req.Header.Set("anthropic-beta", "prompt-caching-2024-07-31")  // Only if required
+```
+
 ### 8. OpenAI Provider Adaptation
 
 **File:** `internal/llm/openai.go`
@@ -346,30 +356,57 @@ resp, err := a.llmClient.ChatStream(ctx, &llm.ChatRequest{
 Change NewAgent (line 97) and NewHeadlessAgent (line 134):
 
 ```go
-systemPrompt := f.BuildSystemPrompt()  // Returns []llm.SystemBlock
+// Normal agent
+systemPrompt := f.BuildSystemPrompt()
+agent := NewAgent(AgentConfig{
+    SystemPrompt: systemPrompt,
+    // ... other fields
+})
+
+// Headless agent with task context
+taskPrompt := fmt.Sprintf("## Task\n\nGoal: %s\nTarget hosts: %s", task.Goal, hostnames)
+systemPrompt := f.BuildSystemPrompt(taskPrompt)
 agent := NewAgent(AgentConfig{
     SystemPrompt: systemPrompt,
     // ... other fields
 })
 ```
 
-### 11. SearchDocs Always-Register Strategy
+Task context goes into dynamic segment, preserving static segment cache.
+
+### 11. All Tools Always-Register Strategy
+
+**Rationale:** Anthropic prompt caching covers the complete prefix: tools array + system + messages. Variable tool definitions fragment cache across sessions. To achieve stable cache hits, the tools array sent to LLM must be byte-identical across sessions.
 
 **File:** `internal/agent/factory.go`
 
-Change line 259-261:
+Change buildRegistryWithHosts (line 250-270) to unconditionally register all tools:
 
 ```go
-// Before
-if !f.DisableSearchDocs && f.KnowledgeStore != nil {
+func (f *Factory) buildRegistryWithHosts(conversationID string, selectedHostIDs []string) *ToolRegistry {
+    registry := NewToolRegistry()
+    listTool := NewGetHostsTool(f.Hosts, f.AccessFaces)
+    listTool.selectedHostIDs = selectedHostIDs
+    registry.Register(listTool)
+    registry.Register(NewExecuteCLITool(f.Hosts, f.AccessFaces, f.SSHPool, f.Logs, f.SSHKeys))
+    registry.Register(NewBatchExecuteTool(f.Hosts, f.AccessFaces, f.SSHPool, f.Logs, f.SSHKeys))
+    registry.Register(NewVerifyTool(f.Hosts, f.AccessFaces, f.SSHPool, f.SSHKeys))
+    registry.Register(NewCallRESTAPITool(f.AccessFaces))
+    
+    // Unconditional registration — no if checks
     registry.Register(NewSearchDocsTool(f.KnowledgeStore, f.Embedder))
+    registry.Register(NewTodoTool(f.TodoStore))
+    registry.Register(NewGetTopologyContextTool(f.TopologyStore))
+    registry.Register(NewTaskTool(f.TaskStore))
+    registry.Register(NewInvokeSkillTool(f.DataDir, f.MsgStore, conversationID))
+    
+    return registry
 }
-
-// After
-registry.Register(NewSearchDocsTool(f.KnowledgeStore, f.Embedder))
 ```
 
-Unconditional registration. Tool schema always sent to LLM. Actual blocking happens at two levels:
+Remove all `if f.DisableSearchDocs`, `if f.TodoStore != nil`, `if f.TopologyStore != nil`, `if f.TaskStore != nil`, `if f.DataDir != ""` checks.
+
+Tool schema always sent to LLM. Actual blocking happens at two levels:
 
 **Level 1: Hook interception** (optional, early rejection)
 
@@ -383,22 +420,26 @@ if f.Enforcer != nil {
     hooks.AddBefore(DefaultRiskHook())
 }
 
-// SearchDocs disable hook
+// Feature disable hooks
 if f.DisableSearchDocs {
-    hooks.AddBefore(func(ctx context.Context, call ToolCall) error {
-        if call.Name == "SearchDocs" {
-            return fmt.Errorf("SearchDocs is disabled by configuration")
+    hooks.AddBefore(func(toolName string, input map[string]any, riskLevel RiskLevel) *HookResult {
+        if toolName == "SearchDocs" {
+            return &HookResult{
+                Action:    HookDeny,
+                RiskLevel: riskLevel,
+                Reason:    "SearchDocs is disabled by configuration",
+            }
         }
-        return nil
+        return &HookResult{Action: HookAllow, RiskLevel: riskLevel}
     })
 }
 ```
 
 **Level 2: Execute nil guard** (defensive, friendly error)
 
-**File:** `internal/agent/tools_docs.go`
+Each tool's Execute method checks for nil store at entry:
 
-Add guard at Execute entry (line 113):
+**File:** `internal/agent/tools_docs.go`
 
 ```go
 func (t *SearchDocsTool) Execute(ctx context.Context, input map[string]any) (*ToolResult, error) {
@@ -413,7 +454,13 @@ func (t *SearchDocsTool) Execute(ctx context.Context, input map[string]any) (*To
 }
 ```
 
-`Description()` (line 30) and `SystemPromptSection()` (line 34) are already literal constants. No changes needed.
+Apply same pattern to:
+- `tools_todo_task.go` → check `t.todoStore != nil`
+- `tools_topology_context.go` → check `t.topologyStore != nil`
+- `tools_task.go` → check `t.taskStore != nil`
+- `tools_skill.go` → check `t.dataDir != ""`
+
+`Description()` and `SystemPromptSection()` for all tools are already literal constants. No changes needed.
 
 ### 12. Invariant Test
 
@@ -537,7 +584,7 @@ if a.systemPrompt[1].CacheControl != nil {
 }
 ```
 
-### 14. SearchDocs Nil Store Test
+### 14. Tool Nil Store Tests
 
 **File:** `internal/agent/tools_docs_test.go`
 
@@ -547,8 +594,8 @@ Add test:
 func TestSearchDocsToolNilStore(t *testing.T) {
     tool := NewSearchDocsTool(nil, nil)
     result, err := tool.Execute(context.Background(), map[string]any{
-        "mode": "sections",
-        "scope": map[string]any{"type": "kb"},
+        "mode":       "sections",
+        "scope_type": "kb",
     })
     if err != nil {
         t.Fatalf("Execute returned error: %v", err)
@@ -562,12 +609,14 @@ func TestSearchDocsToolNilStore(t *testing.T) {
 }
 ```
 
-### 15. Other Test Files
+Add similar tests for Todo, Topology, Task, Skill tools with nil stores.
 
-Search for all direct `ChatRequest` constructions:
+### 15. Other Code Sites
+
+Search for all `ChatRequest` constructions in production and test code:
 
 ```bash
-grep -rn "ChatRequest{" internal/ --include="*_test.go"
+rg "ChatRequest\{" internal cmd
 ```
 
 Change all occurrences from:
@@ -588,22 +637,33 @@ req := &llm.ChatRequest{
 }
 ```
 
+Known production sites:
+- `internal/knowledge/markdown_parser.go:72`
+- `internal/knowledge/clustering.go:41`
+- `internal/agent/compactor.go:298`
+- `internal/scheduler/executor.go:233`
+
+Some may have no system prompt (empty slice is valid). All must compile after the type change.
+
 ## Implementation Order
 
 1. Add new constants (identityPrompt, communicatingPrompt, toneAndStylePrompt) to factory.go
 2. Add SystemBlock type to llm/client.go
 3. Change ChatRequest.System type to []SystemBlock
 4. Adapt claude.go and openai.go to handle []SystemBlock
-5. Rewrite BuildSystemPrompt() to return []SystemBlock
+5. Rewrite BuildSystemPrompt(extraDynamic ...string) to return []SystemBlock
 6. Delete epaSystemPromptPrefix from agent.go
 7. Change AgentConfig.SystemPrompt type to []SystemBlock
-8. Update all agent creation call sites (factory.go, tests)
-9. SearchDocs always-register + nil guard
-10. Add invariant test (factory_test.go)
-11. Fix agent_test.go assertions
-12. Fix all other test files (grep for ChatRequest constructions)
-13. Run full test suite
-14. Manual verification: start server, send query, check cache hit metrics
+8. Update all agent creation call sites (factory.go NewAgent/NewHeadlessAgent with task context)
+9. All tools always-register: remove all conditional registration checks in buildRegistryWithHosts
+10. Add nil guards to SearchDocs, Todo, Topology, Task, Skill Execute methods
+11. Add feature disable hooks (optional, for early rejection)
+12. Add invariant test (factory_test.go)
+13. Fix agent_test.go assertions
+14. Fix all production and test ChatRequest constructions (rg "ChatRequest\\{" internal cmd)
+15. Add nil store tests for all optional tools
+16. Run full test suite
+17. Manual verification: start server, send query, check cache hit metrics
 
 ## Verification
 
