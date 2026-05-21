@@ -72,6 +72,11 @@ type ToolCall struct {
 	Input map[string]any `json:"input"`
 }
 
+type SystemBlock struct {
+	Text         string  `json:"text"`
+	CacheControl *string `json:"cache_control,omitempty"` // "ephemeral" for Anthropic, nil otherwise
+}
+
 type Usage struct {
 	InputTokens  int `json:"input_tokens"`
 	OutputTokens int `json:"output_tokens"`
@@ -85,10 +90,10 @@ type StreamEvent struct {
 }
 
 type ChatRequest struct {
-	System    string    `json:"system"`
-	Messages  []Message `json:"messages"`
-	Tools     []ToolDef `json:"tools,omitempty"`
-	MaxTokens int       `json:"max_tokens"`
+	System    []SystemBlock `json:"-"` // Serialized by each provider
+	Messages  []Message     `json:"messages"`
+	Tools     []ToolDef     `json:"tools,omitempty"`
+	MaxTokens int           `json:"max_tokens"`
 }
 
 type Client interface {

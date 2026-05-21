@@ -166,8 +166,7 @@ func chatSendMessage(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id
 	}
 	factory.DisableSearchDocs = allFacesDisableKB(app)
 
-	systemPrompt := factory.BuildSystemPrompt()
-	a := factory.NewAgent(systemPrompt, id, req.HostIDs)
+	a := factory.NewAgent(id, req.HostIDs)
 	waiter := agent.NewConfirmationWaiter()
 	app.StoreChatWaiter(id, waiter)
 	defer app.RemoveChatWaiter(id)

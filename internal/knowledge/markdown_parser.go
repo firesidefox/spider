@@ -70,7 +70,9 @@ func parseMarkdownLLMResponse(raw string) ([]ParsedEntry, error) {
 func (p *MarkdownParser) parseChunk(ctx context.Context, text string) ([]ParsedEntry, error) {
 	prompt := buildMarkdownParsePrompt(text)
 	req := &llm.ChatRequest{
-		System: "You are a technical documentation parser. Return only valid JSON.",
+		System: []llm.SystemBlock{
+			{Text: "You are a technical documentation parser. Return only valid JSON."},
+		},
 		Messages: []llm.Message{
 			{Role: llm.RoleUser, Content: prompt},
 		},

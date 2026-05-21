@@ -18,16 +18,6 @@ import (
 	"github.com/spiderai/spider/internal/store"
 )
 
-const epaSystemPromptPrefix = `## Behavioral Constraints
-
-Process tasks in the following order:
-
-Explore: Use read-only tools to gather information first. Do not perform any side-effecting operations until you have a clear understanding of the current state.
-Plan: Based on exploration results, reason through a complete execution plan internally. Clarify the purpose and expected outcome of each step.
-Act: Execute the plan step by step, verifying results after each step before continuing. If anything unexpected occurs, re-enter Explore — do not proceed blindly.
-
-`
-
 type EventType string
 
 const (
@@ -78,7 +68,7 @@ type Agent struct {
 	msgStore      MessageStorer
 	todoStore     *store.TodoStore
 	hosts         *store.HostStore
-	systemPrompt  string
+	systemPrompt  []llm.SystemBlock
 	maxTurns      int
 	compactor     *Compactor
 	skillManager  *SkillManager
@@ -97,7 +87,7 @@ type AgentConfig struct {
 	MsgStore     MessageStorer
 	TodoStore    *store.TodoStore
 	Hosts        *store.HostStore
-	SystemPrompt string
+	SystemPrompt []llm.SystemBlock
 	MaxTurns     int
 	Compactor    *Compactor
 	SkillManager *SkillManager
@@ -126,7 +116,7 @@ func NewAgent(cfg AgentConfig) *Agent {
 		msgStore:                     cfg.MsgStore,
 		todoStore:                    cfg.TodoStore,
 		hosts:                        cfg.Hosts,
-		systemPrompt:                 epaSystemPromptPrefix + cfg.SystemPrompt,
+		systemPrompt:                 cfg.SystemPrompt,
 		maxTurns:                     maxTurns,
 		compactor:                    cfg.Compactor,
 		skillManager:                 cfg.SkillManager,

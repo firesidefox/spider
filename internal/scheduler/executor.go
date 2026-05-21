@@ -120,13 +120,13 @@ func (e *Executor) executeAsync(ctx context.Context, task *models.Task, run *mod
 			hostLines = append(hostLines, fmt.Sprintf("- %s (%s)", host.Name, host.IP))
 		}
 	}
-	systemPrompt := fmt.Sprintf(
+	taskContext := fmt.Sprintf(
 		"You are executing an automated task.\n\nTask: %s\n\nTarget hosts:\n%s\n\nExecute the task and report results.",
 		task.Goal, strings.Join(hostLines, "\n"),
 	)
 
 	convID := "task-run-" + run.ID
-	ag := e.agentFactory.NewHeadlessAgent(systemPrompt, convID)
+	ag := e.agentFactory.NewHeadlessAgent(convID, taskContext)
 	events, err := ag.Run(execCtx, convID, task.Goal, nil)
 	if err != nil {
 		now := time.Now()

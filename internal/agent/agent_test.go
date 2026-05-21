@@ -227,23 +227,6 @@ func TestMaxTurnsExceeded(t *testing.T) {
 	}
 }
 
-func TestNewAgentPrependsEPAPrefix(t *testing.T) {
-	cfg := AgentConfig{
-		LLMClient:    nil,
-		Registry:     NewToolRegistry(),
-		Hooks:        NewHookChain(),
-		MsgStore:     nil,
-		SystemPrompt: "你是运维助手。",
-	}
-	a := NewAgent(cfg)
-	if !strings.HasPrefix(a.systemPrompt, "## Behavioral Constraints") {
-		t.Errorf("systemPrompt should start with EPA prefix, got: %q", a.systemPrompt[:min(50, len(a.systemPrompt))])
-	}
-	if !strings.Contains(a.systemPrompt, "你是运维助手。") {
-		t.Error("systemPrompt should contain original prompt")
-	}
-}
-
 func TestReadOnlyToolDescriptionsContainExploreHint(t *testing.T) {
 	tools := []Tool{
 		NewGetHostsTool(nil, nil),

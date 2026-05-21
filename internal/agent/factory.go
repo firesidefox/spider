@@ -2,6 +2,7 @@ package agent
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/spiderai/spider/internal/config"
@@ -94,7 +95,7 @@ func (f *Factory) maxTurns() int {
 }
 
 // NewAgent creates a new Agent with all tools registered.
-func (f *Factory) NewAgent(systemPrompt string, conversationID string, selectedHostIDs []string) *Agent {
+func (f *Factory) NewAgent(conversationID string, selectedHostIDs []string) *Agent {
 	logger.ForModule("agent").Info().Str("model", f.LLMModel).Str("conv_id", conversationID).Msg("agent factory: creating agent")
 	registry := f.buildRegistryWithHosts(conversationID, selectedHostIDs)
 
@@ -118,7 +119,7 @@ func (f *Factory) NewAgent(systemPrompt string, conversationID string, selectedH
 		MsgStore:                     f.MsgStore,
 		TodoStore:                    f.TodoStore,
 		Hosts:                        f.Hosts,
-		SystemPrompt:                 systemPrompt,
+		SystemPrompt:                 f.BuildSystemPrompt(),
 		MaxTurns:                     f.maxTurns(),
 		Compactor:                    compactor,
 		SkillManager:                 NewSkillManager(f.DataDir),
@@ -131,7 +132,7 @@ func (f *Factory) NewAgent(systemPrompt string, conversationID string, selectedH
 
 // NewHeadlessAgent creates an Agent that discards all messages (no DB writes).
 // Used for automated task runs that don't need conversation history.
-func (f *Factory) NewHeadlessAgent(systemPrompt string, conversationID string) *Agent {
+func (f *Factory) NewHeadlessAgent(conversationID string, extraDynamic ...string) *Agent {
 	logger.ForModule("agent").Info().Str("model", f.LLMModel).Str("conv_id", conversationID).Msg("agent factory: creating headless agent")
 	registry := f.buildRegistry(conversationID)
 
@@ -147,7 +148,7 @@ func (f *Factory) NewHeadlessAgent(systemPrompt string, conversationID string) *
 		Registry:                     registry,
 		Hooks:                        hooks,
 		MsgStore:                     noopMessageStorer{},
-		SystemPrompt:                 systemPrompt,
+		SystemPrompt:                 f.BuildSystemPrompt(extraDynamic...),
 		MaxTurns:                     f.maxTurns(),
 		SkillManager:                 NewSkillManager(f.DataDir),
 		DataDir:                      f.DataDir,
@@ -214,60 +215,72 @@ Assistant: Collects CPU, memory, and I/O metrics first. Then picks one optimizat
 
 **Verification:** After each Act step, verify before marking completed. If verification fails, keep in_progress and offer rollback if available.`
 
-// BuildSystemPrompt builds a three-layer system prompt.
-// Layer 1: dynamic role + host summary
-// Layer 2: per-tool SystemPromptSection() collected from a temp registry
-// Layer 3: intentFieldPrompt + orchestrationPrompt
-func (f *Factory) BuildSystemPrompt() string {
-	// Layer 1
-	allHosts, err := f.Hosts.List("")
-	var layer1 string
-	if err != nil || len(allHosts) == 0 {
-		layer1 = "You are Spider, an intelligent network operations assistant. No hosts are currently registered."
-	} else {
-		vendorCount := make(map[string]int)
-		for _, h := range allHosts {
-			v := h.Vendor
-			if v == "" {
-				v = "unknown"
-			}
-			vendorCount[v]++
-		}
-		var parts []string
-		for vendor, count := range vendorCount {
-			parts = append(parts, fmt.Sprintf("%s(%d)", vendor, count))
-		}
-		layer1 = fmt.Sprintf(
-			"You are Spider, an intelligent network operations assistant. "+
-				"You manage %d network devices: %s. "+
-				"Use the available tools to execute CLI commands, verify configurations, "+
-				"and answer questions about the network infrastructure.",
-			len(allHosts),
-			strings.Join(parts, ", "),
-		)
-	}
+// BuildSystemPrompt constructs the system prompt as two segments:
+// Static segment (cacheable): identity + communicating + tone + tool sections + orchestration + intent
+// Dynamic segment: environment (host inventory) + optional extraDynamic
+func (f *Factory) BuildSystemPrompt(extraDynamic ...string) []llm.SystemBlock {
+	var static strings.Builder
+	static.WriteString(identityPrompt)
+	static.WriteString("\n\n")
+	static.WriteString(communicatingPrompt)
+	static.WriteString("\n\n")
+	static.WriteString(toneAndStylePrompt)
+	static.WriteString("\n\n")
 
-	// Layer 2: collect tool sections
 	reg := f.buildRegistry("")
-	var b strings.Builder
-	b.WriteString(layer1)
 	for _, tool := range reg.All() {
 		if sp, ok := tool.(SystemPromptSection); ok {
 			section := sp.SystemPromptSection()
 			if strings.TrimSpace(section) != "" {
-				b.WriteString("\n\n")
-				b.WriteString(section)
+				static.WriteString(section)
+				static.WriteString("\n\n")
 			}
 		}
 	}
 
-	// Layer 3
-	b.WriteString("\n\n")
-	b.WriteString(intentFieldPrompt)
-	b.WriteString("\n\n")
-	b.WriteString(orchestrationPrompt)
-	b.WriteString("\n\n## Language and Style\n\nAlways respond in Chinese (Simplified). Use English only for technical terms, command output, and code.\n\nBe direct. Lead with the result. No preamble (\"好的\", \"当然\", \"我来帮你\"). No trailing summary. When reporting multi-host results, use a table or list — not prose.")
-	return b.String()
+	static.WriteString(orchestrationPrompt)
+	static.WriteString("\n\n")
+	static.WriteString(intentFieldPrompt)
+
+	dynamic := f.buildEnvironmentSection()
+	for _, extra := range extraDynamic {
+		dynamic += "\n\n" + extra
+	}
+
+	cacheMark := "ephemeral"
+	return []llm.SystemBlock{
+		{Text: static.String(), CacheControl: &cacheMark},
+		{Text: dynamic},
+	}
+}
+
+func (f *Factory) buildEnvironmentSection() string {
+	allHosts, err := f.Hosts.List("")
+	if err != nil || len(allHosts) == 0 {
+		return "## Environment\n\nNo hosts are currently registered."
+	}
+	vendorCount := make(map[string]int)
+	for _, h := range allHosts {
+		v := h.Vendor
+		if v == "" {
+			v = "unknown"
+		}
+		vendorCount[v]++
+	}
+	// Sort by vendor name to avoid map iteration non-determinism
+	vendors := make([]string, 0, len(vendorCount))
+	for v := range vendorCount {
+		vendors = append(vendors, v)
+	}
+	sort.Strings(vendors)
+	var parts []string
+	for _, v := range vendors {
+		parts = append(parts, fmt.Sprintf("%s(%d)", v, vendorCount[v]))
+	}
+	return fmt.Sprintf(
+		"## Environment\n\nManaged devices: %d total — %s.",
+		len(allHosts), strings.Join(parts, ", "),
+	)
 }
 
 // buildRegistry creates a temporary registry to collect tool SystemPromptSections.

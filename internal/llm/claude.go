@@ -41,15 +41,30 @@ func NewClaudeClient(apiKey, model, baseURL string) *ClaudeClient {
 func (c *ClaudeClient) ChatStream(ctx context.Context, req *ChatRequest) (<-chan StreamEvent, error) {
 	log := logger.FromContext(ctx).With().Str("module", "llm").Logger()
 	msgsJSON, _ := json.Marshal(req.Messages)
-	log.Debug().Str("model", c.model).Int("msgs", len(req.Messages)).Str("system", req.System).RawJSON("messages", msgsJSON).Msg("llm stream start")
+	log.Debug().Str("model", c.model).Int("msgs", len(req.Messages)).Int("system_blocks", len(req.System)).RawJSON("messages", msgsJSON).Msg("llm stream start")
 	start := time.Now()
 
 	body := map[string]any{
 		"model":      c.model,
 		"max_tokens": req.MaxTokens,
-		"system":     req.System,
 		"messages":   req.Messages,
 		"stream":     true,
+	}
+	// System prompt as array of blocks with cache_control
+	if len(req.System) > 0 {
+		systemArray := make([]map[string]any, len(req.System))
+		for i, block := range req.System {
+			systemArray[i] = map[string]any{
+				"type": "text",
+				"text": block.Text,
+			}
+			if block.CacheControl != nil {
+				systemArray[i]["cache_control"] = map[string]any{
+					"type": *block.CacheControl,
+				}
+			}
+		}
+		body["system"] = systemArray
 	}
 	if len(req.Tools) > 0 {
 		body["tools"] = req.Tools
@@ -87,7 +102,7 @@ func (c *ClaudeClient) ChatStream(ctx context.Context, req *ChatRequest) (<-chan
 func (c *ClaudeClient) Chat(ctx context.Context, req *ChatRequest) (string, error) {
 	log := logger.FromContext(ctx).With().Str("module", "llm").Logger()
 	msgsJSON, _ := json.Marshal(req.Messages)
-	log.Debug().Str("model", c.model).Int("msgs", len(req.Messages)).Str("system", req.System).RawJSON("messages", msgsJSON).Msg("llm chat start")
+	log.Debug().Str("model", c.model).Int("msgs", len(req.Messages)).Int("system_blocks", len(req.System)).RawJSON("messages", msgsJSON).Msg("llm chat start")
 	start := time.Now()
 	maxTokens := req.MaxTokens
 	if maxTokens == 0 {
@@ -96,8 +111,23 @@ func (c *ClaudeClient) Chat(ctx context.Context, req *ChatRequest) (string, erro
 	body := map[string]any{
 		"model":      c.model,
 		"max_tokens": maxTokens,
-		"system":     req.System,
 		"messages":   req.Messages,
+	}
+	// System prompt as array of blocks with cache_control
+	if len(req.System) > 0 {
+		systemArray := make([]map[string]any, len(req.System))
+		for i, block := range req.System {
+			systemArray[i] = map[string]any{
+				"type": "text",
+				"text": block.Text,
+			}
+			if block.CacheControl != nil {
+				systemArray[i]["cache_control"] = map[string]any{
+					"type": *block.CacheControl,
+				}
+			}
+		}
+		body["system"] = systemArray
 	}
 	if len(req.Tools) > 0 {
 		body["tools"] = req.Tools

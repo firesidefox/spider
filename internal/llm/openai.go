@@ -40,7 +40,7 @@ func NewOpenAIClient(apiKey, model, baseURL string) *OpenAIClient {
 func (c *OpenAIClient) ChatStream(ctx context.Context, req *ChatRequest) (<-chan StreamEvent, error) {
 	log := logger.FromContext(ctx).With().Str("module", "llm").Logger()
 	msgsJSON, _ := json.Marshal(req.Messages)
-	log.Debug().Str("model", c.model).Int("msgs", len(req.Messages)).Str("system", req.System).RawJSON("messages", msgsJSON).Msg("llm stream start")
+	log.Debug().Str("model", c.model).Int("msgs", len(req.Messages)).Int("system_blocks", len(req.System)).RawJSON("messages", msgsJSON).Msg("llm stream start")
 	start := time.Now()
 
 	msgs := c.buildMessages(req)
@@ -98,7 +98,7 @@ func (c *OpenAIClient) ChatStream(ctx context.Context, req *ChatRequest) (<-chan
 func (c *OpenAIClient) Chat(ctx context.Context, req *ChatRequest) (string, error) {
 	log := logger.FromContext(ctx).With().Str("module", "llm").Logger()
 	msgsJSON, _ := json.Marshal(req.Messages)
-	log.Debug().Str("model", c.model).Int("msgs", len(req.Messages)).Str("system", req.System).RawJSON("messages", msgsJSON).Msg("llm chat start")
+	log.Debug().Str("model", c.model).Int("msgs", len(req.Messages)).Int("system_blocks", len(req.System)).RawJSON("messages", msgsJSON).Msg("llm chat start")
 	start := time.Now()
 	msgs := c.buildMessages(req)
 
@@ -188,8 +188,13 @@ type openaiChunk struct {
 
 func (c *OpenAIClient) buildMessages(req *ChatRequest) []map[string]any {
 	msgs := make([]map[string]any, 0, len(req.Messages)+1)
-	if req.System != "" {
-		msgs = append(msgs, map[string]any{"role": "system", "content": req.System})
+	if len(req.System) > 0 {
+		var parts []string
+		for _, block := range req.System {
+			parts = append(parts, block.Text)
+		}
+		systemText := strings.Join(parts, "\n\n")
+		msgs = append(msgs, map[string]any{"role": "system", "content": systemText})
 	}
 	for _, m := range req.Messages {
 		blocks, ok := m.Content.([]ContentBlock)
