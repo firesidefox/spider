@@ -46,6 +46,7 @@ type AccessFace struct {
 	SSHLegacy        bool                 `json:"ssh_legacy,omitempty"`
 	SSHLoginInput    string               `json:"ssh_login_input,omitempty"`
 	BaseURL          string               `json:"base_url,omitempty"`
+	RESTScheme       string               `json:"rest_scheme,omitempty"`
 	RESTAuthType     RESTAuthType         `json:"rest_auth_type,omitempty"`
 	RESTUsername     string               `json:"rest_username,omitempty"`
 	HeaderName       string               `json:"header_name,omitempty"`
@@ -132,6 +133,7 @@ type AddAccessFaceRequest struct {
 	SSHLegacy        bool                 `json:"ssh_legacy"`
 	SSHLoginInput    string               `json:"ssh_login_input"`
 	BaseURL          string               `json:"base_url"`
+	RESTScheme       string               `json:"rest_scheme"`
 	RESTAuthType     RESTAuthType         `json:"rest_auth_type"`
 	RESTUsername     string               `json:"rest_username"`
 	HeaderName       string               `json:"header_name"`
@@ -152,6 +154,7 @@ type UpdateAccessFaceRequest struct {
 	SSHLegacy        *bool                `json:"ssh_legacy"`
 	SSHLoginInput    *string              `json:"ssh_login_input"`
 	BaseURL          *string              `json:"base_url"`
+	RESTScheme       *string              `json:"rest_scheme"`
 	RESTAuthType     *RESTAuthType        `json:"rest_auth_type"`
 	RESTUsername     *string              `json:"rest_username"`
 	HeaderName       *string              `json:"header_name"`

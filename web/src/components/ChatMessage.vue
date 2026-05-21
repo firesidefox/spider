@@ -25,7 +25,7 @@ interface ConfirmRequest {
   riskLevel: string
 }
 
-const EXPLORE_TOOLS = new Set(['ListHosts', 'GetHost', 'SearchDocs', 'Verify', 'GetTopology'])
+const EXPLORE_TOOLS = new Set(['GetHosts', 'SearchDocs', 'Verify', 'GetTopology'])
 
 type TextItem     = { kind: 'text';        content: string }
 type HkItem       = { kind: 'housekeeping'; call: ToolCallBlock }

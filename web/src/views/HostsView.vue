@@ -116,7 +116,7 @@
                   <div class="face-header">
                     <div class="face-type">
                       <span class="badge" :class="f.type === 'ssh' ? 'badge-ssh' : 'badge-rest'">{{ f.type === 'ssh' ? 'SSH' : 'REST API' }}</span>
-                      <span class="face-addr code">{{ f.type === 'ssh' ? `${f.username}@${f.ip}:${f.port}` : f.base_url || `${f.ip}:${f.port}` }}</span>
+                      <span class="face-addr code">{{ f.type === 'ssh' ? `${f.username}@${f.ip}:${f.port}` : `${f.rest_scheme || 'http'}://${f.ip}:${f.port}${f.base_url || ''}` }}</span>
                     </div>
                     <div class="face-actions">
                       <button class="edit-link" @click="startEditFace(f)">编辑</button>
@@ -133,18 +133,18 @@
                       <div class="value">{{ f.rest_auth_type === 'hmac_aksk' ? `HMAC AK/SK (${f.hmac_algo || 'HMAC-SHA256'})` : f.rest_auth_type }}</div>
                     </div>
                     <div v-if="f.type === 'restapi' && f.rest_username" class="face-item"><label>用户名</label><div class="value">{{ f.rest_username }}</div></div>
-                    <div v-if="f.type === 'restapi' && f.base_url" class="face-item" style="grid-column:1/-1"><label>Base URL</label><div class="value"><code>{{ f.base_url }}</code></div></div>
+                    <div v-if="f.type === 'restapi'" class="face-item" style="grid-column:1/-1"><label>Base URL</label><div class="value"><code>{{ f.rest_scheme || 'http' }}://{{ f.ip }}:{{ f.port }}{{ f.base_url || '' }}</code></div></div>
                   </div>
                   <div class="knowledge-row">
                     <span class="knowledge-label">知识来源：</span>
                     <template v-if="!f.knowledge_sources || f.knowledge_sources.length === 0">
                       <span class="knowledge-tag">全局</span>
                     </template>
-                    <template v-else-if="f.knowledge_sources.some(k => k.type === 'none')">
+                    <template v-else-if="f.knowledge_sources.every(k => k.type === 'none')">
                       <!-- 无知识库，不显示 -->
                     </template>
                     <template v-else>
-                      <span v-for="ks in f.knowledge_sources" :key="ks.type+ks.id" class="knowledge-tag">
+                      <span v-for="ks in f.knowledge_sources.filter(k => k.type !== 'none')" :key="ks.type+ks.id" class="knowledge-tag">
                         <span class="at">@</span>{{ ks.type === 'doc' ? (allDocsMap.get(ks.id)?.title || ks.id) : (docGroupsMap.get(ks.id)?.name || ks.id) }}
                         <button class="ks-remove" @click.stop="saveKnowledgeSources(f, f.knowledge_sources.filter(k => !(k.type === ks.type && k.id === ks.id)).map(k => ({type: k.type, id: k.id})))">×</button>
                       </span>
@@ -295,8 +295,18 @@
           </template>
           <template v-if="faceForm.type === 'restapi'">
             <div class="form-row">
-              <label>Base URL</label>
-              <input v-model="faceForm.base_url" class="input" placeholder="http://192.168.1.1:8080" />
+              <label>协议</label>
+              <select v-model="faceForm.rest_scheme" class="input">
+                <option value="http">http</option>
+                <option value="https">https</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <label>Base URL <span class="label-hint">（可追加路径后缀）</span></label>
+              <div class="base-url-row">
+                <span class="base-url-prefix">{{ faceForm.rest_scheme }}://{{ faceForm.ip || 'IP' }}:{{ faceForm.port || '端口' }}</span>
+                <input v-model="faceForm.rest_path" class="input base-url-suffix" placeholder="/" />
+              </div>
             </div>
             <div class="form-row">
               <label>认证方式</label>
@@ -442,7 +452,7 @@ async function saveOverview() {
 const emptyForm = () => ({ name: '', ip: '', notes: '', vendor: '', product_name: '', product_version: '', tagsStr: '' })
 const form = ref(emptyForm())
 
-const emptyFaceForm = () => ({ type: 'ssh' as 'ssh' | 'restapi', ip: activeHost.value?.ip ?? '', port: 22, username: '', ssh_auth_type: 'password', credential: '', passphrase: '', ssh_key_id: '', ssh_legacy: false, ssh_login_input: '', probe_port: 0, probe_interval: 30, base_url: '', rest_auth_type: 'none', rest_username: '', header_name: '', hmac_algo: 'HMAC-SHA256', knowledge_sources: [] as Array<{type:'group'|'doc';id:number}> })
+const emptyFaceForm = () => ({ type: 'ssh' as 'ssh' | 'restapi', ip: activeHost.value?.ip ?? '', port: 22, username: '', ssh_auth_type: 'password', credential: '', passphrase: '', ssh_key_id: '', ssh_legacy: false, ssh_login_input: '', probe_port: 0, probe_interval: 30, base_url: '', rest_scheme: 'http' as 'http' | 'https', rest_path: '', rest_auth_type: 'none', rest_username: '', header_name: '', hmac_algo: 'HMAC-SHA256', knowledge_sources: [] as Array<{type:'group'|'doc';id:number}> })
 const faceForm = ref(emptyFaceForm())
 
 const allTags = computed(() => {
@@ -535,21 +545,21 @@ function bulkExecSelected() { router.push({ path: '/exec', query: { hosts: selec
 
 async function saveKnowledgeSources(face: AccessFace, sources: Array<{type: string; id: number}>) {
   if (!activeHost.value) return
-  const prev = face.knowledge_sources
-  face.knowledge_sources = sources as typeof face.knowledge_sources
   ksPickerFaceId.value = null
   try {
     await updateAccessFace(activeHost.value.id, face.id, { knowledge_sources: sources as typeof face.knowledge_sources })
+    faces.value = await listAccessFaces(activeHost.value.id)
   } catch {
-    face.knowledge_sources = prev
+    // keep existing state on error
   }
 }
 
 function toggleKnowledgeSource(face: AccessFace, groupId: number) {
   const exists = face.knowledge_sources.some(k => k.type === 'group' && k.id === groupId)
+  const base = face.knowledge_sources.filter(k => k.type !== 'none')
   const sources = exists
-    ? face.knowledge_sources.filter(k => !(k.type === 'group' && k.id === groupId))
-    : [...face.knowledge_sources, { type: 'group' as const, id: groupId }]
+    ? base.filter(k => !(k.type === 'group' && k.id === groupId))
+    : [...base, { type: 'group' as const, id: groupId }]
   saveKnowledgeSources(face, sources)
 }
 
@@ -590,7 +600,8 @@ async function submitFace() {
     req.ssh_legacy = faceForm.value.ssh_legacy
     req.ssh_login_input = faceForm.value.ssh_login_input || undefined
   } else {
-    req.base_url = faceForm.value.base_url || undefined
+    req.base_url = faceForm.value.rest_path || undefined
+    req.rest_scheme = faceForm.value.rest_scheme || 'http'
     req.rest_auth_type = faceForm.value.rest_auth_type
     req.rest_username = faceForm.value.rest_username || undefined
     req.credential = faceForm.value.credential || undefined
@@ -622,6 +633,8 @@ function startEditFace(face: AccessFace) {
     probe_port: face.probe_port || 0,
     probe_interval: face.probe_interval || 0,
     base_url: face.base_url || '',
+    rest_scheme: (face.rest_scheme || 'http') as 'http' | 'https',
+    rest_path: '',
     rest_auth_type: face.rest_auth_type || 'none',
     rest_username: face.rest_username || '',
     header_name: face.header_name || '',
@@ -829,6 +842,10 @@ onUnmounted(() => {
 .form-row { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
 .checkbox-label { display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; }
 .form-row label { font-size: 12px; font-weight: 600; color: var(--muted); }
+.label-hint { font-weight: 400; font-size: 11px; opacity: 0.7; }
+.base-url-row { display: flex; align-items: center; gap: 0; }
+.base-url-prefix { font-size: 13px; color: var(--muted); background: var(--bg-secondary, #f5f5f5); border: 1px solid var(--border); border-right: none; border-radius: 6px 0 0 6px; padding: 0 10px; height: 36px; line-height: 36px; white-space: nowrap; }
+.base-url-suffix { border-radius: 0 6px 6px 0 !important; flex: 1; }
 .modal-footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
 
 .btn { padding: 6px 14px; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; border: 1px solid var(--border); background: var(--surface); color: var(--text); transition: background 0.15s; }

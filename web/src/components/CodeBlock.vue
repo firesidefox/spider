@@ -7,7 +7,7 @@
     </template>
   </div>
   <!-- 非 wrap 模式：原有滚动行为 -->
-  <div v-else class="code-block">
+  <div v-else class="code-block" :class="{ fill }">
     <div class="line-numbers" ref="gutterRef">
       <div v-for="n in lineCount" :key="n" class="line-number">{{ n }}</div>
     </div>
@@ -34,6 +34,7 @@ const props = defineProps<{
   code: string
   html?: string
   wrap?: boolean
+  fill?: boolean
 }>()
 
 const gutterRef = ref<HTMLElement | null>(null)
@@ -55,6 +56,10 @@ watch(() => props.code, () => nextTick(syncScroll))
 .code-block {
   display: flex;
   overflow: hidden;
+}
+
+.code-block.fill {
+  height: 100%;
 }
 
 /* wrap 模式：grid 两列，行号列固定宽，内容列自动换行 */
@@ -100,6 +105,7 @@ watch(() => props.code, () => nextTick(syncScroll))
   border-right: 1px solid var(--border);
   padding: 14px 0;
   user-select: none;
+  align-self: stretch;
 }
 
 .line-number {
@@ -146,5 +152,9 @@ watch(() => props.code, () => nextTick(syncScroll))
   max-height: calc(3 * 1.7em + 28px);
   white-space: pre-wrap;
   word-break: break-all;
+}
+
+.fill .plain-output {
+  max-height: none;
 }
 </style>
