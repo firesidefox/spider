@@ -82,16 +82,34 @@
           <div class="detail-meta-line">
             来源: {{ activeDoc.name }} 块: {{ activeDoc.entry_count }} {{ formatDate(activeDoc.created_at) }}
           </div>
-          <div v-if="loadingContent" class="detail-content-placeholder">
+          <div v-if="loadingSections" class="detail-content-placeholder">
             <div class="detail-meta-text">加载中...</div>
           </div>
-          <div v-else-if="docContent" class="detail-content">
-            <pre style="white-space: pre-wrap; word-wrap: break-word; margin: 0; padding: 12px; background: #f5f5f5; border-radius: 4px; overflow: auto; max-height: 100%;">{{ docContent }}</pre>
+          <div v-else-if="sections.length > 0" class="detail-sections">
+            <div v-for="section in sections" :key="section.id" class="section-item">
+              <div class="section-header" @click="toggleSection(section.id)">
+                <span class="chevron">{{ expandedSections.has(section.id) ? '▼' : '▶' }}</span>
+                <span class="section-name">{{ section.name }}</span>
+                <span class="section-count">{{ section.entry_count }} 条目</span>
+              </div>
+              <div v-if="expandedSections.has(section.id)" class="section-entries">
+                <div v-if="loadingEntries.has(section.id)" class="entry-loading">加载中...</div>
+                <div v-else-if="entriesBySection[section.id]?.length" class="entry-list">
+                  <div v-for="entry in entriesBySection[section.id]" :key="entry.id"
+                    class="entry-item" :class="{ active: activeEntry?.id === entry.id }"
+                    @click="selectEntry(entry)">
+                    <div class="entry-title">{{ entry.title }}</div>
+                    <div class="entry-summary">{{ entry.summary }}</div>
+                  </div>
+                </div>
+                <div v-else class="entry-empty">无条目</div>
+              </div>
+            </div>
           </div>
           <div v-else class="detail-content-placeholder">
             <div class="detail-meta-icon">📄</div>
             <div class="detail-meta-text">{{ activeDoc.doc_type }} · {{ activeDoc.entry_count }} 条目已索引</div>
-            <div class="detail-hint">无内容</div>
+            <div class="detail-hint">无章节</div>
           </div>
         </div>
       </div>
@@ -181,8 +199,8 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import {
   listGroups, createGroup, deleteGroup, deleteGroups,
-  listDocuments, getDocument, deleteDocuments, importDocument, moveDocuments, reindexDocuments,
-  type KnowledgeGroup, type KnowledgeDocument,
+  listDocuments, getDocument, getSections, getEntries, deleteDocuments, importDocument, moveDocuments, reindexDocuments,
+  type KnowledgeGroup, type KnowledgeDocument, type KnowledgeSection, type KnowledgeEntry,
 } from '../api/knowledge'
 
 const fileInputRef = ref<HTMLInputElement | null>(null)
@@ -193,6 +211,13 @@ const activeDoc = ref<KnowledgeDocument | null>(null)
 const docContent = ref<string>('')
 const loadingContent = ref(false)
 const collapsedGroups = ref(new Set<number>())
+
+const sections = ref<KnowledgeSection[]>([])
+const loadingSections = ref(false)
+const expandedSections = ref(new Set<number>())
+const entriesBySection = ref<Record<number, KnowledgeEntry[]>>({})
+const loadingEntries = ref(new Set<number>())
+const activeEntry = ref<KnowledgeEntry | null>(null)
 
 const showNewGroup = ref(false)
 const newGroupName = ref('')
@@ -265,17 +290,19 @@ function onDocRowClick(doc: KnowledgeDocument) {
 
 watch(activeDoc, async (newDoc) => {
   if (!newDoc) {
-    docContent.value = ''
+    sections.value = []
+    expandedSections.value = new Set()
+    entriesBySection.value = {}
+    activeEntry.value = null
     return
   }
-  loadingContent.value = true
+  loadingSections.value = true
   try {
-    const fullDoc = await getDocument(newDoc.id)
-    docContent.value = fullDoc.raw_content || ''
+    sections.value = await getSections(newDoc.id)
   } catch (e: any) {
-    docContent.value = `加载失败: ${e.message}`
+    sections.value = []
   } finally {
-    loadingContent.value = false
+    loadingSections.value = false
   }
 })
 
@@ -284,6 +311,35 @@ function toggleGroup(id: number) {
   s.has(id) ? s.delete(id) : s.add(id)
   collapsedGroups.value = s
   if (!s.has(id) && !docsByGroup.value[id]) loadDocs(id)
+}
+
+async function toggleSection(sectionID: number) {
+  const s = new Set(expandedSections.value)
+  if (s.has(sectionID)) {
+    s.delete(sectionID)
+  } else {
+    s.add(sectionID)
+    if (!entriesBySection.value[sectionID]) {
+      const loading = new Set(loadingEntries.value)
+      loading.add(sectionID)
+      loadingEntries.value = loading
+      try {
+        const entries = await getEntries(sectionID)
+        entriesBySection.value = { ...entriesBySection.value, [sectionID]: entries }
+      } catch (e: any) {
+        entriesBySection.value = { ...entriesBySection.value, [sectionID]: [] }
+      } finally {
+        const loading = new Set(loadingEntries.value)
+        loading.delete(sectionID)
+        loadingEntries.value = loading
+      }
+    }
+  }
+  expandedSections.value = s
+}
+
+function selectEntry(entry: KnowledgeEntry) {
+  activeEntry.value = entry
 }
 
 async function loadGroups() {

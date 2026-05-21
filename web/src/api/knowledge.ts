@@ -21,6 +21,21 @@ export interface KnowledgeDocument {
   updated_at: string
 }
 
+export interface KnowledgeSection {
+  id: number
+  document_id: number
+  name: string
+  summary: string
+  position: number
+  entry_count: number
+}
+
+export interface KnowledgeEntry {
+  id: number
+  title: string
+  summary: string
+}
+
 export interface ImportResult {
   document_id: number
   entry_count: number
@@ -85,6 +100,16 @@ export async function listDocuments(groupID: number): Promise<KnowledgeDocument[
 export async function getDocument(docID: number): Promise<KnowledgeDocument> {
   const r = await fetch(`${BASE}/knowledge-documents/${docID}`, { headers: authHeaders() })
   return handleResponse<KnowledgeDocument>(r)
+}
+
+export async function getSections(docID: number): Promise<KnowledgeSection[]> {
+  const r = await fetch(`${BASE}/knowledge-documents/${docID}/sections`, { headers: authHeaders() })
+  return handleResponse<KnowledgeSection[]>(r)
+}
+
+export async function getEntries(sectionID: number): Promise<KnowledgeEntry[]> {
+  const r = await fetch(`${BASE}/knowledge-sections/${sectionID}/entries`, { headers: authHeaders() })
+  return handleResponse<KnowledgeEntry[]>(r)
 }
 
 export async function deleteDocuments(ids: number[]): Promise<void> {

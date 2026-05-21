@@ -60,19 +60,19 @@ type Document struct {
 
 // Section represents a logical section within a document.
 type Section struct {
-	ID         int
-	DocumentID int
-	Name       string
-	Summary    string
-	Position   int
-	EntryCount int
+	ID         int    `json:"id"`
+	DocumentID int    `json:"document_id"`
+	Name       string `json:"name"`
+	Summary    string `json:"summary"`
+	Position   int    `json:"position"`
+	EntryCount int    `json:"entry_count"`
 }
 
 // EntrySummary provides a lightweight view of an entry.
 type EntrySummary struct {
-	ID      int
-	Title   string
-	Summary string
+	ID      int    `json:"id"`
+	Title   string `json:"title"`
+	Summary string `json:"summary"`
 }
 
 // Entry represents a searchable knowledge entry.

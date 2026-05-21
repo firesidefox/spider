@@ -89,6 +89,8 @@ type docStore interface {
 	GetDocument(ctx context.Context, docID int) (*knowledge.Document, error)
 	DeleteDocuments(ctx context.Context, docIDs []int) error
 	MoveDocuments(ctx context.Context, docIDs []int, targetGroupID int) error
+	CatalogSections(ctx context.Context, scope knowledge.Scope) ([]knowledge.Section, error)
+	CatalogEntries(ctx context.Context, sectionID int) ([]knowledge.EntrySummary, error)
 }
 
 func getKnowledgeDocument(s docStore, w http.ResponseWriter, r *http.Request, docIDStr string) {
@@ -107,6 +109,41 @@ func getKnowledgeDocument(s docStore, w http.ResponseWriter, r *http.Request, do
 		return
 	}
 	writeJSON(w, http.StatusOK, doc)
+}
+
+func getKnowledgeDocumentSections(s docStore, w http.ResponseWriter, r *http.Request, docIDStr string) {
+	docID, err := strconv.Atoi(docIDStr)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid document id")
+		return
+	}
+	scope := knowledge.Scope{Type: "document", ID: docID}
+	sections, err := s.CatalogSections(r.Context(), scope)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if sections == nil {
+		sections = []knowledge.Section{}
+	}
+	writeJSON(w, http.StatusOK, sections)
+}
+
+func getKnowledgeSectionEntries(s docStore, w http.ResponseWriter, r *http.Request, sectionIDStr string) {
+	sectionID, err := strconv.Atoi(sectionIDStr)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid section id")
+		return
+	}
+	entries, err := s.CatalogEntries(r.Context(), sectionID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if entries == nil {
+		entries = []knowledge.EntrySummary{}
+	}
+	writeJSON(w, http.StatusOK, entries)
 }
 
 func listKnowledgeGroupDocuments(s docStore, w http.ResponseWriter, r *http.Request, groupIDStr string) {

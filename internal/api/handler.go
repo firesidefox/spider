@@ -537,12 +537,36 @@ func NewRouter(app *mcppkg.App) http.Handler {
 	// Knowledge documents
 	mux.HandleFunc("/api/v1/knowledge-documents/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet {
-			docID := strings.TrimPrefix(r.URL.Path, "/api/v1/knowledge-documents/")
-			if docID == "" {
+			rest := strings.TrimPrefix(r.URL.Path, "/api/v1/knowledge-documents/")
+			if rest == "" {
 				http.NotFound(w, r)
 				return
 			}
-			getKnowledgeDocument(app.KnowledgeStore, w, r, docID)
+			// Check for /sections suffix
+			if strings.HasSuffix(rest, "/sections") {
+				docID := strings.TrimSuffix(rest, "/sections")
+				getKnowledgeDocumentSections(app.KnowledgeStore, w, r, docID)
+				return
+			}
+			getKnowledgeDocument(app.KnowledgeStore, w, r, rest)
+			return
+		}
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	})
+	mux.HandleFunc("/api/v1/knowledge-sections/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			rest := strings.TrimPrefix(r.URL.Path, "/api/v1/knowledge-sections/")
+			if rest == "" {
+				http.NotFound(w, r)
+				return
+			}
+			// Check for /entries suffix
+			if strings.HasSuffix(rest, "/entries") {
+				sectionID := strings.TrimSuffix(rest, "/entries")
+				getKnowledgeSectionEntries(app.KnowledgeStore, w, r, sectionID)
+				return
+			}
+			http.NotFound(w, r)
 			return
 		}
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)

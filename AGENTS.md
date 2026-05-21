@@ -1,71 +1,71 @@
 <claude-mem-context>
 # Memory Context
 
-# [spider.ai] recent context, 2026-05-21 4:36pm GMT+8
+# [spider.ai] recent context, 2026-05-21 11:06pm GMT+8
 
 Legend: 🎯session 🔴bugfix 🟣feature 🔄refactor ✅change 🔵discovery ⚖️decision
 Format: ID TIME TYPE TITLE
 Fetch details: get_observations([IDs]) | Search: mem-search skill
 
 ### May 21, 2026
-S3292 spider.ai knowledge Store interface — full method set confirmed (May 21 at 1:26 PM)
-S3296 spider.ai — 知识库文档管理：选择模式按钮改为编辑按钮，含批量删除和移动文档功能 (May 21 at 1:28 PM)
-S3301 spider.ai — KB vs Group 概念合并方向讨论 (May 21 at 1:28 PM)
-S3294 spider.ai — 知识库文档管理：选择模式按钮改为编辑按钮，含批量删除和移动文档功能 (May 21 at 1:28 PM)
-S3302 spider.ai — KB vs Group 概念合并：决定砍掉 Group，保留 KB (May 21 at 1:30 PM)
-S3308 spider.ai — 砍掉 Group，保留 KB 作为核心隔离单元 (May 21 at 1:31 PM)
-S3335 spider.ai — 知识库两层重构完成 (KB→Group→Doc 改为 Group→Doc) (May 21 at 1:34 PM)
-6247 1:45p 🔴 store_test.go: TestCascadeDelete and TestListDocuments updated to remove KB dependency
-6248 2:08p 🔄 KnowledgeView sidebar flattened — removed KB layer
-6249 2:10p 🔄 knowledge.ts API — removed KB layer, groups now top-level
-6250 " 🔄 KnowledgeView.vue script — stale KB state and dead code remain
-6251 " 🔄 KnowledgeView.vue — removed 新建知识库 modal from template
-6253 2:11p 🔵 移动到分组 modal still uses stale kbs/groupsByKB refs
-6255 " 🔄 KnowledgeView.vue script section fully cleaned up — KB state removed
-6256 2:15p 🔵 Backend knowledge model confirmed flat — Group top-level, Document references GroupID
-6257 2:16p 🔵 Database schema for knowledge system uses flat Group-Document hierarchy
-6258 " 🔵 Database schema confirms flat Group-Document hierarchy with no KB abstraction
-6260 2:17p ✅ Frontend build succeeds after KB layer removal from KnowledgeView.vue
-6261 " ✅ Go backend builds cleanly after KB layer removal refactor
-6262 " ✅ spider.ai test server started on port 8003 for post-refactor verification
-6263 2:18p 🔴 GET /api/v1/knowledge-groups returns "method not allowed" — auth middleware blocking unauthenticated requests
-6264 " 🔵 Port 8003 already in use — test server failed to start, curl hit existing process
-6265 " ✅ GET /api/v1/knowledge-groups returns [] — flat model API verified at runtime
-6267 " ✅ Playwright E2E test script written to verify flat KB UI hierarchy
-6268 2:19p 🔵 Login fails on port 8004 test server — console error after clicking 登录
-6269 2:20p 🔵 Login returns 401 on port 8004 — admin/admin credentials invalid for test data dir
-6270 2:21p 🔵 Login API returns "method not allowed" for POST — auth endpoint routing issue on port 8004
-6271 2:22p 🔵 Admin password is bcrypt hash — "admin" plaintext invalid for existing data dir
-6272 " 🔴 knowledge_groups table has kb_id NOT NULL column — schema mismatch with refactored code
-6274 " ✅ knowledge_groups table migrated — kb_id column removed from existing database
-6275 " ✅ knowledge_groups schema migration verified — kb_id column gone, flat schema confirmed
-6276 2:23p ✅ POST /api/v1/knowledge-groups works after migration — group created successfully
-6277 " 🔵 spider.ai uses idempotent ALTER TABLE migrations — no migration for knowledge_groups kb_id removal
-6278 2:24p ✅ Automated migration added to schema.go — removes kb_id from knowledge_groups on startup
-S3339 spider.ai — 9 knowledge refactor files staged for commit (May 21 at 2:24 PM)
-6281 3:38p 🔄 spider.ai — ListHosts renamed to GetHosts across codebase
-6282 " 🔵 spider.ai — 21 files with unstaged changes, 293 commits ahead of origin
-6284 3:40p 🔴 spider.ai — agent test build failure: stale API calls in tools_docs_test.go
-6285 " 🟣 spider.ai — RESTScheme field added to AccessFace model and store
-6286 3:41p 🔄 spider.ai — Knowledge API routes restructured: /knowledge-bases removed, /knowledge-groups promoted
-6287 " 🔵 spider.ai — knowledge.Store API: CreateKB removed, CreateGroup signature changed
-6291 " ✅ spider.ai — 9 knowledge refactor files staged for commit
-S3338 spider.ai — knowledge group batch edit feature complete, all tasks done (May 21 at 3:41 PM)
-6288 " 🔴 spider.ai — tools_docs_test.go fixed: stale CreateKB/CreateGroup calls updated
-6289 " 🔵 spider.ai — knowledge API routes confirmed in handler.go
-6290 3:42p 🟣 spider.ai — knowledge group batch edit feature complete, all tasks done
-6293 3:55p ✅ spider.ai — SearchDocs tests updated after KB layer removal
-6294 3:56p ✅ spider.ai — knowledge base docs, plans, and markdown parser test committed
-S3345 spider.ai — knowledge base docs, plans, and markdown parser test committed (May 21 at 3:56 PM)
-6296 4:28p ✅ spec review requested — system prompt cache rebuild
-6298 " 🔵 spider.ai — system prompt cache rebuild spec fully read
-6299 4:29p ✅ spider.ai — spec review: system prompt cache rebuild
-6300 4:30p ✅ spider.ai — spec review: system prompt cache rebuild
-6301 " ✅ spider.ai — spec review: system prompt cache rebuild
-6302 " 🔵 spider.ai — agent HookChain architecture confirmed
-6304 " 🔵 spider.ai — system prompt build and agent creation flow confirmed
-6305 4:31p ✅ spider.ai — spec review: system prompt cache rebuild
-6306 " 🔵 GetHostsTool filters by selectedHostIDs after listing
-6308 4:32p 🔵 spider.ai — system prompt cache rebuild spec: implementation order and test requirements
-6310 " 🔵 SearchDocsTool nil guard is on embedder, not knowledgeStore
+S3400 spider.ai spec files inventory (May 21 at 8:32 PM)
+S3401 System prompt cache rebuild plan has 7 tasks with 37 uncompleted steps (May 21 at 8:33 PM)
+S3407 spider.ai — implementation plan marked complete at __CONTINUE_HERE__ marker (May 21 at 8:34 PM)
+S3408 Excalidraw diagram creation request received (May 21 at 8:44 PM)
+S3416 UI implementation mismatch with mockup design (May 21 at 9:14 PM)
+S3422 Compare knowledge base redesign mockup with current implementation to identify feature gaps and missing functionality (May 21 at 9:42 PM)
+S3442 Implement backend API for document content display in knowledge base (May 21 at 10:04 PM)
+S3420 Compare knowledge base redesign mockup with current implementation to identify gaps (May 21 at 10:04 PM)
+6537 10:11p 🔵 File upload state management enables import button after file selection
+6540 10:12p 🔵 Document import creates duplicate entries in knowledge base
+6542 " ✅ Knowledge base UI screenshot captured for verification
+6544 10:13p ✅ Development server stopped after UI verification
+6545 10:38p 🟣 Document content display implementation continued
+6546 " 🔵 Knowledge documents store raw content in database
+6549 " 🔵 Knowledge documents database schema confirmed with raw_content TEXT field
+6550 10:48p 🔵 Document content API endpoint missing from backend
+6551 " 🔵 Backend GetDocument method fully implemented with raw_content retrieval
+6553 " ⚖️ Planned implementation tasks for document content display feature
+6554 " 🔵 Knowledge documents route uses path-based method dispatch pattern
+6555 " 🔵 Knowledge base refactor missing backend implementation
+6556 " 🟣 Document content display API endpoint implemented
+6558 10:49p 🟣 Document content display feature fully implemented
+6560 10:52p 🔵 Knowledge base refactor missing backend implementation
+6562 " 🔵 Knowledge base backend uses plugin architecture without MCP exposure
+6563 " 🔵 Knowledge base refactor missing backend implementation
+6564 10:53p 🔵 Knowledge base refactor missing backend implementation
+6565 " 🔵 Knowledge base refactor missing backend implementation
+6567 10:54p 🔵 Knowledge base refactor missing backend implementation
+6568 " 🔵 Knowledge base refactor missing backend implementation
+6569 " 🟣 Document content display implemented in knowledge base
+S3444 Document content display feature committed to main branch (May 21 at 10:55 PM)
+6571 10:57p 🔵 Knowledge base refactor missing backend implementation
+6573 " 🟣 Document content display API endpoint implemented
+6574 " 🟣 Global document import with group selection added
+6575 " 🟣 Search and filter inputs added to knowledge base sidebar
+6576 " 🟣 Vue watch hook fetches document content on selection
+6577 " 🔴 Knowledge clustering falls back to single section on LLM failure
+6578 10:58p ✅ Document content display feature committed to main branch
+6579 " ✅ Clustering fallback feature committed to main branch
+6580 10:59p ⚖️ Brainstorming session initiated
+6582 " 🔵 Brainstorming skill workflow invoked for spider.ai project
+6583 " 🔵 spider.ai project context exploration completed
+6584 11:00p ⚖️ Brainstorming session initiated
+6585 " ✅ Brainstorming session initiated
+6586 " ✅ Brainstorming workflow plan initialized for spider.ai project
+6587 " 🔵 Knowledge base implementation progress tracked across 7 files
+6588 " 🔵 Knowledge base documentation structure discovered
+6589 " 🔵 Knowledge base redesign spec defines 4-tier hierarchy with access face binding
+6590 " 🔵 Knowledge base implements 3-level catalog retrieval with vector search fallback
+6591 " 🔵 Knowledge base plugin interface defines Go contract for in-process integration
+6593 11:01p 🔵 Knowledge base catalog and search methods implemented in store layer
+S3447 Knowledge base catalog and search methods implemented in store layer (May 21 at 11:01 PM)
+6594 11:02p 🔵 Knowledge base refactor missing backend implementation
+6595 " 🟣 Knowledge base hierarchical content display implementation planned
+6596 " 🟣 Backend API handlers for sections and entries endpoints implemented
+6597 11:03p ✅ Mock store updated to implement new interface methods
+6599 " 🟣 REST routes registered for sections and entries endpoints
+6600 11:04p 🟣 Frontend API client functions for sections and entries added
+6601 " 🟣 UI template updated to display hierarchical sections and entries
+6602 11:05p ⚖️ Brainstorming session initiated
 </claude-mem-context>

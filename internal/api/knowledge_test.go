@@ -91,6 +91,14 @@ func (m *mockKBStore) MoveDocuments(_ context.Context, docIDs []int, targetGroup
 	return nil
 }
 
+func (m *mockKBStore) CatalogSections(_ context.Context, scope knowledge.Scope) ([]knowledge.Section, error) {
+	return []knowledge.Section{}, nil
+}
+
+func (m *mockKBStore) CatalogEntries(_ context.Context, sectionID int) ([]knowledge.EntrySummary, error) {
+	return []knowledge.EntrySummary{}, nil
+}
+
 func TestListKnowledgeGroups(t *testing.T) {
 	mock := newMockKBStore()
 	mock.CreateGroup(context.Background(), "AISG")
