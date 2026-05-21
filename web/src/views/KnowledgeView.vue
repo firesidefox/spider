@@ -7,7 +7,13 @@
           <button v-if="!selectMode" class="btn btn-sm" @click="enterSelectMode">选择</button>
           <button v-else class="btn btn-sm" @click="exitSelectMode">完成</button>
           <button v-if="!selectMode" class="btn btn-primary btn-sm" @click="showNewGroup = true">+ 分组</button>
+          <button v-if="!selectMode" class="btn btn-primary btn-sm" @click="showGlobalImport = true">+ 导入</button>
         </div>
+      </div>
+      <div class="sidebar-filters">
+        <input v-model="searchQuery" class="filter-input" placeholder="语义搜索文档内容..." />
+        <input v-model="vendorFilter" class="filter-input" placeholder="按 vendor 过滤..." />
+        <input v-model="tagFilter" class="filter-input" placeholder="按 tag 过滤..." />
       </div>
       <div v-if="selectMode" class="select-toolbar">
         <span class="select-info">{{ selectionLabel }}</span>
@@ -72,9 +78,21 @@
             @click="doDeleteDoc(activeDoc)">删除</button>
         </div>
         <div v-if="activeDoc.error_msg" class="detail-error">{{ activeDoc.error_msg }}</div>
-        <div class="detail-empty" v-else>
-          <div class="detail-empty-icon">📄</div>
-          <div>{{ activeDoc.doc_type }} · {{ activeDoc.entry_count }} 条目已索引</div>
+        <div v-else class="detail-body">
+          <div class="detail-meta-line">
+            来源: {{ activeDoc.name }} 块: {{ activeDoc.entry_count }} {{ formatDate(activeDoc.created_at) }}
+          </div>
+          <div v-if="loadingContent" class="detail-content-placeholder">
+            <div class="detail-meta-text">加载中...</div>
+          </div>
+          <div v-else-if="docContent" class="detail-content">
+            <pre style="white-space: pre-wrap; word-wrap: break-word; margin: 0; padding: 12px; background: #f5f5f5; border-radius: 4px; overflow: auto; max-height: 100%;">{{ docContent }}</pre>
+          </div>
+          <div v-else class="detail-content-placeholder">
+            <div class="detail-meta-icon">📄</div>
+            <div class="detail-meta-text">{{ activeDoc.doc_type }} · {{ activeDoc.entry_count }} 条目已索引</div>
+            <div class="detail-hint">无内容</div>
+          </div>
         </div>
       </div>
       <div v-else class="detail-empty">
@@ -122,9 +140,18 @@
     </div>
 
     <!-- 导入弹窗 -->
-    <div v-if="showImport" class="modal-overlay" @click.self="showImport = false">
+    <div v-if="showImport || showGlobalImport" class="modal-overlay" @click.self="closeImport">
       <div class="modal">
         <h3>导入文档</h3>
+        <div v-if="showGlobalImport" class="form-row">
+          <label>目标分组</label>
+          <select v-model.number="importGroupID" class="input">
+            <option :value="0" disabled>选择分组…</option>
+            <option v-for="g in groups" :key="g.id" :value="g.id">
+              {{ g.name }}
+            </option>
+          </select>
+        </div>
         <div class="file-drop-zone"
           @dragover.prevent @drop.prevent="onDrop"
           @click="fileInputRef?.click()">
@@ -140,8 +167,8 @@
         </div>
         <div v-if="importErr" class="err" style="margin-top:8px">{{ importErr }}</div>
         <div class="modal-footer">
-          <button class="btn" @click="showImport = false; importFiles = []">取消</button>
-          <button class="btn btn-primary" :disabled="importing || importFiles.length === 0" @click="doImport">
+          <button class="btn" @click="closeImport">取消</button>
+          <button class="btn btn-primary" :disabled="importing || importFiles.length === 0 || (showGlobalImport && !importGroupID)" @click="doImport">
             {{ importing ? '导入中…' : '导入' }}
           </button>
         </div>
@@ -151,10 +178,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import {
   listGroups, createGroup, deleteGroup, deleteGroups,
-  listDocuments, deleteDocuments, importDocument, moveDocuments, reindexDocuments,
+  listDocuments, getDocument, deleteDocuments, importDocument, moveDocuments, reindexDocuments,
   type KnowledgeGroup, type KnowledgeDocument,
 } from '../api/knowledge'
 
@@ -163,6 +190,8 @@ const fileInputRef = ref<HTMLInputElement | null>(null)
 const groups = ref<KnowledgeGroup[]>([])
 const docsByGroup = ref<Record<number, KnowledgeDocument[]>>({})
 const activeDoc = ref<KnowledgeDocument | null>(null)
+const docContent = ref<string>('')
+const loadingContent = ref(false)
 const collapsedGroups = ref(new Set<number>())
 
 const showNewGroup = ref(false)
@@ -185,6 +214,11 @@ const moveTargetGroupID = ref(0)
 const batching = ref(false)
 const batchErr = ref('')
 const reindexing = ref(false)
+
+const searchQuery = ref('')
+const vendorFilter = ref('')
+const tagFilter = ref('')
+const showGlobalImport = ref(false)
 
 const docsSelectedCount = computed(() => selectedDocs.value.size)
 const hasSelection = computed(() =>
@@ -228,6 +262,22 @@ function onDocRowClick(doc: KnowledgeDocument) {
     activeDoc.value = doc
   }
 }
+
+watch(activeDoc, async (newDoc) => {
+  if (!newDoc) {
+    docContent.value = ''
+    return
+  }
+  loadingContent.value = true
+  try {
+    const fullDoc = await getDocument(newDoc.id)
+    docContent.value = fullDoc.raw_content || ''
+  } catch (e: any) {
+    docContent.value = `加载失败: ${e.message}`
+  } finally {
+    loadingContent.value = false
+  }
+})
 
 function toggleGroup(id: number) {
   const s = new Set(collapsedGroups.value)
@@ -276,6 +326,13 @@ function openImport(groupID: number) {
   showImport.value = true
 }
 
+function closeImport() {
+  showImport.value = false
+  showGlobalImport.value = false
+  importFiles.value = []
+  importErr.value = ''
+}
+
 function onFileSelected(e: Event) {
   const files = (e.target as HTMLInputElement).files
   if (!files) return
@@ -312,8 +369,7 @@ async function doImport() {
   importing.value = false
   await loadDocs(importGroupID.value)
   if (!anyError) {
-    showImport.value = false
-    importFiles.value = []
+    closeImport()
   }
 }
 
@@ -411,6 +467,15 @@ async function doReindex(doc: KnowledgeDocument) {
   }
 }
 
+function formatDate(dateStr: string): string {
+  const d = new Date(dateStr)
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  const hour = String(d.getHours()).padStart(2, '0')
+  const minute = String(d.getMinutes()).padStart(2, '0')
+  return `${month}/${day} ${hour}:${minute}`
+}
+
 onMounted(loadGroups)
 </script>
 
@@ -428,6 +493,16 @@ onMounted(loadGroups)
 }
 .sidebar-title { font-size: 13px; font-weight: 700; color: var(--text); }
 .sidebar-actions { display: flex; gap: 6px; }
+.sidebar-filters {
+  padding: 8px 12px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.filter-input {
+  width: 100%; padding: 6px 10px; font-size: 12px;
+  border: 1px solid var(--border); border-radius: 4px;
+  background: var(--surface); color: var(--text);
+}
+.filter-input::placeholder { color: var(--muted); }
 .select-toolbar {
   display: flex; align-items: center; justify-content: space-between;
   padding: 8px 12px; border-bottom: 1px solid var(--border);
@@ -503,6 +578,24 @@ onMounted(loadGroups)
 .detail-title { font-size: 15px; font-weight: 700; color: var(--text); }
 .entry-count { font-size: 12px; color: var(--text-sub); }
 .detail-error { padding: 16px 20px; color: #dc2626; font-size: 13px; }
+.detail-body {
+  flex: 1; display: flex; flex-direction: column; overflow: hidden; min-height: 0;
+}
+.detail-meta-line {
+  padding: 12px 20px; border-bottom: 1px solid var(--border);
+  font-size: 12px; color: var(--text-sub); background: var(--surface);
+}
+.detail-content-placeholder {
+  flex: 1; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 12px;
+}
+.detail-meta {
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  color: var(--label); font-size: 14px;
+}
+.detail-meta-icon { font-size: 36px; opacity: 0.5; }
+.detail-meta-text { text-align: center; color: var(--label); font-size: 14px; }
+.detail-hint { font-size: 12px; color: var(--muted); font-style: italic; }
 .detail-empty {
   flex: 1; display: flex; flex-direction: column; align-items: center;
   justify-content: center; gap: 12px; color: var(--label); font-size: 14px;

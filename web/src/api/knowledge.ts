@@ -13,6 +13,7 @@ export interface KnowledgeDocument {
   group_id: number
   name: string
   doc_type: string
+  raw_content: string
   status: string
   error_msg: string
   entry_count: number
@@ -38,7 +39,11 @@ async function handleResponse<T>(r: Response): Promise<T> {
     }
     throw new Error(msg)
   }
-  return r.json()
+  if (r.status === 204) return undefined as T
+
+  const text = await r.text()
+  if (!text) return undefined as T
+  return JSON.parse(text) as T
 }
 
 export async function listGroups(): Promise<KnowledgeGroup[]> {
@@ -75,6 +80,11 @@ export async function deleteGroups(ids: number[]): Promise<void> {
 export async function listDocuments(groupID: number): Promise<KnowledgeDocument[]> {
   const r = await fetch(`${BASE}/knowledge-groups/${groupID}/documents`, { headers: authHeaders() })
   return handleResponse<KnowledgeDocument[]>(r)
+}
+
+export async function getDocument(docID: number): Promise<KnowledgeDocument> {
+  const r = await fetch(`${BASE}/knowledge-documents/${docID}`, { headers: authHeaders() })
+  return handleResponse<KnowledgeDocument>(r)
 }
 
 export async function deleteDocuments(ids: number[]): Promise<void> {
@@ -120,4 +130,3 @@ export async function importDocument(groupID: number, file: File): Promise<Impor
   })
   return handleResponse<ImportResult>(r)
 }
-

@@ -91,6 +91,24 @@ type docStore interface {
 	MoveDocuments(ctx context.Context, docIDs []int, targetGroupID int) error
 }
 
+func getKnowledgeDocument(s docStore, w http.ResponseWriter, r *http.Request, docIDStr string) {
+	docID, err := strconv.Atoi(docIDStr)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid document id")
+		return
+	}
+	doc, err := s.GetDocument(r.Context(), docID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if doc == nil {
+		writeError(w, http.StatusNotFound, "document not found")
+		return
+	}
+	writeJSON(w, http.StatusOK, doc)
+}
+
 func listKnowledgeGroupDocuments(s docStore, w http.ResponseWriter, r *http.Request, groupIDStr string) {
 	groupID, err := strconv.Atoi(groupIDStr)
 	if err != nil {
