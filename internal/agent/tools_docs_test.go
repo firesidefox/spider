@@ -77,8 +77,7 @@ func TestSearchDocsSectionsMode(t *testing.T) {
 	ctx := context.Background()
 
 	// Create test data
-	kb, _ := s.CreateKB(ctx, "TestKB")
-	group, _ := s.CreateGroup(ctx, kb.ID, "TestGroup")
+	group, _ := s.CreateGroup(ctx, "TestGroup")
 
 	// Insert document directly
 	res, err := db.ExecContext(ctx,
@@ -151,8 +150,7 @@ func TestSearchDocsEntriesMode(t *testing.T) {
 	ctx := context.Background()
 
 	// Create test data
-	kb, _ := s.CreateKB(ctx, "TestKB")
-	group, _ := s.CreateGroup(ctx, kb.ID, "TestGroup")
+	group, _ := s.CreateGroup(ctx, "TestGroup")
 	res, _ := db.ExecContext(ctx,
 		`INSERT INTO knowledge_documents (group_id, name, doc_type, raw_content, filename, status, created_at, updated_at)
 		 VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
@@ -209,8 +207,7 @@ func TestSearchDocsFetchMode(t *testing.T) {
 	ctx := context.Background()
 
 	// Create test data
-	kb, _ := s.CreateKB(ctx, "TestKB")
-	group, _ := s.CreateGroup(ctx, kb.ID, "TestGroup")
+	group, _ := s.CreateGroup(ctx, "TestGroup")
 	res, _ := db.ExecContext(ctx,
 		`INSERT INTO knowledge_documents (group_id, name, doc_type, raw_content, filename, status, created_at, updated_at)
 		 VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
@@ -269,8 +266,7 @@ func TestSearchDocsSearchMode(t *testing.T) {
 	ctx := context.Background()
 
 	// Create test data
-	kb, _ := s.CreateKB(ctx, "TestKB")
-	group, _ := s.CreateGroup(ctx, kb.ID, "TestGroup")
+	group, _ := s.CreateGroup(ctx, "TestGroup")
 	res, _ := db.ExecContext(ctx,
 		`INSERT INTO knowledge_documents (group_id, name, doc_type, raw_content, filename, status, created_at, updated_at)
 		 VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
