@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/binary"
 	"fmt"
+	"log/slog"
 	"math"
 	"sort"
 	"strings"
@@ -627,12 +628,24 @@ func (s *Store) parseEntries(ctx context.Context, docType string, req ImportRequ
 func (s *Store) clusterToSections(ctx context.Context, entries []ParsedEntry, req ImportRequest) (*ClusterResult, error) {
 	if req.LLMClient == nil {
 		// No LLM: single section containing all entries
-		ids := makeRange(0, len(entries))
-		return &ClusterResult{
-			Sections: []ClusteredSection{{Name: "All Entries", Summary: "", EntryIDs: ids}},
-		}, nil
+		return singleSectionCluster(entries), nil
 	}
-	return ClusterEntries(ctx, req.LLMClient, entries)
+	cluster, err := ClusterEntries(ctx, req.LLMClient, entries)
+	if err != nil {
+		slog.WarnContext(ctx, "knowledge clustering failed; falling back to single section", "error", err)
+		return singleSectionCluster(entries), nil
+	}
+	return cluster, nil
+}
+
+func singleSectionCluster(entries []ParsedEntry) *ClusterResult {
+	return &ClusterResult{
+		Sections: []ClusteredSection{{
+			Name:     "All Entries",
+			Summary:  "",
+			EntryIDs: makeRange(0, len(entries)),
+		}},
+	}
 }
 
 // writeSectionsAndEntries persists sections and entries to the DB, generating embeddings if available.

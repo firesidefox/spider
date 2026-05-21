@@ -42,7 +42,7 @@ func ClusterEntries(ctx context.Context, client llm.Client, entries []ParsedEntr
 		Messages: []llm.Message{
 			{Role: llm.RoleUser, Content: prompt},
 		},
-		MaxTokens: 2048,
+		MaxTokens: 8192,
 	}
 
 	raw, err := client.Chat(ctx, req)

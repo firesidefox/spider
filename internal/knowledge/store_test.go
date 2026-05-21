@@ -8,11 +8,11 @@ import (
 	"math"
 	"testing"
 
-	_ "modernc.org/sqlite"
 	"github.com/spiderai/spider/internal/db"
 	"github.com/spiderai/spider/internal/knowledge"
 	"github.com/spiderai/spider/internal/llm"
 	"github.com/spiderai/spider/internal/rag"
+	_ "modernc.org/sqlite"
 )
 
 func newTestDB(t *testing.T) *sql.DB {
@@ -822,6 +822,58 @@ paths:
 	}
 	if doc.EntryCount != 2 {
 		t.Fatalf("expected entry_count=2, got %d", doc.EntryCount)
+	}
+}
+
+func TestImportDocumentFallsBackWhenClusteringJSONInvalid(t *testing.T) {
+	s := knowledge.NewStore(newTestDB(t))
+	ctx := context.Background()
+
+	g, _ := s.CreateGroup(ctx, "TestGroup")
+
+	content := []byte(`openapi: "3.0.0"
+info:
+  title: Test API
+  version: "1.0"
+paths:
+  /users:
+    get:
+      summary: List users
+      operationId: listUsers
+  /users/{id}:
+    get:
+      summary: Get user by ID
+      operationId: getUser
+`)
+
+	req := knowledge.ImportRequest{
+		GroupID:   g.ID,
+		Name:      "Test API",
+		Content:   content,
+		Filename:  "api.yaml",
+		LLMClient: &mockLLMClient{response: `{"sections": [`},
+	}
+
+	result, err := s.ImportDocument(ctx, req)
+	if err != nil {
+		t.Fatalf("ImportDocument failed: %v", err)
+	}
+	if result.EntryCount != 2 {
+		t.Fatalf("expected 2 entries, got %d", result.EntryCount)
+	}
+	if result.SectionCount != 1 {
+		t.Fatalf("expected fallback section, got %d sections", result.SectionCount)
+	}
+
+	doc, err := s.GetDocument(ctx, result.DocumentID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if doc.Status != "ready" {
+		t.Fatalf("expected status=ready, got %s error=%s", doc.Status, doc.ErrorMsg)
+	}
+	if doc.ErrorMsg != "" {
+		t.Fatalf("expected empty error message, got %q", doc.ErrorMsg)
 	}
 }
 
