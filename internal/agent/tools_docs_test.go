@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"math"
+	"strings"
 	"testing"
 
 	_ "modernc.org/sqlite"
@@ -394,5 +395,23 @@ func TestSearchDocsErrorCases(t *testing.T) {
 				t.Errorf("expected error %q, got %q", tt.wantError, result.Content)
 			}
 		})
+	}
+}
+
+func TestSearchDocsToolNilStore(t *testing.T) {
+	tool := NewSearchDocsTool(nil, nil)
+	result, err := tool.Execute(context.Background(), map[string]any{
+		"mode":       "sections",
+		"scope_type": "group",
+		"scope_id":   1,
+	})
+	if err != nil {
+		t.Fatalf("Execute returned error: %v", err)
+	}
+	if !result.IsError {
+		t.Error("Expected IsError=true when store is nil")
+	}
+	if !strings.Contains(result.Content, "not configured") {
+		t.Errorf("Expected 'not configured' in content, got: %s", result.Content)
 	}
 }

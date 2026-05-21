@@ -123,3 +123,19 @@ func TestTodoTool_UnknownAction(t *testing.T) {
 		t.Error("expected error for unknown action")
 	}
 }
+
+func TestTodoToolNilStore(t *testing.T) {
+	tool := NewTodoTool(nil, nil, "test-conv")
+	result, err := tool.Execute(context.Background(), map[string]any{
+		"action":  "list",
+	})
+	if err != nil {
+		t.Fatalf("Execute returned error: %v", err)
+	}
+	if !result.IsError {
+		t.Error("Expected IsError=true when store is nil")
+	}
+	if !strings.Contains(result.Content, "not configured") {
+		t.Errorf("Expected 'not configured' in content, got: %s", result.Content)
+	}
+}

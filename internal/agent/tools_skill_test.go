@@ -62,3 +62,19 @@ func TestInvokeSkillTool_Execute_MissingName(t *testing.T) {
 		t.Error("expected IsError=true for missing name")
 	}
 }
+
+func TestInvokeSkillToolNilManager(t *testing.T) {
+	tool := &InvokeSkillTool{manager: nil}
+	result, err := tool.Execute(context.Background(), map[string]any{
+		"name": "test-skill",
+	})
+	if err != nil {
+		t.Fatalf("Execute returned error: %v", err)
+	}
+	if !result.IsError {
+		t.Error("Expected IsError=true when manager is nil")
+	}
+	if !strings.Contains(result.Content, "not configured") {
+		t.Errorf("Expected 'not configured' in content, got: %s", result.Content)
+	}
+}
