@@ -3,6 +3,7 @@ defineOptions({ name: 'ChatView' })
 import { ref, onMounted, onActivated, onDeactivated, onUnmounted, nextTick, computed, provide } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ChatMessage from '../components/ChatMessage.vue'
+import RuntimeStatusBar from '../components/RuntimeStatusBar.vue'
 import type { MessageBlock, ToolCallBlock } from '../components/ChatMessage.vue'
 import TargetPanel from '../components/TargetPanel.vue'
 import type { DeviceStatus } from '../components/TargetPanel.vue'
@@ -17,7 +18,7 @@ import {
 import { listHosts, type Host } from '../api/hosts'
 import { authHeaders, getUIPrefs, setUIPrefs } from '../api/auth'
 import { listGroups, listDocumentsByGroup, type DocumentGroup, type Document as KbDocument } from '../api/documents'
-import { updateAgentStatus, type AgentStatus } from '../composables/useAgentStatus'
+import { updateAgentStatus, useAgentStatus, type AgentStatus } from '../composables/useAgentStatus'
 import {
   chatThemes, densityPresets,
   getSavedChatTheme, saveChatTheme,
@@ -75,6 +76,12 @@ async function doExport(format: 'md' | 'json') {
 const activeConvId = ref<string | null>(null)
 const messagesMap = ref<Record<string, DisplayMessage[]>>({})
 const messages = computed(() => messagesMap.value[activeConvId.value ?? ''] ?? [])
+
+const { statuses: agentStatuses } = useAgentStatus()
+const currentAgentStatus = computed(() => {
+  const id = activeConvId.value
+  return id ? agentStatuses.value.get(id) ?? null : null
+})
 
 function getOrInitMessages(convId: string): DisplayMessage[] {
   if (!messagesMap.value[convId]) {
@@ -1289,6 +1296,8 @@ onUnmounted(() => {
         <span class="queued-message-text">{{ i + 1 }}: {{ qm }}</span>
       </div>
 
+      <RuntimeStatusBar v-if="isStreaming" :status="currentAgentStatus" />
+
       <div class="chat-input">
         <div class="input-wrapper">
           <div v-if="kbDropdownMode" class="kb-dropdown">
@@ -1304,6 +1313,7 @@ onUnmounted(() => {
             v-model="inputText"
             @keydown.enter.exact.prevent="send()"
             @keydown="onTextareaKeydown"
+            @keydown.escape.stop="isStreaming && cancelSend()"
             @input="onTextareaInput"
             :placeholder="isStreaming ? '排队发送...' : '输入运维指令...'"
             rows="1"
