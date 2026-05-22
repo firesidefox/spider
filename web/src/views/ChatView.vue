@@ -544,13 +544,14 @@ function handleConvEvent(convId: string, event: ChatEvent) {
   const convMsgs = messagesMap.value[convId]
   if (!convMsgs) return
 
-  function setStatus(phase: AgentStatus['phase'], toolName?: string, toolInput?: unknown) {
+  function setStatus(phase: AgentStatus['phase'], toolName?: string, toolInput?: unknown, hosts?: string[]) {
     updateAgentStatus({
       conversationId: convId,
       title: getConvTitle(convId),
       phase,
       toolName,
       toolInput: toolInput ? JSON.stringify(toolInput) : undefined,
+      hosts,
     })
   }
 
@@ -610,7 +611,7 @@ function handleConvEvent(convId: string, event: ChatEvent) {
       if (SSH_TOOLS.has(toolName) && event.content?.host_names?.length) {
         markDevicesExecuting(event.content.host_names)
       }
-      setStatus('tool', toolName, event.content?.input)
+      setStatus('tool', toolName, event.content?.input, event.content?.host_names)
       break
     }
     case 'tool_result': {
