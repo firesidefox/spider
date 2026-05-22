@@ -6,6 +6,8 @@ export interface AgentStatus {
   phase: 'thinking' | 'tool' | 'confirm' | 'done'
   toolName?: string
   toolInput?: string
+  hosts?: string[]
+  startedAt?: number
   updatedAt: number
 }
 
@@ -16,7 +18,7 @@ export function useAgentStatus() {
   return { statuses: readonly(statuses) }
 }
 
-export function updateAgentStatus(update: Omit<AgentStatus, 'updatedAt'>) {
+export function updateAgentStatus(update: Omit<AgentStatus, 'updatedAt' | 'startedAt'>) {
   const existing = doneTimers.get(update.conversationId)
   if (existing) {
     clearTimeout(existing)
@@ -30,9 +32,11 @@ export function updateAgentStatus(update: Omit<AgentStatus, 'updatedAt'>) {
     return
   }
 
+  const now = Date.now()
   statuses.value.set(update.conversationId, {
     ...update,
-    updatedAt: Date.now(),
+    startedAt: now,
+    updatedAt: now,
   })
   statuses.value = new Map(statuses.value)
 
