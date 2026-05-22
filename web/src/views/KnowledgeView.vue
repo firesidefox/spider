@@ -441,6 +441,10 @@ watch(activeDoc, async d => {
 })
 
 async function selectEntry(e: KnowledgeEntry) {
+  if (activeEntryId.value === e.id) {
+    closeDetail()
+    return
+  }
   activeEntryId.value = e.id
   loadingDetail.value = true
   try {
