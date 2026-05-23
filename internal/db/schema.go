@@ -314,5 +314,7 @@ func migrate(db *sql.DB) error {
 	)`); err != nil {
 		return err
 	}
+	db.Exec("ALTER TABLE documents ADD COLUMN description TEXT NOT NULL DEFAULT ''")
+	db.Exec("ALTER TABLE document_groups ADD COLUMN description TEXT NOT NULL DEFAULT ''")
 	return nil
 }
