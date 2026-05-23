@@ -103,6 +103,23 @@
             <button class="btn btn-sm btn-danger" @click="remove(activeDoc)">删除</button>
           </div>
         </div>
+        <!-- doc description block -->
+        <div class="doc-desc-block">
+          <div class="doc-desc-label">描述</div>
+          <textarea
+            v-model="docDescDraft"
+            class="doc-desc-textarea"
+            placeholder="暂无描述，点击生成或手动输入..."
+            rows="2"
+          />
+          <div class="doc-desc-actions">
+            <button class="btn-desc-gen" :disabled="docDescGenerating" @click="generateDocDescription">
+              {{ docDescGenerating ? '生成中...' : '✦ 生成' }}
+            </button>
+            <button class="btn-desc-save" @click="saveDocDescription">保存</button>
+            <span class="desc-char-hint">≤200字</span>
+          </div>
+        </div>
         <div class="detail-body">
           <div class="detail-meta">
             <span>来源: <strong>{{ activeDoc.source_file }}</strong></span>
@@ -170,7 +187,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, nextTick, watch } from 'vue'
+import { authHeaders } from '../api/auth'
 import {
   listDocuments, ingestDocument, deleteDocument, searchDocuments, moveDocument,
   listGroups, createGroup, renameGroup, deleteGroup,
@@ -213,6 +231,13 @@ const docTitle = (doc: Document) => doc.title || doc.source_file
 const docs = ref<Document[]>([])
 const groups = ref<DocumentGroup[]>([])
 const activeDoc = ref<Document | null>(null)
+const docDescDraft = ref('')
+const docDescGenerating = ref(false)
+
+watch(activeDoc, (d) => {
+  docDescDraft.value = d?.description ?? ''
+})
+
 const filterVendor = ref('')
 const filterTag = ref('')
 const ingestGroupId = ref<number | null>(null)
@@ -358,6 +383,37 @@ function fmtTime(s: string) {
   return new Date(s).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
 
+async function saveDocDescription() {
+  if (!activeDoc.value) return
+  const res = await fetch(`/api/v1/documents/${activeDoc.value.id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ description: docDescDraft.value }),
+  })
+  if (res.ok) {
+    const data = await res.json()
+    activeDoc.value = { ...activeDoc.value, description: data.description }
+  }
+}
+
+async function generateDocDescription() {
+  if (!activeDoc.value) return
+  docDescGenerating.value = true
+  try {
+    const res = await fetch(`/api/v1/documents/${activeDoc.value.id}/regenerate-description`, {
+      method: 'POST',
+      headers: authHeaders(),
+    })
+    if (res.ok) {
+      const data = await res.json()
+      docDescDraft.value = data.description
+      activeDoc.value = { ...activeDoc.value, description: data.description }
+    }
+  } finally {
+    docDescGenerating.value = false
+  }
+}
+
 onMounted(() => { load(); loadGroups() })
 </script>
 
@@ -452,5 +508,60 @@ onMounted(() => { load(); loadGroups() })
 
 @media (max-width: 520px) {
   .file-picker-row { align-items: stretch; flex-direction: column; }
+}
+
+.doc-desc-block {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.doc-desc-label {
+  font-size: 11px;
+  color: var(--text-sub);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 4px;
+}
+.doc-desc-textarea {
+  width: 100%;
+  background: var(--input-bg, #252525);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 4px;
+  padding: 5px 8px;
+  font-size: 12px;
+  resize: vertical;
+  font-family: inherit;
+  line-height: 1.5;
+  box-sizing: border-box;
+}
+.doc-desc-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-top: 5px;
+}
+.btn-desc-gen {
+  background: var(--btn-secondary-bg, #1e2d3d);
+  border: 1px solid var(--btn-secondary-border, #2d4a6a);
+  color: var(--primary, #7eb8f7);
+  padding: 3px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+}
+.btn-desc-gen:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-desc-save {
+  background: var(--btn-success-bg, #1a2e22);
+  border: 1px solid var(--btn-success-border, #2a5a3a);
+  color: var(--success, #6bcf8a);
+  padding: 3px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+}
+.desc-char-hint {
+  font-size: 11px;
+  color: var(--text-muted, #555);
+  margin-left: auto;
 }
 </style>
