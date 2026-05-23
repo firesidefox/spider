@@ -532,6 +532,12 @@ function scrollToBottom() {
   }
 }
 
+function handleEscCancel(e: KeyboardEvent) {
+  if (e.key === 'Escape' && isStreaming.value && !kbDropdownMode.value) {
+    cancelSend()
+  }
+}
+
 async function cancelSend() {
   const convId = activeConvId.value
   if (!convId) return
@@ -1134,11 +1140,13 @@ function startGlobalSSE() {
 onMounted(() => {
   startGlobalSSE()
   document.addEventListener('click', closeModeDropdown)
+  window.addEventListener('keydown', handleEscCancel)
   if (!initialized) { initialized = true; initView() }
   else loadPrefs()
 })
 onActivated(() => {
   document.addEventListener('click', closeModeDropdown)
+  window.addEventListener('keydown', handleEscCancel)
   chatThemeName.value = getSavedChatTheme()
   chatDensityName.value = getSavedChatDensity()
   if (!initialized) { initialized = true; initView() }
@@ -1150,6 +1158,7 @@ onDeactivated(() => {
   pollTimers.forEach((t) => clearTimeout(t))
   pollTimers.clear()
   document.removeEventListener('click', closeModeDropdown)
+  window.removeEventListener('keydown', handleEscCancel)
 })
 
 onUnmounted(() => {
@@ -1158,6 +1167,7 @@ onUnmounted(() => {
   convSubscriptions.forEach(unsub => unsub())
   convSubscriptions.clear()
   toolCallsCache.clear()
+  window.removeEventListener('keydown', handleEscCancel)
 })
 </script>
 
@@ -1313,7 +1323,6 @@ onUnmounted(() => {
             v-model="inputText"
             @keydown.enter.exact.prevent="send()"
             @keydown="onTextareaKeydown"
-            @keydown.escape.stop="isStreaming && cancelSend()"
             @input="onTextareaInput"
             :placeholder="isStreaming ? '排队发送...' : '输入运维指令...'"
             rows="1"
