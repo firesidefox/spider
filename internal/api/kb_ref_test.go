@@ -13,10 +13,6 @@ func TestParseKBRefs(t *testing.T) {
 		want  []kbRef
 	}{
 		{
-			"@kb nginx重启",
-			[]kbRef{{raw: "@kb", displayName: "知识库", groupName: "", docTitle: ""}},
-		},
-		{
 			"@kb:运维手册 nginx重启",
 			[]kbRef{{raw: "@kb:运维手册", displayName: "运维手册", groupName: "运维手册", docTitle: ""}},
 		},
@@ -31,6 +27,7 @@ func TestParseKBRefs(t *testing.T) {
 				{raw: "@kb:网络配置/BGP路由表", displayName: "网络配置/BGP路由表", groupName: "网络配置", docTitle: "BGP路由表"},
 			},
 		},
+		{"@kb nginx重启", nil},
 		{"没有引用", nil},
 	}
 	for _, tt := range tests {
@@ -72,13 +69,10 @@ func TestExpandKBRefs_NoRefs(t *testing.T) {
 	}
 }
 
-func TestExpandKBRefs_GlobalSearch(t *testing.T) {
+func TestExpandKBRefs_BareKBIsPlainText(t *testing.T) {
 	called := false
 	search := func(query string, groupID *int) []*models.Document {
 		called = true
-		if groupID != nil {
-			t.Error("expected nil groupID for @kb")
-		}
 		return []*models.Document{{Title: "结果文档", Content: "内容"}}
 	}
 	result := expandKBRefs("@kb nginx重启",
@@ -86,10 +80,10 @@ func TestExpandKBRefs_GlobalSearch(t *testing.T) {
 		func(groupID int, title string) *models.Document { return nil },
 		search,
 	)
-	if !called {
-		t.Error("search not called")
+	if called {
+		t.Error("search should not be called for bare @kb")
 	}
-	if !strings.Contains(result, "[知识库: 知识库") {
+	if result != "@kb nginx重启" {
 		t.Errorf("unexpected result: %s", result)
 	}
 }
@@ -164,12 +158,12 @@ func TestExpandKBRefs_DuplicateRaw(t *testing.T) {
 		return []*models.Document{{Title: "结果", Content: "内容"}}
 	}
 	result := expandKBRefs(
-		"@kb nginx重启 和 @kb 怎么操作",
+		"@kb:运维手册 nginx重启 和 @kb:运维手册 怎么操作",
 		func(name string) *int { return nil },
 		func(groupID int, title string) *models.Document { return nil },
 		search,
 	)
-	// 两个 @kb 都应被替换，不应有原始 @kb 残留
+	// 两个相同 raw ref 都应被替换，不应有原始 @kb 引用残留。
 	if strings.Contains(result, "@kb") {
 		t.Errorf("raw @kb should be replaced, got: %s", result)
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"math"
@@ -54,9 +55,35 @@ func (s *Store) ListGroups(ctx context.Context) ([]Group, error) {
 	return out, rows.Err()
 }
 
+func (s *Store) GetGroupsByIDs(ctx context.Context, ids []int) ([]Group, error) {
+	if len(ids) == 0 {
+		return []Group{}, nil
+	}
+	placeholders := strings.Repeat("?,", len(ids))
+	placeholders = placeholders[:len(placeholders)-1]
+	args := make([]any, len(ids))
+	for i, id := range ids {
+		args[i] = id
+	}
+	rows, err := s.db.QueryContext(ctx,
+		fmt.Sprintf(`SELECT id, name, created_at FROM knowledge_groups WHERE id IN (%s) ORDER BY id`, placeholders), args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Group
+	for rows.Next() {
+		var g Group
+		if err := rows.Scan(&g.ID, &g.Name, &g.CreatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, g)
+	}
+	return out, rows.Err()
+}
+
 func (s *Store) DeleteGroup(ctx context.Context, groupID int) error {
-	_, err := s.db.ExecContext(ctx, `DELETE FROM knowledge_groups WHERE id = ?`, groupID)
-	return err
+	return s.deleteGroupsTx(ctx, []int{groupID})
 }
 
 func (s *Store) ListDocuments(ctx context.Context, groupID int) ([]Document, error) {
@@ -98,12 +125,44 @@ func (s *Store) GetDocument(ctx context.Context, docID int) (*Document, error) {
 	return &d, nil
 }
 
+func (s *Store) GetDocumentsByIDs(ctx context.Context, ids []int) ([]Document, error) {
+	if len(ids) == 0 {
+		return []Document{}, nil
+	}
+	placeholders := strings.Repeat("?,", len(ids))
+	placeholders = placeholders[:len(placeholders)-1]
+	args := make([]any, len(ids))
+	for i, id := range ids {
+		args[i] = id
+	}
+	rows, err := s.db.QueryContext(ctx, fmt.Sprintf(`
+		SELECT id, group_id, name, doc_type, raw_content, filename, status, error_msg, entry_count, created_at, updated_at
+		FROM knowledge_documents
+		WHERE id IN (%s)
+		ORDER BY id`, placeholders), args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []Document
+	for rows.Next() {
+		var d Document
+		if err := rows.Scan(&d.ID, &d.GroupID, &d.Name, &d.DocType, &d.RawContent, &d.Filename,
+			&d.Status, &d.ErrorMsg, &d.EntryCount, &d.CreatedAt, &d.UpdatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, d)
+	}
+	return out, rows.Err()
+}
+
 func (s *Store) DeleteDocuments(ctx context.Context, docIDs []int) error {
-	return s.deleteByIDs(ctx, "knowledge_documents", docIDs)
+	return s.deleteDocumentsTx(ctx, docIDs)
 }
 
 func (s *Store) DeleteGroups(ctx context.Context, groupIDs []int) error {
-	return s.deleteByIDs(ctx, "knowledge_groups", groupIDs)
+	return s.deleteGroupsTx(ctx, groupIDs)
 }
 
 func (s *Store) deleteByIDs(ctx context.Context, table string, ids []int) error {
@@ -119,6 +178,159 @@ func (s *Store) deleteByIDs(ctx context.Context, table string, ids []int) error 
 	_, err := s.db.ExecContext(ctx,
 		fmt.Sprintf(`DELETE FROM %s WHERE id IN (%s)`, table, placeholders), args...)
 	return err
+}
+
+type accessFaceKnowledgeSource struct {
+	Type string `json:"type"`
+	ID   int    `json:"id"`
+}
+
+func (s *Store) deleteDocumentsTx(ctx context.Context, docIDs []int) error {
+	if len(docIDs) == 0 {
+		return nil
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err := cleanupAccessFaceKnowledgeRefs(ctx, tx, nil, intSet(docIDs)); err != nil {
+		return err
+	}
+	if err := deleteByIDsTx(ctx, tx, "knowledge_documents", docIDs); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func (s *Store) deleteGroupsTx(ctx context.Context, groupIDs []int) error {
+	if len(groupIDs) == 0 {
+		return nil
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	docIDs, err := documentIDsForGroups(ctx, tx, groupIDs)
+	if err != nil {
+		return err
+	}
+	if err := cleanupAccessFaceKnowledgeRefs(ctx, tx, intSet(groupIDs), intSet(docIDs)); err != nil {
+		return err
+	}
+	if err := deleteByIDsTx(ctx, tx, "knowledge_groups", groupIDs); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func documentIDsForGroups(ctx context.Context, tx *sql.Tx, groupIDs []int) ([]int, error) {
+	placeholders := strings.Repeat("?,", len(groupIDs))
+	placeholders = placeholders[:len(placeholders)-1]
+	args := make([]any, len(groupIDs))
+	for i, id := range groupIDs {
+		args[i] = id
+	}
+	rows, err := tx.QueryContext(ctx, fmt.Sprintf(`SELECT id FROM knowledge_documents WHERE group_id IN (%s)`, placeholders), args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []int
+	for rows.Next() {
+		var id int
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		out = append(out, id)
+	}
+	return out, rows.Err()
+}
+
+func cleanupAccessFaceKnowledgeRefs(ctx context.Context, tx *sql.Tx, groupIDs, docIDs map[int]struct{}) error {
+	rows, err := tx.QueryContext(ctx, `SELECT id, kb_mode, knowledge_sources FROM access_faces`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	type faceUpdate struct {
+		id      string
+		mode    string
+		sources []accessFaceKnowledgeSource
+	}
+	var updates []faceUpdate
+	for rows.Next() {
+		var id, mode, raw string
+		if err := rows.Scan(&id, &mode, &raw); err != nil {
+			return err
+		}
+		var sources []accessFaceKnowledgeSource
+		if err := json.Unmarshal([]byte(raw), &sources); err != nil {
+			return err
+		}
+		filtered := make([]accessFaceKnowledgeSource, 0, len(sources))
+		changed := false
+		for _, src := range sources {
+			remove := false
+			if src.Type == "group" {
+				_, remove = groupIDs[src.ID]
+			}
+			if src.Type == "doc" {
+				_, remove = docIDs[src.ID]
+			}
+			if remove {
+				changed = true
+				continue
+			}
+			filtered = append(filtered, src)
+		}
+		if !changed {
+			continue
+		}
+		if len(filtered) == 0 && mode == "specific" {
+			mode = "none"
+		}
+		updates = append(updates, faceUpdate{id: id, mode: mode, sources: filtered})
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for _, u := range updates {
+		if u.sources == nil {
+			u.sources = []accessFaceKnowledgeSource{}
+		}
+		raw, err := json.Marshal(u.sources)
+		if err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE access_faces SET kb_mode=?, knowledge_sources=? WHERE id=?`, u.mode, string(raw), u.id); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func deleteByIDsTx(ctx context.Context, tx *sql.Tx, table string, ids []int) error {
+	placeholders := strings.Repeat("?,", len(ids))
+	placeholders = placeholders[:len(placeholders)-1]
+	args := make([]interface{}, len(ids))
+	for i, id := range ids {
+		args[i] = id
+	}
+	_, err := tx.ExecContext(ctx,
+		fmt.Sprintf(`DELETE FROM %s WHERE id IN (%s)`, table, placeholders), args...)
+	return err
+}
+
+func intSet(ids []int) map[int]struct{} {
+	out := make(map[int]struct{}, len(ids))
+	for _, id := range ids {
+		out[id] = struct{}{}
+	}
+	return out
 }
 
 func (s *Store) MoveDocuments(ctx context.Context, docIDs []int, targetGroupID int) error {
@@ -328,7 +540,7 @@ func (s *Store) FetchEntries(ctx context.Context, entryIDs []int) ([]Entry, erro
 	}
 
 	query := fmt.Sprintf(`
-		SELECT id, title, content
+		SELECT id, document_id, section_id, title, summary, content, position
 		FROM knowledge_entries
 		WHERE id IN (%s)
 		ORDER BY position`, strings.Join(placeholders, ","))
@@ -342,7 +554,7 @@ func (s *Store) FetchEntries(ctx context.Context, entryIDs []int) ([]Entry, erro
 	var out []Entry
 	for rows.Next() {
 		var e Entry
-		if err := rows.Scan(&e.ID, &e.Title, &e.Content); err != nil {
+		if err := rows.Scan(&e.ID, &e.DocumentID, &e.SectionID, &e.Title, &e.Summary, &e.Content, &e.Position); err != nil {
 			return nil, err
 		}
 		out = append(out, e)
@@ -350,9 +562,10 @@ func (s *Store) FetchEntries(ctx context.Context, entryIDs []int) ([]Entry, erro
 	return out, rows.Err()
 }
 
-// Search performs vector similarity search within a given scope.
+// searchByEmbedding performs vector similarity search within a given scope.
 // Returns top-K entries sorted by cosine similarity to the query embedding.
-func (s *Store) Search(ctx context.Context, queryEmb []byte, scope Scope, topK int) ([]Entry, error) {
+// This is a low-level method; callers should use Search instead.
+func (s *Store) searchByEmbedding(ctx context.Context, queryEmb []byte, scope Scope, topK int) ([]Entry, error) {
 	// Validate query embedding
 	if len(queryEmb) == 0 {
 		return nil, fmt.Errorf("query embedding cannot be empty")
@@ -430,10 +643,9 @@ func (s *Store) Search(ctx context.Context, queryEmb []byte, scope Scope, topK i
 	return out, nil
 }
 
-// SearchByQuery embeds the query string and performs vector similarity search.
-// This is the high-level interface preferred by callers; Search is the lower-level
-// path for callers that already hold a precomputed embedding.
-func (s *Store) SearchByQuery(ctx context.Context, query string, scope Scope, topK int, embedder rag.Embedder) ([]Entry, error) {
+// Search embeds the query string and performs vector similarity search.
+// This is the primary search interface aligned with the spec.
+func (s *Store) Search(ctx context.Context, query string, scope Scope, topK int, embedder rag.Embedder) ([]Entry, error) {
 	if query == "" {
 		return nil, fmt.Errorf("query cannot be empty")
 	}
@@ -448,7 +660,7 @@ func (s *Store) SearchByQuery(ctx context.Context, query string, scope Scope, to
 	for i, f := range emb {
 		binary.LittleEndian.PutUint32(buf[i*4:], math.Float32bits(f))
 	}
-	return s.Search(ctx, buf, scope, topK)
+	return s.searchByEmbedding(ctx, buf, scope, topK)
 }
 
 // cosineSimilarity computes the cosine similarity between two embedding vectors.

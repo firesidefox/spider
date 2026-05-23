@@ -36,12 +36,12 @@ const callAPIPromptSection = `### CallAPI (GET: read-only; POST/PUT/DELETE: has 
 
 **Workflow for API calls:**
 1. GetHosts → find host with "api" access face
-2. SearchDocs with group_id from face.knowledge_sources → find correct endpoint, params, auth
+2. If face.kb_mode="specific", SearchDocs with each bound group/doc scope → find correct endpoint, params, auth
 3. CallAPI with face_id + relative path
 
 <example>
 User: Push a new ACL rule via the firewall API.
-Assistant: GetHosts → find gateway (api face, knowledge_sources group_id=3) → SearchDocs catalog=true group_id=3 → SearchDocs query="ACL rule create" → confirm request body with user → CallAPI POST face_id="xxx" url="/api/acl/rules"
+Assistant: GetHosts → find gateway (api face, kb_mode=specific) → SearchDocs with bound scope → confirm request body with user → CallAPI POST face_id="xxx" url="/api/acl/rules"
 </example>`
 
 type CallRESTAPITool struct {
@@ -61,10 +61,10 @@ func NewCallRESTAPITool(faces *store.AccessFaceStore) *CallRESTAPITool {
 	}
 }
 
-func (t *CallRESTAPITool) DefaultRiskLevel() RiskLevel              { return RiskL2 }
+func (t *CallRESTAPITool) DefaultRiskLevel() RiskLevel             { return RiskL2 }
 func (t *CallRESTAPITool) IsConcurrencySafe(_ map[string]any) bool { return false }
-func (t *CallRESTAPITool) Name() string                 { return "CallAPI" }
-func (t *CallRESTAPITool) SystemPromptSection() string  { return callAPIPromptSection }
+func (t *CallRESTAPITool) Name() string                            { return "CallAPI" }
+func (t *CallRESTAPITool) SystemPromptSection() string             { return callAPIPromptSection }
 
 func (t *CallRESTAPITool) Description() string {
 	return "Call a REST API endpoint on a gateway device. Has side effects for POST/PUT/DELETE methods. Use GET freely in Explore phase; use mutating methods only in Act phase after confirming intent. Always set `intent` to a short goal description for mutating calls."

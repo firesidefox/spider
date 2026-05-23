@@ -96,6 +96,89 @@ func TestCascadeDelete(t *testing.T) {
 	}
 }
 
+func TestDeleteDocumentCleansAccessFaceKnowledgeSources(t *testing.T) {
+	db := newTestDB(t)
+	s := knowledge.NewStore(db)
+	ctx := context.Background()
+
+	g, _ := s.CreateGroup(ctx, "ops")
+	res, err := db.ExecContext(ctx, `INSERT INTO knowledge_documents
+		(group_id, name, doc_type, raw_content, filename, status, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+		g.ID, "nginx", "markdown", "content", "nginx.md", "ready")
+	if err != nil {
+		t.Fatal(err)
+	}
+	docID64, _ := res.LastInsertId()
+	docID := int(docID64)
+	sources, _ := json.Marshal([]map[string]any{
+		{"type": "group", "id": g.ID},
+		{"type": "doc", "id": docID},
+	})
+	if _, err := db.ExecContext(ctx, `INSERT INTO hosts (id, name, ip, tags, created_at, updated_at) VALUES ('h1', 'h1', '10.0.0.1', '[]', datetime('now'), datetime('now'))`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO access_faces
+		(id, host_id, type, ip, port, kb_mode, knowledge_sources, created_at, updated_at)
+		VALUES ('f1', 'h1', 'ssh', '10.0.0.1', 22, 'specific', ?, datetime('now'), datetime('now'))`, string(sources)); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := s.DeleteDocuments(ctx, []int{docID}); err != nil {
+		t.Fatal(err)
+	}
+	var raw, mode string
+	if err := db.QueryRowContext(ctx, `SELECT kb_mode, knowledge_sources FROM access_faces WHERE id='f1'`).Scan(&mode, &raw); err != nil {
+		t.Fatal(err)
+	}
+	var got []map[string]any
+	if err := json.Unmarshal([]byte(raw), &got); err != nil {
+		t.Fatal(err)
+	}
+	if mode != "specific" || len(got) != 1 || got[0]["type"] != "group" {
+		t.Fatalf("expected only group source to remain, mode=%s sources=%s", mode, raw)
+	}
+}
+
+func TestDeleteGroupCleansAccessFaceKnowledgeSourcesAndDowngradesMode(t *testing.T) {
+	db := newTestDB(t)
+	s := knowledge.NewStore(db)
+	ctx := context.Background()
+
+	g, _ := s.CreateGroup(ctx, "ops")
+	res, err := db.ExecContext(ctx, `INSERT INTO knowledge_documents
+		(group_id, name, doc_type, raw_content, filename, status, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+		g.ID, "nginx", "markdown", "content", "nginx.md", "ready")
+	if err != nil {
+		t.Fatal(err)
+	}
+	docID64, _ := res.LastInsertId()
+	sources, _ := json.Marshal([]map[string]any{
+		{"type": "group", "id": g.ID},
+		{"type": "doc", "id": int(docID64)},
+	})
+	if _, err := db.ExecContext(ctx, `INSERT INTO hosts (id, name, ip, tags, created_at, updated_at) VALUES ('h1', 'h1', '10.0.0.1', '[]', datetime('now'), datetime('now'))`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO access_faces
+		(id, host_id, type, ip, port, kb_mode, knowledge_sources, created_at, updated_at)
+		VALUES ('f1', 'h1', 'ssh', '10.0.0.1', 22, 'specific', ?, datetime('now'), datetime('now'))`, string(sources)); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := s.DeleteGroup(ctx, g.ID); err != nil {
+		t.Fatal(err)
+	}
+	var raw, mode string
+	if err := db.QueryRowContext(ctx, `SELECT kb_mode, knowledge_sources FROM access_faces WHERE id='f1'`).Scan(&mode, &raw); err != nil {
+		t.Fatal(err)
+	}
+	if mode != "none" || raw != "[]" {
+		t.Fatalf("expected face KB binding cleared, mode=%s sources=%s", mode, raw)
+	}
+}
+
 func TestListDocuments(t *testing.T) {
 	s := knowledge.NewStore(newTestDB(t))
 	ctx := context.Background()
@@ -674,15 +757,11 @@ func TestSearch(t *testing.T) {
 	e1, _ := s.CreateEntry(ctx, int(docID), &sec.ID, "Entry1", "Summary 1", "Full content of entry 1", emb1, 0)
 	_, _ = s.CreateEntry(ctx, int(docID), &sec.ID, "Entry2", "Summary 2", "Full content of entry 2", emb2, 1)
 
-	// Query embedding: [1.0, 0.0, 0.0, 0.0] - should match e1 better
-	queryEmb := make([]byte, 16)
-	binary.LittleEndian.PutUint32(queryEmb[0:4], math.Float32bits(1.0))
-	binary.LittleEndian.PutUint32(queryEmb[4:8], math.Float32bits(0.0))
-	binary.LittleEndian.PutUint32(queryEmb[8:12], math.Float32bits(0.0))
-	binary.LittleEndian.PutUint32(queryEmb[12:16], math.Float32bits(0.0))
+	// Mock embedder that returns [1.0, 0.0, 0.0, 0.0] - should match e1 better
+	embedder := &mockEmbedder{}
 
 	// Test: Search within group scope
-	entries, err := s.Search(ctx, queryEmb, knowledge.Scope{Type: "group", ID: g.ID}, 5)
+	entries, err := s.Search(ctx, "test query", knowledge.Scope{Type: "group", ID: g.ID}, 5, embedder)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -698,20 +777,20 @@ func TestSearch(t *testing.T) {
 		t.Fatalf("expected full content, got: %s", entries[0].Content)
 	}
 
-	// Test: Empty query embedding returns error
-	_, err = s.Search(ctx, []byte{}, knowledge.Scope{Type: "group", ID: g.ID}, 5)
+	// Test: Empty query returns error
+	_, err = s.Search(ctx, "", knowledge.Scope{Type: "group", ID: g.ID}, 5, embedder)
 	if err == nil {
-		t.Fatal("expected error for empty query embedding")
+		t.Fatal("expected error for empty query")
 	}
 
-	// Test: Invalid scope type returns error
-	_, err = s.Search(ctx, queryEmb, knowledge.Scope{Type: "invalid", ID: g.ID}, 5)
+	// Test: Nil embedder returns error
+	_, err = s.Search(ctx, "test", knowledge.Scope{Type: "group", ID: g.ID}, 5, nil)
 	if err == nil {
-		t.Fatal("expected error for invalid scope type")
+		t.Fatal("expected error for nil embedder")
 	}
 
 	// Test: Search within group scope
-	groupEntries, err := s.Search(ctx, queryEmb, knowledge.Scope{Type: "group", ID: g.ID}, 5)
+	groupEntries, err := s.Search(ctx, "test query", knowledge.Scope{Type: "group", ID: g.ID}, 5, embedder)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -720,7 +799,7 @@ func TestSearch(t *testing.T) {
 	}
 
 	// Test: Search within document scope
-	docEntries, err := s.Search(ctx, queryEmb, knowledge.Scope{Type: "document", ID: int(docID)}, 5)
+	docEntries, err := s.Search(ctx, "test query", knowledge.Scope{Type: "document", ID: int(docID)}, 5, embedder)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -748,22 +827,22 @@ func (m *mockLLMClient) CountTokens(ctx context.Context, msgs []llm.Message) (in
 	return 0, nil
 }
 
-// mockEmbedder returns a fixed 3-dim embedding for any text.
+// mockEmbedder returns a fixed 4-dim embedding for any text.
 type mockEmbedder struct{}
 
 func (e *mockEmbedder) Embed(ctx context.Context, text string) ([]float32, error) {
-	return []float32{0.1, 0.2, 0.3}, nil
+	return []float32{1.0, 0.0, 0.0, 0.0}, nil
 }
 
 func (e *mockEmbedder) EmbedBatch(ctx context.Context, texts []string) ([][]float32, error) {
 	out := make([][]float32, len(texts))
 	for i := range texts {
-		out[i] = []float32{0.1, 0.2, 0.3}
+		out[i] = []float32{1.0, 0.0, 0.0, 0.0}
 	}
 	return out, nil
 }
 
-func (e *mockEmbedder) Dimensions() int { return 3 }
+func (e *mockEmbedder) Dimensions() int { return 4 }
 
 // Compile-time checks that mocks satisfy interfaces.
 var _ llm.Client = (*mockLLMClient)(nil)

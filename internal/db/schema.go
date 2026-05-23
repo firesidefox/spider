@@ -2,6 +2,7 @@ package db
 
 import (
 	"database/sql"
+	"encoding/json"
 	"strings"
 )
 
@@ -166,6 +167,11 @@ CREATE INDEX IF NOT EXISTS idx_provider_models_provider_id ON provider_models(pr
 // Migrate 导出版本，供测试使用。
 func Migrate(db *sql.DB) error { return migrate(db) }
 
+type kbSourceRef struct {
+	Type string `json:"type"`
+	ID   int    `json:"id"`
+}
+
 // migrate 创建所有表（幂等）。
 func migrate(db *sql.DB) error {
 	if _, err := db.Exec(schemaSQL); err != nil {
@@ -241,6 +247,7 @@ func migrate(db *sql.DB) error {
 		rest_auth_type TEXT NOT NULL DEFAULT '',
 		rest_username TEXT NOT NULL DEFAULT '',
 		header_name TEXT NOT NULL DEFAULT '',
+		kb_mode TEXT NOT NULL DEFAULT 'none',
 		knowledge_sources TEXT NOT NULL DEFAULT '[]',
 		probe_port INTEGER NOT NULL DEFAULT 0,
 		probe_interval INTEGER NOT NULL DEFAULT 0,
@@ -263,12 +270,6 @@ func migrate(db *sql.DB) error {
 		created_by TEXT NOT NULL CHECK(created_by IN ('user','agent')),
 		created_at DATETIME NOT NULL
 	)`)
-	db.Exec(`CREATE TABLE IF NOT EXISTS host_knowledge_sources (
-		host_id TEXT NOT NULL REFERENCES hosts(id) ON DELETE CASCADE,
-		type TEXT NOT NULL CHECK(type IN ('group','doc')),
-		ref_id INTEGER NOT NULL,
-		PRIMARY KEY (host_id, type, ref_id)
-	)`)
 	// New hosts columns
 	db.Exec("ALTER TABLE hosts ADD COLUMN notes TEXT NOT NULL DEFAULT ''")
 	db.Exec("ALTER TABLE access_faces ADD COLUMN ssh_login_input TEXT NOT NULL DEFAULT ''")
@@ -276,23 +277,33 @@ func migrate(db *sql.DB) error {
 	db.Exec("ALTER TABLE access_faces ADD COLUMN probe_port INTEGER NOT NULL DEFAULT 0")
 	db.Exec("ALTER TABLE access_faces ADD COLUMN probe_interval INTEGER NOT NULL DEFAULT 0")
 	db.Exec("ALTER TABLE access_faces ADD COLUMN rest_scheme TEXT NOT NULL DEFAULT 'http'")
+	db.Exec("ALTER TABLE access_faces ADD COLUMN kb_mode TEXT NOT NULL DEFAULT 'none'")
 	db.Exec("ALTER TABLE hosts ADD COLUMN product_name TEXT NOT NULL DEFAULT ''")
 	db.Exec("ALTER TABLE hosts ADD COLUMN product_version TEXT NOT NULL DEFAULT ''")
 	// Data migration: seed one SSH access_face per existing host.
 	// Idempotent: WHERE clause skips hosts that already have an SSH face.
-	db.Exec(`INSERT OR IGNORE INTO access_faces
+	if _, err := db.Exec(`INSERT OR IGNORE INTO access_faces
 		(id, host_id, type, ip, port, username, auth_type,
 		 encrypted_credential, encrypted_passphrase, ssh_key_id, ssh_legacy,
 		 base_url, rest_auth_type, rest_username, header_name,
-		 knowledge_sources, created_at, updated_at)
+		 kb_mode, knowledge_sources, created_at, updated_at)
 		SELECT
 			lower(hex(randomblob(16))), id, 'ssh', ip, port,
 			COALESCE(username,''), COALESCE(auth_type,''),
 			COALESCE(encrypted_credential,''), COALESCE(encrypted_passphrase,''),
 			COALESCE(ssh_key_id,''), COALESCE(ssh_legacy,0),
-			'', '', '', '[]', created_at, updated_at
+			'', '', '', '', 'none', '[]', created_at, updated_at
 		FROM hosts
-		WHERE id NOT IN (SELECT host_id FROM access_faces)`)
+		WHERE id NOT IN (SELECT host_id FROM access_faces)`); err != nil {
+		return err
+	}
+	if err := migrateAccessFaceKBMode(db); err != nil {
+		return err
+	}
+	if err := migrateHostKnowledgeSources(db); err != nil {
+		return err
+	}
+	db.Exec(`DROP TABLE IF EXISTS host_knowledge_sources`)
 	// Context compaction
 	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS conversation_summaries (
 		id               INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -502,4 +513,154 @@ func migrate(db *sql.DB) error {
 	}
 
 	return nil
+}
+
+func migrateAccessFaceKBMode(db *sql.DB) error {
+	rows, err := db.Query(`SELECT id, kb_mode, knowledge_sources FROM access_faces`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	type update struct {
+		id      string
+		mode    string
+		sources []kbSourceRef
+	}
+	var updates []update
+	for rows.Next() {
+		var id, mode, raw string
+		if err := rows.Scan(&id, &mode, &raw); err != nil {
+			return err
+		}
+		var sources []kbSourceRef
+		if err := json.Unmarshal([]byte(raw), &sources); err != nil {
+			continue
+		}
+		hasSentinel := false
+		hasValid := false
+		filtered := make([]kbSourceRef, 0, len(sources))
+		for _, src := range sources {
+			if src.Type == "none" && src.ID == 0 {
+				hasSentinel = true
+				continue
+			}
+			if (src.Type == "group" || src.Type == "doc") && src.ID > 0 {
+				hasValid = true
+				filtered = append(filtered, src)
+			}
+		}
+		switch {
+		case hasSentinel:
+			updates = append(updates, update{id: id, mode: "none", sources: []kbSourceRef{}})
+		case mode == "none" && hasValid:
+			updates = append(updates, update{id: id, mode: "specific", sources: filtered})
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for _, u := range updates {
+		raw, err := json.Marshal(u.sources)
+		if err != nil {
+			return err
+		}
+		if _, err := db.Exec(`UPDATE access_faces SET kb_mode=?, knowledge_sources=? WHERE id=?`, u.mode, string(raw), u.id); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func migrateHostKnowledgeSources(db *sql.DB) error {
+	var legacyTableExists int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='host_knowledge_sources'`).Scan(&legacyTableExists); err != nil {
+		return err
+	}
+	if legacyTableExists == 0 {
+		return nil
+	}
+	rows, err := db.Query(`
+		SELECT host_id, type, ref_id
+		FROM host_knowledge_sources
+		ORDER BY host_id, type, ref_id`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	byHost := map[string][]kbSourceRef{}
+	for rows.Next() {
+		var hostID, refType string
+		var refID int
+		if err := rows.Scan(&hostID, &refType, &refID); err != nil {
+			return err
+		}
+		if (refType == "group" || refType == "doc") && refID > 0 {
+			byHost[hostID] = append(byHost[hostID], kbSourceRef{Type: refType, ID: refID})
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for hostID, legacySources := range byHost {
+		var faceID, mode, raw string
+		err := db.QueryRow(`
+			SELECT id, kb_mode, knowledge_sources
+			FROM access_faces
+			WHERE host_id = ?
+			ORDER BY CASE WHEN type='ssh' THEN 0 ELSE 1 END, created_at
+			LIMIT 1`, hostID).Scan(&faceID, &mode, &raw)
+		if err == sql.ErrNoRows {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		var sources []kbSourceRef
+		if err := json.Unmarshal([]byte(raw), &sources); err != nil {
+			sources = nil
+		}
+		merged := mergeKBSources(sources, legacySources)
+		if len(merged) == 0 {
+			continue
+		}
+		out, err := json.Marshal(merged)
+		if err != nil {
+			return err
+		}
+		if mode == "none" {
+			mode = "specific"
+		}
+		if _, err := db.Exec(`UPDATE access_faces SET kb_mode=?, knowledge_sources=? WHERE id=?`, mode, string(out), faceID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func mergeKBSources(existing, legacy []kbSourceRef) []kbSourceRef {
+	seen := map[kbSourceRef]struct{}{}
+	out := make([]kbSourceRef, 0, len(existing)+len(legacy))
+	for _, src := range existing {
+		if (src.Type != "group" && src.Type != "doc") || src.ID <= 0 {
+			continue
+		}
+		if _, ok := seen[src]; ok {
+			continue
+		}
+		seen[src] = struct{}{}
+		out = append(out, src)
+	}
+	for _, src := range legacy {
+		if (src.Type != "group" && src.Type != "doc") || src.ID <= 0 {
+			continue
+		}
+		if _, ok := seen[src]; ok {
+			continue
+		}
+		seen[src] = struct{}{}
+		out = append(out, src)
+	}
+	return out
 }

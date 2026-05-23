@@ -8,7 +8,7 @@ import (
 	"github.com/spiderai/spider/internal/models"
 )
 
-var kbRefRe = regexp.MustCompile(`@kb(?::([^\s/]+)(?:/([^\s]+))?)?`)
+var kbRefRe = regexp.MustCompile(`@kb:([^\s/]+)(?:/([^\s]+))?`)
 
 type kbRef struct {
 	raw         string
@@ -32,11 +32,9 @@ func parseKBRefs(message string) []kbRef {
 		seen[raw] = true
 		groupName := m[1]
 		docTitle := m[2]
-		displayName := "知识库"
+		displayName := groupName
 		if groupName != "" && docTitle != "" {
 			displayName = groupName + "/" + docTitle
-		} else if groupName != "" {
-			displayName = groupName
 		}
 		refs = append(refs, kbRef{
 			raw:         raw,

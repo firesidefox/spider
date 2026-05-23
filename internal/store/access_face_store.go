@@ -31,17 +31,22 @@ func (s *AccessFaceStore) Add(hostID string, req *models.AddAccessFaceRequest) (
 	if err != nil {
 		return nil, fmt.Errorf("encrypt passphrase: %w", err)
 	}
-	ksJSON, _ := json.Marshal(req.KnowledgeSources)
+	mode := normalizeKBMode(req.KBMode)
+	sources := normalizeKnowledgeSources(mode, req.KnowledgeSources)
+	if err := validateAccessFaceKB(mode, sources); err != nil {
+		return nil, err
+	}
+	ksJSON, _ := json.Marshal(sources)
 	_, err = s.db.Exec(`INSERT INTO access_faces
 		(id,host_id,type,ip,port,username,auth_type,
 		 encrypted_credential,encrypted_passphrase,ssh_key_id,ssh_legacy,
 		 ssh_login_input,
-		 base_url,rest_scheme,rest_auth_type,rest_username,header_name,hmac_algo,knowledge_sources,probe_port,probe_interval,created_at,updated_at)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		 base_url,rest_scheme,rest_auth_type,rest_username,header_name,hmac_algo,kb_mode,knowledge_sources,probe_port,probe_interval,created_at,updated_at)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		id, hostID, req.Type, req.IP, req.Port, req.Username, req.SSHAuthType,
 		encCred, encPass, req.SSHKeyID, req.SSHLegacy,
 		req.SSHLoginInput,
-		req.BaseURL, req.RESTScheme, req.RESTAuthType, req.RESTUsername, req.HeaderName, req.HMACAlgo, string(ksJSON), req.ProbePort, req.ProbeInterval, now, now)
+		req.BaseURL, req.RESTScheme, req.RESTAuthType, req.RESTUsername, req.HeaderName, req.HMACAlgo, mode, string(ksJSON), req.ProbePort, req.ProbeInterval, now, now)
 	if err != nil {
 		return nil, err
 	}
@@ -162,8 +167,15 @@ func (s *AccessFaceStore) Update(id string, req *models.UpdateAccessFaceRequest)
 	if req.HMACAlgo != nil {
 		cur.HMACAlgo = *req.HMACAlgo
 	}
+	if req.KBMode != nil {
+		cur.KBMode = normalizeKBMode(*req.KBMode)
+	}
 	if req.KnowledgeSources != nil {
 		cur.KnowledgeSources = req.KnowledgeSources
+	}
+	cur.KnowledgeSources = normalizeKnowledgeSources(cur.KBMode, cur.KnowledgeSources)
+	if err := validateAccessFaceKB(cur.KBMode, cur.KnowledgeSources); err != nil {
+		return nil, err
 	}
 	if req.ProbePort != nil {
 		cur.ProbePort = *req.ProbePort
@@ -191,11 +203,11 @@ func (s *AccessFaceStore) Update(id string, req *models.UpdateAccessFaceRequest)
 		encrypted_credential=?,encrypted_passphrase=?,
 		ssh_key_id=?,ssh_legacy=?,ssh_login_input=?,
 		base_url=?,rest_scheme=?,rest_auth_type=?,rest_username=?,
-		header_name=?,hmac_algo=?,knowledge_sources=?,probe_port=?,probe_interval=?,updated_at=?
+		header_name=?,hmac_algo=?,kb_mode=?,knowledge_sources=?,probe_port=?,probe_interval=?,updated_at=?
 		WHERE id=?`,
 		cur.IP, cur.Port, cur.Username, cur.SSHAuthType,
 		encCred, encPass, cur.SSHKeyID, cur.SSHLegacy, cur.SSHLoginInput,
-		cur.BaseURL, cur.RESTScheme, cur.RESTAuthType, cur.RESTUsername, cur.HeaderName, cur.HMACAlgo, string(ksJSON), cur.ProbePort, cur.ProbeInterval, now, id)
+		cur.BaseURL, cur.RESTScheme, cur.RESTAuthType, cur.RESTUsername, cur.HeaderName, cur.HMACAlgo, cur.KBMode, string(ksJSON), cur.ProbePort, cur.ProbeInterval, now, id)
 	if err != nil {
 		return nil, err
 	}
@@ -229,7 +241,7 @@ func (s *AccessFaceStore) DecryptCredential(f *models.AccessFace) (cred, pass st
 const accessFaceCols = `id,host_id,type,ip,port,username,auth_type,` +
 	`encrypted_credential,encrypted_passphrase,ssh_key_id,ssh_legacy,` +
 	`ssh_login_input,` +
-	`base_url,rest_scheme,rest_auth_type,rest_username,header_name,hmac_algo,knowledge_sources,probe_port,probe_interval,created_at,updated_at`
+	`base_url,rest_scheme,rest_auth_type,rest_username,header_name,hmac_algo,kb_mode,knowledge_sources,probe_port,probe_interval,created_at,updated_at`
 
 type accessFaceScanner interface {
 	Scan(dest ...any) error
@@ -246,7 +258,7 @@ func scanAccessFace(s accessFaceScanner) (*models.AccessFace, error) {
 		&f.SSHKeyID, &sshLegacy,
 		&f.SSHLoginInput,
 		&f.BaseURL, &f.RESTScheme, &f.RESTAuthType, &f.RESTUsername, &f.HeaderName, &f.HMACAlgo,
-		&ksJSON, &f.ProbePort, &f.ProbeInterval, &f.CreatedAt, &f.UpdatedAt,
+		&f.KBMode, &ksJSON, &f.ProbePort, &f.ProbeInterval, &f.CreatedAt, &f.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {
 		return nil, ErrNotFound
@@ -261,5 +273,56 @@ func scanAccessFace(s accessFaceScanner) (*models.AccessFace, error) {
 	if f.KnowledgeSources == nil {
 		f.KnowledgeSources = []models.KnowledgeSourceRef{}
 	}
+	f.KBMode = normalizeKBMode(f.KBMode)
+	f.KnowledgeSources = normalizeKnowledgeSources(f.KBMode, f.KnowledgeSources)
 	return &f, nil
+}
+
+func normalizeKBMode(mode string) string {
+	if mode == "" {
+		return "none"
+	}
+	return mode
+}
+
+func normalizeKnowledgeSources(mode string, sources []models.KnowledgeSourceRef) []models.KnowledgeSourceRef {
+	if mode == "none" {
+		return []models.KnowledgeSourceRef{}
+	}
+	out := make([]models.KnowledgeSourceRef, 0, len(sources))
+	for _, src := range sources {
+		if src.Type == "none" && src.ID == 0 {
+			continue
+		}
+		out = append(out, src)
+	}
+	if out == nil {
+		return []models.KnowledgeSourceRef{}
+	}
+	return out
+}
+
+func validateAccessFaceKB(mode string, sources []models.KnowledgeSourceRef) error {
+	switch mode {
+	case "none":
+		return nil
+	case "specific":
+		if len(sources) == 0 {
+			return fmt.Errorf("kb_mode=specific requires at least one knowledge_source")
+		}
+		if len(sources) > 10 {
+			return fmt.Errorf("knowledge_sources exceeds limit of 10")
+		}
+		for _, src := range sources {
+			if src.Type != "group" && src.Type != "doc" {
+				return fmt.Errorf("invalid knowledge_source type")
+			}
+			if src.ID <= 0 {
+				return fmt.Errorf("invalid knowledge_source id")
+			}
+		}
+		return nil
+	default:
+		return fmt.Errorf("invalid kb_mode")
+	}
 }

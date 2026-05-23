@@ -17,28 +17,28 @@ import (
 
 // Factory holds shared dependencies for creating Agent instances.
 type Factory struct {
-	LLMClient      llm.Client
-	Hosts          *store.HostStore
-	AccessFaces    *store.AccessFaceStore
-	SSHPool        *ssh.Pool
-	SSHKeys        *store.SSHKeyStore
-	Logs           *store.LogStore
-	MsgStore       MessageStorer
-	Enforcer       *permission.Enforcer
-	PermissionMode permission.Mode
-	SummaryStore   *store.SummaryStore
-	CompactionCfg  config.CompactionConfig
-	MaxTurns       int
-	LLMModel       string
-	TodoStore      *store.TodoStore
-	TopologyStore  *store.TopologyStore
-	SSEBroadcaster SSEBroadcaster
-	DataDir        string
-	DocStore       *store.DocumentStore
-	RagStore       *rag.Store
-	KnowledgeStore *knowledge.Store
-	Embedder       rag.Embedder
-	TaskStore      *store.TaskStore
+	LLMClient                    llm.Client
+	Hosts                        *store.HostStore
+	AccessFaces                  *store.AccessFaceStore
+	SSHPool                      *ssh.Pool
+	SSHKeys                      *store.SSHKeyStore
+	Logs                         *store.LogStore
+	MsgStore                     MessageStorer
+	Enforcer                     *permission.Enforcer
+	PermissionMode               permission.Mode
+	SummaryStore                 *store.SummaryStore
+	CompactionCfg                config.CompactionConfig
+	MaxTurns                     int
+	LLMModel                     string
+	TodoStore                    *store.TodoStore
+	TopologyStore                *store.TopologyStore
+	SSEBroadcaster               SSEBroadcaster
+	DataDir                      string
+	DocStore                     *store.DocumentStore
+	RagStore                     *rag.Store
+	KnowledgeStore               *knowledge.Store
+	Embedder                     rag.Embedder
+	TaskStore                    *store.TaskStore
 	DisableSearchDocs            bool
 	PerToolResultMaxChars        int
 	PerMessageToolResultMaxChars int
@@ -294,6 +294,7 @@ func (f *Factory) buildRegistryWithHosts(conversationID string, selectedHostIDs 
 	registry := NewToolRegistry()
 	listTool := NewGetHostsTool(f.Hosts, f.AccessFaces)
 	listTool.selectedHostIDs = selectedHostIDs
+	listTool.knowledgeStore = f.KnowledgeStore
 	registry.Register(listTool)
 	registry.Register(NewExecuteCLITool(f.Hosts, f.AccessFaces, f.SSHPool, f.Logs, f.SSHKeys))
 	registry.Register(NewBatchExecuteTool(f.Hosts, f.AccessFaces, f.SSHPool, f.Logs, f.SSHKeys))

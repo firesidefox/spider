@@ -99,6 +99,10 @@ func (m *mockKBStore) CatalogEntries(_ context.Context, sectionID int) ([]knowle
 	return []knowledge.EntrySummary{}, nil
 }
 
+func (m *mockKBStore) FetchEntries(_ context.Context, entryIDs []int) ([]knowledge.Entry, error) {
+	return []knowledge.Entry{}, nil
+}
+
 func TestListKnowledgeGroups(t *testing.T) {
 	mock := newMockKBStore()
 	mock.CreateGroup(context.Background(), "AISG")

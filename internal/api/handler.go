@@ -571,6 +571,18 @@ func NewRouter(app *mcppkg.App) http.Handler {
 		}
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	})
+	mux.HandleFunc("/api/v1/knowledge-entries/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			rest := strings.TrimPrefix(r.URL.Path, "/api/v1/knowledge-entries/")
+			if rest == "" {
+				http.NotFound(w, r)
+				return
+			}
+			getKnowledgeEntry(app.KnowledgeStore, w, r, rest)
+			return
+		}
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	})
 	mux.HandleFunc("/api/v1/knowledge-documents", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodDelete:

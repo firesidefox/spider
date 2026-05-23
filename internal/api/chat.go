@@ -148,8 +148,8 @@ func chatSendMessage(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id
 	}
 	factory.DataDir = app.Config.DataDir
 	var req struct {
-		Content  string   `json:"content"`
-		HostIDs  []string `json:"host_ids"`
+		Content string   `json:"content"`
+		HostIDs []string `json:"host_ids"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, 400, "invalid request body")
@@ -245,26 +245,10 @@ func chatSendMessage(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id
 	app.ConvStore.SetStatus(id, "idle") //nolint:errcheck
 }
 
-// allFacesDisableKB returns true when every access face in the system
-// has knowledge_sources set to the "none" sentinel [{type:"none",id:0}].
-// Used to skip registering SearchDocsTool entirely.
+// allFacesDisableKB is retained for compatibility with the agent factory hook.
+// SearchDocs remains available even when faces do not expose KB bindings.
 func allFacesDisableKB(app *mcppkg.App) bool {
-	hosts, err := app.HostStore.List("")
-	if err != nil || len(hosts) == 0 {
-		return false
-	}
-	for _, h := range hosts {
-		faces, err := app.AccessFaceStore.ListByHost(h.ID)
-		if err != nil {
-			return false
-		}
-		for _, f := range faces {
-			if len(f.KnowledgeSources) == 0 || f.KnowledgeSources[0].Type != "none" {
-				return false
-			}
-		}
-	}
-	return true
+	return false
 }
 
 func injectHostNames(app *mcppkg.App, content map[string]any) {

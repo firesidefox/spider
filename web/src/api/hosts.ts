@@ -16,6 +16,18 @@ export interface Host {
   memories?: Memory[]
 }
 
+export type KBMode = 'none' | 'specific'
+
+export interface KnowledgeSource {
+  type: 'group' | 'doc'
+  id: number
+  name?: string
+  title?: string
+  group_id?: number
+  group_name?: string
+  description?: string
+}
+
 export interface AccessFace {
   id: string
   host_id: string
@@ -32,7 +44,8 @@ export interface AccessFace {
   rest_username?: string
   header_name?: string
   hmac_algo?: string
-  knowledge_sources: Array<{ type: 'group' | 'doc'; id: number }>
+  kb_mode: KBMode
+  knowledge_sources: KnowledgeSource[]
   probe_port?: number
   probe_interval?: number
   created_at: string
@@ -93,6 +106,7 @@ export interface AddAccessFaceRequest {
   rest_username?: string
   header_name?: string
   hmac_algo?: string
+  kb_mode?: KBMode
   knowledge_sources?: Array<{ type: 'group' | 'doc'; id: number }>
   probe_port?: number
   probe_interval?: number

@@ -137,15 +137,12 @@
                   </div>
                   <div class="knowledge-row">
                     <span class="knowledge-label">知识来源：</span>
-                    <template v-if="!f.knowledge_sources || f.knowledge_sources.length === 0">
-                      <span class="knowledge-tag">全局</span>
-                    </template>
-                    <template v-else-if="f.knowledge_sources.every(k => k.type === 'none')">
-                      <!-- 无知识库，不显示 -->
+                    <template v-if="f.kb_mode === 'none' || !f.knowledge_sources || f.knowledge_sources.length === 0">
+                      <span class="knowledge-tag">不使用 KB</span>
                     </template>
                     <template v-else>
-                      <span v-for="ks in f.knowledge_sources.filter(k => k.type !== 'none')" :key="ks.type+ks.id" class="knowledge-tag">
-                        <span class="at">@</span>{{ ks.type === 'doc' ? (allDocsMap.get(ks.id)?.title || ks.id) : (docGroupsMap.get(ks.id)?.name || ks.id) }}
+                      <span v-for="ks in f.knowledge_sources" :key="ks.type+ks.id" class="knowledge-tag">
+                        <span class="at">@</span>{{ sourceLabel(ks) }}
                         <button class="ks-remove" @click.stop="saveKnowledgeSources(f, f.knowledge_sources.filter(k => !(k.type === ks.type && k.id === ks.id)).map(k => ({type: k.type, id: k.id})))">×</button>
                       </span>
                     </template>
@@ -154,8 +151,9 @@
                       <div v-if="ksPickerFaceId === f.id" class="ks-dropdown" @click.stop>
                         <label v-for="g in docGroups" :key="g.id" class="ks-option">
                           <input type="checkbox"
-                            :checked="f.knowledge_sources.some(k => k.id === g.id)"
+                            :checked="f.knowledge_sources.some(k => k.type === 'group' && k.id === g.id)"
                             @change="toggleKnowledgeSource(f, g.id)"
+                            :disabled="!f.knowledge_sources.some(k => k.type === 'group' && k.id === g.id) && f.knowledge_sources.length >= 10"
                           />
                           {{ g.name }}
                         </label>
@@ -344,31 +342,32 @@
           <div class="form-row">
             <label>知识来源</label>
             <div class="ks-mode-tabs">
-              <button type="button" class="btn btn-sm" :class="{ active: ksMode === 'global' }" @click="setKsMode('global')">全局</button>
-              <button type="button" class="btn btn-sm" :class="{ active: ksMode === 'group' }" @click="setKsMode('group')">文档组</button>
-              <button type="button" class="btn btn-sm" :class="{ active: ksMode === 'doc' }" @click="setKsMode('doc')">具体文档</button>
+              <button type="button" class="btn btn-sm" :class="{ active: ksMode === 'specific' }" @click="setKsMode('specific')">指定 KB</button>
               <button type="button" class="btn btn-sm" :class="{ active: ksMode === 'none' }" @click="setKsMode('none')">无</button>
             </div>
-            <div v-if="ksMode === 'group' && docGroups && docGroups.length > 0" class="ks-checkboxes">
+            <div v-if="ksMode === 'specific' && docGroups && docGroups.length > 0" class="ks-checkboxes">
               <label v-for="g in docGroups" :key="g.id" class="checkbox-label">
                 <input type="checkbox"
                   :checked="faceForm.knowledge_sources.some(k => k.type === 'group' && k.id === g.id)"
+                  :disabled="!faceForm.knowledge_sources.some(k => k.type === 'group' && k.id === g.id) && faceForm.knowledge_sources.length >= 10"
                   @change="toggleKs('group', g.id)" />
                 {{ g.name }}
               </label>
             </div>
-            <div v-if="ksMode === 'doc' && allDocs && allDocs.length > 0" class="ks-checkboxes">
+            <div v-if="ksMode === 'specific' && allDocs && allDocs.length > 0" class="ks-checkboxes">
               <label v-for="d in allDocs" :key="d.id" class="checkbox-label">
                 <input type="checkbox"
                   :checked="faceForm.knowledge_sources.some(k => k.type === 'doc' && k.id === d.id)"
+                  :disabled="!faceForm.knowledge_sources.some(k => k.type === 'doc' && k.id === d.id) && faceForm.knowledge_sources.length >= 10"
                   @change="toggleKs('doc', d.id)" />
-                {{ d.title || d.source_file }}
+                {{ d.name || d.filename }}
               </label>
             </div>
+            <div v-if="ksMode === 'specific' && faceForm.knowledge_sources.length >= 10" class="hint">最多绑定 10 个 KB 来源</div>
           </div>
           <div class="modal-footer">
             <button type="button" class="btn" @click="closeFaceModal">取消</button>
-            <button type="submit" class="btn btn-primary">{{ editFaceTarget ? '保存' : '添加' }}</button>
+            <button type="submit" class="btn btn-primary" :disabled="ksMode === 'specific' && faceForm.knowledge_sources.length === 0">{{ editFaceTarget ? '保存' : '添加' }}</button>
           </div>
         </form>
       </div>
@@ -386,7 +385,7 @@ import {
   type Host, type AccessFace, type Fingerprint, type Memory,
 } from '../api/hosts'
 import { listSSHKeys, type SafeSSHKey } from '../api/ssh-keys'
-import { listGroups, listDocuments, type DocumentGroup, type Document } from '../api/documents'
+import { listGroups as listKnowledgeGroups, listDocuments as listKnowledgeDocuments, type KnowledgeGroup, type KnowledgeDocument } from '../api/knowledge'
 
 const router = useRouter()
 const hosts = ref<Host[]>([])
@@ -409,10 +408,10 @@ const newMemory = ref('')
 const showAddFace = ref(false)
 const editFaceTarget = ref<AccessFace | null>(null)
 const sshKeys = ref<SafeSSHKey[]>([])
-const docGroups = ref<DocumentGroup[]>([])
-const ksMode = ref<'global' | 'group' | 'doc' | 'none'>('global')
+const docGroups = ref<KnowledgeGroup[]>([])
+const ksMode = ref<'specific' | 'none'>('none')
 const showAdvanced = ref(false)
-const allDocs = ref<Document[]>([])
+const allDocs = ref<KnowledgeDocument[]>([])
 
 const editingOverview = ref(false)
 const overviewSaving = ref(false)
@@ -476,6 +475,13 @@ const filtered = computed(() => hosts.value.filter(h => {
 
 const docGroupsMap = computed(() => new Map(docGroups.value.map(g => [g.id, g])))
 const allDocsMap = computed(() => new Map(allDocs.value.map(d => [d.id, d])))
+
+function sourceLabel(source: { type: 'group' | 'doc'; id: number; name?: string; title?: string; group_name?: string }) {
+  if (source.type === 'doc') {
+    return source.title || allDocsMap.value.get(source.id)?.name || source.id
+  }
+  return source.name || docGroupsMap.value.get(source.id)?.name || source.id
+}
 
 async function load() { hosts.value = await listHosts() }
 
@@ -547,7 +553,8 @@ async function saveKnowledgeSources(face: AccessFace, sources: Array<{type: stri
   if (!activeHost.value) return
   ksPickerFaceId.value = null
   try {
-    await updateAccessFace(activeHost.value.id, face.id, { knowledge_sources: sources as typeof face.knowledge_sources })
+    const cleanSources = sources.filter((s): s is { type: 'group' | 'doc'; id: number } => (s.type === 'group' || s.type === 'doc') && s.id > 0)
+    await updateAccessFace(activeHost.value.id, face.id, { kb_mode: cleanSources.length ? 'specific' : 'none', knowledge_sources: cleanSources })
     faces.value = await listAccessFaces(activeHost.value.id)
   } catch {
     // keep existing state on error
@@ -556,7 +563,8 @@ async function saveKnowledgeSources(face: AccessFace, sources: Array<{type: stri
 
 function toggleKnowledgeSource(face: AccessFace, groupId: number) {
   const exists = face.knowledge_sources.some(k => k.type === 'group' && k.id === groupId)
-  const base = face.knowledge_sources.filter(k => k.type !== 'none')
+  const base = face.knowledge_sources.map(k => ({ type: k.type, id: k.id }))
+  if (!exists && base.length >= 10) return
   const sources = exists
     ? base.filter(k => !(k.type === 'group' && k.id === groupId))
     : [...base, { type: 'group' as const, id: groupId }]
@@ -571,14 +579,15 @@ function toggleFormKnowledgeSource(groupId: number) {
     : [...ks, { type: 'group', id: groupId }]
 }
 
-function setKsMode(mode: 'global' | 'group' | 'doc' | 'none') {
+function setKsMode(mode: 'specific' | 'none') {
   ksMode.value = mode
-  faceForm.value.knowledge_sources = mode === 'none' ? [{ type: 'none', id: 0 }] : []
+  faceForm.value.knowledge_sources = []
 }
 
 function toggleKs(type: 'group' | 'doc', id: number) {
   const ks = faceForm.value.knowledge_sources
   const exists = ks.some(k => k.type === type && k.id === id)
+  if (!exists && ks.length >= 10) return
   faceForm.value.knowledge_sources = exists
     ? ks.filter(k => !(k.type === type && k.id === id))
     : [...ks, { type, id }]
@@ -590,7 +599,7 @@ function onRestAuthTypeChange() {
 
 async function submitFace() {
   if (!activeHost.value) return
-  const req: Record<string, unknown> = { type: faceForm.value.type, ip: faceForm.value.ip, port: faceForm.value.port, tags: [], knowledge_sources: faceForm.value.knowledge_sources, probe_port: faceForm.value.probe_port || 0, probe_interval: faceForm.value.probe_interval || 0 }
+  const req: Record<string, unknown> = { type: faceForm.value.type, ip: faceForm.value.ip, port: faceForm.value.port, tags: [], kb_mode: ksMode.value, knowledge_sources: ksMode.value === 'specific' ? faceForm.value.knowledge_sources : [], probe_port: faceForm.value.probe_port || 0, probe_interval: faceForm.value.probe_interval || 0 }
   if (faceForm.value.type === 'ssh') {
     req.username = faceForm.value.username || undefined
     req.ssh_auth_type = faceForm.value.ssh_auth_type
@@ -639,18 +648,9 @@ function startEditFace(face: AccessFace) {
     rest_username: face.rest_username || '',
     header_name: face.header_name || '',
     hmac_algo: face.hmac_algo || 'HMAC-SHA256',
-    knowledge_sources: face.knowledge_sources ? [...face.knowledge_sources] : [],
+    knowledge_sources: face.knowledge_sources ? face.knowledge_sources.map(k => ({ type: k.type, id: k.id })) : [],
   }
-  const ks = face.knowledge_sources ?? []
-  if (ks.length === 0) {
-    ksMode.value = 'global'
-  } else if (ks[0].type === 'none') {
-    ksMode.value = 'none'
-  } else if (ks[0].type === 'doc') {
-    ksMode.value = 'doc'
-  } else {
-    ksMode.value = 'group'
-  }
+  ksMode.value = face.kb_mode === 'specific' ? 'specific' : 'none'
   showAddFace.value = true
 }
 
@@ -658,7 +658,7 @@ function openAddFace() {
   faceForm.value = emptyFaceForm()
   editFaceTarget.value = null
   ksMode.value = 'none'
-  faceForm.value.knowledge_sources = [{ type: 'none', id: 0 }]
+  faceForm.value.knowledge_sources = []
   showAdvanced.value = false
   showAddFace.value = true
 }
@@ -704,15 +704,14 @@ function handleOutsideClick(e: MouseEvent) {
 onMounted(async () => {
   window.addEventListener('keydown', handleEsc)
   document.addEventListener('mousedown', handleOutsideClick)
-  const [, keys, groups, docs] = await Promise.all([
+  const [, keys, groups] = await Promise.all([
     load(),
     listSSHKeys().catch((): SafeSSHKey[] => []),
-    listGroups().catch((): DocumentGroup[] => []),
-    listDocuments().catch((): Document[] => []),
+    listKnowledgeGroups().catch((): KnowledgeGroup[] => []),
   ])
   sshKeys.value = keys
   docGroups.value = groups
-  allDocs.value = docs
+  allDocs.value = (await Promise.all(groups.map(g => listKnowledgeDocuments(g.id).catch((): KnowledgeDocument[] => [])))).flat()
 })
 
 onUnmounted(() => {

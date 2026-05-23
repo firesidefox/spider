@@ -21,9 +21,9 @@ func NewSearchDocsTool(knowledgeStore *knowledge.Store, embedder rag.Embedder) *
 	}
 }
 
-func (t *SearchDocsTool) DefaultRiskLevel() RiskLevel              { return RiskL1 }
+func (t *SearchDocsTool) DefaultRiskLevel() RiskLevel             { return RiskL1 }
 func (t *SearchDocsTool) IsConcurrencySafe(_ map[string]any) bool { return true }
-func (t *SearchDocsTool) Name() string                             { return "SearchDocs" }
+func (t *SearchDocsTool) Name() string                            { return "SearchDocs" }
 
 func (t *SearchDocsTool) Description() string {
 	return "Search knowledge base for API endpoints, CLI commands, and documentation. Read-only. No side effects. Use freely in Explore phase."
@@ -59,9 +59,22 @@ func (t *SearchDocsTool) SystemPromptSection() string {
    - Returns: [{title, content}] (top-K matches)
    - Use: When entry_count ≥ 500 or catalog doesn't help
 
+**Face KB Bindings**
+
+Each access face has kb_mode and knowledge_sources. When kb_mode='specific',
+the face exposes one or more KB scopes. Each entry includes name for groups
+or title + group_name for documents.
+
+When solving tasks for selected hosts, prefer SearchDocs scoped to bound sources.
+Multiple sources may bind to different scopes; call SearchDocs separately per scope as needed.
+
+- type=group -> scope_type=group, scope_id=source.id
+- type=doc -> scope_type=document, scope_id=source.id
+- kb_mode=none -> no binding signal
+
 **Typical workflow:**
-1. Get scope from face.knowledge_sources: [{"type":"group","id":3}]
-2. SearchDocs mode=sections, scope_type=group, scope_id=3
+1. Get scope from face where kb_mode='specific'
+2. SearchDocs mode=sections with scope_type/scope_id from the bound source
 3. Pick relevant section_id from results
 4. SearchDocs mode=entries, section_id=N
 5. Pick relevant entry_ids
@@ -83,7 +96,7 @@ func (t *SearchDocsTool) InputSchema() map[string]any {
 			},
 			"scope_type": map[string]any{
 				"type":        "string",
-				"enum":        []string{"kb", "group", "document"},
+				"enum":        []string{"group", "document"},
 				"description": "Scope type for sections/search mode",
 			},
 			"scope_id": map[string]any{
@@ -240,7 +253,7 @@ func (t *SearchDocsTool) executeSearch(ctx context.Context, input map[string]any
 		return &ToolResult{Content: "search unavailable: embedder not configured", IsError: true, RiskLevel: RiskL1}, nil
 	}
 
-	entries, err := t.knowledgeStore.SearchByQuery(ctx, query, knowledge.Scope{Type: scopeType, ID: scopeID}, 5, t.embedder)
+	entries, err := t.knowledgeStore.Search(ctx, query, knowledge.Scope{Type: scopeType, ID: scopeID}, 5, t.embedder)
 	if err != nil {
 		return &ToolResult{Content: fmt.Sprintf("search: %v", err), IsError: true, RiskLevel: RiskL1}, nil
 	}

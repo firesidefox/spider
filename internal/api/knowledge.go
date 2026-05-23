@@ -6,10 +6,12 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/spiderai/spider/internal/knowledge"
 	mcppkg "github.com/spiderai/spider/internal/mcp"
 	"github.com/spiderai/spider/internal/rag"
+	"gopkg.in/yaml.v3"
 )
 
 // kbStore is the subset of knowledge.KnowledgePlugin used by these handlers.
@@ -91,6 +93,7 @@ type docStore interface {
 	MoveDocuments(ctx context.Context, docIDs []int, targetGroupID int) error
 	CatalogSections(ctx context.Context, scope knowledge.Scope) ([]knowledge.Section, error)
 	CatalogEntries(ctx context.Context, sectionID int) ([]knowledge.EntrySummary, error)
+	FetchEntries(ctx context.Context, entryIDs []int) ([]knowledge.Entry, error)
 }
 
 func getKnowledgeDocument(s docStore, w http.ResponseWriter, r *http.Request, docIDStr string) {
@@ -144,6 +147,158 @@ func getKnowledgeSectionEntries(s docStore, w http.ResponseWriter, r *http.Reque
 		entries = []knowledge.EntrySummary{}
 	}
 	writeJSON(w, http.StatusOK, entries)
+}
+
+func getKnowledgeEntry(s docStore, w http.ResponseWriter, r *http.Request, entryIDStr string) {
+	entryID, err := strconv.Atoi(entryIDStr)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid entry id")
+		return
+	}
+	entries, err := s.FetchEntries(r.Context(), []int{entryID})
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if len(entries) == 0 {
+		writeError(w, http.StatusNotFound, "entry not found")
+		return
+	}
+	e := entries[0]
+	method, path := splitMethodPath(e.Title)
+	resp := map[string]any{
+		"id":          e.ID,
+		"document_id": e.DocumentID,
+		"section_id":  e.SectionID,
+		"title":       e.Title,
+		"summary":     e.Summary,
+		"content":     e.Content,
+		"position":    e.Position,
+		"method":      method,
+		"path":        path,
+	}
+	if op := parseOpenAPIOperation(e.Content); op != nil {
+		resp["description"] = op.Description
+		resp["parameters"] = op.Parameters
+		resp["responses"] = op.Responses
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func splitMethodPath(title string) (string, string) {
+	parts := strings.SplitN(title, " ", 2)
+	if len(parts) == 2 {
+		return parts[0], parts[1]
+	}
+	return "", title
+}
+
+type openAPIParam struct {
+	Name        string `json:"name"`
+	In          string `json:"in,omitempty"`
+	Type        string `json:"type,omitempty"`
+	Required    bool   `json:"required"`
+	Description string `json:"description,omitempty"`
+}
+
+type openAPIResponse struct {
+	Description string `json:"description,omitempty"`
+	Example     any    `json:"example,omitempty"`
+}
+
+type openAPIOperation struct {
+	Description string                     `json:"description,omitempty"`
+	Parameters  []openAPIParam             `json:"parameters"`
+	Responses   map[string]openAPIResponse `json:"responses"`
+}
+
+func parseOpenAPIOperation(content string) *openAPIOperation {
+	var raw map[string]any
+	if err := yaml.Unmarshal([]byte(content), &raw); err != nil {
+		return nil
+	}
+	out := &openAPIOperation{
+		Parameters: []openAPIParam{},
+		Responses:  map[string]openAPIResponse{},
+	}
+	if d, ok := raw["description"].(string); ok {
+		out.Description = d
+	} else if d, ok := raw["summary"].(string); ok {
+		out.Description = d
+	}
+	if pp, ok := raw["parameters"].([]any); ok {
+		for _, p := range pp {
+			pm, ok := p.(map[string]any)
+			if !ok {
+				continue
+			}
+			param := openAPIParam{}
+			if v, ok := pm["name"].(string); ok {
+				param.Name = v
+			}
+			if v, ok := pm["in"].(string); ok {
+				param.In = v
+			}
+			if v, ok := pm["required"].(bool); ok {
+				param.Required = v
+			}
+			if v, ok := pm["description"].(string); ok {
+				param.Description = v
+			}
+			if sch, ok := pm["schema"].(map[string]any); ok {
+				if t, ok := sch["type"].(string); ok {
+					param.Type = t
+				}
+			} else if t, ok := pm["type"].(string); ok {
+				param.Type = t
+			}
+			out.Parameters = append(out.Parameters, param)
+		}
+	}
+	if rr, ok := raw["responses"].(map[string]any); ok {
+		for code, val := range rr {
+			vm, ok := val.(map[string]any)
+			if !ok {
+				continue
+			}
+			resp := openAPIResponse{}
+			if d, ok := vm["description"].(string); ok {
+				resp.Description = d
+			}
+			if c, ok := vm["content"].(map[string]any); ok {
+				for _, mt := range c {
+					mtm, ok := mt.(map[string]any)
+					if !ok {
+						continue
+					}
+					if ex, ok := mtm["example"]; ok {
+						resp.Example = ex
+						break
+					}
+					if exs, ok := mtm["examples"].(map[string]any); ok {
+						for _, e := range exs {
+							em, ok := e.(map[string]any)
+							if !ok {
+								continue
+							}
+							if v, ok := em["value"]; ok {
+								resp.Example = v
+								break
+							}
+						}
+						if resp.Example != nil {
+							break
+						}
+					}
+				}
+			}
+			if ex, ok := vm["example"]; ok && resp.Example == nil {
+				resp.Example = ex
+			}
+			out.Responses[code] = resp
+		}
+	}
+	return out
 }
 
 func listKnowledgeGroupDocuments(s docStore, w http.ResponseWriter, r *http.Request, groupIDStr string) {

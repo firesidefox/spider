@@ -20,16 +20,26 @@ const (
 type RESTAuthType string
 
 const (
-	RESTAuthBearer    RESTAuthType = "bearer"
-	RESTAuthBasic     RESTAuthType = "basic"
-	RESTAuthAPIKey    RESTAuthType = "apikey"
-	RESTAuthNone      RESTAuthType = "none"
-	RESTAuthHMACAKSK  RESTAuthType = "hmac_aksk"
+	RESTAuthBearer   RESTAuthType = "bearer"
+	RESTAuthBasic    RESTAuthType = "basic"
+	RESTAuthAPIKey   RESTAuthType = "apikey"
+	RESTAuthNone     RESTAuthType = "none"
+	RESTAuthHMACAKSK RESTAuthType = "hmac_aksk"
 )
 
 type KnowledgeSourceRef struct {
-	Type  string `json:"type"` // "group" | "doc"
-	ID    int    `json:"id"`
+	Type string `json:"type"` // "group" | "doc"
+	ID   int    `json:"id"`
+}
+
+type KnowledgeSourceRefEnriched struct {
+	Type        string `json:"type"`
+	ID          int    `json:"id"`
+	Name        string `json:"name,omitempty"`
+	Description string `json:"description,omitempty"`
+	Title       string `json:"title,omitempty"`
+	GroupID     int    `json:"group_id,omitempty"`
+	GroupName   string `json:"group_name,omitempty"`
 }
 
 type AccessFace struct {
@@ -51,9 +61,10 @@ type AccessFace struct {
 	RESTUsername     string               `json:"rest_username,omitempty"`
 	HeaderName       string               `json:"header_name,omitempty"`
 	HMACAlgo         string               `json:"hmac_algo,omitempty"`
+	KBMode           string               `json:"kb_mode"`
 	KnowledgeSources []KnowledgeSourceRef `json:"knowledge_sources"`
-	ProbePort     int                  `json:"probe_port,omitempty"`
-	ProbeInterval int                  `json:"probe_interval,omitempty"`
+	ProbePort        int                  `json:"probe_port,omitempty"`
+	ProbeInterval    int                  `json:"probe_interval,omitempty"`
 	CreatedAt        time.Time            `json:"created_at"`
 	UpdatedAt        time.Time            `json:"updated_at"`
 }
@@ -85,20 +96,19 @@ type Memory struct {
 }
 
 type Host struct {
-	ID               string               `json:"id"`
-	Name             string               `json:"name"`
-	IP               string               `json:"ip"`
-	Notes            string               `json:"notes,omitempty"`
-	Tags             []string             `json:"tags"`
-	Vendor           string               `json:"vendor,omitempty"`
-	ProductName      string               `json:"product_name,omitempty"`
-	ProductVersion   string               `json:"product_version,omitempty"`
-	CreatedAt        time.Time            `json:"created_at"`
-	UpdatedAt        time.Time            `json:"updated_at"`
-	KnowledgeSources []KnowledgeSourceRef `json:"knowledge_sources,omitempty"`
-	AccessFaces      []AccessFace         `json:"access_faces,omitempty"`
-	Fingerprint      *Fingerprint         `json:"fingerprint,omitempty"`
-	Memories         []Memory             `json:"memories,omitempty"`
+	ID             string       `json:"id"`
+	Name           string       `json:"name"`
+	IP             string       `json:"ip"`
+	Notes          string       `json:"notes,omitempty"`
+	Tags           []string     `json:"tags"`
+	Vendor         string       `json:"vendor,omitempty"`
+	ProductName    string       `json:"product_name,omitempty"`
+	ProductVersion string       `json:"product_version,omitempty"`
+	CreatedAt      time.Time    `json:"created_at"`
+	UpdatedAt      time.Time    `json:"updated_at"`
+	AccessFaces    []AccessFace `json:"access_faces,omitempty"`
+	Fingerprint    *Fingerprint `json:"fingerprint,omitempty"`
+	Memories       []Memory     `json:"memories,omitempty"`
 }
 
 type AddHostRequest struct {
@@ -138,6 +148,7 @@ type AddAccessFaceRequest struct {
 	RESTUsername     string               `json:"rest_username"`
 	HeaderName       string               `json:"header_name"`
 	HMACAlgo         string               `json:"hmac_algo"`
+	KBMode           string               `json:"kb_mode"`
 	KnowledgeSources []KnowledgeSourceRef `json:"knowledge_sources"`
 	ProbePort        int                  `json:"probe_port,omitempty"`
 	ProbeInterval    int                  `json:"probe_interval,omitempty"`
@@ -159,6 +170,7 @@ type UpdateAccessFaceRequest struct {
 	RESTUsername     *string              `json:"rest_username"`
 	HeaderName       *string              `json:"header_name"`
 	HMACAlgo         *string              `json:"hmac_algo"`
+	KBMode           *string              `json:"kb_mode"`
 	KnowledgeSources []KnowledgeSourceRef `json:"knowledge_sources"`
 	ProbePort        *int                 `json:"probe_port,omitempty"`
 	ProbeInterval    *int                 `json:"probe_interval,omitempty"`

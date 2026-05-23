@@ -13,22 +13,26 @@ type KnowledgePlugin interface {
 	// Group management (top-level container)
 	CreateGroup(ctx context.Context, name string) (*Group, error)
 	ListGroups(ctx context.Context) ([]Group, error)
+	GetGroupsByIDs(ctx context.Context, ids []int) ([]Group, error)
 	DeleteGroup(ctx context.Context, groupID int) error
+	DeleteGroups(ctx context.Context, groupIDs []int) error
 
 	// Document management
 	ListDocuments(ctx context.Context, groupID int) ([]Document, error)
 	GetDocument(ctx context.Context, docID int) (*Document, error)
+	GetDocumentsByIDs(ctx context.Context, ids []int) ([]Document, error)
 	DeleteDocuments(ctx context.Context, docIDs []int) error
+	MoveDocuments(ctx context.Context, docIDs []int, targetGroupID int) error
 
 	// Retrieval
 	CatalogSections(ctx context.Context, scope Scope) ([]Section, error)
 	CatalogEntries(ctx context.Context, sectionID int) ([]EntrySummary, error)
 	FetchEntries(ctx context.Context, entryIDs []int) ([]Entry, error)
-	Search(ctx context.Context, queryEmb []byte, scope Scope, topK int) ([]Entry, error)
-	SearchByQuery(ctx context.Context, query string, scope Scope, topK int, embedder rag.Embedder) ([]Entry, error)
+	Search(ctx context.Context, query string, scope Scope, topK int, embedder rag.Embedder) ([]Entry, error)
 
 	// Import
 	ImportDocument(ctx context.Context, req ImportRequest) (*ImportResult, error)
+	ReindexDocument(ctx context.Context, docID int, req ImportRequest) (*ImportResult, error)
 }
 
 // Scope defines the search/retrieval scope.
@@ -48,17 +52,17 @@ type Group struct {
 
 // Document represents an imported document.
 type Document struct {
-	ID          int       `json:"id"`
-	GroupID     int       `json:"group_id"`
-	Name        string    `json:"name"`
-	DocType     string    `json:"doc_type"` // "openapi" | "markdown"
-	RawContent  string    `json:"raw_content"`
-	Filename    string    `json:"filename"`
-	Status      string    `json:"status"` // "pending" | "indexing" | "ready" | "error"
-	ErrorMsg    string    `json:"error_msg"`
-	EntryCount  int       `json:"entry_count"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	ID         int       `json:"id"`
+	GroupID    int       `json:"group_id"`
+	Name       string    `json:"name"`
+	DocType    string    `json:"doc_type"` // "openapi" | "markdown"
+	RawContent string    `json:"raw_content"`
+	Filename   string    `json:"filename"`
+	Status     string    `json:"status"` // "pending" | "indexing" | "ready" | "error"
+	ErrorMsg   string    `json:"error_msg"`
+	EntryCount int       `json:"entry_count"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 // Section represents a logical section within a document.
@@ -80,14 +84,14 @@ type EntrySummary struct {
 
 // Entry represents a searchable knowledge entry.
 type Entry struct {
-	ID         int
-	DocumentID int
-	SectionID  *int
-	Title      string
-	Summary    string
-	Content    string
-	Embedding  []byte
-	Position   int
+	ID         int    `json:"id"`
+	DocumentID int    `json:"document_id"`
+	SectionID  *int   `json:"section_id,omitempty"`
+	Title      string `json:"title"`
+	Summary    string `json:"summary"`
+	Content    string `json:"content"`
+	Embedding  []byte `json:"-"`
+	Position   int    `json:"position"`
 }
 
 // ImportRequest specifies parameters for importing a document.
