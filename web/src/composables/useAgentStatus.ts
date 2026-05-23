@@ -33,9 +33,10 @@ export function updateAgentStatus(update: Omit<AgentStatus, 'updatedAt' | 'start
   }
 
   const now = Date.now()
+  const phaseChanged = prev?.phase !== update.phase
   statuses.value.set(update.conversationId, {
     ...update,
-    startedAt: now,
+    startedAt: phaseChanged || !prev?.startedAt ? now : prev.startedAt,
     updatedAt: now,
   })
   statuses.value = new Map(statuses.value)

@@ -938,7 +938,7 @@ function closeModeDropdown(e: MouseEvent) {
   }
 }
 
-// @kb two-step dropdown
+// @kb: two-step dropdown
 const textareaRef = ref<HTMLTextAreaElement | null>(null)
 const kbDropdownMode = ref<'groups' | 'docs' | null>(null)
 const kbGroups = ref<DocumentGroup[]>([])
@@ -990,14 +990,14 @@ async function onTextareaInput() {
     }
   }
 
-  // Match @kb or @kb: → show groups
-  const groupMatch = before.match(/@kb:?$/)
+  // Match @kb: → show groups
+  const groupMatch = before.match(/@kb:$/)
   if (groupMatch) {
     await loadGroupsIfNeeded()
     if (kbGroups.value.length > 0) {
       kbDropdownMode.value = 'groups'
       kbActiveIndex.value = 0
-      kbTriggerStart.value = before.lastIndexOf('@kb')
+      kbTriggerStart.value = before.lastIndexOf('@kb:')
     }
     return
   }

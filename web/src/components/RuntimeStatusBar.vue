@@ -1,14 +1,13 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import type { AgentStatus } from '../composables/useAgentStatus'
+import { EXPLORE_TOOLS } from '../composables/toolSets'
 
 const props = defineProps<{
   status: AgentStatus | null
 }>()
 
 const SPINNER = ['✻', '✦', '✶', '✷', '✸', '✹']
-// Keep in sync with ChatMessage.vue's EXPLORE_TOOLS (plus invoke_skill).
-const EXPLORE_TOOLS = new Set(['GetHosts', 'SearchDocs', 'Verify', 'GetTopology', 'invoke_skill'])
 
 const spinnerIdx = ref(0)
 const elapsedSec = ref(0)
