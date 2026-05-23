@@ -11,13 +11,15 @@
 ```
 Group（组）
   └── Document（文档）
-        └── Entry（条目）← 内部索引单元，用户只浏览
+        ├── Section（章节）← LLM 聚类生成，检索导航用
+        └── Entry（条目）← 实际索引单元
 ```
 
 | 层级 | 说明 | 示例 |
 |------|------|------|
 | Group | 按厂商/项目分组的顶层容器 | AISG、F5 BIG-IP、Huawei |
 | Document | 一个上传的文件 | 监控 API、CLI 手册 |
+| Section | LLM 生成的语义章节，用于分层检索 | "查询接口"、"配置管理" |
 | Entry | 一个 endpoint 或 CLI 命令 | GET /api/v1/query |
 
 ### 1.1 Access Face 绑定
@@ -199,15 +201,27 @@ scope 对应 access face 的绑定目标：
 
 ```go
 type KnowledgePlugin interface {
+    // Group management
+    CreateGroup(ctx context.Context, name string) (*Group, error)
+    ListGroups(ctx context.Context) ([]Group, error)
+    DeleteGroup(ctx context.Context, groupID int) error
+    DeleteGroups(ctx context.Context, groupIDs []int) error
+
+    // Document management
+    ListDocuments(ctx context.Context, groupID int) ([]Document, error)
+    GetDocument(ctx context.Context, docID int) (*Document, error)
+    DeleteDocuments(ctx context.Context, docIDs []int) error
+    MoveDocuments(ctx context.Context, docIDs []int, targetGroupID int) error
+
     // 检索
     CatalogSections(ctx context.Context, scope Scope) ([]Section, error)
     CatalogEntries(ctx context.Context, sectionID int) ([]EntrySummary, error)
     FetchEntries(ctx context.Context, entryIDs []int) ([]Entry, error)
-    Search(ctx context.Context, query string, scope Scope, topK int) ([]Entry, error)
+    Search(ctx context.Context, query string, scope Scope, topK int, embedder rag.Embedder) ([]Entry, error)
 
     // 导入
     ImportDocument(ctx context.Context, req ImportRequest) (*ImportResult, error)
-    DeleteDocuments(ctx context.Context, docIDs []int) error
+    ReindexDocument(ctx context.Context, docID int, req ImportRequest) (*ImportResult, error)
 }
 
 type Scope struct {
@@ -267,6 +281,8 @@ CREATE TABLE knowledge_documents (
     group_id    INTEGER NOT NULL REFERENCES knowledge_groups(id) ON DELETE CASCADE,
     name        TEXT NOT NULL,
     doc_type    TEXT NOT NULL CHECK(doc_type IN ('openapi','markdown')),
+    raw_content TEXT NOT NULL DEFAULT '',
+    filename    TEXT NOT NULL DEFAULT '',
     status      TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','indexing','ready','error')),
     error_msg   TEXT NOT NULL DEFAULT '',
     entry_count INTEGER NOT NULL DEFAULT 0,
@@ -278,8 +294,8 @@ CREATE TABLE knowledge_documents (
 CREATE TABLE knowledge_sections (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     document_id INTEGER NOT NULL REFERENCES knowledge_documents(id) ON DELETE CASCADE,
-    name        TEXT NOT NULL,   -- 中文章节名
-    summary     TEXT NOT NULL,   -- 一句话描述
+    name        TEXT NOT NULL,
+    summary     TEXT NOT NULL DEFAULT '',
     position    INTEGER NOT NULL DEFAULT 0
 );
 
@@ -287,16 +303,18 @@ CREATE TABLE knowledge_sections (
 CREATE TABLE knowledge_entries (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     document_id INTEGER NOT NULL REFERENCES knowledge_documents(id) ON DELETE CASCADE,
-    section_id  INTEGER REFERENCES knowledge_sections(id),
-    title       TEXT NOT NULL,   -- "GET /api/v1/query"
-    summary     TEXT NOT NULL,   -- child：一句话
-    content     TEXT NOT NULL,   -- parent：完整内容
-    embedding   BLOB,            -- child summary 的向量（1536 维 float32）
+    section_id  INTEGER REFERENCES knowledge_sections(id) ON DELETE SET NULL,
+    title       TEXT NOT NULL,
+    summary     TEXT NOT NULL DEFAULT '',
+    content     TEXT NOT NULL,
+    embedding   BLOB,
     position    INTEGER NOT NULL DEFAULT 0
 );
 
-CREATE INDEX idx_entries_document ON knowledge_entries(document_id);
-CREATE INDEX idx_entries_section  ON knowledge_entries(section_id);
+CREATE INDEX idx_kb_docs_group_id ON knowledge_documents(group_id);
+CREATE INDEX idx_kb_sections_doc_id ON knowledge_sections(document_id);
+CREATE INDEX idx_kb_entries_doc_id ON knowledge_entries(document_id);
+CREATE INDEX idx_kb_entries_section_id ON knowledge_entries(section_id);
 ```
 
 `access_faces.knowledge_sources` 字段格式：

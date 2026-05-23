@@ -36,6 +36,34 @@ export interface KnowledgeEntry {
   summary: string
 }
 
+export interface KnowledgeEntryParam {
+  name: string
+  in?: string
+  type?: string
+  required: boolean
+  description?: string
+}
+
+export interface KnowledgeEntryResponse {
+  description?: string
+  example?: any
+}
+
+export interface KnowledgeEntryDetail {
+  id: number
+  document_id: number
+  section_id?: number | null
+  title: string
+  summary: string
+  content: string
+  position: number
+  method?: string
+  path?: string
+  description?: string
+  parameters?: KnowledgeEntryParam[]
+  responses?: Record<string, KnowledgeEntryResponse>
+}
+
 export interface ImportResult {
   document_id: number
   entry_count: number
@@ -110,6 +138,11 @@ export async function getSections(docID: number): Promise<KnowledgeSection[]> {
 export async function getEntries(sectionID: number): Promise<KnowledgeEntry[]> {
   const r = await fetch(`${BASE}/knowledge-sections/${sectionID}/entries`, { headers: authHeaders() })
   return handleResponse<KnowledgeEntry[]>(r)
+}
+
+export async function getEntry(entryID: number): Promise<KnowledgeEntryDetail> {
+  const r = await fetch(`${BASE}/knowledge-entries/${entryID}`, { headers: authHeaders() })
+  return handleResponse<KnowledgeEntryDetail>(r)
 }
 
 export async function deleteDocuments(ids: number[]): Promise<void> {

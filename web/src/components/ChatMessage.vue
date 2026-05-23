@@ -2,6 +2,7 @@
 import { ref, computed, inject } from 'vue'
 import { marked } from 'marked'
 import type { ChatThemeTokens, ChatDensity } from '../chatTheme'
+import { EXPLORE_TOOLS } from '../composables/toolSets'
 
 export interface ToolCallBlock {
   id: string
@@ -25,7 +26,7 @@ interface ConfirmRequest {
   riskLevel: string
 }
 
-const EXPLORE_TOOLS = new Set(['GetHosts', 'SearchDocs', 'Verify', 'GetTopology'])
+
 
 type TextItem     = { kind: 'text';        content: string }
 type HkItem       = { kind: 'housekeeping'; call: ToolCallBlock }
