@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"time"
@@ -17,7 +18,7 @@ func NewGroupStore(db *sql.DB) *GroupStore {
 }
 
 func (s *GroupStore) List() ([]*models.DocumentGroup, error) {
-	rows, err := s.db.Query("SELECT id, name, created_at FROM document_groups ORDER BY id")
+	rows, err := s.db.Query("SELECT id, name, description, created_at FROM document_groups ORDER BY id")
 	if err != nil {
 		return nil, err
 	}
@@ -25,7 +26,7 @@ func (s *GroupStore) List() ([]*models.DocumentGroup, error) {
 	var list []*models.DocumentGroup
 	for rows.Next() {
 		var g models.DocumentGroup
-		if err := rows.Scan(&g.ID, &g.Name, &g.CreatedAt); err != nil {
+		if err := rows.Scan(&g.ID, &g.Name, &g.Description, &g.CreatedAt); err != nil {
 			return nil, err
 		}
 		list = append(list, &g)
@@ -59,5 +60,11 @@ func (s *GroupStore) MoveDocument(docID int, groupID *int) error {
 		return err
 	}
 	_, err := s.db.Exec("UPDATE documents SET group_id = ? WHERE id = ?", *groupID, docID)
+	return err
+}
+
+func (s *GroupStore) UpdateDescription(ctx context.Context, id int, desc string) error {
+	_, err := s.db.ExecContext(ctx,
+		"UPDATE document_groups SET description = ? WHERE id = ?", desc, id)
 	return err
 }
