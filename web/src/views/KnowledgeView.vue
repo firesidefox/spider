@@ -446,6 +446,7 @@ async function selectEntry(e: KnowledgeEntry) {
     return
   }
   activeEntryId.value = e.id
+  focusedIdx.value = filteredEntries.value.findIndex(x => x.id === e.id)
   loadingDetail.value = true
   try {
     activeEntryDetail.value = await getEntry(e.id)
