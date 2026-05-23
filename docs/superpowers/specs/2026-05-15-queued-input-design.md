@@ -1,7 +1,7 @@
 # Queued Input Design
 
 **Date:** 2026-05-15  
-**Feature:** 运行中输入（queued input）
+**Status:** 已实现 — queuedMessages ref、streaming 时入队、done 后自动 flush（ChatView.vue）
 
 ## Overview
 

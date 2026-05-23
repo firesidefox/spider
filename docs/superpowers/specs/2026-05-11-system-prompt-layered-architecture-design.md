@@ -1,5 +1,7 @@
 # System Prompt Layered Architecture Design
 
+**Status:** 已实现 — Description()/SystemPromptSection()/Nudge 多层架构（tools.go + factory.go + tools_todo_task.go）
+
 ## Goal
 
 Refactor system prompt construction from a centralized string in `factory.go` into a three-layer architecture where each tool owns its behavior guidance.

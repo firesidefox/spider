@@ -1,5 +1,7 @@
 # Per-Module Dynamic Log Level — Design Spec
 
+**Status:** 已实现 — logger.SetModuleLevel()、ForModule()、PUT /api/v1/log-level（logger/logger.go）
+
 ## Goal
 
 Support per-module log level override at runtime, without restarting the server. Modules not explicitly overridden inherit the global default level.

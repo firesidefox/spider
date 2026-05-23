@@ -1,71 +1,72 @@
 <claude-mem-context>
 # Memory Context
 
-# [spider.ai] recent context, 2026-05-21 11:06pm GMT+8
+# [spider.ai] recent context, 2026-05-23 3:24pm GMT+8
 
 Legend: 🎯session 🔴bugfix 🟣feature 🔄refactor ✅change 🔵discovery ⚖️decision
 Format: ID TIME TYPE TITLE
 Fetch details: get_observations([IDs]) | Search: mem-search skill
 
-### May 21, 2026
-S3400 spider.ai spec files inventory (May 21 at 8:32 PM)
-S3401 System prompt cache rebuild plan has 7 tasks with 37 uncompleted steps (May 21 at 8:33 PM)
-S3407 spider.ai — implementation plan marked complete at __CONTINUE_HERE__ marker (May 21 at 8:34 PM)
-S3408 Excalidraw diagram creation request received (May 21 at 8:44 PM)
-S3416 UI implementation mismatch with mockup design (May 21 at 9:14 PM)
-S3422 Compare knowledge base redesign mockup with current implementation to identify feature gaps and missing functionality (May 21 at 9:42 PM)
-S3442 Implement backend API for document content display in knowledge base (May 21 at 10:04 PM)
-S3420 Compare knowledge base redesign mockup with current implementation to identify gaps (May 21 at 10:04 PM)
-6537 10:11p 🔵 File upload state management enables import button after file selection
-6540 10:12p 🔵 Document import creates duplicate entries in knowledge base
-6542 " ✅ Knowledge base UI screenshot captured for verification
-6544 10:13p ✅ Development server stopped after UI verification
-6545 10:38p 🟣 Document content display implementation continued
-6546 " 🔵 Knowledge documents store raw content in database
-6549 " 🔵 Knowledge documents database schema confirmed with raw_content TEXT field
-6550 10:48p 🔵 Document content API endpoint missing from backend
-6551 " 🔵 Backend GetDocument method fully implemented with raw_content retrieval
-6553 " ⚖️ Planned implementation tasks for document content display feature
-6554 " 🔵 Knowledge documents route uses path-based method dispatch pattern
-6555 " 🔵 Knowledge base refactor missing backend implementation
-6556 " 🟣 Document content display API endpoint implemented
-6558 10:49p 🟣 Document content display feature fully implemented
-6560 10:52p 🔵 Knowledge base refactor missing backend implementation
-6562 " 🔵 Knowledge base backend uses plugin architecture without MCP exposure
-6563 " 🔵 Knowledge base refactor missing backend implementation
-6564 10:53p 🔵 Knowledge base refactor missing backend implementation
-6565 " 🔵 Knowledge base refactor missing backend implementation
-6567 10:54p 🔵 Knowledge base refactor missing backend implementation
-6568 " 🔵 Knowledge base refactor missing backend implementation
-6569 " 🟣 Document content display implemented in knowledge base
-S3444 Document content display feature committed to main branch (May 21 at 10:55 PM)
-6571 10:57p 🔵 Knowledge base refactor missing backend implementation
-6573 " 🟣 Document content display API endpoint implemented
-6574 " 🟣 Global document import with group selection added
-6575 " 🟣 Search and filter inputs added to knowledge base sidebar
-6576 " 🟣 Vue watch hook fetches document content on selection
-6577 " 🔴 Knowledge clustering falls back to single section on LLM failure
-6578 10:58p ✅ Document content display feature committed to main branch
-6579 " ✅ Clustering fallback feature committed to main branch
-6580 10:59p ⚖️ Brainstorming session initiated
-6582 " 🔵 Brainstorming skill workflow invoked for spider.ai project
-6583 " 🔵 spider.ai project context exploration completed
-6584 11:00p ⚖️ Brainstorming session initiated
-6585 " ✅ Brainstorming session initiated
-6586 " ✅ Brainstorming workflow plan initialized for spider.ai project
-6587 " 🔵 Knowledge base implementation progress tracked across 7 files
-6588 " 🔵 Knowledge base documentation structure discovered
-6589 " 🔵 Knowledge base redesign spec defines 4-tier hierarchy with access face binding
-6590 " 🔵 Knowledge base implements 3-level catalog retrieval with vector search fallback
-6591 " 🔵 Knowledge base plugin interface defines Go contract for in-process integration
-6593 11:01p 🔵 Knowledge base catalog and search methods implemented in store layer
-S3447 Knowledge base catalog and search methods implemented in store layer (May 21 at 11:01 PM)
-6594 11:02p 🔵 Knowledge base refactor missing backend implementation
-6595 " 🟣 Knowledge base hierarchical content display implementation planned
-6596 " 🟣 Backend API handlers for sections and entries endpoints implemented
-6597 11:03p ✅ Mock store updated to implement new interface methods
-6599 " 🟣 REST routes registered for sections and entries endpoints
-6600 11:04p 🟣 Frontend API client functions for sections and entries added
-6601 " 🟣 UI template updated to display hierarchical sections and entries
-6602 11:05p ⚖️ Brainstorming session initiated
+### May 22, 2026
+S3577 knowledge_groups table lacks description column (May 22 at 4:33 PM)
+S3578 KB doc naming — reuse title, handle inaccuracy via rename (May 22 at 4:35 PM)
+S3579 KB spec — doc/documents.description sourcing and host binding merge (May 22 at 4:37 PM)
+S3580 KB grouping triggered manually via "生成/重新生成" button (May 22 at 4:40 PM)
+S3584 ListHosts kb_binding enrichment — N+1 strategy selected (May 22 at 4:45 PM)
+S3588 KB host enrichment prefetch vs N+1 complexity — awaiting A/B decision (May 22 at 4:45 PM)
+S3581 ListHosts API performance — kb_binding enrichment strategy selection (N+1 vs batch IN vs SQL JOIN) (May 22 at 4:45 PM)
+S3589 Chat-to-host association flow in spider.ai (May 22 at 4:59 PM)
+S3585 KB host enrichment — prefetch vs N+1 complexity comparison for KBGroupID/KBDocID fields (May 22 at 4:59 PM)
+### May 23, 2026
+S3591 Host-KB binding implementation plan written (May 23 at 9:34 AM)
+6932 10:17a 🟣 Batch Lookup Methods Added to Knowledge Store
+6933 10:18a 🟣 Host/AccessFace API Responses Enriched with Knowledge References
+6934 " 🔵 Session Continuation: Spec Review and Plan Completeness Check
+6935 10:23a 🟣 KBMode Type and KnowledgeSource Interface Added to hosts.ts
+6936 " 🟣 HostsView KB Display Updated for kb_mode and sourceLabel
+6937 10:24a 🟣 AccessFace Modal KB Mode Tabs Redesigned to specific/none
+6938 " 🟣 HostsView KB Logic Migrated from 4-mode to 2-mode (specific/none)
+6939 " 🟣 sourceLabel Helper Added to HostsView Script Section
+6940 10:25a 🔵 Stale kb_mode Reference Found in Agent Tool Comment
+6941 " ✅ Agent SearchDocs Tool Prompt Updated for kb_mode Multi-Source
+6942 " ✅ Agent Prompt Comments Updated to Remove Stale kb_mode References
+6943 " ✅ tools_list_hosts.go Output Format Docs Fully Updated for kb_mode
+6944 10:29a 🟣 HostsView Migrated from api/documents to api/knowledge; onMounted Loads Docs Per Group
+6945 " 🔴 ChatView @kb Dropdown Trigger Fixed to Require Colon
+6946 " 🔵 HostsView Import Migration Requires Multiple Patch Attempts Due to Stale File State
+6947 " 🟣 Full kb_mode Migration Verified: All Go Tests Pass, Frontend Builds Clean
+6948 10:30a 🟣 kb_mode Backend Implementation: Schema, Models, Store, and Data Migration
+6949 10:32a 🔵 Code Review Requested on Current Diff
+6950 " 🟣 Knowledge Base + Host Binding Feature — Large In-Progress Diff
+6951 " 🟣 KB Mode Binding Moved from Host to AccessFace
+6952 10:33a ✅ Agent Prompt + KB Scope UI Aligned to New kb_mode Model
+6953 " 🟣 Tests Added for KB Cascade Cleanup and Search API Rename
+6954 " 🔵 GetHosts Agent Tool Still Exposes Raw KnowledgeSources Without kb_mode
+6955 10:34a 🔵 All Internal Tests Pass; Two Parallel KB API Modules Coexist in Frontend
+6956 " 🔵 GetHosts Agent Tool Missing kb_mode in faceSummary — Confirmed Gap
+6957 " 🔵 Code Review Requested on Current Diff
+6958 10:35a 🔵 Knowledge Store: Scope-Based Query Architecture
+6959 10:36a 🔵 AccessFace Knowledge Sources: kb_mode + knowledge_sources Pattern
+6960 " 🔵 GetHosts Tool Prompt: KB Routing Instructions for Agent
+6961 10:40a 🔴 Migration test for host_knowledge_sources → access_faces KB mode
+6962 " 🔵 migrateAccessFaceKBMode fails to set kb_mode when access_faces already has kb_mode column
+6963 10:41a 🔴 Fix migration order: migrateHostKnowledgeSources runs before DROP TABLE
+6964 " 🔴 Implement migrateHostKnowledgeSources with dedup merge logic
+6965 10:42a 🔴 Fix kbSourceRef undefined — use models.KnowledgeSourceRef instead
+6966 " 🟣 Test added: GetHosts output includes kb_mode on access_faces
+6967 10:43a 🔴 GetHostsTool missing kb_mode field in faceSummary JSON output
+6969 10:48a 🔵 Host-KB Binding Phase 1 Code Review Request
+6968 10:49a ⚖️ Full suite green; code review subagent dispatched before merge
+6970 10:54a 🔵 Code review found 3 blocking issues in Host-KB binding phase 1
+6971 " 🔵 Migration INSERT column count is actually correct — reviewer finding was wrong
+6972 10:55a 🔵 enrichHosts relies on Host.AccessFaces being pre-populated — confirmed gap
+6973 " 🔴 Add migration test for host with no pre-existing access_face
+6974 10:56a 🔵 No-access-face migration test fails: INSERT OR IGNORE seeding not working
+6975 10:58a 🔴 Fix INSERT OR IGNORE missing header_name value and add error check
+6976 " 🔵 internal/api/hosts_test.go does not exist
+6977 10:59a 🔴 Fix listHosts/getHost to hydrate AccessFaces before enrichment; fix listAccessFaces to return enriched DTOs
+6978 " 🔵 New API tests fail to build: t.Context() and insertKnowledgeDoc interface mismatch
+6979 11:00a 🟣 API enrichment tests pass: GET /hosts, GET /hosts/:id, GET /hosts/:id/faces all return kb_mode
+6980 " 🔵 TestListHostsIncludesEnrichedAccessFaces panics: access_faces array empty in response
+6981 11:01a 🔄 Refactor host/face enrichment into hydrateHostAccessFaces and enrichAccessFaces helpers
 </claude-mem-context>

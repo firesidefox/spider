@@ -1,5 +1,7 @@
 # Chat Theme System Design
 
+**Status:** 已实现 — light/dark/system 三模式（ThemeModeSelector.vue）、localStorage 持久化、matchMedia 系统偏好
+
 ## Overview
 
 对话框（ChatMessage.vue）专属主题系统。支持5套配色方案 × 3档布局密度，独立于全局 dark/light 主题。设置入口在 ProfileView。

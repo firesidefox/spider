@@ -1,5 +1,7 @@
 # RAG Embedding 配置独立化设计
 
+**状态：** 已实现 — RAG config UI、POST /api/v1/rag-config/validate、embedding provider 独立配置（ProfileView.vue）
+
 ## 目标
 
 将知识库 RAG 的 embedding 配置从 LLM 供应商（provider）中剥离，改为系统级独立配置。原因：不是所有 LLM 供应商都提供 embedding API，两者应独立管理。

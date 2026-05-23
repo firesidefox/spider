@@ -1,5 +1,7 @@
 # Login Page Particle Effect Design
 
+**Status:** 已实现 — ParticleCanvas.vue、LoginView.vue 粒子背景动画
+
 ## Overview
 
 Add AI-themed particle animation to the login page background. Floating nodes with dynamic connections create a neural network visual that responds to mouse movement.

@@ -1,5 +1,7 @@
 # 运维智能体知识库检索设计
 
+**状态：** 已实现 — SearchDocs 工具、三层检索（sections/entries/fetch/search）、sqlite-vec 向量搜索
+
 ## 目标
 
 在智能运维对话中支持两种知识库检索路径：
