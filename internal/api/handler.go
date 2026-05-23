@@ -461,7 +461,17 @@ func NewRouter(app *mcppkg.App) http.Handler {
 		}
 	})
 	mux.HandleFunc("/api/v1/document-groups/", func(w http.ResponseWriter, r *http.Request) {
-		id := r.URL.Path[len("/api/v1/document-groups/"):]
+		rest := r.URL.Path[len("/api/v1/document-groups/"):]
+		if r.Method == http.MethodPost && strings.HasSuffix(rest, "/regenerate-description") {
+			idStr := strings.TrimSuffix(rest, "/regenerate-description")
+			regenerateGroupDescription(app, w, r, idStr)
+			return
+		}
+		if r.Method == http.MethodPut {
+			updateGroupDescription(app, w, r, rest)
+			return
+		}
+		id := rest
 		switch r.Method {
 		case http.MethodPatch:
 			operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -476,7 +486,17 @@ func NewRouter(app *mcppkg.App) http.Handler {
 		}
 	})
 	mux.HandleFunc("/api/v1/documents/", func(w http.ResponseWriter, r *http.Request) {
-		id := r.URL.Path[len("/api/v1/documents/"):]
+		rest := r.URL.Path[len("/api/v1/documents/"):]
+		if r.Method == http.MethodPost && strings.HasSuffix(rest, "/regenerate-description") {
+			idStr := strings.TrimSuffix(rest, "/regenerate-description")
+			regenerateDocDescription(app, w, r, idStr)
+			return
+		}
+		if r.Method == http.MethodPut {
+			updateDocDescription(app, w, r, rest)
+			return
+		}
+		id := rest
 		switch r.Method {
 		case http.MethodDelete:
 			operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

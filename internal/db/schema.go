@@ -512,6 +512,8 @@ func migrate(db *sql.DB) error {
 		db.Exec(`ALTER TABLE knowledge_groups_new RENAME TO knowledge_groups`)
 	}
 
+	db.Exec("ALTER TABLE documents ADD COLUMN description TEXT NOT NULL DEFAULT ''")
+	db.Exec("ALTER TABLE document_groups ADD COLUMN description TEXT NOT NULL DEFAULT ''")
 	return nil
 }
 

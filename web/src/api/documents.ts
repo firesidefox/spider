@@ -3,6 +3,7 @@ import { authHeaders } from './auth'
 export interface DocumentGroup {
   id: number
   name: string
+  description: string
   created_at: string
 }
 
@@ -12,6 +13,7 @@ export interface Document {
   vendor: string
   tags: string[]
   title: string
+  description: string
   content: string
   source_file: string
   chunk_index: number

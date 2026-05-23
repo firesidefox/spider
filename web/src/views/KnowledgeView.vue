@@ -119,6 +119,23 @@
           <button class="btn btn-sm" style="margin-left:auto"
             @click="copy(activeEntryDetail.path || activeEntryDetail.title)">复制路径</button>
         </div>
+        <!-- doc description block -->
+        <div class="doc-desc-block">
+          <div class="doc-desc-label">描述</div>
+          <textarea
+            v-model="docDescDraft"
+            class="doc-desc-textarea"
+            placeholder="暂无描述，点击生成或手动输入..."
+            rows="2"
+          />
+          <div class="doc-desc-actions">
+            <button class="btn-desc-gen" :disabled="docDescGenerating" @click="generateDocDescription">
+              {{ docDescGenerating ? '生成中...' : '✦ 生成' }}
+            </button>
+            <button class="btn-desc-save" @click="saveDocDescription">保存</button>
+            <span class="desc-char-hint">≤200字</span>
+          </div>
+        </div>
         <div class="detail-body">
           <section v-if="activeEntryDetail.description" class="detail-section">
             <h4>描述</h4>

@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -33,7 +34,7 @@ func (s *DocumentStore) Save(vendor string, tags []string, title, content string
 }
 
 func (s *DocumentStore) List() ([]*models.Document, error) {
-	rows, err := s.db.Query("SELECT id, vendor, tags, title, content, source_file, chunk_index, created_at, group_id FROM documents ORDER BY id")
+	rows, err := s.db.Query("SELECT id, vendor, tags, title, description, content, source_file, chunk_index, created_at, group_id FROM documents ORDER BY id")
 	if err != nil {
 		return nil, err
 	}
@@ -43,7 +44,7 @@ func (s *DocumentStore) List() ([]*models.Document, error) {
 
 func (s *DocumentStore) ListByVendor(vendor string) ([]*models.Document, error) {
 	rows, err := s.db.Query(
-		"SELECT id, vendor, tags, title, content, source_file, chunk_index, created_at, group_id FROM documents WHERE vendor = ? ORDER BY id",
+		"SELECT id, vendor, tags, title, description, content, source_file, chunk_index, created_at, group_id FROM documents WHERE vendor = ? ORDER BY id",
 		vendor,
 	)
 	if err != nil {
@@ -55,7 +56,7 @@ func (s *DocumentStore) ListByVendor(vendor string) ([]*models.Document, error) 
 
 func (s *DocumentStore) ListByTag(tag string) ([]*models.Document, error) {
 	rows, err := s.db.Query(
-		"SELECT id, vendor, tags, title, content, source_file, chunk_index, created_at, group_id FROM documents WHERE EXISTS (SELECT 1 FROM json_each(tags) WHERE value = ?) ORDER BY id",
+		"SELECT id, vendor, tags, title, description, content, source_file, chunk_index, created_at, group_id FROM documents WHERE EXISTS (SELECT 1 FROM json_each(tags) WHERE value = ?) ORDER BY id",
 		tag,
 	)
 	if err != nil {
@@ -67,7 +68,7 @@ func (s *DocumentStore) ListByTag(tag string) ([]*models.Document, error) {
 
 func (s *DocumentStore) ListByGroup(groupID int) ([]*models.Document, error) {
 	rows, err := s.db.Query(
-		"SELECT id, vendor, tags, title, content, source_file, chunk_index, created_at, group_id FROM documents WHERE group_id = ? ORDER BY id",
+		"SELECT id, vendor, tags, title, description, content, source_file, chunk_index, created_at, group_id FROM documents WHERE group_id = ? ORDER BY id",
 		groupID,
 	)
 	if err != nil {
@@ -89,12 +90,12 @@ func (s *DocumentStore) Delete(id int) error {
 
 func (s *DocumentStore) GetByID(id int) (*models.Document, error) {
 	row := s.db.QueryRow(
-		"SELECT id, vendor, tags, title, content, source_file, chunk_index, created_at, group_id FROM documents WHERE id = ?",
+		"SELECT id, vendor, tags, title, description, content, source_file, chunk_index, created_at, group_id FROM documents WHERE id = ?",
 		id,
 	)
 	var d models.Document
 	var tagsJSON string
-	err := row.Scan(&d.ID, &d.Vendor, &tagsJSON, &d.Title, &d.Content, &d.SourceFile, &d.ChunkIndex, &d.CreatedAt, &d.GroupID)
+	err := row.Scan(&d.ID, &d.Vendor, &tagsJSON, &d.Title, &d.Description, &d.Content, &d.SourceFile, &d.ChunkIndex, &d.CreatedAt, &d.GroupID)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -110,12 +111,12 @@ func (s *DocumentStore) GetByID(id int) (*models.Document, error) {
 // FindByTitle returns the first document matching groupID and title, or nil if not found.
 func (s *DocumentStore) FindByTitle(groupID int, title string) (*models.Document, error) {
 	row := s.db.QueryRow(
-		"SELECT id, vendor, tags, title, content, source_file, chunk_index, created_at, group_id FROM documents WHERE group_id = ? AND title = ? LIMIT 1",
+		"SELECT id, vendor, tags, title, description, content, source_file, chunk_index, created_at, group_id FROM documents WHERE group_id = ? AND title = ? LIMIT 1",
 		groupID, title,
 	)
 	var d models.Document
 	var tagsJSON string
-	err := row.Scan(&d.ID, &d.Vendor, &tagsJSON, &d.Title, &d.Content, &d.SourceFile, &d.ChunkIndex, &d.CreatedAt, &d.GroupID)
+	err := row.Scan(&d.ID, &d.Vendor, &tagsJSON, &d.Title, &d.Description, &d.Content, &d.SourceFile, &d.ChunkIndex, &d.CreatedAt, &d.GroupID)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -146,7 +147,7 @@ func scanDocumentRows(rows *sql.Rows) ([]*models.Document, error) {
 	for rows.Next() {
 		var d models.Document
 		var tagsJSON string
-		if err := rows.Scan(&d.ID, &d.Vendor, &tagsJSON, &d.Title, &d.Content, &d.SourceFile, &d.ChunkIndex, &d.CreatedAt, &d.GroupID); err != nil {
+		if err := rows.Scan(&d.ID, &d.Vendor, &tagsJSON, &d.Title, &d.Description, &d.Content, &d.SourceFile, &d.ChunkIndex, &d.CreatedAt, &d.GroupID); err != nil {
 			return nil, fmt.Errorf("scan document: %w", err)
 		}
 		if err := json.Unmarshal([]byte(tagsJSON), &d.Tags); err != nil {
@@ -155,4 +156,10 @@ func scanDocumentRows(rows *sql.Rows) ([]*models.Document, error) {
 		list = append(list, &d)
 	}
 	return list, nil
+}
+
+func (s *DocumentStore) UpdateDescription(ctx context.Context, id int, desc string) error {
+	_, err := s.db.ExecContext(ctx,
+		"UPDATE documents SET description = ? WHERE id = ?", desc, id)
+	return err
 }

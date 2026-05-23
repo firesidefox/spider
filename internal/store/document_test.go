@@ -1,6 +1,9 @@
 package store
 
-import "testing"
+import (
+	"context"
+	"testing"
+)
 
 func TestDocumentStore_SaveAndSearch(t *testing.T) {
 	database := setupTestDB(t)
@@ -111,5 +114,52 @@ func TestDocumentStore_DeleteBatch_Empty(t *testing.T) {
 	all, _ := ds.List()
 	if len(all) != 1 {
 		t.Errorf("len = %d, want 1", len(all))
+	}
+}
+
+func TestDocumentStore_UpdateDescription(t *testing.T) {
+	db := setupTestDB(t)
+	ds := NewDocumentStore(db)
+	ctx := context.Background()
+
+	if err := ds.Save("vendor", []string{}, "title", "content", nil, "f.md", 0, nil); err != nil {
+		t.Fatal(err)
+	}
+	docs, _ := ds.List()
+	if len(docs) == 0 {
+		t.Fatal("no docs")
+	}
+	id := docs[0].ID
+
+	if err := ds.UpdateDescription(ctx, id, "A test description."); err != nil {
+		t.Fatal(err)
+	}
+	doc, err := ds.GetByID(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if doc.Description != "A test description." {
+		t.Fatalf("got %q, want %q", doc.Description, "A test description.")
+	}
+}
+
+func TestGroupStore_UpdateDescription(t *testing.T) {
+	db := setupTestDB(t)
+	gs := NewGroupStore(db)
+	ctx := context.Background()
+
+	g, err := gs.Create("mygroup")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := gs.UpdateDescription(ctx, g.ID, "Group about ops."); err != nil {
+		t.Fatal(err)
+	}
+	groups, err := gs.List()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(groups) != 1 || groups[0].Description != "Group about ops." {
+		t.Fatalf("unexpected groups: %+v", groups)
 	}
 }

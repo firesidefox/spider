@@ -1,11 +1,17 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
+	"time"
 
 	mcppkg "github.com/spiderai/spider/internal/mcp"
+	"github.com/spiderai/spider/internal/llm"
+	"github.com/spiderai/spider/internal/models"
 	"github.com/spiderai/spider/internal/rag"
 )
 
@@ -244,4 +250,186 @@ func deleteBatchGroups(app *mcppkg.App, w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func normalizeDescription(s string) string {
+	s = strings.TrimSpace(s)
+	s = strings.NewReplacer("\n", " ", "\t", " ", "\r", " ").Replace(s)
+	for strings.Contains(s, "  ") {
+		s = strings.ReplaceAll(s, "  ", " ")
+	}
+	runes := []rune(s)
+	if len(runes) > 200 {
+		runes = runes[:200]
+	}
+	return string(runes)
+}
+
+func truncate(s string, maxRunes int) string {
+	r := []rune(s)
+	if len(r) > maxRunes {
+		return string(r[:maxRunes])
+	}
+	return s
+}
+
+func regenerateDocDescription(app *mcppkg.App, w http.ResponseWriter, r *http.Request, idStr string) {
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid document id")
+		return
+	}
+	doc, err := app.DocStore.GetByID(id)
+	if err != nil || doc == nil {
+		writeError(w, http.StatusNotFound, "document not found")
+		return
+	}
+	if app.AgentFactory == nil {
+		writeError(w, http.StatusServiceUnavailable, "llm provider unavailable")
+		return
+	}
+	prompt := fmt.Sprintf(
+		"为知识库文档生成一句话描述。文档标题: %s。文档内容摘要:\n%s\n输出一句话（≤50字）概括本文档主题。纯文本，不含换行与Markdown。",
+		doc.Title, truncate(doc.Content, 500),
+	)
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+	resp, err := app.AgentFactory.LLMClient.Chat(ctx, &llm.ChatRequest{
+		Messages:  []llm.Message{{Role: llm.RoleUser, Content: prompt}},
+		MaxTokens: 256,
+	})
+	if err != nil {
+		writeError(w, http.StatusServiceUnavailable, "llm provider unavailable")
+		return
+	}
+	desc := normalizeDescription(resp)
+	if err := app.DocStore.UpdateDescription(r.Context(), id, desc); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"description": desc})
+}
+
+func regenerateGroupDescription(app *mcppkg.App, w http.ResponseWriter, r *http.Request, idStr string) {
+	groupID, err := strconv.Atoi(idStr)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid group id")
+		return
+	}
+	groups, err := app.GroupStore.List()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	var group *models.DocumentGroup
+	for _, g := range groups {
+		if g.ID == groupID {
+			group = g
+			break
+		}
+	}
+	if group == nil {
+		writeError(w, http.StatusNotFound, "group not found")
+		return
+	}
+	docs, err := app.DocStore.ListByGroup(groupID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if len(docs) == 0 {
+		writeError(w, http.StatusBadRequest, "group has no documents")
+		return
+	}
+	if app.AgentFactory == nil {
+		writeError(w, http.StatusServiceUnavailable, "llm provider unavailable")
+		return
+	}
+	var sb strings.Builder
+	for _, d := range docs {
+		sb.WriteString(fmt.Sprintf("- %s: %s\n", d.Title, d.Description))
+	}
+	prompt := fmt.Sprintf(
+		"为知识库分组生成一句话描述。分组名: %s。包含文档:\n%s\n输出一句话（≤50字）概括本组涵盖的知识范围。纯文本，不含换行与Markdown。",
+		group.Name, sb.String(),
+	)
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+	resp, err := app.AgentFactory.LLMClient.Chat(ctx, &llm.ChatRequest{
+		Messages:  []llm.Message{{Role: llm.RoleUser, Content: prompt}},
+		MaxTokens: 256,
+	})
+	if err != nil {
+		writeError(w, http.StatusServiceUnavailable, "llm provider unavailable")
+		return
+	}
+	desc := normalizeDescription(resp)
+	if err := app.GroupStore.UpdateDescription(r.Context(), groupID, desc); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"description": desc})
+}
+
+func updateDocDescription(app *mcppkg.App, w http.ResponseWriter, r *http.Request, idStr string) {
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid document id")
+		return
+	}
+	doc, err := app.DocStore.GetByID(id)
+	if err != nil || doc == nil {
+		writeError(w, http.StatusNotFound, "document not found")
+		return
+	}
+	var body struct {
+		Description string `json:"description"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+	desc := normalizeDescription(body.Description)
+	if err := app.DocStore.UpdateDescription(r.Context(), id, desc); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"description": desc})
+}
+
+func updateGroupDescription(app *mcppkg.App, w http.ResponseWriter, r *http.Request, idStr string) {
+	groupID, err := strconv.Atoi(idStr)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid group id")
+		return
+	}
+	groups, err := app.GroupStore.List()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	found := false
+	for _, g := range groups {
+		if g.ID == groupID {
+			found = true
+			break
+		}
+	}
+	if !found {
+		writeError(w, http.StatusNotFound, "group not found")
+		return
+	}
+	var body struct {
+		Description string `json:"description"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+	desc := normalizeDescription(body.Description)
+	if err := app.GroupStore.UpdateDescription(r.Context(), groupID, desc); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"description": desc})
 }
