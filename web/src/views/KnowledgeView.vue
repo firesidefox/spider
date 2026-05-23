@@ -16,7 +16,7 @@
         <!-- 分组 -->
         <div v-for="group in groups" :key="group.id" class="group-section"
           @dragover.prevent @drop="onDropToGroup($event, group.id)">
-          <div class="group-header" @click="toggleGroup(group.id)">
+          <div class="group-header" @click="toggleGroup(group.id); activeGroupId = group.id; activeDoc = null">
             <span class="group-chevron">{{ collapsedGroups.has(group.id) ? '▶' : '▼' }}</span>
             <span v-if="editingGroupId !== group.id" class="group-name" @dblclick.stop="startRename(group)">{{ group.name }}</span>
             <input v-else class="group-name-input" v-model="editingGroupName"
@@ -28,7 +28,7 @@
             <div v-for="doc in groupedDocs(group.id)" :key="doc.id"
               class="doc-row" :class="{ selected: activeDoc?.id === doc.id }"
               draggable="true" @dragstart="onDragStart($event, doc)"
-              @click="activeDoc = doc; searched = false">
+              @click="activeDoc = doc; activeGroupId = doc.group_id ?? null; searched = false">
               <div class="doc-row-title">{{ docTitle(doc) }}</div>
               <div class="doc-row-meta">
                 <span class="badge">{{ doc.vendor }}</span>
@@ -49,7 +49,7 @@
             <div v-for="doc in ungroupedDocs" :key="doc.id"
               class="doc-row" :class="{ selected: activeDoc?.id === doc.id }"
               draggable="true" @dragstart="onDragStart($event, doc)"
-              @click="activeDoc = doc; searched = false">
+              @click="activeDoc = doc; activeGroupId = null; searched = false">
               <div class="doc-row-title">{{ docTitle(doc) }}</div>
               <div class="doc-row-meta">
                 <span class="badge">{{ doc.vendor }}</span>
@@ -130,11 +130,54 @@
         </div>
       </template>
 
+      <!-- Group detail panel -->
+      <div v-else-if="activeGroupId != null && !activeDoc" class="group-detail-panel">
+        <div class="group-detail-inner">
+          <div class="group-detail-title">
+            <span class="group-detail-icon">📁</span>
+            <span class="group-detail-name">{{ groups.find(g => g.id === activeGroupId)?.name }}</span>
+            <span class="group-detail-count">{{ (docsByGroup.get(activeGroupId) ?? []).length }} 篇文档</span>
+          </div>
+
+          <div class="doc-desc-label">分组描述</div>
+          <textarea
+            v-model="groupDescDraft"
+            class="doc-desc-textarea"
+            placeholder="暂无描述，点击生成或手动输入..."
+            rows="2"
+          />
+          <div class="doc-desc-actions">
+            <button class="btn-desc-gen" :disabled="groupDescGenerating" @click="generateGroupDescription">
+              {{ groupDescGenerating ? '生成中...' : '✦ 生成' }}
+            </button>
+            <button class="btn-desc-save" @click="saveGroupDescription">保存</button>
+            <span class="desc-char-hint">≤200字</span>
+          </div>
+
+          <hr class="group-detail-divider" />
+
+          <div class="doc-desc-label" style="margin-bottom:8px">文档列表</div>
+          <div
+            v-for="doc in (docsByGroup.get(activeGroupId) ?? [])"
+            :key="doc.id"
+            class="group-doc-item"
+            @click="activeDoc = doc"
+          >
+            <span class="group-doc-icon">📄</span>
+            <div class="group-doc-info">
+              <div class="group-doc-name">{{ doc.title }}</div>
+              <div class="group-doc-desc" :class="{ empty: !doc.description }">
+                {{ doc.description || '暂无描述' }}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div v-else class="detail-empty">
         <div class="detail-empty-icon">📚</div>
         <div>选择左侧文档，或输入关键词语义搜索</div>
-      </div>
-    </div>
+      </div>    </div>
 
     <!-- 新建分组弹窗 -->
     <div v-if="showNewGroup" class="modal-overlay" @click.self="showNewGroup = false">
@@ -233,9 +276,19 @@ const groups = ref<DocumentGroup[]>([])
 const activeDoc = ref<Document | null>(null)
 const docDescDraft = ref('')
 const docDescGenerating = ref(false)
+const activeGroupId = ref<number | null>(null)
+const groupDescDraft = ref('')
+const groupDescGenerating = ref(false)
 
 watch(activeDoc, (d) => {
   docDescDraft.value = d?.description ?? ''
+})
+
+watch(activeGroupId, (id) => {
+  if (id != null) {
+    const g = groups.value.find(g => g.id === id)
+    groupDescDraft.value = g?.description ?? ''
+  }
 })
 
 const filterVendor = ref('')
@@ -414,6 +467,39 @@ async function generateDocDescription() {
   }
 }
 
+async function saveGroupDescription() {
+  if (activeGroupId.value == null) return
+  const res = await fetch(`/api/v1/document-groups/${activeGroupId.value}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ description: groupDescDraft.value }),
+  })
+  if (res.ok) {
+    const data = await res.json()
+    const idx = groups.value.findIndex(g => g.id === activeGroupId.value)
+    if (idx !== -1) groups.value[idx] = { ...groups.value[idx], description: data.description }
+  }
+}
+
+async function generateGroupDescription() {
+  if (activeGroupId.value == null) return
+  groupDescGenerating.value = true
+  try {
+    const res = await fetch(`/api/v1/document-groups/${activeGroupId.value}/regenerate-description`, {
+      method: 'POST',
+      headers: authHeaders(),
+    })
+    if (res.ok) {
+      const data = await res.json()
+      groupDescDraft.value = data.description
+      const idx = groups.value.findIndex(g => g.id === activeGroupId.value)
+      if (idx !== -1) groups.value[idx] = { ...groups.value[idx], description: data.description }
+    }
+  } finally {
+    groupDescGenerating.value = false
+  }
+}
+
 onMounted(() => { load(); loadGroups() })
 </script>
 
@@ -564,4 +650,47 @@ onMounted(() => { load(); loadGroups() })
   color: var(--text-muted, #555);
   margin-left: auto;
 }
+
+.group-detail-panel {
+  flex: 1;
+  overflow-y: auto;
+}
+.group-detail-inner {
+  padding: 20px 24px;
+  max-width: 560px;
+}
+.group-detail-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.group-detail-icon { font-size: 20px; }
+.group-detail-name { font-size: 15px; font-weight: 600; color: var(--text); }
+.group-detail-count { font-size: 12px; color: var(--text-muted, #555); }
+.group-detail-divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 16px 0;
+}
+.group-doc-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border-subtle, #222);
+  cursor: pointer;
+}
+.group-doc-item:hover { background: var(--hover-bg, #1a1a1a); }
+.group-doc-icon { font-size: 14px; margin-top: 1px; }
+.group-doc-info { flex: 1; min-width: 0; }
+.group-doc-name { font-size: 13px; color: var(--text-sub); margin-bottom: 2px; }
+.group-doc-desc {
+  font-size: 11px;
+  color: var(--text-muted, #555);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.group-doc-desc.empty { font-style: italic; }
 </style>
