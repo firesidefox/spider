@@ -5,7 +5,7 @@
 
 ## 概述
 
-为 spider.ai 新增 Prometheus 查询能力。Prometheus 建模为独立的监控数据源（`prometheus_sources`），与 `AccessFace`（接入面，表达"如何访问主机"）分离——Prometheus 是观测源，方向和语义不同，不应混用。数据源通过绑定关系（`prometheus_bindings`）关联到拓扑层或单台主机。新增一个 Agent 工具执行自由 PromQL 查询。告警集成单独跟踪，见 PRD。
+为 spider.ai 新增 Prometheus 查询能力。Prometheus 建模为独立的监控数据源（`prometheus_sources`），与 `AccessFace`（接入面，表达"如何访问主机"）分离——Prometheus 是观测源，方向和语义不同，不应混用。数据源通过绑定关系（`prometheus_bindings`）关联到拓扑层或单台主机。新增一个 Agent 工具执行自由 PromQL 查询。
 
 ## 1. 数据模型
 
@@ -66,12 +66,40 @@ CREATE UNIQUE INDEX idx_pb_host ON prometheus_bindings(host_id)
 
 ## 2. 配置入口（UI）
 
-| 作用域 | 入口位置 | 操作 |
-|---|---|---|
-| 拓扑层 | 拓扑详情页 → 按层配置 | 为某业务的某层绑定 Prometheus 数据源 |
-| 主机覆盖 | 主机详情页 → "监控源"区块（与接入面列表分离） | 为单台主机绑定独立数据源，覆盖拓扑层配置 |
+**三层结构：**
 
-## 3. Agent 工具：`QueryMetrics`
+| 层级 | 入口位置 | 操作 |
+|---|---|---|
+| 数据源管理 | 系统设置 → Data Sources → Prometheus | 增删改 `prometheus_sources`（名称、URL、认证） |
+| 拓扑层绑定 | 拓扑详情页 → 按层配置 | 从已有 sources 中选择，绑定到某业务的某层 |
+| 主机覆盖绑定 | 主机详情页 → "监控源"区块（与接入面列表分离） | 从已有 sources 中选择，绑定到单台主机，覆盖拓扑层配置 |
+
+数据源在 Settings 中统一管理，绑定关系在各自的上下文页面中配置。
+
+## 3. Agent 工具：`ListMetrics`
+
+列出指定主机在 Prometheus 中存在的所有指标名，供 Agent 构造 PromQL 前发现可用指标。
+
+**输入参数：**
+
+```json
+{
+  "host_id": "string（必填）— 目标主机 ID",
+  "filter":  "string（可选）— 指标名前缀过滤，如 'node_cpu'"
+}
+```
+
+**行为：**
+- 同 §1.3 解析 Prometheus 数据源
+- 调 `GET /api/v1/label/__name__/values?match[]={instance="<IP>:9100"}`
+- 返回该主机所有指标名列表；有 `filter` 时做前缀过滤
+- 风险等级：`L1`（只读），并发安全
+
+**System prompt 指导：**
+- 在 `QueryMetrics` 之前调用，用于不确定指标名时的发现
+- 有 `filter` 时缩小结果范围，减少 token 消耗
+
+## 4. Agent 工具：`QueryMetrics`
 
 对指定主机执行自由 PromQL 查询。
 
@@ -107,7 +135,7 @@ CREATE UNIQUE INDEX idx_pb_host ON prometheus_bindings(host_id)
 - 当前状态用即时查询，趋势分析用区间查询
 - 避免在大集群上使用无 label 过滤的裸查询（如 `{}`）
 
-## 4. 内部 Prometheus 客户端
+## 5. 内部 Prometheus 客户端
 
 ```go
 // internal/prometheus/client.go
@@ -115,13 +143,13 @@ type Client struct { baseURL, authType, credential string }
 func NewClient(source *models.PrometheusSource, decryptedCred string) *Client
 func (c *Client) QueryInstant(ctx context.Context, query string, ts time.Time) (*QueryResult, error)
 func (c *Client) QueryRange(ctx context.Context, query, start, end, step string) (*QueryResult, error)
+func (c *Client) ListMetricNames(ctx context.Context, selector string) ([]string, error)
 ```
 
 轻量 HTTP 封装。不做重试。超时 30s（可由 context 取消）。
 
-## 5. 范围外（本次不做）
+## 6. 范围外（本次不做）
 
-- Prometheus 指标自动发现 / 自动补全
 - Grafana 集成
 - 告警集成（GetAlerts 工具、Alertmanager Webhook）— 见 PRD
 - 单台主机多条 binding（每台主机最多一条 host 级覆盖）
