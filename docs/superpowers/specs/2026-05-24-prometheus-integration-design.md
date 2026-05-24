@@ -80,6 +80,17 @@ CREATE UNIQUE INDEX idx_pb_host ON prometheus_bindings(host_id)
 
 数据源在 Settings 中统一管理，绑定关系在各自的上下文页面中配置。
 
+**Settings → Data Sources → Prometheus 页面布局：**
+
+- 上方：已配置数据源列表，每行显示名称、URL、认证方式、连接状态徽章
+- 右上角：「+ 新增数据源」按钮
+- 点击列表行 → 右侧抽屉（drawer）划出编辑表单，背景列表保持可见
+- 抽屉顶部：标题 + 关闭按钮（×）
+- 抽屉内容分两节：
+  - **HTTP**：名称（必填）、URL（必填）、超时秒数
+  - **认证**：认证方式下拉（无认证 / Basic Auth / Bearer Token）、跳过 TLS 验证开关；选 Basic Auth 展开用户名+密码子表单，选 Bearer Token 展开 Token 输入框
+- 抽屉底部 footer（固定）：保存、测试连接、连接结果提示、删除
+
 ## 3. Agent 工具：`ListMetrics`
 
 列出指定主机在 Prometheus 中存在的所有指标名，供 Agent 构造 PromQL 前发现可用指标。
