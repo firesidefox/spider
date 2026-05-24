@@ -1,12 +1,9 @@
 <template>
   <div class="prom-page">
-    <div class="page-title">Data Sources — Prometheus</div>
-    <div class="page-subtitle">管理 Prometheus 监控数据源，在拓扑页面或主机页面绑定到具体作用域</div>
-
     <div class="ds-list">
       <div class="ds-list-header">
         <span class="ds-list-title">已配置数据源</span>
-        <button class="btn-add" @click="openNew">+ 新增数据源</button>
+        <button class="btn btn-primary btn-sm" @click="openNew">+ 新增数据源</button>
       </div>
       <div v-if="loading" class="ds-empty">加载中...</div>
       <div v-else-if="sources.length === 0" class="ds-empty">暂无数据源</div>
@@ -41,23 +38,23 @@
             <div class="form-section-title">HTTP</div>
             <div class="form-row">
               <label class="form-label">名称 <span class="req">*</span></label>
-              <input v-model="form.name" class="form-input" placeholder="如：生产环境 Prometheus" />
+              <input v-model="form.name" class="input" placeholder="如：生产环境 Prometheus" />
             </div>
             <div class="form-row">
               <label class="form-label">URL <span class="req">*</span></label>
-              <input v-model="form.base_url" class="form-input" placeholder="http://prometheus:9090" />
+              <input v-model="form.base_url" class="input" placeholder="http://prometheus:9090" />
               <div class="form-hint">Prometheus 实例地址</div>
             </div>
             <div class="form-row">
               <label class="form-label">超时（秒）</label>
-              <input v-model.number="form.timeout_seconds" class="form-input sm" type="number" min="1" />
+              <input v-model.number="form.timeout_seconds" class="input sm" type="number" min="1" />
             </div>
           </div>
           <div class="form-section">
             <div class="form-section-title">认证</div>
             <div class="form-row">
               <label class="form-label">认证方式</label>
-              <select v-model="form.auth_type" class="form-select">
+              <select v-model="form.auth_type" class="input">
                 <option value="none">无认证</option>
                 <option value="basic">Basic Auth</option>
                 <option value="bearer">Bearer Token</option>
@@ -72,29 +69,29 @@
               <div class="auth-detail-title">Basic Auth 详情</div>
               <div class="form-row">
                 <label class="form-label">用户名</label>
-                <input v-model="form.username" class="form-input" style="max-width:240px" />
+                <input v-model="form.username" class="input" style="max-width:240px" />
               </div>
               <div class="form-row" style="margin-bottom:0">
                 <label class="form-label">密码</label>
-                <input v-model="form.password" class="form-input" type="password" placeholder="••••••••" style="max-width:240px" />
+                <input v-model="form.password" class="input" type="password" placeholder="••••••••" style="max-width:240px" />
               </div>
             </div>
             <div v-if="form.auth_type === 'bearer'" class="auth-detail">
               <div class="auth-detail-title">Bearer Token</div>
               <div class="form-row" style="margin-bottom:0">
                 <label class="form-label">Token</label>
-                <input v-model="form.token" class="form-input" type="password" />
+                <input v-model="form.token" class="input" type="password" />
               </div>
             </div>
           </div>
         </div>
         <div class="drawer-footer">
-          <button class="btn-save" :disabled="saving" @click="save">{{ saving ? '保存中...' : '保存' }}</button>
-          <button class="btn-test" :disabled="testing || isNew" @click="testConn">测试连接</button>
+          <button class="btn btn-primary" :disabled="saving" @click="save">{{ saving ? '保存中...' : '保存' }}</button>
+          <button class="btn btn-sm" :disabled="testing || isNew" @click="testConn">测试连接</button>
           <span v-if="testResult" :class="testResult.ok ? 'test-ok' : 'test-err'">
             {{ testResult.ok ? `连接正常 · ${testResult.latency_ms}ms` : testResult.error }}
           </span>
-          <button v-if="!isNew" class="btn-del" @click="confirmDelete">删除</button>
+          <button v-if="!isNew" class="btn btn-danger btn-sm" style="margin-left:auto" @click="confirmDelete">删除</button>
         </div>
       </div>
     </template>
@@ -238,22 +235,6 @@ async function confirmDelete() {
 
 <style scoped>
 .prom-page {
-  max-width: 800px;
-}
-
-.page-title {
-  font-size: 20px;
-  font-weight: 700;
-  color: var(--text);
-  letter-spacing: -0.02em;
-  margin-bottom: 6px;
-}
-
-.page-subtitle {
-  font-size: 13px;
-  color: var(--muted, #6c7280);
-  margin-bottom: 28px;
-  line-height: 1.5;
 }
 
 /* ── Data Source List ── */
@@ -280,19 +261,6 @@ async function confirmDelete() {
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
-
-.btn-add {
-  background: #5794f2;
-  border: none;
-  border-radius: 6px;
-  padding: 6px 14px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #fff;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-.btn-add:hover { background: #4080e8; }
 
 .ds-empty {
   padding: 32px;
@@ -447,44 +415,12 @@ async function confirmDelete() {
   margin-left: 2px;
 }
 
-.form-input {
-  background: var(--input-bg, #13151a);
-  border: 1px solid var(--border, #2c2f36);
-  border-radius: 6px;
-  padding: 8px 11px;
-  font-size: 13px;
-  color: var(--text, #e2e8f0);
-  outline: none;
-  font-family: inherit;
-  transition: border-color 0.15s, box-shadow 0.15s;
-  width: 100%;
-}
-.form-input:focus {
-  border-color: #5794f2;
-  box-shadow: 0 0 0 3px rgba(87, 148, 242, 0.15);
-}
-.form-input::placeholder { color: var(--muted, #6c7280); }
-.form-input.sm { width: 100px; }
-
 .form-hint {
   font-size: 11px;
   color: var(--muted, #6c7280);
 }
 
-.form-select {
-  background: var(--input-bg, #13151a);
-  border: 1px solid var(--border, #2c2f36);
-  border-radius: 6px;
-  padding: 8px 11px;
-  font-size: 13px;
-  color: var(--text, #e2e8f0);
-  outline: none;
-  font-family: inherit;
-  cursor: pointer;
-  transition: border-color 0.15s;
-  width: 200px;
-}
-.form-select:focus { border-color: #5794f2; }
+.input.sm { width: 100px; }
 
 /* ── Toggle ── */
 .toggle-row {
@@ -562,34 +498,6 @@ async function confirmDelete() {
   flex-wrap: wrap;
 }
 
-.btn-save {
-  background: #5794f2;
-  border: none;
-  border-radius: 6px;
-  padding: 8px 18px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #fff;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-.btn-save:hover:not(:disabled) { background: #4080e8; }
-.btn-save:disabled { opacity: 0.5; cursor: not-allowed; }
-
-.btn-test {
-  background: var(--card-bg, #1e2128);
-  border: 1px solid var(--border, #2c2f36);
-  border-radius: 6px;
-  padding: 8px 16px;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-sub, #9ca3af);
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s;
-}
-.btn-test:hover:not(:disabled) { background: var(--row-hover, #1f2228); color: var(--text, #e2e8f0); }
-.btn-test:disabled { opacity: 0.45; cursor: not-allowed; }
-
 .test-ok {
   font-size: 12px;
   color: #22c55e;
@@ -605,18 +513,4 @@ async function confirmDelete() {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-
-.btn-del {
-  background: none;
-  border: 1px solid rgba(248, 113, 113, 0.3);
-  border-radius: 6px;
-  padding: 8px 16px;
-  font-size: 13px;
-  font-weight: 500;
-  color: #f87171;
-  cursor: pointer;
-  margin-left: auto;
-  transition: background 0.15s, border-color 0.15s;
-}
-.btn-del:hover { background: rgba(248, 113, 113, 0.08); border-color: #f87171; }
 </style>

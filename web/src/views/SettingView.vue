@@ -71,10 +71,13 @@
         <SkillsPanel />
       </template>
       <template v-else-if="activeTab === 'datasources'">
-        <div class="datasources-shell">
-          <div class="datasources-tabs">
-            <span class="datasources-tab active">Prometheus</span>
-          </div>
+        <div class="detail-topbar">
+          <span class="detail-title">数据源</span>
+        </div>
+        <div class="datasources-subtabs">
+          <span class="datasources-subtab active">Prometheus</span>
+        </div>
+        <div class="detail-body">
           <PrometheusDataSourcesPanel />
         </div>
       </template>
@@ -1921,8 +1924,7 @@ async function handleAddChannel() {
 .ct-display-row:last-child { border-bottom: none; }
 .ct-display-label { font-size: 12px; color: var(--muted); width: 72px; flex-shrink: 0; }
 .ct-display-chip { display: inline-block; font-size: 12px; font-weight: 500; padding: 3px 10px; border-radius: 12px; border: 1px solid var(--border); color: var(--text-sub); background: var(--panel); }
-.datasources-shell { height: 100%; display: flex; flex-direction: column; }
-.datasources-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); padding: 0 32px; flex-shrink: 0; }
-.datasources-tab { padding: 10px 16px; font-size: 13px; color: var(--text-sub); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; }
-.datasources-tab.active { color: var(--primary, #5794f2); border-bottom-color: var(--primary, #5794f2); font-weight: 500; }
+.datasources-subtabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); padding: 0 20px; flex-shrink: 0; background: var(--surface); }
+.datasources-subtab { padding: 10px 16px; font-size: 13px; color: var(--text-sub); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.datasources-subtab.active { color: var(--primary); border-bottom-color: var(--primary); font-weight: 500; }
 </style>
