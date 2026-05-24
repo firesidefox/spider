@@ -15,17 +15,21 @@
 
 ```sql
 CREATE TABLE prometheus_sources (
-  id                    TEXT PRIMARY KEY,
-  name                  TEXT NOT NULL,
-  base_url              TEXT NOT NULL,                -- 如 http://prom:9090
-  auth_type             TEXT NOT NULL DEFAULT 'none', -- none | bearer | basic
-  encrypted_credential  TEXT NOT NULL DEFAULT '',     -- 经 crypto.Manager 加密
-  created_at            DATETIME NOT NULL,
-  updated_at            DATETIME NOT NULL
+  id                  TEXT PRIMARY KEY,
+  name                TEXT NOT NULL,
+  base_url            TEXT NOT NULL,                  -- 如 http://prom:9090
+  timeout_seconds     INTEGER NOT NULL DEFAULT 30,    -- HTTP 超时，0 表示用默认值
+  auth_type           TEXT NOT NULL DEFAULT 'none',   -- none | basic | bearer
+  username            TEXT NOT NULL DEFAULT '',       -- auth_type=basic 时使用
+  encrypted_password  TEXT NOT NULL DEFAULT '',       -- auth_type=basic 时使用，加密存储
+  encrypted_token     TEXT NOT NULL DEFAULT '',       -- auth_type=bearer 时使用，加密存储
+  skip_tls_verify     INTEGER NOT NULL DEFAULT 0,     -- 1=跳过 TLS 验证（内网自签证书）
+  created_at          DATETIME NOT NULL,
+  updated_at          DATETIME NOT NULL
 )
 ```
 
-Go 模型字段：`EncryptedCredential`（DB 列：`encrypted_credential`），加密模式与 `AccessFace.EncryptedCred` 一致。
+加密字段（`encrypted_password`、`encrypted_token`）均经 `crypto.Manager` 加密，模式与 `AccessFace.EncryptedCred` 一致。`username` 明文存储（非敏感）。
 
 ### 1.2 `prometheus_bindings`（作用域绑定）
 
@@ -139,8 +143,16 @@ CREATE UNIQUE INDEX idx_pb_host ON prometheus_bindings(host_id)
 
 ```go
 // internal/prometheus/client.go
-type Client struct { baseURL, authType, credential string }
-func NewClient(source *models.PrometheusSource, decryptedCred string) *Client
+type Client struct {
+    baseURL        string
+    authType       string
+    username       string
+    password       string // 解密后
+    token          string // 解密后
+    timeoutSeconds int
+    skipTLSVerify  bool
+}
+func NewClient(source *models.PrometheusSource, decryptedPassword, decryptedToken string) *Client
 func (c *Client) QueryInstant(ctx context.Context, query string, ts time.Time) (*QueryResult, error)
 func (c *Client) QueryRange(ctx context.Context, query, start, end, step string) (*QueryResult, error)
 func (c *Client) ListMetricNames(ctx context.Context, selector string) ([]string, error)
