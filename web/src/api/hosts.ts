@@ -47,7 +47,6 @@ export interface AccessFace {
   kb_mode: KBMode
   knowledge_sources: KnowledgeSource[]
   probe_port?: number
-  probe_interval?: number
   created_at: string
   updated_at: string
 }
@@ -109,7 +108,6 @@ export interface AddAccessFaceRequest {
   kb_mode?: KBMode
   knowledge_sources?: Array<{ type: 'group' | 'doc'; id: number }>
   probe_port?: number
-  probe_interval?: number
 }
 
 async function apiFetch(url: string, init?: RequestInit) {
@@ -140,10 +138,6 @@ export async function updateHost(id: string, req: UpdateHostRequest): Promise<Ho
 
 export async function deleteHost(id: string): Promise<void> {
   await apiFetch(`/api/v1/hosts/${id}`, { method: 'DELETE' })
-}
-
-export async function pingHost(id: string): Promise<{ connected: boolean; latency_ms?: number; error?: string }> {
-  return (await apiFetch(`/api/v1/hosts/${id}/ping`, { method: 'POST' })).json()
 }
 
 export async function listAccessFaces(hostId: string): Promise<AccessFace[]> {

@@ -15,7 +15,6 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 
 	"github.com/spiderai/spider/internal/agent"
-	"github.com/spiderai/spider/internal/monitor"
 	"github.com/spiderai/spider/internal/auth"
 	"github.com/spiderai/spider/internal/config"
 	"github.com/spiderai/spider/internal/knowledge"
@@ -75,8 +74,6 @@ type App struct {
 
 	sseBuffers   map[string][][]byte // convID -> in-flight events for reconnect
 	sseBuffersMu sync.Mutex
-
-	Monitor *monitor.Monitor
 
 	globalSSEClients   []chan []byte
 	globalSSEClientsMu sync.Mutex

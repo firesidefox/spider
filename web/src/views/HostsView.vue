@@ -50,15 +50,10 @@
           </div>
           <div class="detail-topbar-right">
             <button class="btn btn-sm" @click="goExec(activeHost)">▶ 执行</button>
-            <button class="btn btn-sm" :disabled="pinging" @click="pingActive">{{ pinging ? '测试中…' : '⚡ 测试' }}</button>
             <button class="btn btn-sm btn-danger" @click="removeHost(activeHost)">删除</button>
           </div>
         </div>
         <div class="detail-body">
-          <div v-if="pingResult" class="ping-result" :class="pingResult.connected ? 'ping-ok' : 'ping-fail'">
-            <span v-if="pingResult.connected">● 已连接 ({{ pingResult.latency_ms }}ms)</span>
-            <span v-else>● 连接失败: {{ pingResult.error }}</span>
-          </div>
 
           <!-- 基本信息 section -->
             <div class="section">
@@ -285,10 +280,6 @@
                 <label>存活探测端口（默认使用操作面端口）</label>
                 <input :value="faceForm.probe_port || ''" @input="faceForm.probe_port = Number(($event.target as HTMLInputElement).value) || 0" class="input" type="number" min="1" max="65535" :placeholder="String(faceForm.port || 22)" />
               </div>
-              <div class="form-row">
-                <label>探测间隔（秒，可选）</label>
-                <input v-model.number="faceForm.probe_interval" class="input" type="number" min="1" max="3600" placeholder="30" />
-              </div>
             </template>
           </template>
           <template v-if="faceForm.type === 'restapi'">
@@ -379,7 +370,7 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
-  listHosts, addHost, updateHost, deleteHost, pingHost,
+  listHosts, addHost, updateHost, deleteHost,
   listAccessFaces, addAccessFace, updateAccessFace, deleteAccessFace,
   getFingerprint, listMemories, addMemory, deleteMemory,
   type Host, type AccessFace, type Fingerprint, type Memory,
@@ -395,9 +386,6 @@ const selected = ref<string[]>([])
 const activeHost = ref<Host | null>(null)
 const showAdd = ref(false)
 const editTarget = ref<Host | null>(null)
-const pinging = ref(false)
-const pingResult = ref<{ connected: boolean; latency_ms?: number; error?: string } | null>(null)
-let pingTimer: ReturnType<typeof setTimeout> | null = null
 const ksPickerFaceId = ref<string | null>(null)
 
 
@@ -451,7 +439,7 @@ async function saveOverview() {
 const emptyForm = () => ({ name: '', ip: '', notes: '', vendor: '', product_name: '', product_version: '', tagsStr: '' })
 const form = ref(emptyForm())
 
-const emptyFaceForm = () => ({ type: 'ssh' as 'ssh' | 'restapi', ip: activeHost.value?.ip ?? '', port: 22, username: '', ssh_auth_type: 'password', credential: '', passphrase: '', ssh_key_id: '', ssh_legacy: false, ssh_login_input: '', probe_port: 0, probe_interval: 30, base_url: '', rest_scheme: 'http' as 'http' | 'https', rest_path: '', rest_auth_type: 'none', rest_username: '', header_name: '', hmac_algo: 'HMAC-SHA256', knowledge_sources: [] as Array<{type:'group'|'doc';id:number}> })
+const emptyFaceForm = () => ({ type: 'ssh' as 'ssh' | 'restapi', ip: activeHost.value?.ip ?? '', port: 22, username: '', ssh_auth_type: 'password', credential: '', passphrase: '', ssh_key_id: '', ssh_legacy: false, ssh_login_input: '', probe_port: 0, base_url: '', rest_scheme: 'http' as 'http' | 'https', rest_path: '', rest_auth_type: 'none', rest_username: '', header_name: '', hmac_algo: 'HMAC-SHA256', knowledge_sources: [] as Array<{type:'group'|'doc';id:number}> })
 const faceForm = ref(emptyFaceForm())
 
 const allTags = computed(() => {
@@ -487,7 +475,6 @@ async function load() { hosts.value = await listHosts() }
 
 async function selectHost(h: Host) {
   activeHost.value = h
-  pingResult.value = null
   editingOverview.value = false
   faces.value = []
   fingerprint.value = null
@@ -500,21 +487,6 @@ async function selectHost(h: Host) {
   faces.value = f
   fingerprint.value = fp
   memories.value = m
-}
-
-async function pingActive() {
-  if (!activeHost.value || pinging.value) return
-  pinging.value = true
-  pingResult.value = null
-  if (pingTimer) clearTimeout(pingTimer)
-  try {
-    pingResult.value = await pingHost(activeHost.value.id)
-  } catch (e: any) {
-    pingResult.value = { connected: false, error: e.message || '请求失败' }
-  } finally {
-    pinging.value = false
-    pingTimer = setTimeout(() => { pingResult.value = null }, 5000)
-  }
 }
 
 function closeModal() {
@@ -599,7 +571,7 @@ function onRestAuthTypeChange() {
 
 async function submitFace() {
   if (!activeHost.value) return
-  const req: Record<string, unknown> = { type: faceForm.value.type, ip: faceForm.value.ip, port: faceForm.value.port, tags: [], kb_mode: ksMode.value, knowledge_sources: ksMode.value === 'specific' ? faceForm.value.knowledge_sources : [], probe_port: faceForm.value.probe_port || 0, probe_interval: faceForm.value.probe_interval || 0 }
+  const req: Record<string, unknown> = { type: faceForm.value.type, ip: faceForm.value.ip, port: faceForm.value.port, tags: [], kb_mode: ksMode.value, knowledge_sources: ksMode.value === 'specific' ? faceForm.value.knowledge_sources : [], probe_port: faceForm.value.probe_port || 0 }
   if (faceForm.value.type === 'ssh') {
     req.username = faceForm.value.username || undefined
     req.ssh_auth_type = faceForm.value.ssh_auth_type
@@ -640,7 +612,6 @@ function startEditFace(face: AccessFace) {
     ssh_legacy: face.ssh_legacy || false,
     ssh_login_input: face.ssh_login_input || '',
     probe_port: face.probe_port || 0,
-    probe_interval: face.probe_interval || 0,
     base_url: face.base_url || '',
     rest_scheme: (face.rest_scheme || 'http') as 'http' | 'https',
     rest_path: '',
@@ -780,10 +751,6 @@ onUnmounted(() => {
 .detail-label { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 6px; }
 .detail-value { font-size: 15px; font-weight: 600; color: var(--text); }
 .detail-value.code, .code { font-family: 'SF Mono', Consolas, monospace; }
-
-.ping-result { font-size: 13px; font-weight: 500; padding: 8px 14px; border-radius: 8px; margin-bottom: 14px; }
-.ping-ok { background: rgba(34,197,94,0.12); color: #16a34a; }
-.ping-fail { background: rgba(239,68,68,0.12); color: #dc2626; }
 
 .faces-header { margin-bottom: 14px; }
 .face-card { border: 1px solid var(--border); border-radius: 8px; margin-bottom: 10px; }

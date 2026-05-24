@@ -64,7 +64,6 @@ type AccessFace struct {
 	KBMode           string               `json:"kb_mode"`
 	KnowledgeSources []KnowledgeSourceRef `json:"knowledge_sources"`
 	ProbePort        int                  `json:"probe_port,omitempty"`
-	ProbeInterval    int                  `json:"probe_interval,omitempty"`
 	CreatedAt        time.Time            `json:"created_at"`
 	UpdatedAt        time.Time            `json:"updated_at"`
 }
@@ -151,7 +150,6 @@ type AddAccessFaceRequest struct {
 	KBMode           string               `json:"kb_mode"`
 	KnowledgeSources []KnowledgeSourceRef `json:"knowledge_sources"`
 	ProbePort        int                  `json:"probe_port,omitempty"`
-	ProbeInterval    int                  `json:"probe_interval,omitempty"`
 }
 
 type UpdateAccessFaceRequest struct {
@@ -173,7 +171,6 @@ type UpdateAccessFaceRequest struct {
 	KBMode           *string              `json:"kb_mode"`
 	KnowledgeSources []KnowledgeSourceRef `json:"knowledge_sources"`
 	ProbePort        *int                 `json:"probe_port,omitempty"`
-	ProbeInterval    *int                 `json:"probe_interval,omitempty"`
 }
 
 type AddMemoryRequest struct {

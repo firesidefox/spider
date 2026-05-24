@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -22,7 +21,6 @@ import (
 	"github.com/spiderai/spider/internal/knowledge"
 	"github.com/spiderai/spider/internal/logger"
 	mcppkg "github.com/spiderai/spider/internal/mcp"
-	"github.com/spiderai/spider/internal/monitor"
 	"github.com/spiderai/spider/internal/permission"
 	"github.com/spiderai/spider/internal/scheduler"
 	sshpkg "github.com/spiderai/spider/internal/ssh"
@@ -303,22 +301,6 @@ func serve(cfgFile, addrOverride, dataDirOverride string, debug bool) error {
 		defer sched.Stop()
 		defer exec.Stop()
 	}
-
-	app.Monitor = monitor.New(
-		app.HostStore,
-		app.AccessFaceStore,
-		func(hostID string, online bool) {
-			data, _ := json.Marshal(map[string]any{
-				"type": "host_status",
-				"content": map[string]any{
-					"host_id": hostID,
-					"online":  online,
-				},
-			})
-			app.BroadcastGlobalSSE(data)
-		},
-	)
-	app.Monitor.Start(shutdownCtx)
 
 	mcpHandler := mcppkg.NewHTTPHandler(app)
 

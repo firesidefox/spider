@@ -12,7 +12,6 @@ import (
 	"github.com/spiderai/spider/internal/knowledge"
 	mcppkg "github.com/spiderai/spider/internal/mcp"
 	"github.com/spiderai/spider/internal/models"
-	sshpkg "github.com/spiderai/spider/internal/ssh"
 	"github.com/spiderai/spider/internal/store"
 )
 
@@ -94,20 +93,6 @@ func deleteHost(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id stri
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"message": "已删除"})
-}
-
-func pingHost(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id string) {
-	sshFace, err := app.AccessFaceStore.GetSSHFaceForHost(id)
-	if err != nil {
-		writeJSON(w, http.StatusOK, map[string]any{"connected": false, "error": "无 SSH 操作面"})
-		return
-	}
-	latency, err := sshpkg.CheckConnectivity(sshFace, app.AccessFaceStore, app.SSHKeyStore)
-	if err != nil {
-		writeJSON(w, http.StatusOK, map[string]any{"connected": false, "error": err.Error()})
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"connected": true, "latency_ms": latency.Milliseconds()})
 }
 
 // Access face handlers
@@ -301,7 +286,6 @@ type accessFaceResponse struct {
 	KBMode           string                              `json:"kb_mode"`
 	KnowledgeSources []models.KnowledgeSourceRefEnriched `json:"knowledge_sources"`
 	ProbePort        int                                 `json:"probe_port,omitempty"`
-	ProbeInterval    int                                 `json:"probe_interval,omitempty"`
 	CreatedAt        time.Time                           `json:"created_at"`
 	UpdatedAt        time.Time                           `json:"updated_at"`
 }
@@ -460,7 +444,6 @@ func makeAccessFaceResponse(f models.AccessFace, cache knowledgeRefCache) access
 		KBMode:           f.KBMode,
 		KnowledgeSources: enrichKnowledgeSources(f, cache),
 		ProbePort:        f.ProbePort,
-		ProbeInterval:    f.ProbeInterval,
 		CreatedAt:        f.CreatedAt,
 		UpdatedAt:        f.UpdatedAt,
 	}

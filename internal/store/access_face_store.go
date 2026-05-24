@@ -46,7 +46,7 @@ func (s *AccessFaceStore) Add(hostID string, req *models.AddAccessFaceRequest) (
 		id, hostID, req.Type, req.IP, req.Port, req.Username, req.SSHAuthType,
 		encCred, encPass, req.SSHKeyID, req.SSHLegacy,
 		req.SSHLoginInput,
-		req.BaseURL, req.RESTScheme, req.RESTAuthType, req.RESTUsername, req.HeaderName, req.HMACAlgo, mode, string(ksJSON), req.ProbePort, req.ProbeInterval, now, now)
+		req.BaseURL, req.RESTScheme, req.RESTAuthType, req.RESTUsername, req.HeaderName, req.HMACAlgo, mode, string(ksJSON), req.ProbePort, 0, now, now)
 	if err != nil {
 		return nil, err
 	}
@@ -180,9 +180,6 @@ func (s *AccessFaceStore) Update(id string, req *models.UpdateAccessFaceRequest)
 	if req.ProbePort != nil {
 		cur.ProbePort = *req.ProbePort
 	}
-	if req.ProbeInterval != nil {
-		cur.ProbeInterval = *req.ProbeInterval
-	}
 	encCred := cur.EncryptedCred
 	encPass := cur.EncryptedPass
 	if req.Credential != nil {
@@ -207,7 +204,7 @@ func (s *AccessFaceStore) Update(id string, req *models.UpdateAccessFaceRequest)
 		WHERE id=?`,
 		cur.IP, cur.Port, cur.Username, cur.SSHAuthType,
 		encCred, encPass, cur.SSHKeyID, cur.SSHLegacy, cur.SSHLoginInput,
-		cur.BaseURL, cur.RESTScheme, cur.RESTAuthType, cur.RESTUsername, cur.HeaderName, cur.HMACAlgo, cur.KBMode, string(ksJSON), cur.ProbePort, cur.ProbeInterval, now, id)
+		cur.BaseURL, cur.RESTScheme, cur.RESTAuthType, cur.RESTUsername, cur.HeaderName, cur.HMACAlgo, cur.KBMode, string(ksJSON), cur.ProbePort, 0, now, id)
 	if err != nil {
 		return nil, err
 	}
@@ -251,6 +248,7 @@ func scanAccessFace(s accessFaceScanner) (*models.AccessFace, error) {
 	var f models.AccessFace
 	var ksJSON string
 	var sshLegacy int
+	var probeInterval int // kept in DB for backward compat, not used
 	err := s.Scan(
 		&f.ID, &f.HostID, &f.Type, &f.IP, &f.Port,
 		&f.Username, &f.SSHAuthType,
@@ -258,7 +256,7 @@ func scanAccessFace(s accessFaceScanner) (*models.AccessFace, error) {
 		&f.SSHKeyID, &sshLegacy,
 		&f.SSHLoginInput,
 		&f.BaseURL, &f.RESTScheme, &f.RESTAuthType, &f.RESTUsername, &f.HeaderName, &f.HMACAlgo,
-		&f.KBMode, &ksJSON, &f.ProbePort, &f.ProbeInterval, &f.CreatedAt, &f.UpdatedAt,
+		&f.KBMode, &ksJSON, &f.ProbePort, &probeInterval, &f.CreatedAt, &f.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {
 		return nil, ErrNotFound

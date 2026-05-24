@@ -3,29 +3,9 @@ package api
 import (
 	"fmt"
 	"net/http"
-	"time"
 
 	mcppkg "github.com/spiderai/spider/internal/mcp"
 )
-
-func hostStatuses(app *mcppkg.App, w http.ResponseWriter, r *http.Request) {
-	if app.Monitor == nil {
-		writeJSON(w, 200, []any{})
-		return
-	}
-	statuses := app.Monitor.Statuses()
-	type item struct {
-		HostID    string    `json:"host_id"`
-		Online    bool      `json:"online"`
-		CheckedAt time.Time `json:"checked_at"`
-	}
-	out := make([]item, 0, len(statuses))
-	now := time.Now()
-	for id, online := range statuses {
-		out = append(out, item{HostID: id, Online: online, CheckedAt: now})
-	}
-	writeJSON(w, 200, out)
-}
 
 func globalStream(app *mcppkg.App, w http.ResponseWriter, r *http.Request) {
 	flusher, ok := w.(http.Flusher)

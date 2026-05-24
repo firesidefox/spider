@@ -11,7 +11,7 @@ import { useTargetHosts } from '../composables/useTargetHosts'
 import {
   sendMessage, subscribeConversation, createConversation, listConversations,
   getConversation, deleteConversation, confirmAction, cancelConversation,
-  getActiveModel, setActiveModel, updateTitle, exportConversation, getHostStatuses,
+  getActiveModel, setActiveModel, updateTitle, exportConversation,
   suggestTitle,
   type Conversation, type ChatMessage as ChatMsg, type ChatEvent, type Todo,
 } from '../api/chat'
@@ -299,7 +299,6 @@ const { selectedHostIds } = useTargetHosts()
 const deviceResetTimers = new Map<string, ReturnType<typeof setTimeout>>()
 const SSH_TOOLS = new Set(['RunCommand', 'RunCommandBatch'])
 const executingHosts = new Set<string>()
-const monitorStatuses = new Map<string, boolean>()
 
 function setDeviceStatus(hostName: string, status: DeviceStatus['status']) {
   const idx = devices.value.findIndex(d => d.name === hostName)
@@ -325,8 +324,7 @@ function markDevicesDone(hostNames: string[], failed: boolean) {
     const t = setTimeout(() => {
       if (d) {
         executingHosts.delete(d.id)
-        const monitorOnline = monitorStatuses.get(d.id)
-        setDeviceStatus(name, monitorOnline === false ? 'offline' : 'online')
+        setDeviceStatus(name, 'online')
       }
       deviceResetTimers.delete(name)
     }, 2000)
@@ -903,13 +901,11 @@ async function handleDeleteConversation(id: string) {
 }
 
 async function loadDevices() {
-  const [hosts, statuses] = await Promise.all([listHosts(), getHostStatuses()])
+  const hosts = await listHosts()
   allHosts.value = hosts
-  const statusMap = new Map(statuses.map(s => [s.host_id, s.online]))
-  statuses.forEach(s => monitorStatuses.set(s.host_id, s.online))
   devices.value = hosts.map(h => ({
     id: h.id, name: h.name, ip: h.ip,
-    vendor: '', status: (statusMap.get(h.id) === false ? 'offline' : 'online') as DeviceStatus['status'],
+    vendor: '', status: 'online' as DeviceStatus['status'],
   }))
 }
 
@@ -1117,23 +1113,7 @@ let globalEs: EventSource | null = null
 
 function startGlobalSSE() {
   globalEs = new EventSource('/api/v1/stream')
-  globalEs.onmessage = (e) => {
-    try {
-      const event = JSON.parse(e.data)
-      if (event.type === 'host_status') {
-        const { host_id, online } = event.content
-        monitorStatuses.set(host_id, online)
-        if (!executingHosts.has(host_id)) {
-          const idx = devices.value.findIndex(d => d.id === host_id)
-          if (idx !== -1 && devices.value[idx].status !== (online ? 'online' : 'offline')) {
-            devices.value = devices.value.map((d, i) =>
-              i === idx ? { ...d, status: online ? 'online' : 'offline' } : d
-            )
-          }
-        }
-      }
-    } catch {}
-  }
+  globalEs.onmessage = (_e) => {}
   globalEs.onerror = () => {}
 }
 
