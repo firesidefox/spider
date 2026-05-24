@@ -50,7 +50,7 @@ export interface UpdatePrometheusSourceRequest {
 export async function listPrometheusSources(): Promise<PrometheusSource[]> {
   const res = await fetch('/api/v1/prometheus/sources', { headers: authHeaders() })
   if (!res.ok) throw new Error(await res.text())
-  return res.json()
+  return (await res.json()) ?? []
 }
 
 export async function addPrometheusSource(req: AddPrometheusSourceRequest): Promise<PrometheusSource> {
