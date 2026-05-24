@@ -200,8 +200,8 @@ func parseDuration(s string) (time.Duration, error) {
 	if d, err := time.ParseDuration(s); err == nil {
 		return d, nil
 	}
-	if strings.HasSuffix(s, "d") {
-		n, err := strconv.Atoi(strings.TrimSuffix(s, "d"))
+	if trimmed, ok := strings.CutSuffix(s, "d"); ok {
+		n, err := strconv.Atoi(trimmed)
 		if err == nil {
 			return time.Duration(n) * 24 * time.Hour, nil
 		}
