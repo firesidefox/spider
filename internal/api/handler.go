@@ -896,6 +896,76 @@ func NewRouter(app *mcppkg.App) http.Handler {
 		}
 	})))
 
+	// Prometheus Data Sources
+	mux.HandleFunc("/api/v1/prometheus/sources", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			listPrometheusSources(app, w, r)
+		case http.MethodPost:
+			operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				addPrometheusSource(app, w, r)
+			})).ServeHTTP(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+	mux.HandleFunc("/api/v1/prometheus/sources/", func(w http.ResponseWriter, r *http.Request) {
+		rest := r.URL.Path[len("/api/v1/prometheus/sources/"):]
+		id := rest
+		sub := ""
+		if idx := indexOf(rest, '/'); idx >= 0 {
+			id = rest[:idx]
+			sub = rest[idx+1:]
+		}
+		switch sub {
+		case "":
+			switch r.Method {
+			case http.MethodGet:
+				getPrometheusSource(app, w, r, id)
+			case http.MethodPut:
+				operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					updatePrometheusSource(app, w, r, id)
+				})).ServeHTTP(w, r)
+			case http.MethodDelete:
+				operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					deletePrometheusSource(app, w, r, id)
+				})).ServeHTTP(w, r)
+			default:
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			}
+		case "test":
+			testPrometheusConnection(app, w, r, id)
+		case "bindings":
+			switch r.Method {
+			case http.MethodGet:
+				listPrometheusBindings(app, w, r, id)
+			default:
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			}
+		default:
+			http.Error(w, "not found", http.StatusNotFound)
+		}
+	})
+	mux.HandleFunc("/api/v1/prometheus/bindings", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				addPrometheusBinding(app, w, r)
+			})).ServeHTTP(w, r)
+			return
+		}
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	})
+	mux.HandleFunc("/api/v1/prometheus/bindings/", func(w http.ResponseWriter, r *http.Request) {
+		id := r.URL.Path[len("/api/v1/prometheus/bindings/"):]
+		if r.Method == http.MethodDelete {
+			operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				deletePrometheusBinding(app, w, r, id)
+			})).ServeHTTP(w, r)
+			return
+		}
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	})
+
 	// Auth middleware wraps the inner mux; login/logout are exposed without auth.
 	authMW := authmw.AuthMiddleware(
 		app.Config.Auth.Enabled,
