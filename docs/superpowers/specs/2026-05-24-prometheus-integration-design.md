@@ -1,113 +1,113 @@
-# Prometheus Integration Design
+# Prometheus 集成设计
 
-**Date:** 2026-05-24  
-**Status:** Approved
+**日期：** 2026-05-24  
+**状态：** 已批准
 
-## Overview
+## 概述
 
-Add Prometheus query integration to spider.ai. Prometheus is modeled as a monitoring data source (`prometheus_sources`), separate from `AccessFace` (which expresses access channels, not observation sources). Sources are scoped to a topology layer or individual host. One agent tool executes free PromQL queries. Alert integration is tracked separately in the PRD.
+为 spider.ai 新增 Prometheus 查询能力。Prometheus 建模为独立的监控数据源（`prometheus_sources`），与 `AccessFace`（接入面，表达"如何访问主机"）分离——Prometheus 是观测源，方向和语义不同，不应混用。数据源通过绑定关系（`prometheus_bindings`）关联到拓扑层或单台主机。新增一个 Agent 工具执行自由 PromQL 查询。告警集成单独跟踪，见 PRD。
 
-## 1. Data Model
+## 1. 数据模型
 
-### 1.1 `prometheus_sources`
+### 1.1 `prometheus_sources`（监控数据源定义）
 
-Defines a Prometheus instance (URL + auth). No scope here — scope is in bindings.
+存储 Prometheus 实例的连接信息，不含作用域——作用域在 bindings 表中。
 
 ```sql
 CREATE TABLE prometheus_sources (
   id                    TEXT PRIMARY KEY,
   name                  TEXT NOT NULL,
-  base_url              TEXT NOT NULL,           -- e.g. http://prom:9090
-  auth_type             TEXT NOT NULL DEFAULT 'none',  -- none | bearer | basic
-  encrypted_credential  TEXT NOT NULL DEFAULT '', -- encrypted via crypto.Manager
+  base_url              TEXT NOT NULL,                -- 如 http://prom:9090
+  auth_type             TEXT NOT NULL DEFAULT 'none', -- none | bearer | basic
+  encrypted_credential  TEXT NOT NULL DEFAULT '',     -- 经 crypto.Manager 加密
   created_at            DATETIME NOT NULL,
   updated_at            DATETIME NOT NULL
 )
 ```
 
-Go model field: `EncryptedCredential` (DB column: `encrypted_credential`), same pattern as `AccessFace.EncryptedCred`.
+Go 模型字段：`EncryptedCredential`（DB 列：`encrypted_credential`），加密模式与 `AccessFace.EncryptedCred` 一致。
 
-### 1.2 `prometheus_bindings`
+### 1.2 `prometheus_bindings`（作用域绑定）
 
-Binds a source to a scope. Two scope types:
+将数据源绑定到作用域，支持两种类型：
 
-| scope_type | covers | unique constraint |
+| scope_type | 覆盖范围 | 唯一约束 |
 |---|---|---|
-| `topology_layer` | all topology nodes in `(topology_id, layer)` | UNIQUE(topology_id, layer) |
-| `host` | one specific host (override) | UNIQUE(host_id) |
+| `topology_layer` | 指定拓扑中指定层的所有节点 | UNIQUE(topology_id, layer) |
+| `host` | 单台主机（覆盖拓扑层绑定） | UNIQUE(host_id) |
 
 ```sql
 CREATE TABLE prometheus_bindings (
   id           TEXT PRIMARY KEY,
   source_id    TEXT NOT NULL REFERENCES prometheus_sources(id) ON DELETE CASCADE,
   scope_type   TEXT NOT NULL CHECK (scope_type IN ('topology_layer', 'host')),
-  topology_id  TEXT REFERENCES topologies(id) ON DELETE CASCADE,  -- scope_type=topology_layer
-  layer        TEXT,                                               -- scope_type=topology_layer
-  host_id      TEXT REFERENCES hosts(id) ON DELETE CASCADE,       -- scope_type=host
+  topology_id  TEXT REFERENCES topologies(id) ON DELETE CASCADE, -- scope_type=topology_layer 时有值
+  layer        TEXT,                                              -- scope_type=topology_layer 时有值
+  host_id      TEXT REFERENCES hosts(id) ON DELETE CASCADE,      -- scope_type=host 时有值
   created_at   DATETIME NOT NULL
-)
+);
 CREATE UNIQUE INDEX idx_pb_topology_layer ON prometheus_bindings(topology_id, layer)
   WHERE scope_type = 'topology_layer';
 CREATE UNIQUE INDEX idx_pb_host ON prometheus_bindings(host_id)
   WHERE scope_type = 'host';
 ```
 
-### 1.3 Source lookup for a given host
+### 1.3 数据源查找逻辑（给定 host_id）
 
-Priority: host binding first, topology+layer binding as fallback.
+主机级绑定优先，拓扑层绑定兜底：
 
 ```
-1. SELECT source via binding WHERE scope_type='host' AND host_id=?
-2. if not found:
-     find topology_node WHERE host_id=? → get (topology_id, layer)
-     SELECT source via binding WHERE scope_type='topology_layer'
-       AND topology_id=? AND layer=?
-3. if still not found: return error "no Prometheus source configured for this host"
+1. 查 bindings WHERE scope_type='host' AND host_id=?
+2. 未找到 →
+     查 topology_nodes WHERE host_id=? → 得到 (topology_id, layer)
+     查 bindings WHERE scope_type='topology_layer' AND topology_id=? AND layer=?
+3. 仍未找到 → 返回错误"该主机未配置 Prometheus 数据源"
 ```
 
-## 2. Configuration UI
+## 2. 配置入口（UI）
 
-| Scope | Entry point | Action |
+| 作用域 | 入口位置 | 操作 |
 |---|---|---|
-| Topology layer | Topology detail page → layer row | Configure which Prometheus source covers this layer |
-| Host override | Host detail page → "监控源" section (separate from AccessFace list) | Bind a specific source to this host |
+| 拓扑层 | 拓扑详情页 → 按层配置 | 为某业务的某层绑定 Prometheus 数据源 |
+| 主机覆盖 | 主机详情页 → "监控源"区块（与接入面列表分离） | 为单台主机绑定独立数据源，覆盖拓扑层配置 |
 
-## 3. Agent Tool: `QueryMetrics`
+## 3. Agent 工具：`QueryMetrics`
 
-Execute a free PromQL expression for a given host.
+对指定主机执行自由 PromQL 查询。
 
-**Input schema:**
+**输入参数：**
 
 ```json
 {
-  "host_id": "string (required) — host whose metrics to query",
-  "query":   "string (required) — PromQL expression",
-  "start":   "string (optional) — RFC3339 or Unix timestamp",
-  "end":     "string (optional) — RFC3339 or Unix timestamp",
-  "step":    "string (optional) — duration string, e.g. '1m', '30s'"
+  "host_id": "string（必填）— 目标主机 ID",
+  "query":   "string（必填）— PromQL 表达式",
+  "start":   "string（可选）— RFC3339 或 Unix 时间戳",
+  "end":     "string（可选）— RFC3339 或 Unix 时间戳",
+  "step":    "string（可选）— 步长，如 '1m'、'30s'",
+  "raw":     "bool（可选）— 返回原始 Prometheus JSON，默认 false"
 }
 ```
 
-**Behavior:**
-- `start` and `end` must both be present or both absent; providing only one is an error
-- If absent → instant query (`GET /api/v1/query`)
-- If present → range query (`GET /api/v1/query_range`)
-- `step` default: `(end - start) / 100`, minimum 1s
-- Max time window: 7 days; max data points: 10,000 — exceeded → error, not truncation
-- Source resolved via §1.3 lookup; error if no source found
-- Risk level: `L1` (read-only), concurrency safe
+**行为规则：**
+- `start` 与 `end` 必须同时提供或同时省略，仅提供其一报错
+- 两者省略 → 即时查询（`GET /api/v1/query`）
+- 两者提供 → 区间查询（`GET /api/v1/query_range`）
+- `step` 缺省值：`(end - start) / 100`，最小 1s
+- 最大时间窗口：7 天；最大数据点数：10,000 — 超出直接报错，不截断
+- 数据源通过 §1.3 逻辑自动解析，未找到则报错
+- 风险等级：`L1`（只读），并发安全
 
-**Output:** summarized result (not raw JSON)
-- `result_type`, `series_count`, per-series: `metric` labels, `latest`, `min`, `max`, `avg`, up to 20 samples
-- `raw: true` input parameter returns full Prometheus JSON (for debugging)
+**输出（默认）：** 摘要格式，非原始 JSON
+- `result_type`、`series_count`，每条序列：`metric` 标签、`latest`、`min`、`max`、`avg`、最多 20 个样本点
+- `raw: true` 时返回完整 Prometheus JSON（调试用）
 
-**System prompt guidance:**
-- Resolve the host's Prometheus source automatically — do not ask user for Prometheus URL
-- Construct PromQL with host IP as label selector, e.g. `node_cpu_seconds_total{instance="<IP>:9100"}`
-- Instant query for current state; range query for trend analysis
-- Avoid label-less queries (`{}`) on large clusters
+**System prompt 指导：**
+- 工具自动解析主机对应的数据源，无需用户提供 Prometheus URL
+- PromQL 使用主机 IP 构造 label selector，如 `node_cpu_seconds_total{instance="<IP>:9100"}`
+- 当前状态用即时查询，趋势分析用区间查询
+- 避免在大集群上使用无 label 过滤的裸查询（如 `{}`）
 
-## 4. Internal Prometheus Client
+## 4. 内部 Prometheus 客户端
 
 ```go
 // internal/prometheus/client.go
@@ -117,11 +117,11 @@ func (c *Client) QueryInstant(ctx context.Context, query string, ts time.Time) (
 func (c *Client) QueryRange(ctx context.Context, query, start, end, step string) (*QueryResult, error)
 ```
 
-Thin HTTP wrapper. No retry. Timeout: 30s (context-cancelable).
+轻量 HTTP 封装。不做重试。超时 30s（可由 context 取消）。
 
-## 5. Out of Scope
+## 5. 范围外（本次不做）
 
-- Prometheus metric discovery / autocomplete
-- Grafana integration
-- Alert integration (GetAlerts tool, Alertmanager webhook) — tracked in PRD
-- Multiple bindings per host (one override per host only)
+- Prometheus 指标自动发现 / 自动补全
+- Grafana 集成
+- 告警集成（GetAlerts 工具、Alertmanager Webhook）— 见 PRD
+- 单台主机多条 binding（每台主机最多一条 host 级覆盖）
