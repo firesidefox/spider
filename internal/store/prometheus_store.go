@@ -10,6 +10,8 @@ import (
 	"github.com/spiderai/spider/internal/models"
 )
 
+var ErrNoPrometheusBinding = fmt.Errorf("该主机未配置 Prometheus 数据源")
+
 // --- PrometheusSourceStore ---
 
 type PrometheusSourceStore struct {
@@ -270,7 +272,7 @@ func (s *PrometheusBindingStore) FindSourceIDForHost(hostID string) (string, err
 		return sourceID, nil
 	}
 	if err == sql.ErrNoRows {
-		return "", fmt.Errorf("该主机未配置 Prometheus 数据源")
+		return "", ErrNoPrometheusBinding
 	}
 	return "", err
 }
@@ -285,5 +287,8 @@ func scanPrometheusBinding(sc promBindingScanner) (*models.PrometheusBinding, er
 	if err == sql.ErrNoRows {
 		return nil, ErrNotFound
 	}
-	return &b, err
+	if err != nil {
+		return nil, err
+	}
+	return &b, nil
 }

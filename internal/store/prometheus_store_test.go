@@ -171,9 +171,15 @@ func TestFindSourceIDForHost(t *testing.T) {
 	})
 
 	// Insert topology, host, and topology_node
-	database.Exec(`INSERT INTO topologies (id,name,notes,created_at,updated_at) VALUES ('t1','topo','',datetime('now'),datetime('now'))`)
-	database.Exec(`INSERT INTO hosts (id,name,ip,tags,created_at,updated_at) VALUES ('h1','host1','10.0.0.1','[]',datetime('now'),datetime('now'))`)
-	database.Exec(`INSERT INTO topology_nodes (id,topology_id,layer,name,role,host_id,notes,created_at,updated_at) VALUES ('n1','t1','server','node1','','h1','',datetime('now'),datetime('now'))`)
+	if _, err := database.Exec(`INSERT INTO topologies (id,name,notes,created_at,updated_at) VALUES ('t1','topo','',datetime('now'),datetime('now'))`); err != nil {
+		t.Fatalf("insert topology: %v", err)
+	}
+	if _, err := database.Exec(`INSERT INTO hosts (id,name,ip,tags,created_at,updated_at) VALUES ('h1','host1','10.0.0.1','[]',datetime('now'),datetime('now'))`); err != nil {
+		t.Fatalf("insert host: %v", err)
+	}
+	if _, err := database.Exec(`INSERT INTO topology_nodes (id,topology_id,layer,name,role,host_id,notes,created_at,updated_at) VALUES ('n1','t1','server','node1','','h1','',datetime('now'),datetime('now'))`); err != nil {
+		t.Fatalf("insert topology_node: %v", err)
+	}
 
 	// No binding yet — should error
 	_, err := bs.FindSourceIDForHost("h1")
@@ -182,10 +188,12 @@ func TestFindSourceIDForHost(t *testing.T) {
 	}
 
 	// Add topology_layer binding
-	bs.Add(&models.AddPrometheusBindingRequest{
+	if _, err := bs.Add(&models.AddPrometheusBindingRequest{
 		SourceID: src.ID, ScopeType: models.ScopeTopologyLayer,
 		TopologyID: "t1", Layer: "server",
-	})
+	}); err != nil {
+		t.Fatalf("Add binding: %v", err)
+	}
 
 	// Should find via topology_layer
 	foundID, err := bs.FindSourceIDForHost("h1")
@@ -200,9 +208,11 @@ func TestFindSourceIDForHost(t *testing.T) {
 	src2, _ := ss.Add(&models.AddPrometheusSourceRequest{
 		Name: "prom2", BaseURL: "http://p2:9090", AuthType: models.PrometheusAuthNone,
 	})
-	bs.Add(&models.AddPrometheusBindingRequest{
+	if _, err := bs.Add(&models.AddPrometheusBindingRequest{
 		SourceID: src2.ID, ScopeType: models.ScopeHost, HostID: "h1",
-	})
+	}); err != nil {
+		t.Fatalf("Add binding: %v", err)
+	}
 
 	foundID, err = bs.FindSourceIDForHost("h1")
 	if err != nil {
