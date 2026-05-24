@@ -176,7 +176,7 @@ func (c *Client) ListMetricNames(ctx context.Context, selector string) ([]string
 // TestConnection verifies the Prometheus instance is reachable.
 func (c *Client) TestConnection(ctx context.Context) (latencyMs int64, err error) {
 	start := time.Now()
-	_, err = c.get(ctx, "/api/v1/metadata", url.Values{"limit": {"1"}})
+	_, err = c.get(ctx, "/api/v1/query", url.Values{"query": {"1"}, "time": {"1"}})
 	if err != nil {
 		return 0, err
 	}
@@ -204,6 +204,12 @@ func parseDuration(s string) (time.Duration, error) {
 		n, err := strconv.Atoi(trimmed)
 		if err == nil {
 			return time.Duration(n) * 24 * time.Hour, nil
+		}
+	}
+	if trimmed, ok := strings.CutSuffix(s, "w"); ok {
+		n, err := strconv.Atoi(trimmed)
+		if err == nil {
+			return time.Duration(n) * 7 * 24 * time.Hour, nil
 		}
 	}
 	return 0, fmt.Errorf("cannot parse duration %q", s)
