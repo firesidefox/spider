@@ -299,6 +299,10 @@ func (f *Factory) buildRegistryWithHosts(conversationID string, selectedHostIDs 
 	listTool.knowledgeStore = f.KnowledgeStore
 	registry.Register(listTool)
 	registry.Register(NewCheckConnectivityTool(f.Hosts, f.AccessFaces))
+	if f.PrometheusSourceStore != nil && f.PrometheusBindingStore != nil {
+		registry.Register(NewListMetricsTool(f.PrometheusSourceStore, f.PrometheusBindingStore, f.Hosts))
+		registry.Register(NewQueryMetricsTool(f.PrometheusSourceStore, f.PrometheusBindingStore))
+	}
 	registry.Register(NewExecuteCLITool(f.Hosts, f.AccessFaces, f.SSHPool, f.Logs, f.SSHKeys))
 	registry.Register(NewBatchExecuteTool(f.Hosts, f.AccessFaces, f.SSHPool, f.Logs, f.SSHKeys))
 	registry.Register(NewVerifyTool(f.Hosts, f.AccessFaces, f.SSHPool, f.SSHKeys))
