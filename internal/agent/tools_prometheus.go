@@ -14,6 +14,8 @@ import (
 
 var timeNow = time.Now // allows test override if needed
 
+const nodeExporterPort = "9100"
+
 // sourceStorer is the minimal interface needed by prometheus tools.
 type sourceStorer interface {
 	GetByID(id string) (*models.PrometheusSource, error)
@@ -104,7 +106,7 @@ func (t *ListMetricsTool) Execute(ctx context.Context, input map[string]any) (*T
 	selector := "{}"
 	if t.hosts != nil {
 		if host, err := t.hosts.GetByID(hostID); err == nil && host != nil {
-			selector = fmt.Sprintf(`{instance=~"%s:.*"}`, host.IP)
+			selector = fmt.Sprintf(`{instance="%s:%s"}`, host.IP, nodeExporterPort)
 		}
 	}
 
@@ -263,7 +265,7 @@ func formatQueryResult(r *promclient.QueryResult) string {
 		fmt.Fprintf(&sb, "  latest=%s  min=%s  max=%s  avg=%s\n", s.Latest, s.Min, s.Max, s.Avg)
 		for _, sample := range s.Samples {
 			if sample.Timestamp != 0 {
-				fmt.Fprintf(&sb, "  [%.3e] %s\n", sample.Timestamp, sample.Value)
+				fmt.Fprintf(&sb, "  [%.0f] %s\n", sample.Timestamp, sample.Value)
 			} else {
 				fmt.Fprintf(&sb, "  %s\n", sample.Value)
 			}
