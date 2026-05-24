@@ -18,14 +18,6 @@ const router = createRouter({
     { path: '/knowledge', component: () => import('./views/KnowledgeView.vue') },
     { path: '/topology',  component: () => import('./views/TopologyView.vue') },
     { path: '/tasks',    component: () => import('./views/TasksView.vue') },
-    {
-      path: '/settings',
-      component: () => import('./views/SettingsView.vue'),
-      children: [
-        { path: '', redirect: '/settings/prometheus' },
-        { path: 'prometheus', component: () => import('./components/PrometheusDataSourcesPanel.vue') },
-      ],
-    },
   ],
 })
 

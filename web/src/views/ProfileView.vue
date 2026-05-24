@@ -48,6 +48,9 @@
           <div class="nav-row" :class="{ selected: activeTab === 'skills' }" @click="activeTab = 'skills'">
             <span class="nav-icon">🧩</span><span class="nav-label">Skills</span>
           </div>
+          <div class="nav-row" :class="{ selected: activeTab === 'datasources' }" @click="activeTab = 'datasources'">
+            <span class="nav-icon">📡</span><span class="nav-label">数据源</span>
+          </div>
           <div class="nav-row" :class="{ selected: activeTab === 'install' }" @click="activeTab = 'install'">
             <span class="nav-icon">📦</span><span class="nav-label">安装</span>
           </div>
@@ -66,6 +69,14 @@
       </template>
       <template v-else-if="activeTab === 'skills'">
         <SkillsPanel />
+      </template>
+      <template v-else-if="activeTab === 'datasources'">
+        <div class="datasources-shell">
+          <div class="datasources-tabs">
+            <span class="datasources-tab active">Prometheus</span>
+          </div>
+          <PrometheusDataSourcesPanel />
+        </div>
       </template>
       <template v-else>
         <div class="detail-topbar">
@@ -854,6 +865,7 @@ import UsersPanel from './UsersPanel.vue'
 import AuditView from './AuditView.vue'
 import InstallPanel from './InstallPanel.vue'
 import SkillsPanel from './SkillsPanel.vue'
+import PrometheusDataSourcesPanel from '../components/PrometheusDataSourcesPanel.vue'
 import {
   chatThemes, densityPresets,
   getSavedChatTheme, saveChatTheme,
@@ -872,12 +884,12 @@ const roleLabel = computed(() => {
 
 const allowedTabs = computed(() => {
   const base = ['info', 'tokens', 'ssh-keys', 'logs', 'chat-theme']
-  return isAdmin.value ? [...base, 'users', 'audit', 'install', 'skills', 'agent', 'kb', 'settings', 'notify'] : base
+  return isAdmin.value ? [...base, 'users', 'audit', 'install', 'skills', 'agent', 'kb', 'settings', 'notify', 'datasources'] : base
 })
 
 const queryTab = route.query.tab as string
 const initialTab = allowedTabs.value.includes(queryTab) ? queryTab : 'info'
-const activeTab = ref<'info' | 'tokens' | 'ssh-keys' | 'logs' | 'chat-theme' | 'users' | 'audit' | 'install' | 'skills' | 'agent' | 'kb' | 'settings' | 'notify'>(initialTab)
+const activeTab = ref<'info' | 'tokens' | 'ssh-keys' | 'logs' | 'chat-theme' | 'users' | 'audit' | 'install' | 'skills' | 'agent' | 'kb' | 'settings' | 'notify' | 'datasources'>(initialTab)
 watch(activeTab, (tab) => router.replace({ query: { tab } }))
 const tabTitle = computed(() => ({
   info: '基本信息', tokens: '访问令牌', 'ssh-keys': 'SSH Keys', logs: '操作日志',
@@ -1909,4 +1921,8 @@ async function handleAddChannel() {
 .ct-display-row:last-child { border-bottom: none; }
 .ct-display-label { font-size: 12px; color: var(--muted); width: 72px; flex-shrink: 0; }
 .ct-display-chip { display: inline-block; font-size: 12px; font-weight: 500; padding: 3px 10px; border-radius: 12px; border: 1px solid var(--border); color: var(--text-sub); background: var(--panel); }
+.datasources-shell { height: 100%; display: flex; flex-direction: column; }
+.datasources-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); padding: 0 32px; flex-shrink: 0; }
+.datasources-tab { padding: 10px 16px; font-size: 13px; color: var(--text-sub); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.datasources-tab.active { color: var(--primary, #5794f2); border-bottom-color: var(--primary, #5794f2); font-weight: 500; }
 </style>
