@@ -133,7 +133,7 @@ Spider 是以 Claude Code 为中心的 SSH 代理网关和智能运维平台。
 
 | 功能 | 描述 | 优先级 |
 |------|------|--------|
-| 添加接入面 | 为主机添加 SSH 或 REST API 类型的接入面 | P0 |
+| 添加接入面 | 为主机添加 SSH、REST API 或 Prometheus 类型的接入面 | P0 |
 | 更新接入面 | 更新认证信息、地址、知识库绑定 | P0 |
 | 删除接入面 | 删除指定接入面 | P0 |
 | 列出接入面 | 查看主机的所有接入面 | P0 |
@@ -303,6 +303,7 @@ MCP 传输协议：Streamable HTTP（`/mcp` 端点）。
 | `CallAPI` | 调用主机 REST API，GET 只读，POST/PUT/DELETE 有副作用 | 有（非 GET） |
 | `SearchDocs` | 语义搜索知识库，返回相关文档片段 | 只读 |
 | `Todo` | 创建和管理当前对话的子任务列表 | 有 |
+| `QueryMetrics` | 对主机 Prometheus 接入面执行自由 PromQL 查询（即时或区间），返回原始 Prometheus JSON | 只读 |
 | `GetTopology` | 获取网络拓扑数据（节点、边、分组） | 只读 |
 | `GetTopologyContext` | 查询主机在拓扑中的位置和上下游关系 | 只读 |
 | `CreateTask` | 保存已确认的自动化任务到数据库 | 有 |
@@ -531,7 +532,7 @@ Claude Code 发起工具调用 → MCP Layer 解析参数 → ExecService 查询
 |------|------|------|
 | id | string | 主键 |
 | host_id | UUID | 所属主机 |
-| face_type | string | ssh / rest_api |
+| face_type | string | ssh / rest_api / prometheus |
 | name | string | 接入面名称 |
 | address | string | 连接地址 |
 | auth_type | string | key / password / key_password |
@@ -907,6 +908,17 @@ GET    /version                          版本信息
 | 主机状态总览 | 在线/离线/未知主机数量，状态分布 | P0 |
 | 活跃告警列表 | 当前 firing 状态的告警，按严重程度排序 | P0 |
 | 执行统计 | 近 7 天执行次数、成功率趋势 | P1 |
+
+**Prometheus 告警集成**
+
+前提：主机已配置 prometheus 类型接入面（`base_url` 指向 Prometheus 实例）。
+
+| 功能 | 描述 | 优先级 |
+|------|------|--------|
+| `GetAlerts` Agent 工具 | 查询主机 Prometheus 活跃 firing 告警，支持 label 过滤（如 `severity=critical`） | P0 |
+| Alertmanager Webhook 接收 | `POST /api/webhooks/alertmanager/:face_id?token=<token>`，接收标准 Alertmanager v4 webhook payload | P0 |
+| 告警自动创建任务 | firing 告警自动创建 Task（标题 `[Alert] <alertname> on <host_name>`，含 labels + annotations），状态 pending，不自动启动 agent | P0 |
+| Webhook Token 管理 | 首次请求时生成 32 字节随机 token，存入 config 表；在 Settings 页展示，供 Alertmanager receiver 配置 | P0 |
 
 #### 未来探索
 
