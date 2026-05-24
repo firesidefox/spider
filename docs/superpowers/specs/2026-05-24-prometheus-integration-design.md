@@ -5,7 +5,7 @@
 
 ## Overview
 
-Add Prometheus query and alert integration to spider.ai. Prometheus instances are configured as a new `AccessFace` type (`prometheus`) on individual hosts. Two agent tools expose free PromQL queries and active alert retrieval. An Alertmanager webhook endpoint auto-creates tasks from firing alerts.
+Add Prometheus query integration to spider.ai. Prometheus instances are configured as a new `AccessFace` type (`prometheus`) on individual hosts. One agent tool exposes free PromQL queries. Alert integration is tracked separately in the PRD.
 
 ## 1. Data Model
 
@@ -60,78 +60,24 @@ Execute a free PromQL expression against the Prometheus instance bound to a host
 - Prefer instant queries for current state; range queries for trend analysis
 - Do not construct queries wider than needed (avoid `{}` without label matchers on large clusters)
 
-### `GetAlerts`
+## 3. Internal Prometheus Client
 
-Fetch active alerts from a host's Prometheus instance.
-
-**Input schema:**
-
-```json
-{
-  "host_id": "string (required) — host with a prometheus face",
-  "filter":  "string (optional) — label selector, e.g. 'severity=critical,job=node'"
-}
-```
-
-**Behavior:**
-- Calls `GET /api/v1/alerts`
-- Filters to `state=firing` alerts only
-- Applies optional `filter` label matching client-side
-- Returns list of alerts with `labels`, `annotations`, `startsAt`
-- Risk level: `L1` (read-only)
-- Concurrency safe: yes
-
-## 3. Alertmanager Webhook
-
-### Endpoint
-
-```
-POST /api/webhooks/alertmanager/:face_id?token=<webhook_token>
-```
-
-- `:face_id` — ID of the prometheus `AccessFace`; ties the webhook to a specific host without label parsing
-- `token` — static token stored in spider config; rejects requests without matching token
-
-### Payload
-
-Standard Alertmanager webhook v4 format. Only `firing` alerts are processed; `resolved` alerts are ignored (no auto-action on resolution).
-
-### Auto-task creation
-
-For each firing alert group received:
-
-1. Look up host via `face_id`
-2. Create a `Task` with:
-   - Title: `[Alert] <alertname> on <host_name>`
-   - Description: alert `labels` + `annotations.summary` + `annotations.description`
-   - `host_ids`: the matched host
-3. Task is created in `pending` state; agent is **not** auto-started (user triggers manually)
-
-### Security
-
-- Webhook token is a random 32-byte hex string generated on first webhook request, stored in the `config` table under key `webhook_alertmanager_token`
-- Token is displayed once in the UI under Settings → Webhooks
-- No auth header — token in query param only (Alertmanager webhook config supports this natively)
-
-## 4. Internal Prometheus Client
-
-Shared client used by both agent tools and the webhook handler:
+Shared client used by the agent tool:
 
 ```go
 // internal/prometheus/client.go
 type Client struct { baseURL, authType, token string }
 func NewClient(face *models.AccessFace, decryptedCred string) *Client
-func (c *Client) QueryInstant(ctx, query string, ts time.Time) (*QueryResult, error)
-func (c *Client) QueryRange(ctx, query, start, end, step string) (*QueryResult, error)
-func (c *Client) Alerts(ctx context.Context) ([]Alert, error)
+func (c *Client) QueryInstant(ctx context.Context, query string, ts time.Time) (*QueryResult, error)
+func (c *Client) QueryRange(ctx context.Context, query, start, end, step string) (*QueryResult, error)
 ```
 
 Thin HTTP wrapper. No retry logic. Timeout: 30s default (context-cancelable).
 
-## 5. Out of Scope
+## 4. Out of Scope
 
 - Prometheus metric discovery / autocomplete
 - Grafana integration
-- Alert silencing / inhibition via API
+- Alert integration (GetAlerts tool, Alertmanager webhook, auto-task creation) — tracked in PRD
 - Multiple prometheus faces per host
 - Topology-level Prometheus config (deferred)
