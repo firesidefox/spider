@@ -31,7 +31,7 @@ export interface KnowledgeSource {
 export interface AccessFace {
   id: string
   host_id: string
-  type: 'ssh' | 'restapi'
+  type: 'ssh' | 'restapi' | 'prometheus'
   ip: string
   port: number
   username?: string
@@ -47,6 +47,7 @@ export interface AccessFace {
   kb_mode: KBMode
   knowledge_sources: KnowledgeSource[]
   probe_port?: number
+  prometheus_source_id?: string
   created_at: string
   updated_at: string
 }
@@ -90,7 +91,7 @@ export interface UpdateHostRequest {
 }
 
 export interface AddAccessFaceRequest {
-  type: 'ssh' | 'restapi'
+  type: 'ssh' | 'restapi' | 'prometheus'
   ip: string
   port: number
   username?: string
@@ -108,6 +109,7 @@ export interface AddAccessFaceRequest {
   kb_mode?: KBMode
   knowledge_sources?: Array<{ type: 'group' | 'doc'; id: number }>
   probe_port?: number
+  prometheus_source_id?: string
 }
 
 async function apiFetch(url: string, init?: RequestInit) {

@@ -286,6 +286,7 @@ type accessFaceResponse struct {
 	KBMode           string                              `json:"kb_mode"`
 	KnowledgeSources []models.KnowledgeSourceRefEnriched `json:"knowledge_sources"`
 	ProbePort        int                                 `json:"probe_port,omitempty"`
+	PrometheusSourceID string                            `json:"prometheus_source_id,omitempty"`
 	CreatedAt        time.Time                           `json:"created_at"`
 	UpdatedAt        time.Time                           `json:"updated_at"`
 }
@@ -444,6 +445,7 @@ func makeAccessFaceResponse(f models.AccessFace, cache knowledgeRefCache) access
 		KBMode:           f.KBMode,
 		KnowledgeSources: enrichKnowledgeSources(f, cache),
 		ProbePort:        f.ProbePort,
+		PrometheusSourceID: f.PrometheusSourceID,
 		CreatedAt:        f.CreatedAt,
 		UpdatedAt:        f.UpdatedAt,
 	}

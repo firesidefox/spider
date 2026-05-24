@@ -23,13 +23,17 @@ func NewAccessFaceStore(db *sql.DB, cm *crypto.Manager) *AccessFaceStore {
 func (s *AccessFaceStore) Add(hostID string, req *models.AddAccessFaceRequest) (*models.AccessFace, error) {
 	id := uuid.New().String()
 	now := time.Now().UTC()
-	encCred, err := s.crypto.Encrypt(req.Credential)
-	if err != nil {
-		return nil, fmt.Errorf("encrypt credential: %w", err)
-	}
-	encPass, err := s.crypto.Encrypt(req.Passphrase)
-	if err != nil {
-		return nil, fmt.Errorf("encrypt passphrase: %w", err)
+	var encCred, encPass string
+	var err error
+	if req.Type != models.FacePrometheus {
+		encCred, err = s.crypto.Encrypt(req.Credential)
+		if err != nil {
+			return nil, fmt.Errorf("encrypt credential: %w", err)
+		}
+		encPass, err = s.crypto.Encrypt(req.Passphrase)
+		if err != nil {
+			return nil, fmt.Errorf("encrypt passphrase: %w", err)
+		}
 	}
 	mode := normalizeKBMode(req.KBMode)
 	sources := normalizeKnowledgeSources(mode, req.KnowledgeSources)
@@ -41,12 +45,12 @@ func (s *AccessFaceStore) Add(hostID string, req *models.AddAccessFaceRequest) (
 		(id,host_id,type,ip,port,username,auth_type,
 		 encrypted_credential,encrypted_passphrase,ssh_key_id,ssh_legacy,
 		 ssh_login_input,
-		 base_url,rest_scheme,rest_auth_type,rest_username,header_name,hmac_algo,kb_mode,knowledge_sources,probe_port,probe_interval,created_at,updated_at)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		 base_url,rest_scheme,rest_auth_type,rest_username,header_name,hmac_algo,kb_mode,knowledge_sources,probe_port,probe_interval,prometheus_source_id,created_at,updated_at)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		id, hostID, req.Type, req.IP, req.Port, req.Username, req.SSHAuthType,
 		encCred, encPass, req.SSHKeyID, req.SSHLegacy,
 		req.SSHLoginInput,
-		req.BaseURL, req.RESTScheme, req.RESTAuthType, req.RESTUsername, req.HeaderName, req.HMACAlgo, mode, string(ksJSON), req.ProbePort, 0, now, now)
+		req.BaseURL, req.RESTScheme, req.RESTAuthType, req.RESTUsername, req.HeaderName, req.HMACAlgo, mode, string(ksJSON), req.ProbePort, 0, req.PrometheusSourceID, now, now)
 	if err != nil {
 		return nil, err
 	}
@@ -180,6 +184,9 @@ func (s *AccessFaceStore) Update(id string, req *models.UpdateAccessFaceRequest)
 	if req.ProbePort != nil {
 		cur.ProbePort = *req.ProbePort
 	}
+	if req.PrometheusSourceID != nil {
+		cur.PrometheusSourceID = *req.PrometheusSourceID
+	}
 	encCred := cur.EncryptedCred
 	encPass := cur.EncryptedPass
 	if req.Credential != nil {
@@ -200,11 +207,11 @@ func (s *AccessFaceStore) Update(id string, req *models.UpdateAccessFaceRequest)
 		encrypted_credential=?,encrypted_passphrase=?,
 		ssh_key_id=?,ssh_legacy=?,ssh_login_input=?,
 		base_url=?,rest_scheme=?,rest_auth_type=?,rest_username=?,
-		header_name=?,hmac_algo=?,kb_mode=?,knowledge_sources=?,probe_port=?,probe_interval=?,updated_at=?
+		header_name=?,hmac_algo=?,kb_mode=?,knowledge_sources=?,probe_port=?,probe_interval=?,prometheus_source_id=?,updated_at=?
 		WHERE id=?`,
 		cur.IP, cur.Port, cur.Username, cur.SSHAuthType,
 		encCred, encPass, cur.SSHKeyID, cur.SSHLegacy, cur.SSHLoginInput,
-		cur.BaseURL, cur.RESTScheme, cur.RESTAuthType, cur.RESTUsername, cur.HeaderName, cur.HMACAlgo, cur.KBMode, string(ksJSON), cur.ProbePort, 0, now, id)
+		cur.BaseURL, cur.RESTScheme, cur.RESTAuthType, cur.RESTUsername, cur.HeaderName, cur.HMACAlgo, cur.KBMode, string(ksJSON), cur.ProbePort, 0, cur.PrometheusSourceID, now, id)
 	if err != nil {
 		return nil, err
 	}
@@ -238,7 +245,8 @@ func (s *AccessFaceStore) DecryptCredential(f *models.AccessFace) (cred, pass st
 const accessFaceCols = `id,host_id,type,ip,port,username,auth_type,` +
 	`encrypted_credential,encrypted_passphrase,ssh_key_id,ssh_legacy,` +
 	`ssh_login_input,` +
-	`base_url,rest_scheme,rest_auth_type,rest_username,header_name,hmac_algo,kb_mode,knowledge_sources,probe_port,probe_interval,created_at,updated_at`
+	`base_url,rest_scheme,rest_auth_type,rest_username,header_name,hmac_algo,kb_mode,knowledge_sources,probe_port,probe_interval,` +
+	`prometheus_source_id,created_at,updated_at`
 
 type accessFaceScanner interface {
 	Scan(dest ...any) error
@@ -256,7 +264,7 @@ func scanAccessFace(s accessFaceScanner) (*models.AccessFace, error) {
 		&f.SSHKeyID, &sshLegacy,
 		&f.SSHLoginInput,
 		&f.BaseURL, &f.RESTScheme, &f.RESTAuthType, &f.RESTUsername, &f.HeaderName, &f.HMACAlgo,
-		&f.KBMode, &ksJSON, &f.ProbePort, &probeInterval, &f.CreatedAt, &f.UpdatedAt,
+		&f.KBMode, &ksJSON, &f.ProbePort, &probeInterval, &f.PrometheusSourceID, &f.CreatedAt, &f.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {
 		return nil, ErrNotFound

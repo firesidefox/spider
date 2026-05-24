@@ -304,6 +304,9 @@ func migrate(db *sql.DB) error {
 		return err
 	}
 	db.Exec(`DROP TABLE IF EXISTS host_knowledge_sources`)
+	if err := migrateAccessFacesPrometheus(db); err != nil {
+		return err
+	}
 	// Context compaction
 	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS conversation_summaries (
 		id               INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -695,4 +698,69 @@ func mergeKBSources(existing, legacy []kbSourceRef) []kbSourceRef {
 		out = append(out, src)
 	}
 	return out
+}
+
+func migrateAccessFacesPrometheus(db *sql.DB) error {
+	var createSQL string
+	db.QueryRow("SELECT sql FROM sqlite_master WHERE type='table' AND name='access_faces'").Scan(&createSQL)
+	if strings.Contains(createSQL, "'prometheus'") {
+		return nil
+	}
+	// ensure column exists before recreation (idempotent)
+	db.Exec("ALTER TABLE access_faces ADD COLUMN prometheus_source_id TEXT NOT NULL DEFAULT ''")
+
+	db.Exec("PRAGMA foreign_keys=OFF")
+	db.Exec("DROP TABLE IF EXISTS access_faces_new")
+	if _, err := db.Exec(`CREATE TABLE access_faces_new (
+		id TEXT PRIMARY KEY,
+		host_id TEXT NOT NULL REFERENCES hosts(id) ON DELETE CASCADE,
+		type TEXT NOT NULL CHECK(type IN ('ssh','restapi','prometheus')),
+		ip TEXT NOT NULL DEFAULT '',
+		port INTEGER NOT NULL DEFAULT 0,
+		username TEXT NOT NULL DEFAULT '',
+		auth_type TEXT NOT NULL DEFAULT '',
+		encrypted_credential TEXT NOT NULL DEFAULT '',
+		encrypted_passphrase TEXT NOT NULL DEFAULT '',
+		ssh_key_id TEXT NOT NULL DEFAULT '',
+		ssh_legacy INTEGER NOT NULL DEFAULT 0,
+		ssh_login_input TEXT NOT NULL DEFAULT '',
+		base_url TEXT NOT NULL DEFAULT '',
+		rest_scheme TEXT NOT NULL DEFAULT 'http',
+		rest_auth_type TEXT NOT NULL DEFAULT '',
+		rest_username TEXT NOT NULL DEFAULT '',
+		header_name TEXT NOT NULL DEFAULT '',
+		hmac_algo TEXT NOT NULL DEFAULT '',
+		kb_mode TEXT NOT NULL DEFAULT 'none',
+		knowledge_sources TEXT NOT NULL DEFAULT '[]',
+		probe_port INTEGER NOT NULL DEFAULT 0,
+		probe_interval INTEGER NOT NULL DEFAULT 0,
+		prometheus_source_id TEXT NOT NULL DEFAULT '',
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL
+	)`); err != nil {
+		db.Exec("PRAGMA foreign_keys=ON")
+		return err
+	}
+	if _, err := db.Exec(`INSERT INTO access_faces_new
+		SELECT id,host_id,type,
+		COALESCE(ip,''),COALESCE(port,0),
+		COALESCE(username,''),COALESCE(auth_type,''),
+		COALESCE(encrypted_credential,''),COALESCE(encrypted_passphrase,''),
+		COALESCE(ssh_key_id,''),COALESCE(ssh_legacy,0),
+		COALESCE(ssh_login_input,''),COALESCE(base_url,''),
+		COALESCE(rest_scheme,'http'),COALESCE(rest_auth_type,''),
+		COALESCE(rest_username,''),COALESCE(header_name,''),COALESCE(hmac_algo,''),
+		COALESCE(kb_mode,'none'),COALESCE(knowledge_sources,'[]'),
+		COALESCE(probe_port,0),COALESCE(probe_interval,0),
+		COALESCE(prometheus_source_id,''),
+		created_at,updated_at
+		FROM access_faces`); err != nil {
+		db.Exec("DROP TABLE access_faces_new")
+		db.Exec("PRAGMA foreign_keys=ON")
+		return err
+	}
+	db.Exec("DROP TABLE access_faces")
+	db.Exec("ALTER TABLE access_faces_new RENAME TO access_faces")
+	db.Exec("PRAGMA foreign_keys=ON")
+	return nil
 }

@@ -5,8 +5,9 @@ import "time"
 type AccessFaceType string
 
 const (
-	FaceSSH     AccessFaceType = "ssh"
-	FaceRESTAPI AccessFaceType = "restapi"
+	FaceSSH        AccessFaceType = "ssh"
+	FaceRESTAPI    AccessFaceType = "restapi"
+	FacePrometheus AccessFaceType = "prometheus"
 )
 
 type SSHAuthType string
@@ -64,6 +65,7 @@ type AccessFace struct {
 	KBMode           string               `json:"kb_mode"`
 	KnowledgeSources []KnowledgeSourceRef `json:"knowledge_sources"`
 	ProbePort        int                  `json:"probe_port,omitempty"`
+	PrometheusSourceID string             `json:"prometheus_source_id,omitempty"`
 	CreatedAt        time.Time            `json:"created_at"`
 	UpdatedAt        time.Time            `json:"updated_at"`
 }
@@ -150,6 +152,7 @@ type AddAccessFaceRequest struct {
 	KBMode           string               `json:"kb_mode"`
 	KnowledgeSources []KnowledgeSourceRef `json:"knowledge_sources"`
 	ProbePort        int                  `json:"probe_port,omitempty"`
+	PrometheusSourceID string             `json:"prometheus_source_id,omitempty"`
 }
 
 type UpdateAccessFaceRequest struct {
@@ -171,6 +174,7 @@ type UpdateAccessFaceRequest struct {
 	KBMode           *string              `json:"kb_mode"`
 	KnowledgeSources []KnowledgeSourceRef `json:"knowledge_sources"`
 	ProbePort        *int                 `json:"probe_port,omitempty"`
+	PrometheusSourceID *string            `json:"prometheus_source_id,omitempty"`
 }
 
 type AddMemoryRequest struct {

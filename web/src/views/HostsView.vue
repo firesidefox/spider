@@ -110,8 +110,9 @@
                 <div v-for="f in faces" :key="f.id" class="face-card">
                   <div class="face-header">
                     <div class="face-type">
-                      <span class="badge" :class="f.type === 'ssh' ? 'badge-ssh' : 'badge-rest'">{{ f.type === 'ssh' ? 'SSH' : 'REST API' }}</span>
-                      <span class="face-addr code">{{ f.type === 'ssh' ? `${f.username}@${f.ip}:${f.port}` : `${f.rest_scheme || 'http'}://${f.ip}:${f.port}${f.base_url || ''}` }}</span>
+                      <span class="badge" :class="f.type === 'ssh' ? 'badge-ssh' : f.type === 'prometheus' ? 'badge-prom' : 'badge-rest'">{{ f.type === 'ssh' ? 'SSH' : f.type === 'prometheus' ? 'Prometheus' : 'REST API' }}</span>
+                      <span v-if="f.type !== 'prometheus'" class="face-addr code">{{ f.type === 'ssh' ? `${f.username}@${f.ip}:${f.port}` : `${f.rest_scheme || 'http'}://${f.ip}:${f.port}${f.base_url || ''}` }}</span>
+                      <span v-else class="face-addr">{{ promSources.find(s => s.id === f.prometheus_source_id)?.name || f.prometheus_source_id || '未绑定数据源' }}</span>
                     </div>
                     <div class="face-actions">
                       <button class="edit-link" @click="startEditFace(f)">编辑</button>
@@ -129,6 +130,10 @@
                     </div>
                     <div v-if="f.type === 'restapi' && f.rest_username" class="face-item"><label>用户名</label><div class="value">{{ f.rest_username }}</div></div>
                     <div v-if="f.type === 'restapi'" class="face-item" style="grid-column:1/-1"><label>Base URL</label><div class="value"><code>{{ f.rest_scheme || 'http' }}://{{ f.ip }}:{{ f.port }}{{ f.base_url || '' }}</code></div></div>
+                    <div v-if="f.type === 'prometheus' && f.prometheus_source_id" class="face-item" style="grid-column:1/-1">
+                      <label>数据源 URL</label>
+                      <div class="value"><code>{{ promSources.find(s => s.id === f.prometheus_source_id)?.base_url || '' }}</code></div>
+                    </div>
                   </div>
                   <div class="knowledge-row">
                     <span class="knowledge-label">知识来源：</span>
@@ -238,10 +243,13 @@
             <select v-model="faceForm.type" class="input">
               <option value="ssh">SSH</option>
               <option value="restapi">REST API</option>
+              <option value="prometheus">Prometheus</option>
             </select>
           </div>
+          <template v-if="faceForm.type !== 'prometheus'">
           <div class="form-row"><label>IP</label><input v-model="faceForm.ip" class="input" required /></div>
           <div class="form-row"><label>端口</label><input v-model.number="faceForm.port" class="input" type="number" required /></div>
+          </template>
           <template v-if="faceForm.type === 'ssh'">
             <div class="form-row"><label>用户名</label><input v-model="faceForm.username" class="input" /></div>
             <div class="form-row"><label>认证方式</label>
@@ -330,6 +338,16 @@
               </div>
             </template>
           </template>
+          <template v-if="faceForm.type === 'prometheus'">
+            <div class="form-row">
+              <label>数据源 <span class="req">*</span></label>
+              <select v-model="faceForm.prometheus_source_id" class="input">
+                <option value="">— 选择 Prometheus 数据源 —</option>
+                <option v-for="s in promSources" :key="s.id" :value="s.id">{{ s.name }} ({{ s.base_url }})</option>
+              </select>
+              <div v-if="promSources.length === 0" class="form-hint">暂无数据源，请先在设置中添加</div>
+            </div>
+          </template>
           <div class="form-row">
             <label>知识来源</label>
             <div class="ks-mode-tabs">
@@ -358,7 +376,7 @@
           </div>
           <div class="modal-footer">
             <button type="button" class="btn" @click="closeFaceModal">取消</button>
-            <button type="submit" class="btn btn-primary" :disabled="ksMode === 'specific' && faceForm.knowledge_sources.length === 0">{{ editFaceTarget ? '保存' : '添加' }}</button>
+            <button type="submit" class="btn btn-primary" :disabled="(ksMode === 'specific' && faceForm.knowledge_sources.length === 0) || (faceForm.type === 'prometheus' && !faceForm.prometheus_source_id)">{{ editFaceTarget ? '保存' : '添加' }}</button>
           </div>
         </form>
       </div>
@@ -377,6 +395,7 @@ import {
 } from '../api/hosts'
 import { listSSHKeys, type SafeSSHKey } from '../api/ssh-keys'
 import { listGroups as listKnowledgeGroups, listDocuments as listKnowledgeDocuments, type KnowledgeGroup, type KnowledgeDocument } from '../api/knowledge'
+import { listPrometheusSources, type PrometheusSource } from '../api/prometheus'
 
 const router = useRouter()
 const hosts = ref<Host[]>([])
@@ -400,6 +419,7 @@ const docGroups = ref<KnowledgeGroup[]>([])
 const ksMode = ref<'specific' | 'none'>('none')
 const showAdvanced = ref(false)
 const allDocs = ref<KnowledgeDocument[]>([])
+const promSources = ref<PrometheusSource[]>([])
 
 const editingOverview = ref(false)
 const overviewSaving = ref(false)
@@ -439,7 +459,7 @@ async function saveOverview() {
 const emptyForm = () => ({ name: '', ip: '', notes: '', vendor: '', product_name: '', product_version: '', tagsStr: '' })
 const form = ref(emptyForm())
 
-const emptyFaceForm = () => ({ type: 'ssh' as 'ssh' | 'restapi', ip: activeHost.value?.ip ?? '', port: 22, username: '', ssh_auth_type: 'password', credential: '', passphrase: '', ssh_key_id: '', ssh_legacy: false, ssh_login_input: '', probe_port: 0, base_url: '', rest_scheme: 'http' as 'http' | 'https', rest_path: '', rest_auth_type: 'none', rest_username: '', header_name: '', hmac_algo: 'HMAC-SHA256', knowledge_sources: [] as Array<{type:'group'|'doc';id:number}> })
+const emptyFaceForm = () => ({ type: 'ssh' as 'ssh' | 'restapi' | 'prometheus', ip: activeHost.value?.ip ?? '', port: 22, username: '', ssh_auth_type: 'password', credential: '', passphrase: '', ssh_key_id: '', ssh_legacy: false, ssh_login_input: '', probe_port: 0, base_url: '', rest_scheme: 'http' as 'http' | 'https', rest_path: '', rest_auth_type: 'none', rest_username: '', header_name: '', hmac_algo: 'HMAC-SHA256', knowledge_sources: [] as Array<{type:'group'|'doc';id:number}>, prometheus_source_id: '' })
 const faceForm = ref(emptyFaceForm())
 
 const allTags = computed(() => {
@@ -580,7 +600,7 @@ async function submitFace() {
     req.ssh_key_id = faceForm.value.ssh_key_id || undefined
     req.ssh_legacy = faceForm.value.ssh_legacy
     req.ssh_login_input = faceForm.value.ssh_login_input || undefined
-  } else {
+  } else if (faceForm.value.type === 'restapi') {
     req.base_url = faceForm.value.rest_path || undefined
     req.rest_scheme = faceForm.value.rest_scheme || 'http'
     req.rest_auth_type = faceForm.value.rest_auth_type
@@ -588,6 +608,8 @@ async function submitFace() {
     req.credential = faceForm.value.credential || undefined
     req.header_name = faceForm.value.header_name || undefined
     req.hmac_algo = faceForm.value.hmac_algo || undefined
+  } else if (faceForm.value.type === 'prometheus') {
+    req.prometheus_source_id = faceForm.value.prometheus_source_id || undefined
   }
   if (editFaceTarget.value) {
     await updateAccessFace(activeHost.value.id, editFaceTarget.value.id, req as Parameters<typeof updateAccessFace>[2])
@@ -620,6 +642,7 @@ function startEditFace(face: AccessFace) {
     header_name: face.header_name || '',
     hmac_algo: face.hmac_algo || 'HMAC-SHA256',
     knowledge_sources: face.knowledge_sources ? face.knowledge_sources.map(k => ({ type: k.type, id: k.id })) : [],
+    prometheus_source_id: face.prometheus_source_id || '',
   }
   ksMode.value = face.kb_mode === 'specific' ? 'specific' : 'none'
   showAddFace.value = true
@@ -675,13 +698,15 @@ function handleOutsideClick(e: MouseEvent) {
 onMounted(async () => {
   window.addEventListener('keydown', handleEsc)
   document.addEventListener('mousedown', handleOutsideClick)
-  const [, keys, groups] = await Promise.all([
+  const [, keys, groups, pSources] = await Promise.all([
     load(),
     listSSHKeys().catch((): SafeSSHKey[] => []),
     listKnowledgeGroups().catch((): KnowledgeGroup[] => []),
+    listPrometheusSources().catch((): PrometheusSource[] => []),
   ])
   sshKeys.value = keys
   docGroups.value = groups
+  promSources.value = pSources
   allDocs.value = (await Promise.all(groups.map(g => listKnowledgeDocuments(g.id).catch((): KnowledgeDocument[] => [])))).flat()
 })
 
@@ -791,6 +816,7 @@ onUnmounted(() => {
 .badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; }
 .badge-ssh { background: rgba(99,102,241,0.15); color: var(--primary); }
 .badge-rest { background: rgba(16,185,129,0.15); color: #059669; }
+.badge-prom { background: rgba(230,80,20,0.15); color: #e65014; }
 .badge-warn { background: rgba(245,158,11,0.15); color: #d97706; }
 .badge-agent { background: rgba(99,102,241,0.15); color: var(--primary); }
 .badge-user { background: rgba(107,114,128,0.15); color: #6b7280; }
@@ -809,6 +835,8 @@ onUnmounted(() => {
 .checkbox-label { display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; }
 .form-row label { font-size: 12px; font-weight: 600; color: var(--muted); }
 .label-hint { font-weight: 400; font-size: 11px; opacity: 0.7; }
+.form-hint { font-size: 11px; color: var(--muted); }
+.req { color: #f87171; margin-left: 2px; }
 .base-url-row { display: flex; align-items: center; gap: 0; }
 .base-url-prefix { font-size: 13px; color: var(--muted); background: var(--bg-secondary, #f5f5f5); border: 1px solid var(--border); border-right: none; border-radius: 6px 0 0 6px; padding: 0 10px; height: 36px; line-height: 36px; white-space: nowrap; }
 .base-url-suffix { border-radius: 0 6px 6px 0 !important; flex: 1; }

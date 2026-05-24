@@ -250,12 +250,12 @@ func (s *PrometheusBindingStore) Delete(id string) error {
 	return nil
 }
 
-// FindSourceIDForHost implements the lookup priority: host binding first, then topology_layer binding.
+// FindSourceIDForHost implements the lookup priority: host-level prometheus face first, then topology_layer binding.
 func (s *PrometheusBindingStore) FindSourceIDForHost(hostID string) (string, error) {
-	// 1. host-level binding
+	// 1. host-level prometheus access face
 	var sourceID string
-	err := s.db.QueryRow(`SELECT source_id FROM prometheus_bindings
-		WHERE scope_type='host' AND host_id=? LIMIT 1`, hostID).Scan(&sourceID)
+	err := s.db.QueryRow(`SELECT prometheus_source_id FROM access_faces
+		WHERE host_id=? AND type='prometheus' AND prometheus_source_id!='' LIMIT 1`, hostID).Scan(&sourceID)
 	if err == nil {
 		return sourceID, nil
 	}
