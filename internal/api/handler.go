@@ -934,6 +934,10 @@ func NewRouter(app *mcppkg.App) http.Handler {
 				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			}
 		case "test":
+			if r.Method != http.MethodGet {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
 			testPrometheusConnection(app, w, r, id)
 		case "bindings":
 			switch r.Method {

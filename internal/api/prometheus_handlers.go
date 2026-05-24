@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"time"
@@ -10,6 +11,7 @@ import (
 	mcppkg "github.com/spiderai/spider/internal/mcp"
 	"github.com/spiderai/spider/internal/models"
 	promclient "github.com/spiderai/spider/internal/prometheus"
+	"github.com/spiderai/spider/internal/store"
 )
 
 // --- Sources ---
@@ -47,8 +49,11 @@ func addPrometheusSource(app *mcppkg.App, w http.ResponseWriter, r *http.Request
 
 func getPrometheusSource(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id string) {
 	src, err := app.PrometheusSourceStore.GetByID(id)
-	if err != nil {
+	if errors.Is(err, store.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "not found")
+		return
+	} else if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, src)
@@ -61,7 +66,10 @@ func updatePrometheusSource(app *mcppkg.App, w http.ResponseWriter, r *http.Requ
 		return
 	}
 	updated, err := app.PrometheusSourceStore.Update(id, &req)
-	if err != nil {
+	if errors.Is(err, store.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "not found")
+		return
+	} else if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -69,8 +77,11 @@ func updatePrometheusSource(app *mcppkg.App, w http.ResponseWriter, r *http.Requ
 }
 
 func deletePrometheusSource(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id string) {
-	if err := app.PrometheusSourceStore.Delete(id); err != nil {
+	if err := app.PrometheusSourceStore.Delete(id); errors.Is(err, store.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "not found")
+		return
+	} else if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -113,6 +124,10 @@ func addPrometheusBinding(app *mcppkg.App, w http.ResponseWriter, r *http.Reques
 	var req models.AddPrometheusBindingRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+	if strings.TrimSpace(req.SourceID) == "" {
+		writeError(w, http.StatusBadRequest, "source_id required")
 		return
 	}
 	b, err := app.PrometheusBindingStore.Add(&req)
