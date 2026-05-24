@@ -49,6 +49,8 @@ type App struct {
 	RagConfigStore *store.RagConfigStore
 	TodoStore      *store.TodoStore
 	TopologyStore  *store.TopologyStore
+	PrometheusSourceStore  *store.PrometheusSourceStore
+	PrometheusBindingStore *store.PrometheusBindingStore
 	TaskStore      *store.TaskStore
 	TaskRunStore   *store.TaskRunStore
 	NotifyChannelStore *store.NotifyChannelStore
@@ -104,6 +106,8 @@ func (a *App) NewAgentFactory() (*agent.Factory, error) {
 	f.PerMessageToolResultMaxChars = a.Config.Agent.PerMessageToolResultMaxChars
 	f.TodoStore = a.TodoStore
 	f.TopologyStore = a.TopologyStore
+	f.PrometheusSourceStore = a.PrometheusSourceStore
+	f.PrometheusBindingStore = a.PrometheusBindingStore
 	f.SSEBroadcaster = a
 	f.DocStore = a.DocStore
 	f.KnowledgeStore = a.KnowledgeStore

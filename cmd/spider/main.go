@@ -255,6 +255,8 @@ func serve(cfgFile, addrOverride, dataDirOverride string, debug bool) error {
 	app.RagConfigStore = store.NewRagConfigStore(database, cm)
 	app.TodoStore = store.NewTodoStore(database)
 	app.TopologyStore = store.NewTopologyStore(database)
+	app.PrometheusSourceStore = store.NewPrometheusSourceStore(database, cm)
+	app.PrometheusBindingStore = store.NewPrometheusBindingStore(database)
 
 	app.Classifier = permission.NewClassifier(nil)
 	if len(cfg.Agent.Rules) > 0 {
@@ -284,6 +286,8 @@ func serve(cfgFile, addrOverride, dataDirOverride string, debug bool) error {
 		agentFactory.MaxTurns = cfg.Agent.MaxTurns
 		agentFactory.TodoStore = app.TodoStore
 		agentFactory.TaskStore = taskStore
+		agentFactory.PrometheusSourceStore = app.PrometheusSourceStore
+		agentFactory.PrometheusBindingStore = app.PrometheusBindingStore
 		app.AgentFactory = agentFactory
 	}
 

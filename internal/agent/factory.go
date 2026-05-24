@@ -39,6 +39,8 @@ type Factory struct {
 	KnowledgeStore               *knowledge.Store
 	Embedder                     rag.Embedder
 	TaskStore                    *store.TaskStore
+	PrometheusSourceStore        *store.PrometheusSourceStore
+	PrometheusBindingStore       *store.PrometheusBindingStore
 	DisableSearchDocs            bool
 	PerToolResultMaxChars        int
 	PerMessageToolResultMaxChars int
