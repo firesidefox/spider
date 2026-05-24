@@ -9,6 +9,52 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+func TestPrometheusTables(t *testing.T) {
+	sqldb, err := sql.Open("sqlite", ":memory:?_foreign_keys=on")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { sqldb.Close() })
+	if err := Migrate(sqldb); err != nil {
+		t.Fatal(err)
+	}
+	// Insert a host so FK on host_id is satisfied
+	now := time.Now().UTC()
+	if _, err := sqldb.Exec(`INSERT INTO hosts (id,name,ip,created_at,updated_at) VALUES ('host1','host1','127.0.0.1',?,?)`, now, now); err != nil {
+		t.Fatalf("insert host: %v", err)
+	}
+	// sources table
+	_, err = sqldb.Exec(`INSERT INTO prometheus_sources
+		(id,name,base_url,timeout_seconds,auth_type,username,
+		 encrypted_password,encrypted_token,skip_tls_verify,created_at,updated_at)
+		VALUES ('s1','test','http://localhost:9090',30,'none','','','',0,
+				datetime('now'),datetime('now'))`)
+	if err != nil {
+		t.Fatalf("insert prometheus_sources: %v", err)
+	}
+	// bindings table — topology_layer scope
+	_, err = sqldb.Exec(`INSERT INTO prometheus_bindings
+		(id,source_id,scope_type,topology_id,layer,host_id,created_at)
+		VALUES ('b1','s1','topology_layer','topo1','server',NULL,datetime('now'))`)
+	if err != nil {
+		t.Fatalf("insert prometheus_bindings (topology_layer): %v", err)
+	}
+	// bindings table — host scope
+	_, err = sqldb.Exec(`INSERT INTO prometheus_bindings
+		(id,source_id,scope_type,topology_id,layer,host_id,created_at)
+		VALUES ('b2','s1','host',NULL,NULL,'host1',datetime('now'))`)
+	if err != nil {
+		t.Fatalf("insert prometheus_bindings (host): %v", err)
+	}
+	// unique constraint on (topology_id, layer)
+	_, err = sqldb.Exec(`INSERT INTO prometheus_bindings
+		(id,source_id,scope_type,topology_id,layer,host_id,created_at)
+		VALUES ('b3','s1','topology_layer','topo1','server',NULL,datetime('now'))`)
+	if err == nil {
+		t.Fatal("expected unique constraint violation for duplicate (topology_id, layer)")
+	}
+}
+
 func TestMigratePreservesHostKnowledgeSources(t *testing.T) {
 	testMigratePreservesHostKnowledgeSources(t, true)
 }
