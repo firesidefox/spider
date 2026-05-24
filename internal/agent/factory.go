@@ -296,6 +296,7 @@ func (f *Factory) buildRegistryWithHosts(conversationID string, selectedHostIDs 
 	listTool.selectedHostIDs = selectedHostIDs
 	listTool.knowledgeStore = f.KnowledgeStore
 	registry.Register(listTool)
+	registry.Register(NewCheckConnectivityTool(f.Hosts, f.AccessFaces))
 	registry.Register(NewExecuteCLITool(f.Hosts, f.AccessFaces, f.SSHPool, f.Logs, f.SSHKeys))
 	registry.Register(NewBatchExecuteTool(f.Hosts, f.AccessFaces, f.SSHPool, f.Logs, f.SSHKeys))
 	registry.Register(NewVerifyTool(f.Hosts, f.AccessFaces, f.SSHPool, f.SSHKeys))
