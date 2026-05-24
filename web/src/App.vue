@@ -9,7 +9,7 @@
         <RouterLink to="/knowledge" class="nav-item">知识库</RouterLink>
         <RouterLink to="/topology" class="nav-item">网络拓扑</RouterLink>
         <RouterLink to="/tasks" class="nav-item">任务管理</RouterLink>
-        <RouterLink to="/profile" class="nav-item">系统设置</RouterLink>
+        <RouterLink to="/setting" class="nav-item">系统设置</RouterLink>
       </nav>
       <div v-if="currentUser" class="nav-user">
         <div class="user-dropdown" @click.stop="showUserMenu = !showUserMenu">
