@@ -15,6 +15,9 @@ func TestPrometheusTables(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { sqldb.Close() })
+	if _, err := sqldb.Exec("PRAGMA foreign_keys = ON"); err != nil {
+		t.Fatal(err)
+	}
 	if err := Migrate(sqldb); err != nil {
 		t.Fatal(err)
 	}
@@ -22,6 +25,10 @@ func TestPrometheusTables(t *testing.T) {
 	now := time.Now().UTC()
 	if _, err := sqldb.Exec(`INSERT INTO hosts (id,name,ip,created_at,updated_at) VALUES ('host1','host1','127.0.0.1',?,?)`, now, now); err != nil {
 		t.Fatalf("insert host: %v", err)
+	}
+	// Insert a topology so FK on topology_id is satisfied
+	if _, err := sqldb.Exec(`INSERT INTO topologies (id,name,created_at,updated_at) VALUES ('topo1','topo1',datetime('now'),datetime('now'))`); err != nil {
+		t.Fatalf("insert topology: %v", err)
 	}
 	// sources table
 	_, err = sqldb.Exec(`INSERT INTO prometheus_sources
@@ -52,6 +59,13 @@ func TestPrometheusTables(t *testing.T) {
 		VALUES ('b3','s1','topology_layer','topo1','server',NULL,datetime('now'))`)
 	if err == nil {
 		t.Fatal("expected unique constraint violation for duplicate (topology_id, layer)")
+	}
+	// unique constraint on host_id
+	_, err = sqldb.Exec(`INSERT INTO prometheus_bindings
+		(id,source_id,scope_type,topology_id,layer,host_id,created_at)
+		VALUES ('b4','s1','host',NULL,NULL,'host1',datetime('now'))`)
+	if err == nil {
+		t.Fatal("expected unique constraint violation for duplicate host_id")
 	}
 }
 
