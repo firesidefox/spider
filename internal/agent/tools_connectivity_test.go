@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/spiderai/spider/internal/crypto"
@@ -58,7 +59,7 @@ func TestCheckConnectivityTool_SystemPromptSection(t *testing.T) {
 		t.Error("SystemPromptSection must not be empty")
 	}
 	for _, keyword := range []string{"CheckConnectivity", "Explore", "unreachable"} {
-		if !containsStr(section, keyword) {
+		if !strings.Contains(section, keyword) {
 			t.Errorf("SystemPromptSection missing keyword %q", keyword)
 		}
 	}
@@ -287,17 +288,4 @@ func TestCheckConnectivityTool_RESTAPIFaceReachable(t *testing.T) {
 	if !got[0].Faces[0].Reachable {
 		t.Errorf("REST API face should be reachable: %s", got[0].Faces[0].Error)
 	}
-}
-
-func containsStr(s, sub string) bool {
-	return len(s) >= len(sub) && (s == sub || len(s) > 0 && containsStrHelper(s, sub))
-}
-
-func containsStrHelper(s, sub string) bool {
-	for i := 0; i <= len(s)-len(sub); i++ {
-		if s[i:i+len(sub)] == sub {
-			return true
-		}
-	}
-	return false
 }

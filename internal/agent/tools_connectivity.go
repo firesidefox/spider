@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/net/icmp"
@@ -14,6 +16,8 @@ import (
 	"github.com/spiderai/spider/internal/models"
 	"github.com/spiderai/spider/internal/store"
 )
+
+var icmpSeq uint32
 
 type CheckConnectivityTool struct {
 	hosts *store.HostStore
@@ -85,7 +89,7 @@ type connectivityResult struct {
 	Faces     []faceResult `json:"faces"`
 }
 
-func (t *CheckConnectivityTool) Execute(_ context.Context, input map[string]any) (*ToolResult, error) {
+func (t *CheckConnectivityTool) Execute(ctx context.Context, input map[string]any) (*ToolResult, error) {
 	hosts, err := t.hosts.List("")
 	if err != nil {
 		return &ToolResult{Content: "failed to list hosts: " + err.Error(), IsError: true, RiskLevel: RiskL1}, nil
@@ -101,7 +105,7 @@ func (t *CheckConnectivityTool) Execute(_ context.Context, input map[string]any)
 						allowed[s] = true
 					}
 				}
-				filtered := hosts[:0]
+				filtered := make([]*models.Host, 0, len(hosts))
 				for _, h := range hosts {
 					if allowed[h.ID] {
 						filtered = append(filtered, h)
@@ -118,7 +122,7 @@ func (t *CheckConnectivityTool) Execute(_ context.Context, input map[string]any)
 		wg.Add(1)
 		go func(idx int, host *models.Host) {
 			defer wg.Done()
-			results[idx] = t.probeHost(host)
+			results[idx] = t.probeHost(ctx, host)
 		}(i, h)
 	}
 	wg.Wait()
@@ -137,7 +141,7 @@ func (t *CheckConnectivityTool) Execute(_ context.Context, input map[string]any)
 	}, nil
 }
 
-func (t *CheckConnectivityTool) probeHost(host *models.Host) connectivityResult {
+func (t *CheckConnectivityTool) probeHost(ctx context.Context, host *models.Host) connectivityResult {
 	res := connectivityResult{
 		HostID: host.ID,
 		Name:   host.Name,
@@ -145,7 +149,7 @@ func (t *CheckConnectivityTool) probeHost(host *models.Host) connectivityResult 
 		Faces:  []faceResult{},
 	}
 
-	latency, err := icmpPing(host.IP, 3*time.Second)
+	latency, err := icmpPing(ctx, host.IP, 3*time.Second)
 	if err != nil {
 		res.Reachable = false
 		res.Error = err.Error()
@@ -163,7 +167,7 @@ func (t *CheckConnectivityTool) probeHost(host *models.Host) connectivityResult 
 				fwg.Add(1)
 				go func(idx int, face *models.AccessFace) {
 					defer fwg.Done()
-					faceResults[idx] = t.probeFace(face)
+					faceResults[idx] = t.probeFace(ctx, face)
 				}(i, f)
 			}
 			fwg.Wait()
@@ -174,7 +178,7 @@ func (t *CheckConnectivityTool) probeHost(host *models.Host) connectivityResult 
 	return res
 }
 
-func (t *CheckConnectivityTool) probeFace(face *models.AccessFace) faceResult {
+func (t *CheckConnectivityTool) probeFace(ctx context.Context, face *models.AccessFace) faceResult {
 	port := face.Port
 	if face.ProbePort != 0 {
 		port = face.ProbePort
@@ -185,8 +189,10 @@ func (t *CheckConnectivityTool) probeFace(face *models.AccessFace) faceResult {
 		IP:     face.IP,
 		Port:   port,
 	}
+	dialCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
 	start := time.Now()
-	conn, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", face.IP, port), 3*time.Second)
+	conn, err := (&net.Dialer{}).DialContext(dialCtx, "tcp", fmt.Sprintf("%s:%d", face.IP, port))
 	if err != nil {
 		fr.Reachable = false
 		fr.Error = err.Error()
@@ -200,19 +206,22 @@ func (t *CheckConnectivityTool) probeFace(face *models.AccessFace) faceResult {
 
 // icmpPing sends one unprivileged ICMP echo to ip and returns RTT.
 // Uses "udp4" which does not require root on Linux 3.11+ or macOS.
-func icmpPing(ip string, timeout time.Duration) (time.Duration, error) {
+func icmpPing(ctx context.Context, ip string, timeout time.Duration) (time.Duration, error) {
 	conn, err := icmp.ListenPacket("udp4", "")
 	if err != nil {
 		return 0, fmt.Errorf("icmp listen: %w", err)
 	}
 	defer conn.Close()
 
+	id := os.Getpid() & 0xffff
+	seq := int(atomic.AddUint32(&icmpSeq, 1) & 0xffff)
+
 	msg := icmp.Message{
 		Type: ipv4.ICMPTypeEcho,
 		Code: 0,
 		Body: &icmp.Echo{
-			ID:   1,
-			Seq:  1,
+			ID:   id,
+			Seq:  seq,
 			Data: []byte("spider"),
 		},
 	}
@@ -227,14 +236,31 @@ func icmpPing(ip string, timeout time.Duration) (time.Duration, error) {
 		return 0, fmt.Errorf("write icmp: %w", err)
 	}
 
-	if err := conn.SetReadDeadline(time.Now().Add(timeout)); err != nil {
+	deadline := time.Now().Add(timeout)
+	if ctxDeadline, ok := ctx.Deadline(); ok && ctxDeadline.Before(deadline) {
+		deadline = ctxDeadline
+	}
+	if err := conn.SetReadDeadline(deadline); err != nil {
 		return 0, fmt.Errorf("set deadline: %w", err)
 	}
 
 	rb := make([]byte, 1500)
-	_, _, err = conn.ReadFrom(rb)
-	if err != nil {
-		return 0, fmt.Errorf("icmp timeout or unreachable: %w", err)
+	for {
+		n, _, err := conn.ReadFrom(rb)
+		if err != nil {
+			return 0, fmt.Errorf("icmp timeout or unreachable: %w", err)
+		}
+		reply, err := icmp.ParseMessage(1 /* iana.ProtocolICMP */, rb[:n])
+		if err != nil {
+			continue
+		}
+		if reply.Type != ipv4.ICMPTypeEchoReply {
+			continue
+		}
+		echo, ok := reply.Body.(*icmp.Echo)
+		if !ok || echo.ID != id || echo.Seq != seq {
+			continue
+		}
+		return time.Since(start), nil
 	}
-	return time.Since(start), nil
 }
