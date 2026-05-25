@@ -1,8 +1,10 @@
 package db
 
 import (
+	"crypto/rand"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"strings"
 )
 
@@ -704,12 +706,12 @@ func migrateAccessFacesPrometheus(db *sql.DB) error {
 	var createSQL string
 	db.QueryRow("SELECT sql FROM sqlite_master WHERE type='table' AND name='access_faces'").Scan(&createSQL)
 	if strings.Contains(createSQL, "'prometheus'") {
-		return nil
+		// table already has the new CHECK constraint; ensure host-scope bindings are migrated
+		return migrateHostScopePromBindings(db)
 	}
-	// ensure column exists before recreation (idempotent)
-	db.Exec("ALTER TABLE access_faces ADD COLUMN prometheus_source_id TEXT NOT NULL DEFAULT ''")
-
 	db.Exec("PRAGMA foreign_keys=OFF")
+	// ensure column exists before recreation (idempotent for instances that ran a partial migration)
+	db.Exec("ALTER TABLE access_faces ADD COLUMN prometheus_source_id TEXT NOT NULL DEFAULT ''")
 	db.Exec("DROP TABLE IF EXISTS access_faces_new")
 	if _, err := db.Exec(`CREATE TABLE access_faces_new (
 		id TEXT PRIMARY KEY,
@@ -759,8 +761,79 @@ func migrateAccessFacesPrometheus(db *sql.DB) error {
 		db.Exec("PRAGMA foreign_keys=ON")
 		return err
 	}
-	db.Exec("DROP TABLE access_faces")
-	db.Exec("ALTER TABLE access_faces_new RENAME TO access_faces")
+	if _, err := db.Exec("DROP TABLE access_faces"); err != nil {
+		db.Exec("DROP TABLE access_faces_new")
+		db.Exec("PRAGMA foreign_keys=ON")
+		return err
+	}
+	if _, err := db.Exec("ALTER TABLE access_faces_new RENAME TO access_faces"); err != nil {
+		db.Exec("PRAGMA foreign_keys=ON")
+		return err
+	}
 	db.Exec("PRAGMA foreign_keys=ON")
+	return migrateHostScopePromBindings(db)
+}
+
+// migrateHostScopePromBindings converts prometheus_bindings rows with scope_type='host'
+// into prometheus-type access faces, then deletes the old binding rows.
+func migrateHostScopePromBindings(db *sql.DB) error {
+	rows, err := db.Query(`SELECT host_id, source_id, created_at FROM prometheus_bindings WHERE scope_type='host'`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	type row struct {
+		hostID    string
+		sourceID  string
+		createdAt string
+	}
+	var bindings []row
+	for rows.Next() {
+		var r row
+		if err := rows.Scan(&r.hostID, &r.sourceID, &r.createdAt); err != nil {
+			return err
+		}
+		bindings = append(bindings, r)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for _, b := range bindings {
+		// skip if a prometheus face for this host already exists
+		var count int
+		db.QueryRow(`SELECT COUNT(*) FROM access_faces WHERE host_id=? AND type='prometheus'`, b.hostID).Scan(&count)
+		if count > 0 {
+			continue
+		}
+		id := newSchemaUUID()
+		_, err := db.Exec(`INSERT INTO access_faces
+			(id,host_id,type,ip,port,username,auth_type,
+			 encrypted_credential,encrypted_passphrase,ssh_key_id,ssh_legacy,
+			 ssh_login_input,base_url,rest_scheme,rest_auth_type,rest_username,
+			 header_name,hmac_algo,kb_mode,knowledge_sources,probe_port,probe_interval,
+			 prometheus_source_id,created_at,updated_at)
+			VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+			id, b.hostID, "prometheus", "", 0, "", "",
+			"", "", "", 0, "", "", "http", "", "",
+			"", "", "none", "[]", 0, 0,
+			b.sourceID, b.createdAt, b.createdAt)
+		if err != nil {
+			return err
+		}
+	}
+	if len(bindings) > 0 {
+		_, err = db.Exec(`DELETE FROM prometheus_bindings WHERE scope_type='host'`)
+		if err != nil {
+			return err
+		}
+	}
 	return nil
+}
+
+func newSchemaUUID() string {
+	var b [16]byte
+	rand.Read(b[:])
+	b[6] = (b[6] & 0x0f) | 0x40
+	b[8] = (b[8] & 0x3f) | 0x80
+	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
 }

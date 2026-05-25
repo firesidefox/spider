@@ -189,16 +189,18 @@ func (s *AccessFaceStore) Update(id string, req *models.UpdateAccessFaceRequest)
 	}
 	encCred := cur.EncryptedCred
 	encPass := cur.EncryptedPass
-	if req.Credential != nil {
-		encCred, err = s.crypto.Encrypt(*req.Credential)
-		if err != nil {
-			return nil, err
+	if cur.Type != models.FacePrometheus {
+		if req.Credential != nil {
+			encCred, err = s.crypto.Encrypt(*req.Credential)
+			if err != nil {
+				return nil, err
+			}
 		}
-	}
-	if req.Passphrase != nil {
-		encPass, err = s.crypto.Encrypt(*req.Passphrase)
-		if err != nil {
-			return nil, err
+		if req.Passphrase != nil {
+			encPass, err = s.crypto.Encrypt(*req.Passphrase)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 	ksJSON, _ := json.Marshal(cur.KnowledgeSources)

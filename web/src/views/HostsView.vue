@@ -609,7 +609,7 @@ async function submitFace() {
     req.header_name = faceForm.value.header_name || undefined
     req.hmac_algo = faceForm.value.hmac_algo || undefined
   } else if (faceForm.value.type === 'prometheus') {
-    req.prometheus_source_id = faceForm.value.prometheus_source_id || undefined
+    req.prometheus_source_id = faceForm.value.prometheus_source_id
   }
   if (editFaceTarget.value) {
     await updateAccessFace(activeHost.value.id, editFaceTarget.value.id, req as Parameters<typeof updateAccessFace>[2])
