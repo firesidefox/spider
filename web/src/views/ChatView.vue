@@ -814,6 +814,8 @@ async function send(overrideText?: string) {
   }
   convMsgs.push(assistantMsg)
   setConversationStreaming(convId, true)
+  updateAgentStatus({ conversationId: convId, title: getConvTitle(convId), phase: 'thinking' })
+  if (!pollTimers.has(convId)) pollUntilIdle(convId)
   turnUsage.value = null
   await nextTick()
   scrollToBottom()
