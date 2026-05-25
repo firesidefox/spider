@@ -111,6 +111,7 @@ function toggleAct(id: string) {
 }
 
 function exploreParam(call: ToolCallBlock): string {
+  if (call.name === 'CheckConnectivity') return ''
   if (!call.input) return ''
   const vals = Object.values(call.input)
   if (!vals.length) return ''
@@ -221,7 +222,7 @@ function formatDuration(ms: number) {
                   <span class="sub-arrow">→</span>
                   <span :class="call.isError ? 'res-err' : 'res-ok'">{{ exploreResult(call) }}</span>
                 </template>
-                <span class="sub-param">{{ exploreParam(call) }}</span>
+                <span v-if="exploreParam(call)" class="sub-param">{{ exploreParam(call) }}</span>
                 <template v-if="call.durationMs != null">
                   <span class="dur">{{ formatDuration(call.durationMs) }}</span>
                 </template>

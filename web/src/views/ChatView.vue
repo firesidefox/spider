@@ -140,8 +140,8 @@ async function pollUntilIdle(convId: string) {
       if (data.conversation.status === 'idle') {
         pollTimers.delete(convId)
         messagesMap.value[convId] = buildDisplayMessages(data.messages)
+        setConversationStreaming(convId, false)
         if (activeConvId.value === convId) {
-          isStreaming.value = false
           await nextTick()
           scrollToBottom()
         }
@@ -156,8 +156,25 @@ async function pollUntilIdle(convId: string) {
 }
 
 const inputText = ref('')
-const isStreaming = ref(false)
 const queuedMessages = ref<string[]>([])
+const streamingConvIds = ref<Set<string>>(new Set())
+const isStreaming = computed({
+  get: () => activeConvId.value ? streamingConvIds.value.has(activeConvId.value) : false,
+  set: (streaming: boolean) => {
+    if (!activeConvId.value) return
+    setConversationStreaming(activeConvId.value, streaming)
+  },
+})
+
+function setConversationStreaming(convId: string, streaming: boolean) {
+  const next = new Set(streamingConvIds.value)
+  if (streaming) next.add(convId)
+  else next.delete(convId)
+  streamingConvIds.value = next
+
+  const conv = conversations.value.find(c => c.id === convId)
+  if (conv) conv.status = streaming ? 'processing' : 'idle'
+}
 
 const slashCommands = [
   { cmd: '/rename', hint: '[name] — 重命名会话（空=AI生成）' },
@@ -491,10 +508,10 @@ async function selectConversation(id: string) {
 
   if (data.conversation.status === 'processing' && messagesMap.value[id]) {
     // SSE is still writing into messagesMap[id] — don't overwrite it.
-    isStreaming.value = true
+    setConversationStreaming(id, true)
   } else {
     messagesMap.value[id] = buildDisplayMessages(data.messages)
-    isStreaming.value = data.conversation.status === 'processing'
+    setConversationStreaming(id, data.conversation.status === 'processing')
     if (data.conversation.status === 'processing') {
       pollUntilIdle(id)
     }
@@ -519,6 +536,7 @@ async function createNewConversation() {
   conversations.value.unshift(conv)
   activeConvId.value = conv.id
   messagesMap.value[conv.id] = []
+  setConversationStreaming(conv.id, false)
   router.replace(`/chat/${conv.id}`)
   await nextTick()
   textareaRef.value?.focus()
@@ -542,7 +560,7 @@ async function cancelSend() {
   abortCtrl?.abort()
   abortCtrl = null
   await cancelConversation(convId)
-  isStreaming.value = false
+  setConversationStreaming(convId, false)
   // Reload from DB to replace the truncated in-memory assistant message
   const data = await getConversation(convId)
   messagesMap.value[convId] = buildDisplayMessages(data.messages)
@@ -583,8 +601,8 @@ function handleConvEvent(convId: string, event: ChatEvent) {
     if (!last || last.role !== 'assistant' || !last.isStreaming) {
       const newMsg: DisplayMessage = { id: `a-${Date.now()}`, role: 'assistant', blocks: [], isStreaming: true, toolIndex: new Map() }
       convMsgs.push(newMsg)
+      setConversationStreaming(convId, true)
       if (activeConvId.value === convId) {
-        isStreaming.value = true
         nextTick(() => scrollToBottom())
       }
     }
@@ -662,11 +680,11 @@ function handleConvEvent(convId: string, event: ChatEvent) {
         last.blocks.push({ type: 'text', content: errText })
       }
       last.isStreaming = false
+      setConversationStreaming(convId, false)
       for (const b of last.blocks) {
         if (b.type === 'tool' && b.call.durationMs == null) b.call.durationMs = 0
       }
       if (activeConvId.value === convId) {
-        isStreaming.value = false
         nextTick(() => scrollToBottom())
         flushQueue()
       }
@@ -675,11 +693,11 @@ function handleConvEvent(convId: string, event: ChatEvent) {
     case 'done':
       clearRetryState()
       last.isStreaming = false
+      setConversationStreaming(convId, false)
       for (const b of last.blocks) {
         if (b.type === 'tool' && b.call.durationMs == null) b.call.durationMs = 0
       }
       if (activeConvId.value === convId) {
-        isStreaming.value = false
         nextTick(() => scrollToBottom())
         flushQueue()
       }
@@ -702,7 +720,9 @@ function handleConvEvent(convId: string, event: ChatEvent) {
     }
     case 'turn_usage': {
       const u = event.content as { output_tokens: number }
-      turnUsage.value = u.output_tokens
+      if (activeConvId.value === convId) {
+        turnUsage.value = u.output_tokens
+      }
       break
     }
     case 'retrying': {
@@ -793,7 +813,7 @@ async function send(overrideText?: string) {
     blocks: [], isStreaming: true,
   }
   convMsgs.push(assistantMsg)
-  isStreaming.value = true
+  setConversationStreaming(convId, true)
   turnUsage.value = null
   await nextTick()
   scrollToBottom()
