@@ -1,7 +1,7 @@
 <claude-mem-context>
 # Memory Context
 
-# [spider.ai] recent context, 2026-05-23 3:24pm GMT+8
+# [spider.ai] recent context, 2026-05-25 8:01am GMT+8
 
 Legend: 🎯session 🔴bugfix 🟣feature 🔄refactor ✅change 🔵discovery ⚖️decision
 Format: ID TIME TYPE TITLE
@@ -19,13 +19,7 @@ S3589 Chat-to-host association flow in spider.ai (May 22 at 4:59 PM)
 S3585 KB host enrichment — prefetch vs N+1 complexity comparison for KBGroupID/KBDocID fields (May 22 at 4:59 PM)
 ### May 23, 2026
 S3591 Host-KB binding implementation plan written (May 23 at 9:34 AM)
-6932 10:17a 🟣 Batch Lookup Methods Added to Knowledge Store
-6933 10:18a 🟣 Host/AccessFace API Responses Enriched with Knowledge References
-6934 " 🔵 Session Continuation: Spec Review and Plan Completeness Check
-6935 10:23a 🟣 KBMode Type and KnowledgeSource Interface Added to hosts.ts
-6936 " 🟣 HostsView KB Display Updated for kb_mode and sourceLabel
-6937 10:24a 🟣 AccessFace Modal KB Mode Tabs Redesigned to specific/none
-6938 " 🟣 HostsView KB Logic Migrated from 4-mode to 2-mode (specific/none)
+6938 10:24a 🟣 HostsView KB Logic Migrated from 4-mode to 2-mode (specific/none)
 6939 " 🟣 sourceLabel Helper Added to HostsView Script Section
 6940 10:25a 🔵 Stale kb_mode Reference Found in Agent Tool Comment
 6941 " ✅ Agent SearchDocs Tool Prompt Updated for kb_mode Multi-Source
@@ -69,4 +63,11 @@ S3591 Host-KB binding implementation plan written (May 23 at 9:34 AM)
 6979 11:00a 🟣 API enrichment tests pass: GET /hosts, GET /hosts/:id, GET /hosts/:id/faces all return kb_mode
 6980 " 🔵 TestListHostsIncludesEnrichedAccessFaces panics: access_faces array empty in response
 6981 11:01a 🔄 Refactor host/face enrichment into hydrateHostAccessFaces and enrichAccessFaces helpers
+### May 24, 2026
+7010 1:08p 🔵 spider.ai monitoring data analysis infrastructure
+7011 1:09p 🔵 aisg-monitor-api.yml full Prometheus API spec
+7012 " 🔵 internal/api/monitor.go only implements SSE global stream
+7013 " 🔵 Phase 3 alerting roadmap: threshold rules, notification channels, dashboard
+7014 " 🔵 Host monitor design partially implemented — key pieces missing
+7015 1:24p 🔵 Prometheus 作为已聚合监控平台的接入问题
 </claude-mem-context>
