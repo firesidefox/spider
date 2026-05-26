@@ -1502,7 +1502,7 @@ onUnmounted(() => {
 .chat-main.welcome-mode .chat-input {
   max-width: 640px; width: 100%; position: relative;
   transition: max-width 0.35s ease;
-  border-top: none; background: transparent;
+  border-top: none; background: transparent; padding: 0;
 }
 .chat-main.welcome-transitioning .chat-input,
 .chat-main.welcome-chat .chat-input { max-width: 100%; }
@@ -1542,11 +1542,14 @@ onUnmounted(() => {
   background: rgba(99,102,241,0.05);
   border: 1px solid rgba(99,102,241,0.28);
   border-radius: 9px;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 4px 20px rgba(0,0,0,0.3);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 2px 12px rgba(0,0,0,0.08);
   transition: border-color 0.2s;
 }
 .chat-main.welcome-mode .input-wrapper:focus-within {
   border-color: rgba(99,102,241,0.55);
+}
+.chat-main.welcome-mode .input-wrapper textarea {
+  border: none; background: transparent; border-radius: 0;
 }
 .chat-main.welcome-mode .send-btn:not(.cancel-btn):not(.queue-btn) {
   background: linear-gradient(135deg, #6366f1, #818cf8);
