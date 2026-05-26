@@ -84,6 +84,41 @@ Both have `filter` for glow (feGaussianBlur). Head uses stronger blur (stdDeviat
 
 ---
 
+## Layout Transition: Welcome → Chat
+
+Triggered 500ms after send click (concurrent with border trace).
+
+### Sequence
+
+| Time from click | Event |
+|-----------------|-------|
+| `0ms` | Border trace starts |
+| `500ms` | Welcome area begins `fadeUp` exit |
+| `920ms` | Welcome area gone; `chat-mode` class applied; input expands to full width |
+| `1420ms` | Messages area starts fading in (`delay: 0.5s`) |
+| `2120ms` | Messages fully visible (`duration: 0.7s`) |
+| `~3300ms` | Border trace + hold + fade completes |
+
+### Welcome area exit
+- `opacity: 0`, `transform: translateY(-20px)`, `filter: blur(4px)`
+- Duration: `0.4s ease`
+
+### Input box expansion
+- `max-width` transitions from `560px` → `100%` via CSS transition `0.35s ease`
+- Triggered by `chat-mode` class
+
+### Messages area enter
+- `opacity: 0 → 1`, `transform: translateY(12px) → translateY(0)`
+- `transition: opacity 0.7s ease 0.5s, transform 0.7s ease 0.5s`
+- Delay starts from when `chat-mode` class is applied
+
+### Vue implementation
+- `activeConvId` being set (existing behavior) drives the `welcome-mode` class removal
+- Override: delay class removal by `420ms` after `transitioning` class is set, so Vue sees the outgoing animation complete before switching layouts
+- Use a `transitionState: 'welcome' | 'transitioning' | 'chat'` ref to drive CSS classes
+
+---
+
 ## Files Changed
 
 - `web/src/views/ChatView.vue` — CSS rules for `.welcome-greeting`, `.welcome-logo`, `.welcome-text`, `.chat-main.welcome-mode .chat-input`, `.send-btn` (welcome scoped), plus template: add SVG overlay, add animation JS.
