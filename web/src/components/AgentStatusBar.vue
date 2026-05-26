@@ -27,7 +27,7 @@ const { statuses } = useAgentStatus()
 const router = useRouter()
 const route = useRoute()
 
-const currentConvId = computed(() => route.query.id as string | undefined)
+const currentConvId = computed(() => route.params.id as string | undefined)
 
 const sorted = computed<AgentStatus[]>(() => {
   const all = Array.from(statuses.value.values())
@@ -58,7 +58,7 @@ function rowDetail(s: AgentStatus): string {
 
 function handleClick(convId: string) {
   removeAgentStatus(convId)
-  router.push(`/chat?id=${convId}`)
+  router.push(`/chat/${convId}`)
 }
 </script>
 

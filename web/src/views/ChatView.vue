@@ -1252,6 +1252,7 @@ onUnmounted(() => {
           <input type="checkbox" v-if="batchMode" class="conv-checkbox"
                  :checked="selectedConvIds.has(c.id)"
                  @click.stop="toggleSelectConv(c.id)" />
+          <span v-if="batchMode" class="conv-item-title">{{ c.title || '未命名对话' }}</span>
           <input v-else-if="editingConvId === c.id" class="conv-item-input"
                  v-model="editTitleText"
                  @keydown.enter="saveConvTitle(c.id)"
