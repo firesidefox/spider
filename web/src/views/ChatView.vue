@@ -1221,6 +1221,8 @@ onBeforeRouteUpdate(async (to) => {
   const newId = to.params.id as string | undefined
   if (newId && newId !== activeConvId.value) {
     await selectConversation(newId)
+  } else if (!newId) {
+    activeConvId.value = null
   }
 })
 
