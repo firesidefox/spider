@@ -932,6 +932,11 @@ function startBorderTrace() {
   let fadeStart = 0
 
   function step(ts: number) {
+    if (!trailRectRef.value || !headRectRef.value) {
+      traceRafId.value = null
+      traceAnimating.value = false
+      return
+    }
     if (!startTs) startTs = ts
     const elapsed = ts - startTs
 
@@ -1320,6 +1325,7 @@ onBeforeRouteUpdate(async (to) => {
 })
 
 onUnmounted(() => {
+  if (traceRafId.value !== null) cancelAnimationFrame(traceRafId.value)
   globalEs?.close()
   clearAllTimers()
   convSubscriptions.forEach(unsub => unsub())
