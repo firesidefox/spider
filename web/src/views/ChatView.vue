@@ -1272,6 +1272,10 @@ onUnmounted(() => {
           </div>
         </div>
       </div>
+      <div v-if="batchMode" class="batch-action-bar">
+        <span class="batch-count">已选 {{ selectedConvIds.size }}</span>
+        <button class="batch-delete-btn" :disabled="selectedConvIds.size === 0" @click="handleBatchDelete">删除选中</button>
+      </div>
     </div>
     <div class="sidebar-resize-handle" @mousedown="startDrag">
       <div class="drag-indicator"></div>
@@ -1580,4 +1584,11 @@ onUnmounted(() => {
 .target-toggle { background: none; border: none; cursor: pointer; color: var(--text-sub); font-size: 18px; width: 24px; height: 24px; border-radius: 4px; display: flex; align-items: center; justify-content: center; line-height: 1; }
 .target-toggle:hover { background: rgba(255,255,255,0.06); color: var(--text); }
 .target-side-body { flex: 1; overflow-y: auto; }
+
+/* Batch action bar */
+.batch-action-bar { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-top: 1px solid var(--border); background: var(--surface); flex-shrink: 0; }
+.batch-count { flex: 1; color: var(--text-sub); font-size: 12px; font-family: 'SF Mono', monospace; }
+.batch-delete-btn { background: var(--red, #e05252); color: #fff; border: none; padding: 4px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; font-family: 'SF Mono', monospace; }
+.batch-delete-btn:hover:not(:disabled) { background: #c94444; }
+.batch-delete-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 </style>
