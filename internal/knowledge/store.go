@@ -901,8 +901,12 @@ func (s *Store) writeSectionsAndEntries(ctx context.Context, docID int, entries 
 			e := entries[entryIdx]
 
 			var embedding []byte
-			if req.Embedder != nil && e.Summary != "" {
-				vec, err := req.Embedder.Embed(ctx, e.Summary)
+			embedText := e.Summary
+			if embedText == "" {
+				embedText = e.Title
+			}
+			if req.Embedder != nil && embedText != "" {
+				vec, err := req.Embedder.Embed(ctx, embedText)
 				if err != nil {
 					return nil, fmt.Errorf("embed entry %d: %w", entryIdx, err)
 				}
