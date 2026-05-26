@@ -546,6 +546,7 @@ async function loadConversations() {
 
 async function selectConversation(id: string) {
   if (activeConvId.value === id && transitionState.value === 'chat') return
+  if (selectingConvId === id) return  // same conv already loading
   selectingConvId = id
   clearPollTimer(id)
   try {
@@ -593,7 +594,7 @@ async function selectConversation(id: string) {
   } catch (e) {
     console.error('selectConversation failed', e)
   } finally {
-    selectingConvId = null
+    if (selectingConvId === id) selectingConvId = null
   }
 }
 
@@ -864,8 +865,8 @@ async function send(overrideText?: string) {
   }
 
   if (!activeConvId.value) {
-    setTimeout(triggerLayoutTransition, 0)
     await createNewConversation()
+    triggerLayoutTransition()
   }
 
   const convId = activeConvId.value!
@@ -1253,6 +1254,7 @@ onBeforeRouteUpdate(async (to) => {
     if (oldId) {
       const unsub = convSubscriptions.get(oldId)
       if (unsub) { unsub(); convSubscriptions.delete(oldId) }
+      clearPollTimer(oldId)
     }
     activeConvId.value = null
     transitionState.value = 'welcome'
@@ -1333,7 +1335,7 @@ onUnmounted(() => {
            'welcome-chat': transitionState === 'chat',
          }"
          @click="showExportMenu = false; showModeDropdown = false; closeConvMenu()">
-      <div v-if="activeConvId" class="chat-header">
+      <div v-if="activeConvId || !sidebarOpen" class="chat-header">
         <button v-if="!sidebarOpen" class="sidebar-toggle" @click="toggleSidebar">≡</button>
         <button v-if="!sidebarOpen" class="header-new-btn" @click="goNewPage()">+</button>
         <input v-if="editingHeaderTitle" class="conv-title-input"
