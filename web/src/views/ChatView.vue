@@ -79,7 +79,9 @@ async function doExport(format: 'md' | 'json') {
 const activeConvId = ref<string | null>(null)
 const messagesMap = ref<Record<string, DisplayMessage[]>>({})
 
-const transitionState = ref<'welcome' | 'transitioning' | 'chat'>('welcome')
+const transitionState = ref<'welcome' | 'transitioning' | 'chat'>(
+  route.params.id ? 'chat' : 'welcome'
+)
 const messages = computed(() => messagesMap.value[activeConvId.value ?? ''] ?? [])
 
 const { statuses: agentStatuses } = useAgentStatus()
@@ -851,7 +853,7 @@ async function send(overrideText?: string) {
   }
 
   if (!activeConvId.value) {
-    if (!overrideText) setTimeout(triggerLayoutTransition, 0)
+    setTimeout(triggerLayoutTransition, 0)
     await createNewConversation()
   }
 
@@ -1179,7 +1181,6 @@ async function initView() {
   } else {
     const lastConvId = localStorage.getItem('spider-last-conv')
     if (lastConvId) {
-      router.replace(`/chat/${lastConvId}`)
       await selectConversation(lastConvId)
     }
   }
@@ -1237,6 +1238,11 @@ onBeforeRouteUpdate(async (to) => {
   if (newId && newId !== activeConvId.value) {
     await selectConversation(newId)
   } else if (!newId) {
+    const oldId = activeConvId.value
+    if (oldId) {
+      const unsub = convSubscriptions.get(oldId)
+      if (unsub) { unsub(); convSubscriptions.delete(oldId) }
+    }
     activeConvId.value = null
     transitionState.value = 'welcome'
   }
@@ -1316,7 +1322,7 @@ onUnmounted(() => {
            'welcome-chat': transitionState === 'chat',
          }"
          @click="showExportMenu = false; showModeDropdown = false; closeConvMenu()">
-      <div v-if="activeConvId && transitionState === 'chat'" class="chat-header">
+      <div v-if="activeConvId" class="chat-header">
         <button v-if="!sidebarOpen" class="sidebar-toggle" @click="toggleSidebar">≡</button>
         <button v-if="!sidebarOpen" class="header-new-btn" @click="goNewPage()">+</button>
         <input v-if="editingHeaderTitle" class="conv-title-input"
