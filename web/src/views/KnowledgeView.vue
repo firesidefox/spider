@@ -75,34 +75,48 @@
     <!-- Entries panel -->
     <section v-if="activeDoc" class="kb-entries">
       <div class="entries-toolbar">
-        <input v-model="entryQuery" class="filter-input" placeholder="🔍 搜索 API 路径或描述..." />
-        <div class="method-filters">
+        <input v-model="entryQuery" class="filter-input" placeholder="🔍 搜索 API 路径或描述..."
+          :style="entriesView === 'raw' ? 'opacity:0.4;pointer-events:none' : ''" />
+        <div class="method-filters"
+          :style="entriesView === 'raw' ? 'opacity:0.4;pointer-events:none' : ''">
           <button v-for="m in METHODS" :key="m" class="method-chip"
             :class="[m.toLowerCase(), { active: methodFilters.has(m) }]"
             @click="toggleMethod(m)">{{ m }}</button>
+        </div>
+        <div class="view-tabs">
+          <button class="view-tab" :class="{ active: entriesView === 'friendly' }"
+            @click="entriesView = 'friendly'">友好</button>
+          <button class="view-tab" :class="{ active: entriesView === 'raw' }"
+            @click="entriesView = 'raw'">原文</button>
         </div>
       </div>
       <div class="entries-meta">
         来源: {{ activeDoc.name }} · 块: {{ totalEntries }} · {{ formatDate(activeDoc.updated_at || activeDoc.created_at) }}
       </div>
       <div class="entries-body">
-        <div v-if="loadingSections" class="entries-loading">加载中...</div>
-        <div v-else-if="!sections.length && !flatEntries.length" class="entries-empty">无条目</div>
-        <div v-else class="entries-list">
-          <div v-for="(entry, idx) in filteredEntries" :key="entry.id"
-            class="entry-card" :class="{ active: expandedEntries.has(entry.id), focused: focusedIdx === idx }"
-            @click="toggleEntry(entry)">
-            <div class="entry-row">
-              <span class="method-badge" :class="entryMethod(entry).toLowerCase()">
-                {{ entryMethod(entry) || '·' }}
-              </span>
-              <span class="entry-path">{{ entryPath(entry) }}</span>
-              <button class="copy-btn" :title="'复制 ' + entryPath(entry)" @click.stop="copy(entryPath(entry))">📋</button>
+        <!-- 原文视图 -->
+        <pre v-if="entriesView === 'raw'" class="resp-body raw-source">{{ activeDoc?.raw_content }}</pre>
+
+        <!-- 友好视图 -->
+        <template v-else>
+          <div v-if="loadingSections" class="entries-loading">加载中...</div>
+          <div v-else-if="!sections.length && !flatEntries.length" class="entries-empty">无条目</div>
+          <div v-else class="entries-list">
+            <div v-for="(entry, idx) in filteredEntries" :key="entry.id"
+              class="entry-card" :class="{ active: expandedEntries.has(entry.id), focused: focusedIdx === idx }"
+              @click="toggleEntry(entry)">
+              <div class="entry-row">
+                <span class="method-badge" :class="entryMethod(entry).toLowerCase()">
+                  {{ entryMethod(entry) || '·' }}
+                </span>
+                <span class="entry-path">{{ entryPath(entry) }}</span>
+                <button class="copy-btn" :title="'复制 ' + entryPath(entry)" @click.stop="copy(entryPath(entry))">📋</button>
+              </div>
+              <div class="entry-summary">{{ entry.summary }}</div>
             </div>
-            <div class="entry-summary">{{ entry.summary }}</div>
+            <div v-if="!filteredEntries.length" class="entries-empty">无匹配条目</div>
           </div>
-          <div v-if="!filteredEntries.length" class="entries-empty">无匹配条目</div>
-        </div>
+        </template>
       </div>
     </section>
 
@@ -935,4 +949,24 @@ onBeforeUnmount(() => {
 .file-item-status { flex-shrink: 0; }
 .file-item-status.ok { color: #10b981; }
 .file-item-status.error { color: #dc2626; }
+
+.view-tabs {
+  display: flex;
+  border-top: 1px solid var(--border);
+  margin: 0 -12px;
+}
+.view-tab {
+  flex: 1; text-align: center;
+  font-size: 12px; font-weight: 600;
+  padding: 7px 0; cursor: pointer;
+  color: var(--muted); background: none; border: none;
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+}
+.view-tab:hover { color: var(--text-sub); }
+.view-tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+.raw-source {
+  flex: 1; margin: 0; white-space: pre-wrap; word-break: break-all;
+  overflow-y: auto;
+}
 </style>
