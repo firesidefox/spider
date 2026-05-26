@@ -1507,7 +1507,7 @@ onUnmounted(() => {
 .chat-main.welcome-mode .retry-banner { display: none; }
 .chat-main.welcome-mode .chat-input {
   max-width: 640px; width: 100%; position: relative;
-  transition: max-width 1.0s ease;
+  transition: max-width 0.3s ease;
   border-top: none; background: transparent; padding: 0;
 }
 .chat-main.welcome-transitioning .chat-input,
