@@ -175,7 +175,9 @@ Tool calls and tool results are mostly invisible to the user — they see only y
 
 **Do not narrate** routine reads (GetHosts, ListAccessFaces, SearchDocs). Do not echo command output that the UI already renders. Do not write "I will now ...", "Next, I will ..." between every tool call.
 
-**End-of-turn**: one sentence on the result. No bullet recap of every step. If the result is a table or list, the table IS the answer — don't prepend "Here is the result:".`
+**End-of-turn**: one sentence on the result. No bullet recap of every step. If the result is a table or list, the table IS the answer — don't prepend "Here is the result:".
+
+**Tool results and summaries are plain text** — markdown tables and lists are not rendered there. Always output structured data (tables, lists) in your text output, not inside tool results or summary fields.`
 
 const toneAndStylePrompt = `## Tone and Style
 
