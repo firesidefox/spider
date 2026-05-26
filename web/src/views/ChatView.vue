@@ -78,6 +78,14 @@ async function doExport(format: 'md' | 'json') {
 
 const activeConvId = ref<string | null>(null)
 const messagesMap = ref<Record<string, DisplayMessage[]>>({})
+
+// Welcome border-trace animation
+const chatInputRef = ref<HTMLElement | null>(null)
+const traceRafId = ref<number | null>(null)
+const traceAnimating = ref(false)
+const trailRectRef = ref<SVGRectElement | null>(null)
+const headRectRef = ref<SVGRectElement | null>(null)
+const transitionState = ref<'welcome' | 'transitioning' | 'chat'>('welcome')
 const messages = computed(() => messagesMap.value[activeConvId.value ?? ''] ?? [])
 
 const { statuses: agentStatuses } = useAgentStatus()
@@ -847,6 +855,7 @@ async function send(overrideText?: string) {
   }
 
   if (!activeConvId.value) {
+    startBorderTrace()
     await createNewConversation()
   }
 
@@ -875,6 +884,90 @@ async function send(overrideText?: string) {
   scrollToBottom()
 
   abortCtrl = sendMessage(convId, text, selectedHostIds.value)
+}
+
+function startBorderTrace() {
+  if (traceRafId.value !== null) {
+    cancelAnimationFrame(traceRafId.value)
+    traceRafId.value = null
+  }
+
+  const inputEl = chatInputRef.value
+  const trail = trailRectRef.value
+  const head = headRectRef.value
+  if (!inputEl || !trail || !head) return
+
+  const { width: w, height: h } = inputEl.getBoundingClientRect()
+  const rx = 9
+  const PERIM = 2 * (w - 2 * rx) + 2 * (h - 2 * rx) + 2 * Math.PI * rx
+  // start at right-center: top edge + TR arc + half right edge
+  const START = (w - 2 * rx) + (Math.PI / 2 * rx) + (h / 2 - rx)
+
+  const TRACE_DUR = 2400
+  const HOLD = 600
+  const FADE_DUR = 700
+
+  function setRect(el: SVGRectElement) {
+    el.setAttribute('x', '1')
+    el.setAttribute('y', '1')
+    el.setAttribute('width', String(w - 2))
+    el.setAttribute('height', String(h - 2))
+    el.setAttribute('rx', String(rx))
+    el.setAttribute('ry', String(rx))
+  }
+  setRect(trail)
+  setRect(head)
+
+  trail.setAttribute('stroke-dasharray', `0 ${PERIM + 100}`)
+  trail.setAttribute('stroke-dashoffset', String(-START))
+  trail.setAttribute('stroke-opacity', '0')
+  head.setAttribute('stroke-dashoffset', String(-START))
+  head.setAttribute('stroke-opacity', '0')
+
+  function easeInOut(t: number) { return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t }
+
+  let startTs: number | null = null
+  let phase: 'draw' | 'hold' | 'fade' = 'draw'
+  let holdStart = 0
+  let fadeStart = 0
+
+  function step(ts: number) {
+    if (!startTs) startTs = ts
+    const elapsed = ts - startTs
+
+    if (phase === 'draw') {
+      const t = Math.min(elapsed / TRACE_DUR, 1)
+      const ease = easeInOut(t)
+      const grown = ease * PERIM
+      trail.setAttribute('stroke-dasharray', `${grown} ${PERIM + 100}`)
+      trail.setAttribute('stroke-dashoffset', String(-START))
+      trail.setAttribute('stroke-opacity', String(Math.min(t / 0.12, 1) * 0.65))
+      head.setAttribute('stroke-dashoffset', String(-(START + grown)))
+      head.setAttribute('stroke-opacity', String(Math.min(t / 0.04, 1)))
+      if (t >= 1) {
+        trail.setAttribute('stroke-dasharray', `${PERIM} ${PERIM + 100}`)
+        trail.setAttribute('stroke-opacity', '0.65')
+        head.setAttribute('stroke-opacity', '0')
+        phase = 'hold'
+        holdStart = ts
+      }
+    } else if (phase === 'hold') {
+      if (ts - holdStart >= HOLD) { phase = 'fade'; fadeStart = ts }
+    } else {
+      const ft = Math.min((ts - fadeStart) / FADE_DUR, 1)
+      trail.setAttribute('stroke-opacity', String((1 - ft) * 0.65))
+      if (ft >= 1) {
+        trail.setAttribute('stroke-opacity', '0')
+        traceRafId.value = null
+        traceAnimating.value = false
+        return
+      }
+    }
+    traceRafId.value = requestAnimationFrame(step)
+  }
+
+  traceAnimating.value = true
+  traceRafId.value = requestAnimationFrame(step)
 }
 
 function flushQueue() {
@@ -1402,7 +1495,25 @@ onUnmounted(() => {
 
       <RuntimeStatusBar v-if="isStreaming" :status="currentAgentStatus" />
 
-      <div class="chat-input">
+      <div class="chat-input" ref="chatInputRef">
+        <!-- Border-trace SVG overlay (welcome-mode only) -->
+        <svg v-if="transitionState !== 'chat'" class="trace-svg" xmlns="http://www.w3.org/2000/svg"
+             style="position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:2;">
+          <defs>
+            <filter id="trace-trail-glow" x="-30%" y="-30%" width="160%" height="160%">
+              <feGaussianBlur in="SourceGraphic" stdDeviation="2" result="b"/>
+              <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
+            <filter id="trace-head-glow" x="-80%" y="-80%" width="260%" height="260%">
+              <feGaussianBlur in="SourceGraphic" stdDeviation="4" result="b"/>
+              <feMerge><feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
+          </defs>
+          <rect ref="trailRectRef" fill="none" stroke="#818cf8" stroke-width="1.5"
+            stroke-dasharray="0 9999" stroke-opacity="0" filter="url(#trace-trail-glow)"/>
+          <rect ref="headRectRef" fill="none" stroke="#e0e7ff" stroke-width="2.5"
+            stroke-dasharray="18 9999" stroke-opacity="0" filter="url(#trace-head-glow)"/>
+        </svg>
         <div class="input-wrapper">
           <div v-if="kbDropdownMode" class="kb-dropdown">
             <div
