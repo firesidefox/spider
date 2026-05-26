@@ -1231,11 +1231,19 @@ onUnmounted(() => {
     <!-- Sidebar -->
     <div class="sidebar" :class="{ collapsed: !sidebarOpen }" :style="{ width: sidebarOpen ? sidebarWidth + 'px' : '0' }">
       <div class="sidebar-header">
-        <button class="sidebar-toggle" @click="toggleSidebar">≡</button>
-        <div class="sidebar-tabs">
-          <button class="sidebar-tab active">对话</button>
-        </div>
-        <button class="sidebar-new" @click="createNewConversation()">+</button>
+        <template v-if="!batchMode">
+          <button class="sidebar-toggle" @click="toggleSidebar">≡</button>
+          <div class="sidebar-tabs">
+            <button class="sidebar-tab active">对话</button>
+          </div>
+          <button class="sidebar-new" @click="createNewConversation()">+</button>
+        </template>
+        <template v-else>
+          <span class="batch-mode-label">批量管理</span>
+          <span style="flex:1"></span>
+          <button class="batch-select-all" @click="toggleSelectAll">{{ selectedConvIds.size === conversations.length ? '取消全选' : '全选' }}</button>
+          <button class="batch-cancel" @click="exitBatchMode">取消</button>
+        </template>
       </div>
       <div class="sidebar-body">
         <div v-for="c in conversations" :key="c.id" class="conv-item"
