@@ -42,20 +42,27 @@
         <div class="sp-topbar">
           <span class="sp-detail-title">{{ selected.name }}</span>
           <div class="sp-topbar-right">
-            <button class="btn btn-sm btn-secondary" @click="copySkill(selected)">复制</button>
-            <button
-              class="btn btn-sm btn-primary"
-              :disabled="selected.source === 'builtin'"
-              @click="triggerUpload(selected.name)"
-            >上传新版本</button>
-            <button
-              class="btn btn-sm btn-danger"
-              :disabled="selected.source === 'builtin'"
-              @click="deleteSkill(selected.name)"
-            >删除</button>
+            <template v-if="editing">
+              <button class="btn btn-sm btn-primary" :disabled="saving" @click="saveEdit">{{ saving ? '保存中…' : '保存' }}</button>
+              <button class="btn btn-sm" @click="cancelEdit">取消</button>
+            </template>
+            <template v-else>
+              <button class="btn btn-sm btn-secondary" @click="copySkill(selected)">复制</button>
+              <button
+                v-if="selected.source === 'custom'"
+                class="btn btn-sm btn-primary"
+                @click="startEdit"
+              >编辑</button>
+              <button
+                class="btn btn-sm btn-danger"
+                :disabled="selected.source === 'builtin'"
+                @click="deleteSkill(selected.name)"
+              >删除</button>
+            </template>
           </div>
         </div>
-        <div class="sp-body">
+        <textarea v-if="editing" v-model="editContent" class="sp-edit-textarea" />
+        <div v-else class="sp-body">
           <div v-if="selected.status === 'error'" class="sp-error-banner">
             <strong>解析失败：</strong>{{ selected.error }}<br>
             <span class="sp-error-hint">请上传包含有效 YAML frontmatter 的 .md 文件（需含 <code>description</code> 字段）</span>
@@ -117,6 +124,9 @@ const showCopyEditor = ref(false)
 const copyContent = ref('')
 const copySourceName = ref('')
 const copyTargetName = ref('')
+const editing = ref(false)
+const editContent = ref('')
+const saving = ref(false)
 
 const statusClass = computed(() => ({
   'sp-status--uploading': status.value.type === 'uploading',
@@ -139,6 +149,7 @@ async function loadSkills() {
 
 async function selectSkill(skill: Skill) {
   selected.value = skill
+  editing.value = false
   loading.value = true
   rawContent.value = ''
   try {
@@ -195,6 +206,38 @@ async function onDrop(e: DragEvent) {
   if (!file) return
   if (!file.name.endsWith('.md')) { setStatus({ type: 'error', msg: '仅支持 .md 文件' }); return }
   await uploadFile(file, file.name.replace(/\.md$/i, ''))
+}
+
+function startEdit() {
+  editContent.value = rawContent.value
+  editing.value = true
+}
+
+function cancelEdit() {
+  editing.value = false
+  editContent.value = ''
+}
+
+async function saveEdit() {
+  if (!selected.value) return
+  saving.value = true
+  try {
+    const res = await fetch(`/api/v1/skills/custom/${encodeSkillName(selected.value.name)}`, {
+      method: 'PUT', headers: { 'Content-Type': 'text/plain' }, body: editContent.value,
+    })
+    if (res.ok) {
+      rawContent.value = editContent.value
+      editing.value = false
+      setStatus({ type: 'success', name: selected.value.name })
+      await loadSkills()
+    } else {
+      const body = await res.text().catch(() => '')
+      let msg = '保存失败'
+      try { const j = JSON.parse(body); if (j.error) msg = j.error } catch { if (body) msg = body }
+      setStatus({ type: 'error', msg })
+    }
+  } catch { setStatus({ type: 'error', msg: '保存失败，请重试' }) }
+  finally { saving.value = false }
 }
 
 async function deleteSkill(name: string) {
@@ -284,6 +327,12 @@ onMounted(() => { loadSkills() })
   border-radius: 10px; overflow: hidden; box-shadow: var(--card-shadow);
 }
 .sp-loading { color: var(--muted); font-size: 13px; padding: 24px 28px; }
+.sp-edit-textarea {
+  flex: 1; width: 100%; padding: 20px 24px;
+  background: transparent; color: var(--text); font-size: 13px;
+  font-family: monospace; line-height: 1.6; resize: none;
+  border: none; outline: none; box-sizing: border-box; min-height: 0;
+}
 .sp-error-banner {
   background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.3);
   border-radius: 8px; padding: 12px 16px; margin-bottom: 16px;
