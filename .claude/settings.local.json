@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(go build:*)",
+      "Bash(go run:*)",
+      "Bash(make build:*)",
+      "mcp__spider__list_hosts",
+      "mcp__spider__execute_command",
+      "mcp__spider__execute_command_batch",
+      "Bash(git commit:*)",
+      "Bash(git add:*)",
+      "WebFetch(domain:github.com)",
+      "mcp__playwright__browser_navigate",
+      "Bash(curl *)",
+      "Bash(awk '{print $2}')",
+      "Bash(mkdir -p /Users/cw/fty.ai/spider.ai/skills/spider/.claude-plugin)",
+      "Bash(cp /Users/cw/.claude/skills/spider/.claude-plugin/marketplace.json /Users/cw/fty.ai/spider.ai/skills/spider/.claude-plugin/marketplace.json)",
+      "Skill(update-config)",
+      "Bash(bun add *)"
+    ]
+  }
+}
