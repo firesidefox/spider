@@ -1332,7 +1332,7 @@ onUnmounted(() => {
 
       <div class="welcome-greeting">
         <span class="welcome-logo">✦</span>
-        <span class="welcome-text">你好，{{ currentUser?.username }}</span>
+        <span class="welcome-text">你好，<span class="welcome-username">{{ currentUser?.username }}</span></span>
       </div>
 
       <div class="chat-messages" ref="messagesRef">
@@ -1477,11 +1477,75 @@ onUnmounted(() => {
 .chat-main.welcome-mode .chat-messages { display: none; }
 .chat-main.welcome-mode .todo-panel { display: none; }
 .chat-main.welcome-mode .retry-banner { display: none; }
-.chat-main.welcome-mode .chat-input { max-width: 640px; width: 100%; }
-.welcome-greeting { display: none; flex-direction: column; align-items: center; gap: 16px; margin-bottom: 32px; }
+.chat-main.welcome-mode .chat-input {
+  max-width: 640px; width: 100%; position: relative;
+  transition: max-width 0.35s ease;
+}
+.chat-main.welcome-transitioning .chat-input,
+.chat-main.welcome-chat .chat-input { max-width: 100%; }
+
+.welcome-greeting {
+  display: none; flex-direction: column; align-items: center; gap: 16px;
+  margin-bottom: 32px; position: relative;
+  transition: opacity 0.4s ease, transform 0.4s ease, filter 0.4s ease;
+}
+.welcome-greeting::before {
+  content: '';
+  position: absolute; top: -40px; left: 50%; transform: translateX(-50%);
+  width: 200px; height: 200px;
+  background: radial-gradient(circle, rgba(99,102,241,0.18) 0%, transparent 70%);
+  pointer-events: none;
+}
 .chat-main.welcome-mode .welcome-greeting { display: flex; }
-.welcome-logo { font-size: 32px; color: var(--primary); }
-.welcome-text { font-size: 24px; color: var(--text); font-family: 'SF Mono', monospace; }
+.chat-main.welcome-transitioning .welcome-greeting {
+  opacity: 0; transform: translateY(-20px); filter: blur(4px); pointer-events: none;
+}
+.chat-main.welcome-chat .welcome-greeting { display: none; }
+
+.welcome-logo {
+  font-size: 32px; color: #818cf8;
+  filter: drop-shadow(0 0 14px rgba(99,102,241,0.65));
+  animation: logo-float 3s ease-in-out infinite;
+}
+@keyframes logo-float {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-4px); }
+}
+.welcome-text { font-size: 24px; color: #c7d2fe; }
+.welcome-text .welcome-username { color: #fff; }
+
+/* Welcome-mode input overrides */
+.chat-main.welcome-mode .input-wrapper {
+  background: rgba(99,102,241,0.05);
+  border: 1px solid rgba(99,102,241,0.28);
+  border-radius: 9px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 4px 20px rgba(0,0,0,0.3);
+  transition: border-color 0.2s;
+}
+.chat-main.welcome-mode .input-wrapper:focus-within {
+  border-color: rgba(99,102,241,0.55);
+}
+.chat-main.welcome-mode .send-btn:not(.cancel-btn):not(.queue-btn) {
+  background: linear-gradient(135deg, #6366f1, #818cf8);
+  box-shadow: 0 4px 14px rgba(99,102,241,0.45);
+  transition: transform 0.1s, box-shadow 0.2s;
+}
+.chat-main.welcome-mode .send-btn:not(.cancel-btn):not(.queue-btn):hover {
+  box-shadow: 0 6px 20px rgba(99,102,241,0.6);
+  transform: translateY(-1px);
+}
+.chat-main.welcome-mode .send-btn:not(.cancel-btn):not(.queue-btn):active {
+  transform: scale(0.95);
+}
+
+/* Messages fade-in after welcome exits */
+.chat-main.welcome-chat .chat-messages {
+  animation: messages-fadein 0.7s ease 0.5s both;
+}
+@keyframes messages-fadein {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
 
 .chat-header { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-bottom: 1px solid var(--border); background: var(--panel); }
 .header-new-btn { background: none; border: 1px solid var(--border); color: var(--text); width: 28px; height: 28px; border-radius: 4px; cursor: pointer; font-size: 16px; flex-shrink: 0; }
