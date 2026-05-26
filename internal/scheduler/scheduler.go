@@ -107,7 +107,7 @@ func (s *Scheduler) tryTrigger(task *models.Task) {
 		logger.ForModule("scheduler").Info().Str("task_id", task.ID).Msg("scheduler: skipped, previous run still running")
 		return
 	}
-	// context.Background: task executions outlive the scheduler's own lifecycle.
+	// The executor owns task lifecycle cancellation through the service shutdown context.
 	if _, err := s.executor.Execute(context.Background(), task.ID); err != nil {
 		logger.ForModule("scheduler").Error().Err(err).Str("task_id", task.ID).Msg("scheduler: failed to trigger task")
 	}

@@ -21,6 +21,7 @@ var ErrAlreadyRunning = errors.New("task is already running")
 
 // Executor runs tasks headlessly using the agent.
 type Executor struct {
+	ctx                context.Context
 	taskStore          *store.TaskStore
 	taskRunStore       *store.TaskRunStore
 	hostStore          *store.HostStore
@@ -32,6 +33,7 @@ type Executor struct {
 
 // NewExecutor creates a new Executor.
 func NewExecutor(
+	ctx context.Context,
 	taskStore *store.TaskStore,
 	taskRunStore *store.TaskRunStore,
 	hostStore *store.HostStore,
@@ -39,6 +41,7 @@ func NewExecutor(
 	notifyChannelStore *store.NotifyChannelStore,
 ) *Executor {
 	e := &Executor{
+		ctx:                ctx,
 		taskStore:          taskStore,
 		taskRunStore:       taskRunStore,
 		hostStore:          hostStore,
@@ -51,9 +54,10 @@ func NewExecutor(
 	return e
 }
 
-// Execute starts a task run asynchronously. Returns the created TaskRun immediately.
+// Execute starts a task run asynchronously. Execution is bound to the service
+// lifecycle context supplied to NewExecutor, not to the trigger request context.
 // Returns error if task not found, already running, or run creation fails.
-func (e *Executor) Execute(ctx context.Context, taskID string) (*models.TaskRun, error) {
+func (e *Executor) Execute(_ context.Context, taskID string) (*models.TaskRun, error) {
 	task, err := e.taskStore.Get(taskID)
 	if err != nil {
 		return nil, fmt.Errorf("task not found: %w", err)
@@ -80,7 +84,7 @@ func (e *Executor) Execute(ctx context.Context, taskID string) (*models.TaskRun,
 	e.wg.Add(1)
 	go func() {
 		defer e.wg.Done()
-		e.executeAsync(context.Background(), task, created)
+		e.executeAsync(e.ctx, task, created)
 	}()
 	return created, nil
 }
@@ -103,7 +107,7 @@ func (e *Executor) executeAsync(ctx context.Context, task *models.Task, run *mod
 		if err := e.taskRunStore.Update(run); err != nil {
 			log.Error().Err(err).Msg("failed to update task run")
 		}
-		e.sendNotifications(context.Background(), task, run)
+		e.sendNotifications(ctx, task, run)
 		return
 	}
 
@@ -137,7 +141,7 @@ func (e *Executor) executeAsync(ctx context.Context, task *models.Task, run *mod
 		if uerr := e.taskRunStore.Update(run); uerr != nil {
 			log.Error().Err(uerr).Msg("failed to update task run")
 		}
-		e.sendNotifications(context.Background(), task, run)
+		e.sendNotifications(ctx, task, run)
 		return
 	}
 
@@ -149,13 +153,18 @@ func (e *Executor) executeAsync(ctx context.Context, task *models.Task, run *mod
 			}
 		}
 	}
-	timedOut := execCtx.Err() != nil
+	canceledByShutdown := ctx.Err() != nil
+	timedOut := !canceledByShutdown && execCtx.Err() != nil
 
 	now := time.Now()
 	run.RawOutput = strings.Join(outputParts, "")
 	run.Summary = e.generateSummary(ctx, run.RawOutput)
 	run.FinishedAt = &now
-	if timedOut {
+	if canceledByShutdown {
+		run.Status = models.TaskRunStatusFailed
+		run.RawOutput += "\nexecution canceled: service shutting down"
+		run.Alerted = true
+	} else if timedOut {
 		run.Status = models.TaskRunStatusFailed
 		run.RawOutput += fmt.Sprintf("\nexecution timeout after %dm", task.TimeoutMinutes)
 		run.Alerted = true
@@ -169,7 +178,7 @@ func (e *Executor) executeAsync(ctx context.Context, task *models.Task, run *mod
 		log.Error().Err(err).Msg("failed to update task run")
 	}
 	log.Info().Str("status", string(run.Status)).Msg("task run complete")
-	e.sendNotifications(context.Background(), task, run)
+	e.sendNotifications(ctx, task, run)
 }
 
 // filterValidHosts returns only host IDs that exist in the host store.

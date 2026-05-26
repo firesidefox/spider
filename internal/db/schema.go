@@ -306,9 +306,6 @@ func migrate(db *sql.DB) error {
 		return err
 	}
 	db.Exec(`DROP TABLE IF EXISTS host_knowledge_sources`)
-	if err := migrateAccessFacesPrometheus(db); err != nil {
-		return err
-	}
 	// Context compaction
 	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS conversation_summaries (
 		id               INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -549,6 +546,9 @@ func migrate(db *sql.DB) error {
 	db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_pb_host
 		ON prometheus_bindings(host_id)
 		WHERE scope_type = 'host'`)
+	if err := migrateAccessFacesPrometheus(db); err != nil {
+		return err
+	}
 	return nil
 }
 

@@ -15,8 +15,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	apipkg "github.com/spiderai/spider/internal/api"
 	"github.com/spiderai/spider/internal/agent"
+	apipkg "github.com/spiderai/spider/internal/api"
 	"github.com/spiderai/spider/internal/auth"
 	"github.com/spiderai/spider/internal/knowledge"
 	"github.com/spiderai/spider/internal/logger"
@@ -292,7 +292,7 @@ func serve(cfgFile, addrOverride, dataDirOverride string, debug bool) error {
 	}
 
 	if app.AgentFactory != nil {
-		exec := scheduler.NewExecutor(taskStore, taskRunStore, hs, app.AgentFactory, notifyChannelStore)
+		exec := scheduler.NewExecutor(shutdownCtx, taskStore, taskRunStore, hs, app.AgentFactory, notifyChannelStore)
 		app.Executor = exec
 		// Mark any runs left in 'running' state from a previous crash as failed.
 		if n, err := taskRunStore.MarkStaleRunsFailed(2 * time.Hour); err != nil {
@@ -302,8 +302,11 @@ func serve(cfgFile, addrOverride, dataDirOverride string, debug bool) error {
 		}
 		sched := scheduler.NewScheduler(taskStore, taskRunStore, exec)
 		sched.Start(shutdownCtx)
-		defer sched.Stop()
-		defer exec.Stop()
+		defer func() {
+			shutdownCancel()
+			sched.Stop()
+			exec.Stop()
+		}()
 	}
 
 	mcpHandler := mcppkg.NewHTTPHandler(app)
@@ -340,6 +343,7 @@ func serve(cfgFile, addrOverride, dataDirOverride string, debug bool) error {
 
 	select {
 	case err := <-errCh:
+		shutdownCancel()
 		return fmt.Errorf("http server: %w", err)
 	case <-quit:
 		shutdownCancel() // close SSE streams before HTTP shutdown
