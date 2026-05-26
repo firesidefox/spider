@@ -1247,9 +1247,12 @@ onUnmounted(() => {
       </div>
       <div class="sidebar-body">
         <div v-for="c in conversations" :key="c.id" class="conv-item"
-             :class="{ active: c.id === activeConvId }"
-             @click="selectConversation(c.id)">
-          <input v-if="editingConvId === c.id" class="conv-item-input"
+             :class="{ active: c.id === activeConvId, 'batch-selected': batchMode && selectedConvIds.has(c.id) }"
+             @click="batchMode ? toggleSelectConv(c.id) : selectConversation(c.id)">
+          <input type="checkbox" v-if="batchMode" class="conv-checkbox"
+                 :checked="selectedConvIds.has(c.id)"
+                 @click.stop="toggleSelectConv(c.id)" />
+          <input v-else-if="editingConvId === c.id" class="conv-item-input"
                  v-model="editTitleText"
                  @keydown.enter="saveConvTitle(c.id)"
                  @keydown.escape="cancelEdit"
@@ -1258,7 +1261,15 @@ onUnmounted(() => {
                  @vue:mounted="($event: any) => $event.el.focus()" />
           <span v-else class="conv-item-title" @dblclick.stop="startEditConvTitle(c.id, c.title)">{{ c.title || '未命名对话' }}</span>
           <span v-if="c.status === 'processing'" class="conv-processing-dot" title="处理中"></span>
-          <button class="conv-del" @click.stop="handleDeleteConversation(c.id)">×</button>
+          <div v-if="!batchMode" class="conv-menu-wrap">
+            <button class="conv-more" @click.stop="openConvMenu(c.id)" title="更多">⋯</button>
+            <div v-if="menuOpenConvId === c.id" class="conv-menu" @click.stop>
+              <button class="conv-menu-item" @click="startEditConvTitle(c.id, c.title); closeConvMenu()">✏ 重命名</button>
+              <button class="conv-menu-item" @click="enterBatchMode()">☑ 批量管理</button>
+              <div class="conv-menu-divider"></div>
+              <button class="conv-menu-item conv-menu-item--danger" @click="handleDeleteConversation(c.id); closeConvMenu()">✕ 删除</button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
