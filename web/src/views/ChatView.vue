@@ -888,7 +888,7 @@ function triggerLayoutTransition() {
   transitionState.value = 'transitioning'
   setTimeout(() => {
     if (transitionState.value === 'transitioning') transitionState.value = 'chat'
-  }, 650)
+  }, 1050)
 }
 
 function flushQueue() {
@@ -1501,7 +1501,7 @@ onUnmounted(() => {
 .chat-main.welcome-mode .retry-banner { display: none; }
 .chat-main.welcome-mode .chat-input {
   max-width: 640px; width: 100%; position: relative;
-  transition: max-width 0.5s ease;
+  transition: max-width 0.8s ease;
   border-top: none; background: transparent; padding: 0;
 }
 .chat-main.welcome-transitioning .chat-input,
@@ -1510,7 +1510,7 @@ onUnmounted(() => {
 .welcome-greeting {
   display: none; flex-direction: column; align-items: center; gap: 16px;
   margin-bottom: 32px; position: relative;
-  transition: opacity 0.6s ease, transform 0.6s ease, filter 0.6s ease;
+  transition: opacity 1.0s ease, transform 1.0s ease, filter 1.0s ease;
 }
 .welcome-greeting::before {
   content: '';
@@ -1566,7 +1566,7 @@ onUnmounted(() => {
 
 /* Messages fade-in after welcome exits */
 .chat-main.welcome-chat .chat-messages {
-  animation: messages-fadein 1s ease 0.6s both;
+  animation: messages-fadein 1.2s ease 0.8s both;
 }
 @keyframes messages-fadein {
   from { opacity: 0; transform: translateY(12px); }
