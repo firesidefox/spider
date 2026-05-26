@@ -156,7 +156,7 @@
                       <button v-for="t in entryRespTabs(entryDetails[entry.id])" :key="t.code"
                         class="resp-tab"
                         :class="{ active: entryRespCodes[entry.id] === t.code, ok: t.ok, err: !t.ok }"
-                        @click.stop="entryRespCodes = { ...entryRespCodes, [entry.id]: t.code }">
+                        @click.stop="setEntryRespCode(entry.id, t.code)">
                         <span class="resp-icon">{{ t.ok ? '✓' : '✗' }}</span>
                         <span>{{ t.code }}</span>
                         <span class="resp-desc">{{ t.description }}</span>
@@ -447,6 +447,10 @@ watch(activeDoc, async d => {
     focusedIdx.value = filteredEntries.value.length ? 0 : -1
   } finally { loadingSections.value = false }
 })
+
+function setEntryRespCode(id: number, code: string) {
+  entryRespCodes.value = { ...entryRespCodes.value, [id]: code }
+}
 
 async function toggleEntry(e: KnowledgeEntry) {
   const id = e.id
