@@ -94,17 +94,19 @@ export function sendMessage(
   conversationId: string,
   content: string,
   hostIds?: string[] | null,
-): AbortController {
+): { controller: AbortController; request: Promise<void> } {
   const ctrl = new AbortController()
   const body: Record<string, unknown> = { content }
   if (hostIds && hostIds.length > 0) body.host_ids = hostIds
-  fetch(`/api/v1/chat/conversations/${conversationId}/messages`, {
+  const request = fetch(`/api/v1/chat/conversations/${conversationId}/messages`, {
     method: 'POST',
     signal: ctrl.signal,
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify(body),
-  }).catch(() => { /* errors come via EventSource */ })
-  return ctrl
+  }).then(async (res) => {
+    if (!res.ok) throw new Error((await res.json()).error)
+  })
+  return { controller: ctrl, request }
 }
 
 export async function suggestTitle(id: string): Promise<string> {

@@ -99,7 +99,8 @@ function getOrInitMessages(convId: string): DisplayMessage[] {
 
 const toolCallsCache = new Map<string, any[]>()
 
-function buildDisplayMessages(msgs: ChatMsg[]): DisplayMessage[] {
+function buildDisplayMessages(msgs: ChatMsg[] | null | undefined): DisplayMessage[] {
+  if (!msgs) return []
   return msgs.filter(m => m.role !== 'tool_result').map(m => {
     const blocks: MessageBlock[] = []
     if (m.content) blocks.push({ type: 'text', content: m.content })
@@ -141,21 +142,25 @@ function addSystemMessage(content: string) {
 }
 
 async function pollUntilIdle(convId: string) {
+  clearPollTimer(convId)
   const check = async () => {
     try {
       const data = await getConversation(convId)
       if (data.conversation.status === 'idle') {
         pollTimers.delete(convId)
-        messagesMap.value[convId] = buildDisplayMessages(data.messages)
+        // Don't overwrite messagesMap — SSE replay via message events already
+        // updated it. Only clear the streaming state.
         setConversationStreaming(convId, false)
         if (activeConvId.value === convId) {
           await nextTick()
           scrollToBottom()
         }
       } else {
+        clearPollTimer(convId)
         pollTimers.set(convId, setTimeout(check, 2000))
       }
     } catch {
+      clearPollTimer(convId)
       pollTimers.set(convId, setTimeout(check, 2000))
     }
   }
@@ -573,19 +578,22 @@ async function selectConversation(id: string) {
   } else {
     messagesMap.value[id] = buildDisplayMessages(data.messages)
     setConversationStreaming(id, data.conversation.status === 'processing')
-    if (data.conversation.status === 'processing') {
-      pollUntilIdle(id)
-    }
   }
 
   if (data.conversation.status === 'processing') {
     updateAgentStatus({ conversationId: id, title: data.conversation.title || id.slice(0, 8), phase: 'thinking' })
   }
 
+  // Subscribe to SSE first. pollUntilIdle is a fallback only — it will be
+  // cancelled when the done event arrives via SSE.
   if (!convSubscriptions.has(id)) {
     const lastMsg = data.messages[data.messages.length - 1]
     const unsub = subscribeConversation(id, (event) => handleConvEvent(id, event), lastMsg?.id)
     convSubscriptions.set(id, unsub)
+  }
+
+  if (data.conversation.status === 'processing') {
+    pollUntilIdle(id)
   }
 
   await nextTick()
@@ -744,6 +752,7 @@ function handleConvEvent(convId: string, event: ChatEvent) {
       break
     case 'error': {
       clearRetryState()
+      clearPollTimer(convId)
       const errText = `\n\n**Error:** ${event.content?.error || 'unknown error'}`
       const lastBlk = last.blocks[last.blocks.length - 1]
       if (lastBlk?.type === 'text') {
@@ -764,6 +773,7 @@ function handleConvEvent(convId: string, event: ChatEvent) {
     }
     case 'done':
       clearRetryState()
+      clearPollTimer(convId)
       last.isStreaming = false
       setConversationStreaming(convId, false)
       for (const b of last.blocks) {
@@ -887,12 +897,24 @@ async function send(overrideText?: string) {
   }
   convMsgs.push(assistantMsg)
   setConversationStreaming(convId, true)
+  pollUntilIdle(convId)
   updateAgentStatus({ conversationId: convId, title: getConvTitle(convId), phase: 'thinking' })
   turnUsage.value = null
   await nextTick()
   scrollToBottom()
 
-  abortCtrl = sendMessage(convId, text, selectedHostIds.value)
+  const sendReq = sendMessage(convId, text, selectedHostIds.value)
+  abortCtrl = sendReq.controller
+  sendReq.request.catch((e: any) => {
+    if (e?.name === 'AbortError') return
+    clearPollTimer(convId)
+    const last = convMsgs[convMsgs.length - 1]
+    if (last?.role === 'assistant') {
+      last.blocks.push({ type: 'text', content: `**Error:** ${e?.message || 'send failed'}` })
+      last.isStreaming = false
+    }
+    setConversationStreaming(convId, false)
+  })
 }
 
 

@@ -75,6 +75,9 @@ func chatGetConversation(app *mcppkg.App, w http.ResponseWriter, r *http.Request
 		}
 	}
 	msgs = msgs[:n]
+	if msgs == nil {
+		msgs = []*models.Message{}
+	}
 	tasks, err := app.TodoStore.List(id)
 	if err != nil {
 		writeError(w, 500, err.Error())
@@ -215,34 +218,30 @@ func chatSendMessage(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id
 		return
 	}
 
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
-	flusher, _ := w.(http.Flusher)
-
-	for ev := range events {
-		if ev.Type == agent.EventToolStart {
-			injectHostNames(app, ev.Content)
-		}
-		if ev.Type == agent.EventToolStart || ev.Type == agent.EventToolResult {
-			name, _ := ev.Content["name"].(string)
-			if name == "" {
-				name, _ = ev.Content["tool"].(string)
+	go func() {
+		defer func() {
+			app.ClearSSEBuffer(id)
+			app.ConvStore.SetStatus(id, "idle") //nolint:errcheck
+		}()
+		for ev := range events {
+			if ev.Type == agent.EventToolStart {
+				injectHostNames(app, ev.Content)
 			}
-			if name == "Todo" {
-				continue
+			if ev.Type == agent.EventToolStart || ev.Type == agent.EventToolResult {
+				name, _ := ev.Content["name"].(string)
+				if name == "" {
+					name, _ = ev.Content["tool"].(string)
+				}
+				if name == "Todo" {
+					continue
+				}
 			}
+			data, _ := json.Marshal(ev)
+			app.BufferSSEEvent(id, data)
+			app.BroadcastSSE(id, data)
 		}
-		data, _ := json.Marshal(ev)
-		fmt.Fprintf(w, "data: %s\n\n", data)
-		if flusher != nil {
-			flusher.Flush()
-		}
-		app.BufferSSEEvent(id, data)
-		app.BroadcastSSE(id, data)
-	}
-	app.ClearSSEBuffer(id)
-	app.ConvStore.SetStatus(id, "idle") //nolint:errcheck
+	}()
+	writeJSON(w, http.StatusAccepted, map[string]string{"status": "accepted"})
 }
 
 // allFacesDisableKB is retained for compatibility with the agent factory hook.
