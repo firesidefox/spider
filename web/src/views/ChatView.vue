@@ -1472,6 +1472,17 @@ onUnmounted(() => {
 /* Chat main */
 .chat-main { flex: 1; display: flex; flex-direction: column; min-width: 300px; position: relative; }
 
+/* Welcome mode */
+.chat-main.welcome-mode { justify-content: center; align-items: center; }
+.chat-main.welcome-mode .chat-messages { display: none; }
+.chat-main.welcome-mode .todo-panel { display: none; }
+.chat-main.welcome-mode .retry-banner { display: none; }
+.chat-main.welcome-mode .chat-input { max-width: 640px; width: 100%; }
+.welcome-greeting { display: none; flex-direction: column; align-items: center; gap: 16px; margin-bottom: 32px; }
+.chat-main.welcome-mode .welcome-greeting { display: flex; }
+.welcome-logo { font-size: 32px; color: var(--primary); }
+.welcome-text { font-size: 24px; color: var(--text); font-family: 'SF Mono', monospace; }
+
 .chat-header { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-bottom: 1px solid var(--border); background: var(--panel); }
 .header-new-btn { background: none; border: 1px solid var(--border); color: var(--text); width: 28px; height: 28px; border-radius: 4px; cursor: pointer; font-size: 16px; flex-shrink: 0; }
 .header-new-btn:hover { background: var(--row-hover); }
