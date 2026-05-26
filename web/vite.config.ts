@@ -6,6 +6,7 @@ const apiTarget = process.env.SPIDER_API_TARGET || 'http://localhost:8000'
 export default defineConfig({
   plugins: [vue()],
   build: {
+    chunkSizeWarningLimit: 1000,
     outDir: '../cmd/spider/dist',
     emptyOutDir: true,
     rollupOptions: {
