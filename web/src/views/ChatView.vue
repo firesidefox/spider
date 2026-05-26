@@ -463,6 +463,48 @@ function cancelEdit() {
   editingConvId.value = null
 }
 
+function openConvMenu(id: string) {
+  menuOpenConvId.value = menuOpenConvId.value === id ? null : id
+}
+
+function closeConvMenu() {
+  menuOpenConvId.value = null
+}
+
+function enterBatchMode() {
+  menuOpenConvId.value = null
+  batchMode.value = true
+  selectedConvIds.value = new Set()
+}
+
+function exitBatchMode() {
+  batchMode.value = false
+  selectedConvIds.value = new Set()
+}
+
+function toggleSelectConv(id: string) {
+  const s = new Set(selectedConvIds.value)
+  if (s.has(id)) s.delete(id)
+  else s.add(id)
+  selectedConvIds.value = s
+}
+
+function toggleSelectAll() {
+  if (selectedConvIds.value.size === conversations.value.length) {
+    selectedConvIds.value = new Set()
+  } else {
+    selectedConvIds.value = new Set(conversations.value.map(c => c.id))
+  }
+}
+
+async function handleBatchDelete() {
+  const ids = Array.from(selectedConvIds.value)
+  for (const id of ids) {
+    await handleDeleteConversation(id)
+  }
+  exitBatchMode()
+}
+
 function toggleSidebar() {
   sidebarOpen.value = !sidebarOpen.value
   localStorage.setItem('spider-sidebar', sidebarOpen.value ? 'open' : 'closed')
