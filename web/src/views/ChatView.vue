@@ -592,6 +592,11 @@ async function createNewConversation() {
   textareaRef.value?.focus()
 }
 
+function goNewPage() {
+  activeConvId.value = null
+  router.replace('/chat')
+}
+
 function scrollToBottom() {
   if (messagesRef.value) {
     messagesRef.value.scrollTop = messagesRef.value.scrollHeight
@@ -1239,7 +1244,7 @@ onUnmounted(() => {
           <div class="sidebar-tabs">
             <button class="sidebar-tab active">对话</button>
           </div>
-          <button class="sidebar-new" @click="createNewConversation()">+</button>
+          <button class="sidebar-new" @click="goNewPage()">+</button>
         </template>
         <template v-else>
           <span class="batch-mode-label">批量管理</span>
@@ -1289,7 +1294,7 @@ onUnmounted(() => {
     <div class="chat-main" @click="showExportMenu = false; showModeDropdown = false; closeConvMenu()">
       <div class="chat-header">
         <button v-if="!sidebarOpen" class="sidebar-toggle" @click="toggleSidebar">≡</button>
-        <button v-if="!sidebarOpen" class="header-new-btn" @click="createNewConversation()">+</button>
+        <button v-if="!sidebarOpen" class="header-new-btn" @click="goNewPage()">+</button>
         <input v-if="editingHeaderTitle" class="conv-title-input"
                v-model="editTitleText"
                @keydown.enter="saveHeaderTitle"
