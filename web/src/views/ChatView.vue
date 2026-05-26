@@ -856,9 +856,11 @@ async function send(overrideText?: string) {
     })
   }
 
-  if (!activeConvId.value) {
+  if (!activeConvId.value && !overrideText) {
     startBorderTrace()
     setTimeout(triggerLayoutTransition, 500)
+    await createNewConversation()
+  } else if (!activeConvId.value) {
     await createNewConversation()
   }
 
@@ -898,7 +900,10 @@ function startBorderTrace() {
   const inputEl = chatInputRef.value
   const trail = trailRectRef.value
   const head = headRectRef.value
-  if (!inputEl || !trail || !head) return
+  if (!inputEl || !trail || !head) {
+    traceAnimating.value = false
+    return
+  }
 
   const { width: w, height: h } = inputEl.getBoundingClientRect()
   const rx = 9
@@ -940,7 +945,7 @@ function startBorderTrace() {
       traceAnimating.value = false
       return
     }
-    if (!startTs) startTs = ts
+    if (startTs === null) startTs = ts
     const elapsed = ts - startTs
 
     if (phase === 'draw') {
@@ -982,7 +987,7 @@ function triggerLayoutTransition() {
   if (transitionState.value !== 'welcome') return
   transitionState.value = 'transitioning'
   setTimeout(() => {
-    transitionState.value = 'chat'
+    if (transitionState.value === 'transitioning') transitionState.value = 'chat'
   }, 420)
 }
 
@@ -1412,7 +1417,7 @@ onUnmounted(() => {
            'welcome-chat': transitionState === 'chat',
          }"
          @click="showExportMenu = false; showModeDropdown = false; closeConvMenu()">
-      <div v-if="activeConvId" class="chat-header">
+      <div v-if="activeConvId && transitionState === 'chat'" class="chat-header">
         <button v-if="!sidebarOpen" class="sidebar-toggle" @click="toggleSidebar">≡</button>
         <button v-if="!sidebarOpen" class="header-new-btn" @click="goNewPage()">+</button>
         <input v-if="editingHeaderTitle" class="conv-title-input"
@@ -1639,16 +1644,16 @@ onUnmounted(() => {
 .chat-main.welcome-chat .welcome-greeting { display: none; }
 
 .welcome-logo {
-  font-size: 32px; color: #818cf8;
-  filter: drop-shadow(0 0 14px rgba(99,102,241,0.65));
+  font-size: 32px; color: color-mix(in srgb, var(--primary) 70%, #fff);
+  filter: drop-shadow(0 0 14px color-mix(in srgb, var(--primary) 65%, transparent));
   animation: logo-float 3s ease-in-out infinite;
 }
 @keyframes logo-float {
   0%, 100% { transform: translateY(0); }
   50%       { transform: translateY(-4px); }
 }
-.welcome-text { font-size: 24px; color: #c7d2fe; }
-.welcome-text .welcome-username { color: #fff; }
+.welcome-text { font-size: 24px; color: color-mix(in srgb, var(--primary) 40%, var(--text)); }
+.welcome-text .welcome-username { color: var(--text); }
 
 /* Welcome-mode input overrides */
 .chat-main.welcome-mode .input-wrapper {
