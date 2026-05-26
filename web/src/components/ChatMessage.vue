@@ -29,10 +29,9 @@ interface ConfirmRequest {
 
 
 type TextItem     = { kind: 'text';        content: string }
-type HkItem       = { kind: 'housekeeping'; call: ToolCallBlock }
 type ExploreGroup = { kind: 'explore';     calls: ToolCallBlock[]; streaming: boolean }
 type ActItem      = { kind: 'act';         call: ToolCallBlock; hosts: string[]; command: string }
-type RenderItem   = TextItem | HkItem | ExploreGroup | ActItem
+type RenderItem   = TextItem | ExploreGroup | ActItem
 
 const chatTheme = inject<() => ChatThemeTokens>('chatTheme')
 const chatDensity = inject<() => ChatDensity>('chatDensity')
@@ -79,13 +78,13 @@ const renderItems = computed<RenderItem[]>(() => {
     if (block.type === 'text') {
       if (block.content) items.push({ kind: 'text', content: block.content })
     } else if (block.call.name === 'Todo') {
-    } else if (block.call.name === 'invoke_skill') {
-      items.push({ kind: 'housekeeping', call: block.call })
     } else if (EXPLORE_TOOLS.has(block.call.name)) {
-      const last = items[items.length - 1]
-      if (last?.kind === 'explore') {
-        const calls = [...last.calls, block.call]
-        items[items.length - 1] = { kind: 'explore', calls, streaming: calls.some(c => c.durationMs == null) }
+      const lastExploreIdx = items.findLastIndex(i => i.kind === 'explore')
+      const hasActAfterExplore = lastExploreIdx !== -1 && items.slice(lastExploreIdx + 1).some(i => i.kind === 'act')
+      if (lastExploreIdx !== -1 && !hasActAfterExplore) {
+        const prev = items[lastExploreIdx] as ExploreGroup
+        const calls = [...prev.calls, block.call]
+        items[lastExploreIdx] = { kind: 'explore', calls, streaming: calls.some(c => c.durationMs == null) }
       } else {
         items.push({ kind: 'explore', calls: [block.call], streaming: block.call.durationMs == null })
       }
@@ -118,12 +117,6 @@ function exploreParam(call: ToolCallBlock): string {
   const v = vals[0]
   const s = typeof v === 'string' ? v : JSON.stringify(v)
   return s.length > 32 ? s.slice(0, 32) + '…' : s
-}
-
-function skillArg(call: ToolCallBlock): string {
-  if (!call.input) return ''
-  const v = call.input['skill'] ?? call.input['name'] ?? Object.values(call.input)[0]
-  return typeof v === 'string' ? v : ''
 }
 
 function actCommand(call: ToolCallBlock): string {
@@ -185,21 +178,6 @@ function formatDuration(ms: number) {
           <div class="block-body">
             <div class="assistant-text" v-html="renderMd(item.content)"></div>
             <span v-if="isStreaming && idx === renderItems.length - 1" class="cursor">▊</span>
-          </div>
-        </div>
-
-        <div v-else-if="item.kind === 'housekeeping'" class="block-row">
-          <div class="gutter"><span class="dot" :class="{ pulsing: isStreaming && item.call.durationMs == null }">*</span></div>
-          <div class="block-body">
-            <div class="hk-line">
-              <span class="hk-fn">{{ item.call.name }}</span><span class="hk-paren">(</span><span class="hk-arg">{{ skillArg(item.call) }}</span><span class="hk-paren">)</span>
-              <span class="tool-hd-spacer"></span>
-              <span v-if="isStreaming && item.call.durationMs == null" class="streaming-dots">···</span>
-              <span v-if="item.call.durationMs != null" class="dur">{{ formatDuration(item.call.durationMs) }}</span>
-            </div>
-            <div v-if="item.call.durationMs != null && item.call.summary" class="sub-line">
-              <span class="hook">└</span><span class="sub-text">{{ item.call.summary }}</span>
-            </div>
           </div>
         </div>
 
@@ -351,10 +329,6 @@ function formatDuration(ms: number) {
 .sub-fn { color: var(--ct-text-sub, var(--text-sub)); font-size: 11.5px; font-weight: 500; flex-shrink: 0; }
 .sub-fn.is-error { color: var(--ct-red, var(--red)); }
 .sub-param { color: var(--ct-label-color, var(--label)); font-size: 11px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-left: 6px; }
-.hk-line { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0; }
-.hk-fn { color: var(--ct-label-color, var(--label)); font-weight: 500; font-size: 12px; }
-.hk-paren { color: var(--ct-label-color, var(--label)); font-size: 12px; }
-.hk-arg { color: var(--ct-primary, var(--primary)); font-size: 11.5px; }
 .res-ok { color: var(--ct-green, var(--green)); font-size: 11px; flex-shrink: 0; }
 .res-err { color: var(--ct-red, var(--red)); font-size: 11px; flex-shrink: 0; }
 .act-output-pre { margin: 0; font-family: inherit; font-size: 11px; white-space: pre-wrap; word-break: break-all; line-height: 1.55; }
