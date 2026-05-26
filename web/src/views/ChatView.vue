@@ -1,7 +1,7 @@
 <script setup lang="ts">
 defineOptions({ name: 'ChatView' })
 import { ref, onMounted, onActivated, onDeactivated, onUnmounted, nextTick, computed, provide } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute, useRouter, onBeforeRouteUpdate } from 'vue-router'
 import ChatMessage from '../components/ChatMessage.vue'
 import RuntimeStatusBar from '../components/RuntimeStatusBar.vue'
 import type { MessageBlock, ToolCallBlock } from '../components/ChatMessage.vue'
@@ -168,8 +168,10 @@ const isStreaming = computed({
 
 function setConversationStreaming(convId: string, streaming: boolean) {
   const next = new Set(streamingConvIds.value)
-  if (streaming) next.add(convId)
-  else next.delete(convId)
+  if (streaming) {
+    next.add(convId)
+    if (!pollTimers.has(convId)) pollUntilIdle(convId)
+  } else next.delete(convId)
   streamingConvIds.value = next
 
   const conv = conversations.value.find(c => c.id === convId)
@@ -424,6 +426,9 @@ const effectiveMode = computed(() => {
 const editingHeaderTitle = ref(false)
 const editingConvId = ref<string | null>(null)
 const editTitleText = ref('')
+const menuOpenConvId = ref<string | null>(null)
+const batchMode = ref(false)
+const selectedConvIds = ref<Set<string>>(new Set())
 
 function startEditHeaderTitle() {
   if (!activeConv.value) return
@@ -815,7 +820,6 @@ async function send(overrideText?: string) {
   convMsgs.push(assistantMsg)
   setConversationStreaming(convId, true)
   updateAgentStatus({ conversationId: convId, title: getConvTitle(convId), phase: 'thinking' })
-  if (!pollTimers.has(convId)) pollUntilIdle(convId)
   turnUsage.value = null
   await nextTick()
   scrollToBottom()
@@ -1161,6 +1165,13 @@ onDeactivated(() => {
   pollTimers.clear()
   document.removeEventListener('click', closeModeDropdown)
   window.removeEventListener('keydown', handleEscCancel)
+})
+
+onBeforeRouteUpdate(async (to) => {
+  const newId = to.params.id as string | undefined
+  if (newId && newId !== activeConvId.value) {
+    await selectConversation(newId)
+  }
 })
 
 onUnmounted(() => {
