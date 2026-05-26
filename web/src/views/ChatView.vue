@@ -1621,6 +1621,7 @@ onUnmounted(() => {
 .chat-main.welcome-mode .chat-input {
   max-width: 640px; width: 100%; position: relative;
   transition: max-width 0.35s ease;
+  border-top: none; background: transparent;
 }
 .chat-main.welcome-transitioning .chat-input,
 .chat-main.welcome-chat .chat-input { max-width: 100%; }
