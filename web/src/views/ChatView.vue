@@ -359,6 +359,7 @@ function markDevicesDone(hostNames: string[], failed: boolean) {
 }
 
 let abortCtrl: AbortController | null = null
+let selectingConvId: string | null = null
 // Per-conversation EventSource subscriptions
 const convSubscriptions = new Map<string, () => void>()
 
@@ -544,8 +545,13 @@ async function loadConversations() {
 }
 
 async function selectConversation(id: string) {
+  if (activeConvId.value === id && transitionState.value === 'chat') return
+  selectingConvId = id
   clearPollTimer(id)
-  const data = await getConversation(id)
+  try {
+    const data = await getConversation(id)
+    // If user clicked a different conv while this was loading, abort
+    if (selectingConvId !== id) return
   activeConvId.value = id
   if (transitionState.value !== 'chat') transitionState.value = 'chat'
   const taskMap = new Map<number, Todo>()
@@ -584,6 +590,11 @@ async function selectConversation(id: string) {
 
   await nextTick()
   scrollToBottom()
+  } catch (e) {
+    console.error('selectConversation failed', e)
+  } finally {
+    selectingConvId = null
+  }
 }
 
 async function createNewConversation() {
