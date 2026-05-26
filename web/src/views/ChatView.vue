@@ -177,7 +177,6 @@ function setConversationStreaming(convId: string, streaming: boolean) {
   const next = new Set(streamingConvIds.value)
   if (streaming) {
     next.add(convId)
-    if (!pollTimers.has(convId)) pollUntilIdle(convId)
   } else next.delete(convId)
   streamingConvIds.value = next
 
@@ -1245,10 +1244,10 @@ onDeactivated(() => {
   window.removeEventListener('keydown', handleEscCancel)
 })
 
-onBeforeRouteUpdate(async (to) => {
+onBeforeRouteUpdate((to) => {
   const newId = to.params.id as string | undefined
   if (newId && newId !== activeConvId.value) {
-    await selectConversation(newId)
+    selectConversation(newId)  // fire-and-forget — don't hold the navigation lock
   } else if (!newId) {
     const oldId = activeConvId.value
     if (oldId) {
