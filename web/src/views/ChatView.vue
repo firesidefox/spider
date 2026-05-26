@@ -17,6 +17,7 @@ import {
 } from '../api/chat'
 import { listHosts, type Host } from '../api/hosts'
 import { authHeaders, getUIPrefs, setUIPrefs } from '../api/auth'
+import { useAuth } from '../composables/useAuth'
 import { listGroups, listDocumentsByGroup, type DocumentGroup, type Document as KbDocument } from '../api/documents'
 import { updateAgentStatus, useAgentStatus, type AgentStatus } from '../composables/useAgentStatus'
 import {
@@ -28,6 +29,8 @@ import {
 
 const chatThemeName = ref<ChatThemeName>(getSavedChatTheme())
 const chatDensityName = ref<ChatDensityName>(getSavedChatDensity())
+
+const { currentUser } = useAuth()
 
 provide('chatTheme', () => chatThemes[chatThemeName.value])
 provide('chatDensity', () => densityPresets[chatDensityName.value])
