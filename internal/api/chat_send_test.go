@@ -55,6 +55,71 @@ func TestChatSendMessageReturnsAcceptedWithoutStreamingResponse(t *testing.T) {
 	}
 }
 
+func TestChatSendMessageBackgroundRunOutlivesRequest(t *testing.T) {
+	gotLLMRequest := make(chan struct{})
+	releaseLLM := make(chan struct{})
+	llmSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		close(gotLLMRequest)
+		<-releaseLLM
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte(`data: {"choices":[{"delta":{"content":"ok"}}]}` + "\n\n"))
+		_, _ = w.Write([]byte("data: [DONE]\n\n"))
+	}))
+	t.Cleanup(llmSrv.Close)
+
+	app := newChatSendTestApp(t, llmSrv.URL)
+	if _, err := app.DB.Exec(
+		`INSERT INTO users (id, username, password, role, enabled, created_at)
+		 VALUES ('anonymous', 'anonymous', 'x', 'admin', 1, datetime('now'))`,
+	); err != nil {
+		t.Fatal(err)
+	}
+	conv, err := app.ConvStore.Create("anonymous", "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	reqCtx, cancelReq := context.WithCancel(context.Background())
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/chat/conversations/"+conv.ID+"/messages", strings.NewReader(`{"content":"hi"}`)).WithContext(reqCtx)
+	w := httptest.NewRecorder()
+	handler := auth.AuthMiddleware(false, nil, nil, nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		chatSendMessage(app, w, r, conv.ID)
+	}))
+
+	handler.ServeHTTP(w, req)
+	cancelReq()
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202 Accepted, got %d: %s", w.Code, w.Body.String())
+	}
+
+	select {
+	case <-gotLLMRequest:
+	case <-time.After(time.Second):
+		t.Fatal("background LLM request did not start after POST returned")
+	}
+
+	close(releaseLLM)
+
+	deadline := time.After(time.Second)
+	for {
+		msgs, err := app.MsgStore.ListByConversation(conv.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, msg := range msgs {
+			if msg.Role == "assistant" && msg.Content == "ok" {
+				return
+			}
+		}
+		select {
+		case <-deadline:
+			t.Fatal("assistant response was not persisted after POST request context ended")
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+}
+
 func newChatSendTestApp(t *testing.T, llmBaseURL string) *mcppkg.App {
 	t.Helper()
 	dataDir := t.TempDir()
