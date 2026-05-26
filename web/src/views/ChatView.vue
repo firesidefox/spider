@@ -1080,6 +1080,7 @@ async function handleDeleteConversation(id: string) {
   for (const m of msgs) toolCallsCache.delete(m.id)
   if (activeConvId.value === id) {
     activeConvId.value = null
+    transitionState.value = 'welcome'
     delete messagesMap.value[id]
     router.replace('/chat')
   }
