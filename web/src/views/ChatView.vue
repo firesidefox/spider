@@ -1293,8 +1293,8 @@ onUnmounted(() => {
     </div>
 
     <!-- Chat main -->
-    <div class="chat-main" @click="showExportMenu = false; showModeDropdown = false; closeConvMenu()">
-      <div class="chat-header">
+    <div class="chat-main" :class="{ 'welcome-mode': !activeConvId }" @click="showExportMenu = false; showModeDropdown = false; closeConvMenu()">
+      <div v-if="activeConvId" class="chat-header">
         <button v-if="!sidebarOpen" class="sidebar-toggle" @click="toggleSidebar">≡</button>
         <button v-if="!sidebarOpen" class="header-new-btn" @click="goNewPage()">+</button>
         <input v-if="editingHeaderTitle" class="conv-title-input"
@@ -1328,6 +1328,11 @@ onUnmounted(() => {
           </div>
         </div>
         <button v-if="!targetOpen" class="sidebar-toggle" @click="toggleTarget">‹</button>
+      </div>
+
+      <div class="welcome-greeting">
+        <span class="welcome-logo">✦</span>
+        <span class="welcome-text">你好，{{ currentUser?.username }}</span>
       </div>
 
       <div class="chat-messages" ref="messagesRef">
