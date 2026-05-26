@@ -90,8 +90,8 @@
         <div v-else-if="!sections.length && !flatEntries.length" class="entries-empty">无条目</div>
         <div v-else class="entries-list">
           <div v-for="(entry, idx) in filteredEntries" :key="entry.id"
-            class="entry-card" :class="{ active: activeEntryId === entry.id, focused: focusedIdx === idx }"
-            @click="selectEntry(entry)">
+            class="entry-card" :class="{ active: expandedEntries.has(entry.id), focused: focusedIdx === idx }"
+            @click="toggleEntry(entry)">
             <div class="entry-row">
               <span class="method-badge" :class="entryMethod(entry).toLowerCase()">
                 {{ entryMethod(entry) || '·' }}
@@ -202,15 +202,17 @@ const activeDoc = ref<KnowledgeDocument | null>(null)
 const sections = ref<KnowledgeSection[]>([])
 const entriesBySection = ref<Record<number, KnowledgeEntry[]>>({})
 const loadingSections = ref(false)
-const activeEntryId = ref<number | null>(null)
-const activeEntryDetail = ref<KnowledgeEntryDetail | null>(null)
-const loadingDetail = ref(false)
 const focusedIdx = ref(-1)
+
+const expandedEntries = ref(new Set<number>())
+const entryDetails = ref<Record<number, KnowledgeEntryDetail>>({})
+const loadingEntries = ref(new Set<number>())
+const entryRespCodes = ref<Record<number, string>>({})
+const entriesView = ref<'friendly' | 'raw'>('friendly')
 
 const searchQuery = ref('')
 const entryQuery = ref('')
 const methodFilters = ref(new Set<Method>())
-const activeRespCode = ref('')
 
 const sidebarWidth = ref(280)
 const SIDEBAR_MIN = 200, SIDEBAR_MAX = 400
@@ -296,28 +298,6 @@ const filteredEntries = computed(() => {
   })
 })
 
-const responseTabs = computed(() => {
-  const r = activeEntryDetail.value?.responses
-  if (!r) return []
-  return Object.keys(r).sort().map(code => {
-    const v = r[code]
-    const ok = code.startsWith('2')
-    return { code, ok, description: v.description || '', example: v.example }
-  })
-})
-const activeRespBody = computed(() => {
-  const tab = responseTabs.value.find(t => t.code === activeRespCode.value)
-  if (!tab) return ''
-  if (tab.example == null) return '(无示例)'
-  if (typeof tab.example === 'string') return tab.example
-  try { return JSON.stringify(tab.example, null, 2) } catch { return String(tab.example) }
-})
-watch(responseTabs, t => {
-  if (t.length && !t.find(x => x.code === activeRespCode.value)) {
-    activeRespCode.value = (t.find(x => x.ok) ?? t[0]).code
-  }
-})
-
 const docsSelectedCount = computed(() => selectedDocs.value.size)
 const hasSelection = computed(() => selectedDocs.value.size + selectedGroups.value.size > 0)
 const selectionLabel = computed(() => {
@@ -328,6 +308,25 @@ const selectionLabel = computed(() => {
   if (d) parts.push(`${d} 文档`)
   return '已选 ' + parts.join(' / ')
 })
+
+interface RespTab { code: string; ok: boolean; description: string; example: any }
+
+function entryRespTabs(detail: KnowledgeEntryDetail): RespTab[] {
+  const r = detail.responses
+  if (!r) return []
+  return Object.keys(r).sort().map(code => {
+    const v = r[code]
+    return { code, ok: code.startsWith('2'), description: v.description || '', example: v.example }
+  })
+}
+
+function entryRespBody(detail: KnowledgeEntryDetail, code: string): string {
+  const tab = entryRespTabs(detail).find(t => t.code === code)
+  if (!tab) return ''
+  if (tab.example == null) return '(无示例)'
+  if (typeof tab.example === 'string') return tab.example
+  try { return JSON.stringify(tab.example, null, 2) } catch { return String(tab.example) }
+}
 
 function toggleMethod(m: Method) {
   const s = new Set(methodFilters.value)
@@ -349,11 +348,14 @@ async function onDocClick(d: KnowledgeDocument) {
   if (selectMode.value) { toggleSelectDoc(d.id); return }
   activeGroupId.value = d.group_id
   activeDoc.value = d
-  activeEntryId.value = null
-  activeEntryDetail.value = null
 }
 
 watch(activeDoc, async d => {
+  expandedEntries.value = new Set()
+  entryDetails.value = {}
+  loadingEntries.value = new Set()
+  entryRespCodes.value = {}
+  entriesView.value = 'friendly'
   if (!d) { sections.value = []; entriesBySection.value = {}; return }
   loadingSections.value = true
   try {
@@ -369,27 +371,35 @@ watch(activeDoc, async d => {
   } finally { loadingSections.value = false }
 })
 
-async function selectEntry(e: KnowledgeEntry) {
-  if (activeEntryId.value === e.id) {
-    closeDetail()
+async function toggleEntry(e: KnowledgeEntry) {
+  const id = e.id
+  const next = new Set(expandedEntries.value)
+  if (next.has(id)) {
+    next.delete(id)
+    expandedEntries.value = next
     return
   }
-  activeEntryId.value = e.id
-  focusedIdx.value = filteredEntries.value.findIndex(x => x.id === e.id)
-  loadingDetail.value = true
-  try {
-    activeEntryDetail.value = await getEntry(e.id)
-    const t = responseTabs.value
-    activeRespCode.value = t.length ? (t.find(x => x.ok) ?? t[0]).code : ''
-  } catch (err: any) {
-    activeEntryDetail.value = null
-    alert(err?.message ?? '加载失败')
-  } finally { loadingDetail.value = false }
-}
-
-function closeDetail() {
-  activeEntryDetail.value = null
-  activeEntryId.value = null
+  next.add(id)
+  expandedEntries.value = next
+  focusedIdx.value = filteredEntries.value.findIndex(x => x.id === id)
+  if (!entryDetails.value[id]) {
+    const loading = new Set(loadingEntries.value)
+    loading.add(id)
+    loadingEntries.value = loading
+    try {
+      const detail = await getEntry(id)
+      entryDetails.value = { ...entryDetails.value, [id]: detail }
+      const tabs = entryRespTabs(detail)
+      entryRespCodes.value = {
+        ...entryRespCodes.value,
+        [id]: tabs.length ? (tabs.find(t => t.ok) ?? tabs[0]).code : ''
+      }
+    } finally {
+      const loading2 = new Set(loadingEntries.value)
+      loading2.delete(id)
+      loadingEntries.value = loading2
+    }
+  }
 }
 
 async function copy(text: string) {
@@ -397,9 +407,9 @@ async function copy(text: string) {
 }
 
 // resize
-let resizing: 'sidebar' | 'entries' | null = null
+let resizing: 'sidebar' | null = null
 let startX = 0, startW = 0
-function startResize(target: 'sidebar' | 'entries', e: MouseEvent) {
+function startResize(target: 'sidebar', e: MouseEvent) {
   resizing = target
   startX = e.clientX
   startW = target === 'sidebar' ? sidebarWidth.value : 0
@@ -447,7 +457,6 @@ function onKeydown(e: KeyboardEvent) {
     return
   }
   if (e.key === 'Escape') {
-    if (activeEntryDetail.value) { closeDetail(); return }
     if (isInput) (e.target as HTMLElement).blur()
     return
   }
@@ -461,7 +470,7 @@ function onKeydown(e: KeyboardEvent) {
     focusedIdx.value = Math.max(0, focusedIdx.value - 1)
   } else if (e.key === 'Enter' && focusedIdx.value >= 0) {
     e.preventDefault()
-    selectEntry(filteredEntries.value[focusedIdx.value])
+    toggleEntry(filteredEntries.value[focusedIdx.value])
   }
 }
 
