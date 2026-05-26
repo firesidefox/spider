@@ -871,6 +871,9 @@ GET    /version                          版本信息
 | **Phase 2.5** | AI Chat：Agent Engine、知识库系统、多模型配置、对话管理、终端风格 Chat UI、接入面 KB 绑定、运行状态栏、LLM Provider 管理、Skills 管理 |
 
 ### 10.2 规划中功能
+#### 需求池
+- 知识库 OpenAPI API 条目详情描述的样式调整
+- 知识库 Markdown 类型实现。
 
 #### Phase 3 — 告警与监控
 
