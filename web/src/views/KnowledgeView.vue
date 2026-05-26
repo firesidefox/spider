@@ -73,7 +73,7 @@
     </aside>
 
     <!-- Entries panel -->
-    <section v-if="activeDoc" class="kb-entries" :style="{ width: entriesWidth + 'px' }">
+    <section v-if="activeDoc" class="kb-entries">
       <div class="entries-toolbar">
         <input v-model="entryQuery" class="filter-input" placeholder="🔍 搜索 API 路径或描述..." />
         <div class="method-filters">
@@ -103,92 +103,6 @@
           </div>
           <div v-if="!filteredEntries.length" class="entries-empty">无匹配条目</div>
         </div>
-      </div>
-      <div class="resize-handle" @mousedown.prevent="startResize('entries', $event)"></div>
-    </section>
-
-    <!-- Detail panel -->
-    <section class="kb-detail">
-      <div v-if="activeEntryDetail" class="detail-content">
-        <div class="detail-topbar">
-          <button class="btn btn-sm" @click="closeDetail">← 返回 <kbd>Esc</kbd></button>
-          <span class="method-badge lg" :class="(activeEntryDetail.method || '').toLowerCase()">
-            {{ activeEntryDetail.method || '·' }}
-          </span>
-          <span class="detail-path">{{ activeEntryDetail.path || activeEntryDetail.title }}</span>
-          <button class="btn btn-sm" style="margin-left:auto"
-            @click="copy(activeEntryDetail.path || activeEntryDetail.title)">复制路径</button>
-        </div>
-        <!-- doc description block -->
-        <div class="doc-desc-block">
-          <div class="doc-desc-label">描述</div>
-          <textarea
-            v-model="docDescDraft"
-            class="doc-desc-textarea"
-            placeholder="暂无描述，点击生成或手动输入..."
-            rows="2"
-          />
-          <div class="doc-desc-actions">
-            <button class="btn-desc-gen" :disabled="docDescGenerating" @click="generateDocDescription">
-              {{ docDescGenerating ? '生成中...' : '✦ 生成' }}
-            </button>
-            <button class="btn-desc-save" @click="saveDocDescription">保存</button>
-            <span class="desc-char-hint">≤200字</span>
-          </div>
-        </div>
-        <div class="detail-body">
-          <section v-if="activeEntryDetail.description" class="detail-section">
-            <h4>描述</h4>
-            <p>{{ activeEntryDetail.description }}</p>
-          </section>
-          <section v-if="activeEntryDetail.parameters?.length" class="detail-section">
-            <h4>参数</h4>
-            <table class="param-table">
-              <thead><tr><th>名称</th><th>位置</th><th>类型</th><th>说明</th></tr></thead>
-              <tbody>
-                <tr v-for="p in activeEntryDetail.parameters" :key="p.name + (p.in || '')">
-                  <td>
-                    <code>{{ p.name }}</code>
-                    <span v-if="p.required" class="required-mark">*</span>
-                  </td>
-                  <td><span class="param-in">{{ p.in || '-' }}</span></td>
-                  <td><span class="param-type">{{ p.type || '-' }}</span></td>
-                  <td>{{ p.description || '-' }}</td>
-                </tr>
-              </tbody>
-            </table>
-          </section>
-          <section v-if="responseTabs.length" class="detail-section">
-            <h4>响应示例</h4>
-            <div class="resp-tabs">
-              <button v-for="t in responseTabs" :key="t.code"
-                class="resp-tab" :class="{ active: activeRespCode === t.code, ok: t.ok, err: !t.ok }"
-                @click="activeRespCode = t.code">
-                <span class="resp-icon">{{ t.ok ? '✓' : '✗' }}</span>
-                <span>{{ t.code }}</span>
-                <span class="resp-desc">{{ t.description }}</span>
-              </button>
-            </div>
-            <pre class="resp-body"><code>{{ activeRespBody }}</code></pre>
-          </section>
-          <section v-if="!activeEntryDetail.description && !activeEntryDetail.parameters?.length && !responseTabs.length"
-            class="detail-section">
-            <h4>原始内容</h4>
-            <pre class="resp-body"><code>{{ activeEntryDetail.content }}</code></pre>
-          </section>
-        </div>
-      </div>
-      <div v-else-if="loadingDetail" class="detail-empty">
-        <div class="detail-empty-icon">⏳</div>
-        <div>加载中...</div>
-      </div>
-      <div v-else-if="activeDoc" class="detail-empty">
-        <div class="detail-empty-icon">📋</div>
-        <div>选择一个条目查看详情</div>
-      </div>
-      <div v-else class="detail-empty">
-        <div class="detail-empty-icon">📚</div>
-        <div>选择文档浏览条目</div>
       </div>
     </section>
 
@@ -299,9 +213,7 @@ const methodFilters = ref(new Set<Method>())
 const activeRespCode = ref('')
 
 const sidebarWidth = ref(280)
-const entriesWidth = ref(400)
 const SIDEBAR_MIN = 200, SIDEBAR_MAX = 400
-const ENTRIES_MIN = 300, ENTRIES_MAX = 600
 
 const searchInputRef = ref<HTMLInputElement | null>(null)
 const fileInputRef = ref<HTMLInputElement | null>(null)
@@ -490,7 +402,7 @@ let startX = 0, startW = 0
 function startResize(target: 'sidebar' | 'entries', e: MouseEvent) {
   resizing = target
   startX = e.clientX
-  startW = target === 'sidebar' ? sidebarWidth.value : entriesWidth.value
+  startW = target === 'sidebar' ? sidebarWidth.value : 0
   window.addEventListener('mousemove', onResizeMove)
   window.addEventListener('mouseup', stopResize)
   document.body.style.cursor = 'col-resize'
@@ -501,8 +413,6 @@ function onResizeMove(e: MouseEvent) {
   const dx = e.clientX - startX
   if (resizing === 'sidebar') {
     sidebarWidth.value = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, startW + dx))
-  } else {
-    entriesWidth.value = Math.min(ENTRIES_MAX, Math.max(ENTRIES_MIN, startW + dx))
   }
 }
 function stopResize() {
@@ -513,7 +423,6 @@ function stopResize() {
   document.body.style.cursor = ''
   document.body.style.userSelect = ''
   localStorage.setItem('kb_sidebar_width', String(sidebarWidth.value))
-  localStorage.setItem('kb_entries_width', String(entriesWidth.value))
 }
 
 function saveFilters() {
@@ -522,8 +431,6 @@ function saveFilters() {
 function loadPersistence() {
   const sw = +(localStorage.getItem('kb_sidebar_width') ?? '0')
   if (sw) sidebarWidth.value = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, sw))
-  const ew = +(localStorage.getItem('kb_entries_width') ?? '0')
-  if (ew) entriesWidth.value = Math.min(ENTRIES_MAX, Math.max(ENTRIES_MIN, ew))
   try {
     const mf = JSON.parse(localStorage.getItem('kb_method_filters') ?? '[]')
     if (Array.isArray(mf)) methodFilters.value = new Set(mf)
@@ -830,8 +737,8 @@ onBeforeUnmount(() => {
 <style scoped>
 /* Entries panel */
 .kb-entries {
-  position: relative; flex-shrink: 0;
-  background: var(--panel); border-right: 1px solid var(--border);
+  position: relative; flex: 1; min-width: 0;
+  background: var(--panel);
   display: flex; flex-direction: column; overflow: hidden;
 }
 .entries-toolbar {
