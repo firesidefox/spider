@@ -1498,8 +1498,22 @@ onUnmounted(() => {
 .conv-item.active { color: var(--primary); background: var(--row-hover); }
 .conv-item-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .conv-item-input { flex: 1; background: var(--input-bg); border: 1px solid var(--primary); color: var(--text); font-family: 'SF Mono', monospace; font-size: 13px; padding: 2px 6px; border-radius: 4px; outline: none; }
-.conv-del { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 16px; padding: 0 4px; flex-shrink: 0; }
-.conv-del:hover { color: var(--red); }
+.conv-menu-wrap { position: relative; flex-shrink: 0; }
+.conv-more { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 16px; padding: 0 4px; opacity: 0; transition: opacity 0.1s; }
+.conv-item:hover .conv-more, .conv-item.active .conv-more { opacity: 1; }
+.conv-more:hover { color: var(--text); }
+.conv-menu { position: absolute; right: 0; top: 100%; background: var(--panel); border: 1px solid var(--border); border-radius: 6px; min-width: 140px; z-index: 100; padding: 4px 0; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+.conv-menu-item { display: block; width: 100%; background: none; border: none; color: var(--text); text-align: left; padding: 6px 14px; cursor: pointer; font-size: 12px; font-family: 'SF Mono', monospace; }
+.conv-menu-item:hover { background: var(--row-hover); }
+.conv-menu-item--danger { color: var(--red); }
+.conv-menu-divider { height: 1px; background: var(--border); margin: 2px 0; }
+.conv-checkbox { accent-color: var(--primary); width: 13px; height: 13px; flex-shrink: 0; margin-right: 4px; cursor: pointer; }
+.conv-item.batch-selected { background: var(--row-hover); }
+.batch-mode-label { color: var(--primary); font-size: 12px; font-family: 'SF Mono', monospace; }
+.batch-select-all { background: none; border: 1px solid var(--border); color: var(--text); padding: 2px 8px; border-radius: 4px; font-size: 11px; font-family: 'SF Mono', monospace; cursor: pointer; }
+.batch-select-all:hover { background: var(--row-hover); }
+.batch-cancel { background: none; border: none; color: var(--text-sub); padding: 2px 6px; font-size: 11px; font-family: 'SF Mono', monospace; cursor: pointer; }
+.batch-cancel:hover { color: var(--text); }
 .conv-processing-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--primary); flex-shrink: 0; margin-right: 4px; animation: pulse-dot 1.2s ease-in-out infinite; }
 @keyframes pulse-dot { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(0.7); } }
 
