@@ -35,8 +35,7 @@
       </div>
       <div v-if="selected.length" class="sidebar-bulk">
         已选 {{ selected.length }} 台
-        <button class="btn btn-sm" @click="bulkExecSelected">批量执行</button>
-        <button class="btn btn-sm btn-danger" @click="bulkDelete">批量删除</button>
+<button class="btn btn-sm btn-danger" @click="bulkDelete">批量删除</button>
       </div>
     </aside>
 
@@ -49,8 +48,7 @@
             <span v-if="hostSubtitle" class="detail-subtitle">{{ hostSubtitle }}</span>
           </div>
           <div class="detail-topbar-right">
-            <button class="btn btn-sm" @click="goExec(activeHost)">▶ 执行</button>
-            <button class="btn btn-sm btn-danger" @click="removeHost(activeHost)">删除</button>
+<button class="btn btn-sm btn-danger" @click="removeHost(activeHost)">删除</button>
           </div>
         </div>
         <div class="detail-body">
@@ -538,8 +536,6 @@ async function bulkDelete() {
   load()
 }
 
-function goExec(h: Host) { router.push({ path: '/exec', query: { host: h.id } }) }
-function bulkExecSelected() { router.push({ path: '/exec', query: { hosts: selected.value.join(',') } }) }
 
 async function saveKnowledgeSources(face: AccessFace, sources: Array<{type: string; id: number}>) {
   if (!activeHost.value) return

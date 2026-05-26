@@ -9,7 +9,6 @@ const router = createRouter({
     { path: '/', redirect: '/hosts' },
     { path: '/login', component: () => import('./views/LoginView.vue') },
     { path: '/hosts',    component: () => import('./views/HostsView.vue') },
-    { path: '/exec',     component: () => import('./views/ExecView.vue') },
     { path: '/chat',     component: () => import('./views/ChatView.vue') },
     { path: '/chat/:id', component: () => import('./views/ChatView.vue') },
     { path: '/install',  component: () => import('./views/InstallView.vue') },

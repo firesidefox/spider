@@ -4,8 +4,7 @@
       <div class="nav-brand">🕷 Spider</div>
       <nav class="nav-links">
         <RouterLink to="/hosts" class="nav-item">主机管理</RouterLink>
-        <RouterLink to="/exec" class="nav-item">命令执行</RouterLink>
-        <RouterLink to="/chat" class="nav-item">智能运维</RouterLink>
+<RouterLink to="/chat" class="nav-item">智能运维</RouterLink>
         <RouterLink to="/knowledge" class="nav-item">知识库</RouterLink>
         <RouterLink to="/topology" class="nav-item">网络拓扑</RouterLink>
         <RouterLink to="/tasks" class="nav-item">任务管理</RouterLink>
@@ -534,8 +533,6 @@ textarea.input { resize: vertical; }
 .code { font-family: 'SF Mono', Consolas, monospace; font-size: 13px; }
 
 .truncate { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-/* ── 命令执行布局（已移至 ExecView scoped） ── */
 
 /* ── 设置 ── */
 .settings-card {
