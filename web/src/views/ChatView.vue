@@ -551,6 +551,7 @@ async function selectConversation(id: string) {
   clearPollTimer(id)
   const data = await getConversation(id)
   activeConvId.value = id
+  if (transitionState.value !== 'chat') transitionState.value = 'chat'
   const taskMap = new Map<number, Todo>()
   for (const t of data.todo_tasks ?? []) taskMap.set(t.id, t)
   todoTasksMap.value[id] = taskMap
@@ -602,6 +603,7 @@ async function createNewConversation() {
 
 function goNewPage() {
   activeConvId.value = null
+  transitionState.value = 'welcome'
   router.replace('/chat')
 }
 
@@ -856,6 +858,7 @@ async function send(overrideText?: string) {
 
   if (!activeConvId.value) {
     startBorderTrace()
+    setTimeout(triggerLayoutTransition, 500)
     await createNewConversation()
   }
 
@@ -973,6 +976,14 @@ function startBorderTrace() {
 
   traceAnimating.value = true
   traceRafId.value = requestAnimationFrame(step)
+}
+
+function triggerLayoutTransition() {
+  if (transitionState.value !== 'welcome') return
+  transitionState.value = 'transitioning'
+  setTimeout(() => {
+    transitionState.value = 'chat'
+  }, 420)
 }
 
 function flushQueue() {
@@ -1321,6 +1332,7 @@ onBeforeRouteUpdate(async (to) => {
     await selectConversation(newId)
   } else if (!newId) {
     activeConvId.value = null
+    transitionState.value = 'welcome'
   }
 })
 
@@ -1392,7 +1404,13 @@ onUnmounted(() => {
     </div>
 
     <!-- Chat main -->
-    <div class="chat-main" :class="{ 'welcome-mode': !activeConvId }" @click="showExportMenu = false; showModeDropdown = false; closeConvMenu()">
+    <div class="chat-main"
+         :class="{
+           'welcome-mode': transitionState === 'welcome',
+           'welcome-transitioning': transitionState === 'transitioning',
+           'welcome-chat': transitionState === 'chat',
+         }"
+         @click="showExportMenu = false; showModeDropdown = false; closeConvMenu()">
       <div v-if="activeConvId" class="chat-header">
         <button v-if="!sidebarOpen" class="sidebar-toggle" @click="toggleSidebar">≡</button>
         <button v-if="!sidebarOpen" class="header-new-btn" @click="goNewPage()">+</button>
