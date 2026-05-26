@@ -538,6 +538,10 @@ function onKeydown(e: KeyboardEvent) {
     return
   }
   if (e.key === 'Escape') {
+    if (expandedEntries.value.size > 0) {
+      expandedEntries.value = new Set()
+      return
+    }
     if (isInput) (e.target as HTMLElement).blur()
     return
   }
