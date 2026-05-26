@@ -1245,7 +1245,7 @@ onUnmounted(() => {
           <button class="batch-cancel" @click="exitBatchMode">取消</button>
         </template>
       </div>
-      <div class="sidebar-body">
+      <div class="sidebar-body" @click="closeConvMenu()">
         <div v-for="c in conversations" :key="c.id" class="conv-item"
              :class="{ active: c.id === activeConvId, 'batch-selected': batchMode && selectedConvIds.has(c.id) }"
              @click="batchMode ? toggleSelectConv(c.id) : selectConversation(c.id)">
@@ -1282,7 +1282,7 @@ onUnmounted(() => {
     </div>
 
     <!-- Chat main -->
-    <div class="chat-main" @click="showExportMenu = false; showModeDropdown = false">
+    <div class="chat-main" @click="showExportMenu = false; showModeDropdown = false; closeConvMenu()">
       <div class="chat-header">
         <button v-if="!sidebarOpen" class="sidebar-toggle" @click="toggleSidebar">≡</button>
         <button v-if="!sidebarOpen" class="header-new-btn" @click="createNewConversation()">+</button>
