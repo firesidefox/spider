@@ -103,16 +103,79 @@
           <div v-else-if="!sections.length && !flatEntries.length" class="entries-empty">无条目</div>
           <div v-else class="entries-list">
             <div v-for="(entry, idx) in filteredEntries" :key="entry.id"
-              class="entry-card" :class="{ active: expandedEntries.has(entry.id), focused: focusedIdx === idx }"
+              class="entry-card"
+              :class="{
+                expanded: expandedEntries.has(entry.id),
+                focused: focusedIdx === idx
+              }"
               @click="toggleEntry(entry)">
+
+              <!-- Card header: always visible -->
               <div class="entry-row">
                 <span class="method-badge" :class="entryMethod(entry).toLowerCase()">
                   {{ entryMethod(entry) || '·' }}
                 </span>
                 <span class="entry-path">{{ entryPath(entry) }}</span>
-                <button class="copy-btn" :title="'复制 ' + entryPath(entry)" @click.stop="copy(entryPath(entry))">📋</button>
+                <button class="copy-btn" :title="'复制 ' + entryPath(entry)"
+                  @click.stop="copy(entryPath(entry))">📋</button>
               </div>
               <div class="entry-summary">{{ entry.summary }}</div>
+
+              <!-- Inline detail: visible when expanded -->
+              <div v-if="expandedEntries.has(entry.id)" class="inline-detail" @click.stop>
+
+                <div v-if="loadingEntries.has(entry.id)" class="inline-loading">加载中...</div>
+
+                <template v-else-if="entryDetails[entry.id]">
+                  <div v-if="entryDetails[entry.id].description" class="inline-section">
+                    <h5>描述</h5>
+                    <p>{{ entryDetails[entry.id].description }}</p>
+                  </div>
+
+                  <div v-if="entryDetails[entry.id].parameters?.length" class="inline-section">
+                    <h5>参数</h5>
+                    <table class="inline-param-table">
+                      <thead><tr><th>名称</th><th>位置</th><th>类型</th><th>说明</th></tr></thead>
+                      <tbody>
+                        <tr v-for="p in entryDetails[entry.id].parameters" :key="p.name + (p.in || '')">
+                          <td>
+                            <code>{{ p.name }}</code>
+                            <span v-if="p.required" class="required-mark">*</span>
+                          </td>
+                          <td><span class="param-in">{{ p.in || '-' }}</span></td>
+                          <td><span class="param-type">{{ p.type || '-' }}</span></td>
+                          <td>{{ p.description || '-' }}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div v-if="entryRespTabs(entryDetails[entry.id]).length" class="inline-section">
+                    <h5>响应示例</h5>
+                    <div class="resp-tabs">
+                      <button v-for="t in entryRespTabs(entryDetails[entry.id])" :key="t.code"
+                        class="resp-tab"
+                        :class="{ active: entryRespCodes[entry.id] === t.code, ok: t.ok, err: !t.ok }"
+                        @click.stop="entryRespCodes = { ...entryRespCodes, [entry.id]: t.code }">
+                        <span class="resp-icon">{{ t.ok ? '✓' : '✗' }}</span>
+                        <span>{{ t.code }}</span>
+                        <span class="resp-desc">{{ t.description }}</span>
+                      </button>
+                    </div>
+                    <pre class="resp-body"><code>{{ entryRespBody(entryDetails[entry.id], entryRespCodes[entry.id]) }}</code></pre>
+                  </div>
+
+                  <div v-if="!entryDetails[entry.id].description
+                             && !entryDetails[entry.id].parameters?.length
+                             && !entryRespTabs(entryDetails[entry.id]).length"
+                       class="inline-section">
+                    <h5>原始内容</h5>
+                    <pre class="resp-body"><code>{{ entryDetails[entry.id].content }}</code></pre>
+                  </div>
+                </template>
+
+                <div class="collapse-btn" @click.stop="toggleEntry(entry)">▲ 收起</div>
+              </div>
             </div>
             <div v-if="!filteredEntries.length" class="entries-empty">无匹配条目</div>
           </div>
@@ -967,6 +1030,71 @@ onBeforeUnmount(() => {
 .view-tab.active { color: var(--primary); border-bottom-color: var(--primary); }
 .raw-source {
   flex: 1; margin: 0; white-space: pre-wrap; word-break: break-all;
-  overflow-y: auto;
 }
+
+/* Inline detail */
+.entry-card.expanded {
+  border-color: var(--primary);
+  background: rgba(99,102,241,0.04);
+}
+.inline-detail {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.inline-loading {
+  padding: 12px 0;
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+}
+.inline-section {
+  margin-bottom: 14px;
+}
+.inline-section h5 {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-sub);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+.inline-section p {
+  font-size: 12px;
+  color: var(--text);
+  line-height: 1.6;
+  margin: 0;
+}
+.inline-param-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.inline-param-table th, .inline-param-table td {
+  padding: 6px 8px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+.inline-param-table th {
+  font-weight: 600;
+  color: var(--text-sub);
+  background: var(--surface);
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+.collapse-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--muted);
+  cursor: pointer;
+  gap: 4px;
+}
+.collapse-btn:hover { color: var(--text-sub); }
 </style>
