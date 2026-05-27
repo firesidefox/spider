@@ -3,10 +3,10 @@
     <header v-if="route.path !== '/login'" class="nav">
       <div class="nav-brand">🕷 Spider</div>
       <nav class="nav-links">
+        <RouterLink to="/chat" class="nav-item">智能运维</RouterLink>
         <RouterLink to="/hosts" class="nav-item">主机管理</RouterLink>
-<RouterLink to="/chat" class="nav-item">智能运维</RouterLink>
-        <RouterLink to="/knowledge" class="nav-item">知识库</RouterLink>
         <RouterLink to="/topology" class="nav-item">网络拓扑</RouterLink>
+        <RouterLink to="/knowledge" class="nav-item">知识库</RouterLink>
         <RouterLink to="/tasks" class="nav-item">任务管理</RouterLink>
         <RouterLink to="/setting" class="nav-item">系统设置</RouterLink>
       </nav>

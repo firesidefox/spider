@@ -6,7 +6,7 @@ import { useAuth } from './composables/useAuth'
 const router = createRouter({
   history: createWebHistory(),
   routes: [
-    { path: '/', redirect: '/hosts' },
+    { path: '/', redirect: '/chat' },
     { path: '/login', component: () => import('./views/LoginView.vue') },
     { path: '/hosts',    component: () => import('./views/HostsView.vue') },
     { path: '/chat',     component: () => import('./views/ChatView.vue') },
