@@ -95,7 +95,12 @@
       </div>
       <div class="entries-body">
         <!-- 原文视图 -->
-        <pre v-if="entriesView === 'raw'" class="resp-body raw-source">{{ activeDoc?.raw_content }}</pre>
+        <div v-if="entriesView === 'raw'" class="raw-source">
+          <div v-for="(line, i) in rawLines" :key="i" class="raw-line">
+            <span class="raw-ln">{{ i + 1 }}</span>
+            <span class="raw-text">{{ line }}</span>
+          </div>
+        </div>
 
         <!-- 友好视图 -->
         <template v-else>
@@ -173,6 +178,66 @@
                     <pre class="resp-body"><code>{{ entryDetails[entry.id].content }}</code></pre>
                   </div>
                 </template>
+
+                <!-- Try panel -->
+                <div class="try-panel">
+                  <div class="try-header" @click.stop="toggleTry(entry.id)">
+                    <span class="try-label">试一试</span>
+                    <span class="try-chevron">{{ tryOpen.has(entry.id) ? '▲' : '▼' }}</span>
+                  </div>
+
+                  <div v-if="tryOpen.has(entry.id)" class="try-body" @click.stop>
+                    <div v-if="!prometheusSources.length" class="try-empty">
+                      暂无数据源，请先在系统设置中添加 Prometheus 数据源
+                    </div>
+
+                    <template v-else>
+                      <div class="try-row">
+                        <label class="try-lbl">数据源</label>
+                        <select class="try-select"
+                          :value="trySourceId[entry.id] ?? ''"
+                          @change="trySourceId = { ...trySourceId, [entry.id]: ($event.target as HTMLSelectElement).value }">
+                          <option value="" disabled>选择数据源…</option>
+                          <option v-for="s in prometheusSources" :key="s.id" :value="s.id">
+                            {{ s.name }}
+                          </option>
+                        </select>
+                      </div>
+
+                      <div v-if="entryDetails[entry.id]?.parameters?.length"
+                           class="try-params">
+                        <div v-for="p in entryDetails[entry.id].parameters" :key="p.name"
+                             class="try-row">
+                          <label class="try-lbl try-lbl-mono">{{ p.name }}<span v-if="p.required" class="required-mark">*</span></label>
+                          <input class="try-input"
+                            :placeholder="p.description || p.type || ''"
+                            :value="tryParams[entry.id]?.[p.name] ?? ''"
+                            @input="setTryParam(entry.id, p.name, ($event.target as HTMLInputElement).value)" />
+                        </div>
+                      </div>
+
+                      <div class="try-actions">
+                        <button class="btn btn-primary btn-sm"
+                          :disabled="!trySourceId[entry.id] || tryLoading.has(entry.id)"
+                          @click.stop="sendTry(entry)">
+                          {{ tryLoading.has(entry.id) ? '发送中…' : '发送' }}
+                        </button>
+                      </div>
+
+                      <div v-if="tryError[entry.id]" class="try-error">{{ tryError[entry.id] }}</div>
+
+                      <div v-if="tryResult[entry.id]" class="try-result">
+                        <div class="try-result-meta">
+                          <span :class="tryResult[entry.id]!.status < 400 ? 'try-status-ok' : 'try-status-err'">
+                            {{ tryResult[entry.id]!.status }}
+                          </span>
+                          <span class="try-latency">{{ tryResult[entry.id]!.latency_ms }}ms</span>
+                        </div>
+                        <pre class="resp-body"><code>{{ formatTryBody(tryResult[entry.id]!.body) }}</code></pre>
+                      </div>
+                    </template>
+                  </div>
+                </div>
 
                 <div class="collapse-btn" @click.stop="toggleEntry(entry)">▲ 收起</div>
               </div>
@@ -263,9 +328,15 @@ import {
   listGroups, createGroup, deleteGroup, deleteGroups,
   listDocuments, getSections, getEntries, getEntry,
   deleteDocuments, importDocument, moveDocuments, reindexDocuments,
+  tryEntry,
   type KnowledgeGroup, type KnowledgeDocument, type KnowledgeSection,
   type KnowledgeEntry, type KnowledgeEntryDetail,
+  type TryEntryRequest, type TryEntryResult,
 } from '../api/knowledge'
+import {
+  listPrometheusSources,
+  type PrometheusSource,
+} from '../api/prometheus'
 
 const METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'] as const
 type Method = typeof METHODS[number]
@@ -284,6 +355,13 @@ const focusedIdx = ref(-1)
 const expandedEntries = ref(new Set<number>())
 const entryDetails = ref<Record<number, KnowledgeEntryDetail>>({})
 const loadingEntries = ref(new Set<number>())
+const prometheusSources = ref<PrometheusSource[]>([])
+const tryOpen = ref(new Set<number>())
+const trySourceId = ref<Record<number, string>>({})
+const tryParams = ref<Record<number, Record<string, string>>>({})
+const tryResult = ref<Record<number, TryEntryResult | null>>({})
+const tryLoading = ref(new Set<number>())
+const tryError = ref<Record<number, string>>({})
 const entryRespCodes = ref<Record<number, string>>({})
 const entriesView = ref<'friendly' | 'raw'>('friendly')
 
@@ -357,6 +435,8 @@ function entryPath(e: KnowledgeEntry): string {
   const sp = e.title.indexOf(' ')
   return sp > 0 ? e.title.slice(sp + 1) : e.title
 }
+
+const rawLines = computed(() => (activeDoc.value?.raw_content ?? '').split('\n'))
 
 const filteredEntries = computed(() => {
   const q = entryQuery.value.trim().toLowerCase()
@@ -483,6 +563,44 @@ async function toggleEntry(e: KnowledgeEntry) {
   }
 }
 
+function toggleTry(entryId: number) {
+  const next = new Set(tryOpen.value)
+  next.has(entryId) ? next.delete(entryId) : next.add(entryId)
+  tryOpen.value = next
+}
+
+function setTryParam(entryId: number, key: string, value: string) {
+  tryParams.value = {
+    ...tryParams.value,
+    [entryId]: { ...(tryParams.value[entryId] ?? {}), [key]: value },
+  }
+}
+
+async function sendTry(entry: KnowledgeEntry) {
+  const id = entry.id
+  const sourceId = trySourceId.value[id]
+  if (!sourceId) return
+  const loading = new Set(tryLoading.value)
+  loading.add(id)
+  tryLoading.value = loading
+  tryError.value = { ...tryError.value, [id]: '' }
+  tryResult.value = { ...tryResult.value, [id]: null }
+  try {
+    const req: TryEntryRequest = {
+      source_id: sourceId,
+      params: tryParams.value[id] ?? {},
+    }
+    const result = await tryEntry(id, req)
+    tryResult.value = { ...tryResult.value, [id]: result }
+  } catch (e: any) {
+    tryError.value = { ...tryError.value, [id]: e.message ?? '请求失败' }
+  } finally {
+    const l = new Set(tryLoading.value)
+    l.delete(id)
+    tryLoading.value = l
+  }
+}
+
 async function copy(text: string) {
   try { await navigator.clipboard.writeText(text) } catch {}
 }
@@ -567,6 +685,7 @@ async function loadDocs(groupID: number) {
 
 async function init() {
   loadPersistence()
+  listPrometheusSources().then(list => { prometheusSources.value = list }).catch(() => {})
   await loadGroups()
   await Promise.all(groups.value.map(g => loadDocs(g.id)))
   if (groups.value.length) {
@@ -712,6 +831,10 @@ function formatDate(s?: string): string {
   const h = String(d.getHours()).padStart(2, '0')
   const mi = String(d.getMinutes()).padStart(2, '0')
   return `${m}/${day} ${h}:${mi}`
+}
+
+function formatTryBody(body: string): string {
+  try { return JSON.stringify(JSON.parse(body), null, 2) } catch { return body }
 }
 
 onMounted(() => {
@@ -1037,7 +1160,20 @@ onBeforeUnmount(() => {
 .view-tab:hover { color: var(--text-sub); }
 .view-tab.active { color: var(--primary); border-bottom-color: var(--primary); }
 .raw-source {
-  flex: 1; margin: 0; white-space: pre-wrap; word-break: break-all;
+  flex: 1; margin: 0; font-family: ui-monospace, monospace; font-size: 12px;
+  line-height: 1.6; overflow-x: auto;
+}
+.raw-line {
+  display: flex; min-width: 0;
+}
+.raw-line:hover { background: rgba(99,102,241,0.06); }
+.raw-ln {
+  flex-shrink: 0; width: 3.5em; padding: 0 10px 0 0;
+  text-align: right; color: var(--muted); user-select: none;
+  font-size: 11px; line-height: 1.6;
+}
+.raw-text {
+  flex: 1; white-space: pre; color: #e2e8f0; min-width: 0;
 }
 
 /* Inline detail */
@@ -1105,4 +1241,46 @@ onBeforeUnmount(() => {
   gap: 4px;
 }
 .collapse-btn:hover { color: var(--text-sub); }
+
+/* Try panel */
+.try-panel {
+  margin-top: 12px;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+.try-header {
+  display: flex; align-items: center; justify-content: space-between;
+  cursor: pointer; padding: 2px 0;
+}
+.try-label {
+  font-size: 11px; font-weight: 700; color: var(--primary);
+  letter-spacing: .5px; text-transform: uppercase;
+}
+.try-chevron { font-size: 10px; color: var(--muted); }
+.try-body { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+.try-empty { font-size: 12px; color: var(--muted); padding: 4px 0; }
+.try-row { display: flex; align-items: center; gap: 8px; }
+.try-lbl {
+  font-size: 11px; color: var(--text-sub); white-space: nowrap;
+  min-width: 60px; flex-shrink: 0;
+}
+.try-lbl-mono { font-family: ui-monospace, monospace; }
+.try-select, .try-input {
+  flex: 1; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 4px; padding: 5px 8px; font-size: 12px; color: var(--text);
+}
+.try-input { font-family: ui-monospace, monospace; }
+.try-params { display: flex; flex-direction: column; gap: 6px; }
+.try-actions { display: flex; justify-content: flex-end; }
+.try-error { font-size: 12px; color: #dc2626; }
+.try-result-meta {
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 10px; background: var(--surface);
+  border: 1px solid var(--border); border-radius: 4px 4px 0 0;
+  border-bottom: none; font-size: 11px; font-weight: 700;
+}
+.try-status-ok { color: #10b981; }
+.try-status-err { color: #dc2626; }
+.try-latency { color: var(--muted); font-weight: 400; }
+.try-result .resp-body { border-radius: 0 0 4px 4px; margin-top: 0; }
 </style>
