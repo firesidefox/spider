@@ -180,7 +180,7 @@
                 </template>
 
                 <!-- Try panel -->
-                <div class="try-panel">
+                <div v-if="entryDetails[entry.id]" class="try-panel">
                   <div class="try-header" @click.stop="toggleTry(entry.id)">
                     <span class="try-label">试一试</span>
                     <span class="try-chevron">{{ tryOpen.has(entry.id) ? '▲' : '▼' }}</span>
@@ -512,6 +512,12 @@ watch(activeDoc, async d => {
   entryDetails.value = {}
   loadingEntries.value = new Set()
   entryRespCodes.value = {}
+  tryOpen.value = new Set()
+  trySourceId.value = {}
+  tryParams.value = {}
+  tryResult.value = {}
+  tryLoading.value = new Set()
+  tryError.value = {}
   entriesView.value = 'friendly'
   if (!d) { sections.value = []; entriesBySection.value = {}; return }
   loadingSections.value = true
