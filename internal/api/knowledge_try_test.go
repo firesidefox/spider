@@ -10,6 +10,7 @@ import (
 
 	"github.com/spiderai/spider/internal/knowledge"
 	"github.com/spiderai/spider/internal/models"
+	"github.com/spiderai/spider/internal/store"
 )
 
 // mockPrometheusSourceStore implements the prometheusSourceStore interface for tests.
@@ -20,7 +21,7 @@ type mockPrometheusSourceStore struct {
 func (m *mockPrometheusSourceStore) GetByID(id string) (*models.PrometheusSource, error) {
 	s, ok := m.sources[id]
 	if !ok {
-		return nil, nil
+		return nil, store.ErrNotFound
 	}
 	return s, nil
 }

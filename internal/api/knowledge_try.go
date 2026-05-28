@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"github.com/spiderai/spider/internal/models"
+	"github.com/spiderai/spider/internal/store"
 )
 
 type prometheusSourceStore interface {
@@ -61,12 +63,12 @@ func tryKnowledgeEntry(ds docStore, ss prometheusSourceStore, w http.ResponseWri
 	_, path := splitMethodPath(entry.Title)
 
 	src, err := ss.GetByID(req.SourceID)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+	if errors.Is(err, store.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "source not found")
 		return
 	}
-	if src == nil {
-		writeError(w, http.StatusNotFound, "source not found")
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -134,7 +136,7 @@ func doProxyRequest(ctx context.Context, src *models.PrometheusSource, pwd, tok,
 	defer resp.Body.Close()
 	latency := time.Since(start).Milliseconds()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 10<<20)) // 10 MB
 	if err != nil {
 		return nil, err
 	}
