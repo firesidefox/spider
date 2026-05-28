@@ -588,10 +588,13 @@ func NewRouter(app *mcppkg.App) http.Handler {
 			return
 		}
 		// POST /{id}/try
-		if r.Method == http.MethodPost && strings.HasSuffix(rest, "/try") {
-			id := strings.TrimSuffix(rest, "/try")
-			tryKnowledgeEntry(app.KnowledgeStore, app.PrometheusSourceStore, w, r, id)
-			return
+		if r.Method == http.MethodPost {
+			if id, ok := strings.CutSuffix(rest, "/try"); ok {
+				operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					tryKnowledgeEntry(app.KnowledgeStore, app.PrometheusSourceStore, w, r, id)
+				})).ServeHTTP(w, r)
+				return
+			}
 		}
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	})
