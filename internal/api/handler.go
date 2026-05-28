@@ -578,13 +578,19 @@ func NewRouter(app *mcppkg.App) http.Handler {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	})
 	mux.HandleFunc("/api/v1/knowledge-entries/", func(w http.ResponseWriter, r *http.Request) {
+		rest := strings.TrimPrefix(r.URL.Path, "/api/v1/knowledge-entries/")
 		if r.Method == http.MethodGet {
-			rest := strings.TrimPrefix(r.URL.Path, "/api/v1/knowledge-entries/")
 			if rest == "" {
 				http.NotFound(w, r)
 				return
 			}
 			getKnowledgeEntry(app.KnowledgeStore, w, r, rest)
+			return
+		}
+		// POST /{id}/try
+		if r.Method == http.MethodPost && strings.HasSuffix(rest, "/try") {
+			id := strings.TrimSuffix(rest, "/try")
+			tryKnowledgeEntry(app.KnowledgeStore, app.PrometheusSourceStore, w, r, id)
 			return
 		}
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
