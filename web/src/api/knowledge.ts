@@ -188,3 +188,23 @@ export async function importDocument(groupID: number, file: File): Promise<Impor
   })
   return handleResponse<ImportResult>(r)
 }
+
+export interface TryEntryRequest {
+  source_id: string
+  params: Record<string, string>
+}
+
+export interface TryEntryResult {
+  status: number
+  body: string
+  latency_ms: number
+}
+
+export async function tryEntry(entryID: number, req: TryEntryRequest): Promise<TryEntryResult> {
+  const r = await fetch(`${BASE}/knowledge-entries/${entryID}/try`, {
+    method: 'POST',
+    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+    body: JSON.stringify(req),
+  })
+  return handleResponse<TryEntryResult>(r)
+}
