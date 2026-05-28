@@ -172,7 +172,12 @@ func chatSendMessage(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id
 	a := factory.NewAgent(id, req.HostIDs)
 	waiter := agent.NewConfirmationWaiter()
 	app.StoreChatWaiter(id, waiter)
-	defer app.RemoveChatWaiter(id)
+	goroutineLaunched := false
+	defer func() {
+		if !goroutineLaunched {
+			app.RemoveChatWaiter(id)
+		}
+	}()
 
 	content := req.Content
 	if rs, rsErr := ragStore(app); rsErr == nil {
@@ -207,19 +212,22 @@ func chatSendMessage(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id
 	}
 	ctx, cancel := context.WithCancel(parent)
 	app.StoreConvCancel(id, cancel)
-	defer func() {
-		cancel()
-		app.RemoveConvCancel(id)
-	}()
 	events, err := a.Run(ctx, id, content, waiter)
 	if err != nil {
+		cancel()
+		app.RemoveConvCancel(id)
+		app.RemoveChatWaiter(id)
 		app.ConvStore.SetStatus(id, "idle") //nolint:errcheck
 		writeError(w, 500, err.Error())
 		return
 	}
 
+	goroutineLaunched = true
 	go func() {
 		defer func() {
+			cancel()
+			app.RemoveConvCancel(id)
+			app.RemoveChatWaiter(id)
 			app.ClearSSEBuffer(id)
 			app.ConvStore.SetStatus(id, "idle") //nolint:errcheck
 		}()
@@ -267,6 +275,7 @@ func chatCancel(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id stri
 		return
 	}
 	app.CancelConv(id)
+	app.RemoveChatWaiter(id)
 	app.ConvStore.SetStatus(id, "idle") //nolint:errcheck
 	writeJSON(w, http.StatusOK, map[string]string{"status": "cancelled"})
 }

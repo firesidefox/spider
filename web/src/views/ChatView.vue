@@ -98,6 +98,7 @@ function getOrInitMessages(convId: string): DisplayMessage[] {
 }
 
 const toolCallsCache = new Map<string, any[]>()
+const convLastMsgId = new Map<string, string>()  // last server message ID per conv, for SSE cursor
 
 function buildDisplayMessages(msgs: ChatMsg[] | null | undefined): DisplayMessage[] {
   if (!msgs) return []
@@ -586,8 +587,9 @@ async function selectConversation(id: string) {
 
   // Subscribe to SSE first. pollUntilIdle is a fallback only — it will be
   // cancelled when the done event arrives via SSE.
+  const lastMsg = data.messages[data.messages.length - 1]
+  if (lastMsg?.id) convLastMsgId.set(id, lastMsg.id)
   if (!convSubscriptions.has(id)) {
-    const lastMsg = data.messages[data.messages.length - 1]
     const unsub = subscribeConversation(id, (event) => handleConvEvent(id, event), lastMsg?.id)
     convSubscriptions.set(id, unsub)
   }
@@ -671,6 +673,7 @@ function handleConvEvent(convId: string, event: ChatEvent) {
       convMsgs.push(...buildDisplayMessages([msg]))
       if (activeConvId.value === convId) nextTick(() => scrollToBottom())
     }
+    if (msg.id) convLastMsgId.set(convId, msg.id)
     return
   }
 
@@ -771,7 +774,7 @@ function handleConvEvent(convId: string, event: ChatEvent) {
       }
       break
     }
-    case 'done':
+    case 'done': {
       clearRetryState()
       clearPollTimer(convId)
       last.isStreaming = false
@@ -787,7 +790,17 @@ function handleConvEvent(convId: string, event: ChatEvent) {
       loadConversations()
       delete todoTasksMap.value[convId]
       clearAllTimers()
+      // Update cursor to last known message so next send() subscription starts correctly.
+      // Covers turns with no text output (pure tool-use) and error turns where no message events fired.
+      const lastKnown = convMsgs[convMsgs.length - 1]
+      if (lastKnown?.id) convLastMsgId.set(convId, lastKnown.id)
+      // Close SSE — server closes connection after done; prevent browser reconnect loop
+      {
+        const unsub = convSubscriptions.get(convId)
+        if (unsub) { unsub(); convSubscriptions.delete(convId) }
+      }
       break
+    }
     case 'todo_update': {
       const task = event.content as Todo
       if (!todoTasksMap.value[convId]) todoTasksMap.value[convId] = new Map()
@@ -882,7 +895,8 @@ async function send(overrideText?: string) {
   const convMsgs = getOrInitMessages(convId)
 
   if (!convSubscriptions.has(convId)) {
-    const unsub = subscribeConversation(convId, (event) => handleConvEvent(convId, event))
+    const lastId = convLastMsgId.get(convId)
+    const unsub = subscribeConversation(convId, (event) => handleConvEvent(convId, event), lastId)
     convSubscriptions.set(convId, unsub)
   }
 
@@ -1018,6 +1032,7 @@ async function handleDeleteConversation(id: string) {
   // 清理该会话的 tool_calls 缓存
   const msgs = messagesMap.value[id] || []
   for (const m of msgs) toolCallsCache.delete(m.id)
+  convLastMsgId.delete(id)
   if (activeConvId.value === id) {
     activeConvId.value = null
     transitionState.value = 'welcome'
@@ -1605,13 +1620,6 @@ onUnmounted(() => {
 }
 
 /* Messages fade-in after welcome exits */
-.chat-main.welcome-chat .chat-messages {
-  animation: messages-fadein 0.6s ease 0s both;
-}
-@keyframes messages-fadein {
-  from { opacity: 0; transform: translateY(12px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
 
 .chat-header { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-bottom: 1px solid var(--border); background: var(--panel); }
 .header-new-btn { background: none; border: 1px solid var(--border); color: var(--text); width: 28px; height: 28px; border-radius: 4px; cursor: pointer; font-size: 16px; flex-shrink: 0; }
