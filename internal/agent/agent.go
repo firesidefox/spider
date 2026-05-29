@@ -167,7 +167,7 @@ func (w *ConfirmationWaiter) Resolve(requestID string, approved bool) {
 	}
 }
 
-func (a *Agent) Run(ctx context.Context, conversationID string, userMessage string, waiter *ConfirmationWaiter) (<-chan Event, error) {
+func (a *Agent) Run(ctx context.Context, conversationID string, userMessage string, waiter *ConfirmationWaiter, injectCh <-chan string) (<-chan Event, error) {
 	events := make(chan Event, 64)
 	go func() {
 		defer close(events)
@@ -319,6 +319,22 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 				if assistantText != "" {
 					a.msgStore.Save(conversationID, "assistant", assistantText, "")
 				}
+				// Drain queued user messages before deciding to exit.
+				// If any arrived, continue the loop so LLM can respond to them.
+				if parts := drainInjectCh(injectCh); len(parts) > 0 {
+					merged := strings.Join(parts, "\n\n")
+					a.msgStore.Save(conversationID, "user", merged, "")
+					if assistantText != "" {
+						history = append(history, llm.Message{Role: llm.RoleAssistant, Content: assistantText})
+					}
+					history = append(history, llm.Message{Role: llm.RoleUser, Content: merged})
+					events <- Event{Type: EventTurnUsage, Content: map[string]any{
+						"input_tokens":  usage.InputTokens,
+						"output_tokens": usage.OutputTokens,
+					}}
+					events <- Event{Type: EventMidTurnUserMessage, Content: map[string]any{"text": merged}}
+					continue
+				}
 				log.Debug().Int("turn", turn).Int64("duration_ms", time.Since(turnStart).Milliseconds()).Int("input_tokens", usage.InputTokens).Int("output_tokens", usage.OutputTokens).Str("response", assistantText).Msg("turn done")
 				log.Info().Int("turn", turn).Str("reason", "no_tool_calls").Msg("agent done")
 				events <- Event{Type: EventTurnUsage, Content: map[string]any{
@@ -361,6 +377,12 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 			a.msgStore.Save(conversationID, "assistant", assistantText, string(tcJSON))
 			for _, tr := range pendingToolResults {
 				a.msgStore.Save(conversationID, "tool_result", tr, "")
+			}
+			if parts := drainInjectCh(injectCh); len(parts) > 0 {
+				merged := strings.Join(parts, "\n\n")
+				a.msgStore.Save(conversationID, "user", merged, "")
+				history = append(history, llm.Message{Role: llm.RoleUser, Content: merged})
+				events <- Event{Type: EventMidTurnUserMessage, Content: map[string]any{"text": merged}}
 			}
 			log.Debug().Int("turn", turn).Int64("duration_ms", time.Since(turnStart).Milliseconds()).Int("input_tokens", usage.InputTokens).Int("output_tokens", usage.OutputTokens).Int("tools", len(tcRecords)).Str("response", assistantText).Msg("turn done")
 			events <- Event{Type: EventTurnUsage, Content: map[string]any{

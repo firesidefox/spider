@@ -115,7 +115,7 @@ func TestSimpleTextResponse(t *testing.T) {
 	store := &mockMsgStore{}
 	agent := newTestAgent(client, store, NewToolRegistry())
 
-	ch, err := agent.Run(context.Background(), "conv1", "hi", nil)
+	ch, err := agent.Run(context.Background(), "conv1", "hi", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -153,7 +153,7 @@ func TestToolCallResponse(t *testing.T) {
 	reg.Register(&mockResultTool{name: "echo", result: &ToolResult{Content: "hi", RiskLevel: RiskL1}})
 
 	agent := newTestAgent(client, store, reg)
-	ch, err := agent.Run(context.Background(), "conv1", "run echo", nil)
+	ch, err := agent.Run(context.Background(), "conv1", "run echo", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -212,7 +212,7 @@ func TestMaxTurnsExceeded(t *testing.T) {
 		MaxTurns:  3,
 	})
 
-	ch, err := agent.Run(context.Background(), "conv1", "loop", nil)
+	ch, err := agent.Run(context.Background(), "conv1", "loop", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -284,6 +284,66 @@ func TestDrainInjectCh(t *testing.T) {
 	}
 }
 
+func TestMidTurnInjection(t *testing.T) {
+	toolCall := &llm.ToolCall{ID: "t1", Name: "echo"}
+	client := &mockLLMClient{
+		responses: [][]llm.StreamEvent{
+			// First turn: emit a tool call so we enter the tool-batch path
+			{
+				{Type: "tool_start", ToolCall: toolCall},
+				{Type: "tool_input_delta", Text: `{"msg":"hi"}`},
+				{Type: "message_stop"},
+			},
+			// Second turn: pure text response
+			{
+				{Type: "text_delta", Text: "got it"},
+				{Type: "message_stop"},
+			},
+		},
+	}
+
+	injectCh := make(chan string, 32)
+	injectCh <- "please stop"
+
+	reg := NewToolRegistry()
+	reg.Register(&mockResultTool{name: "echo", result: &ToolResult{Content: "ok", RiskLevel: RiskL1}})
+
+	store := &mockMsgStore{}
+	ag := newTestAgent(client, store, reg)
+
+	events, err := ag.Run(context.Background(), "conv1", "start", nil, injectCh)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var eventTypes []string
+	for ev := range events {
+		eventTypes = append(eventTypes, string(ev.Type))
+	}
+
+	// Must see mid_turn_user_message
+	found := false
+	for _, et := range eventTypes {
+		if et == string(EventMidTurnUserMessage) {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected mid_turn_user_message event, got: %v", eventTypes)
+	}
+
+	// The injected message must have been saved to the store
+	hasInjected := false
+	for _, msg := range store.messages {
+		if msg.role == "user" && msg.content == "please stop" {
+			hasInjected = true
+		}
+	}
+	if !hasInjected {
+		t.Fatalf("injected message not found in message store: %+v", store.messages)
+	}
+}
+
 func TestAgent_PerToolResultLimit_Truncates(t *testing.T) {
 	dataDir := t.TempDir()
 	bigContent := strings.Repeat("a", 60_000)
@@ -314,7 +374,7 @@ func TestAgent_PerToolResultLimit_Truncates(t *testing.T) {
 		ReplacementState:      newContentReplacementState(),
 	})
 
-	ch, err := a.Run(context.Background(), "conv1", "go", nil)
+	ch, err := a.Run(context.Background(), "conv1", "go", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
