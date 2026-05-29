@@ -71,6 +71,9 @@ type App struct {
 	convCancels   map[string]context.CancelFunc
 	convCancelsMu sync.Mutex
 
+	convInjectChs   map[string]chan string
+	convInjectChsMu sync.Mutex
+
 	sseClients   map[string][]chan []byte // convID -> SSE client channels
 	sseClientsMu sync.Mutex
 
@@ -194,6 +197,50 @@ func (a *App) RemoveConvCancel(convID string) {
 	a.convCancelsMu.Lock()
 	defer a.convCancelsMu.Unlock()
 	delete(a.convCancels, convID)
+}
+
+// TryClaimConv atomically registers a new inject channel for convID.
+// Returns (ch, true) if the conv was free; (nil, false) if already running.
+func (a *App) TryClaimConv(convID string) (chan string, bool) {
+	a.convInjectChsMu.Lock()
+	defer a.convInjectChsMu.Unlock()
+	if a.convInjectChs == nil {
+		a.convInjectChs = make(map[string]chan string)
+	}
+	if _, running := a.convInjectChs[convID]; running {
+		return nil, false
+	}
+	ch := make(chan string, 32)
+	a.convInjectChs[convID] = ch
+	return ch, true
+}
+
+// TryInject atomically sends msg to the running agent for convID.
+// Returns queued=true on success, full=true if channel at capacity, false/false if no agent running.
+func (a *App) TryInject(convID, msg string) (queued bool, full bool) {
+	a.convInjectChsMu.Lock()
+	defer a.convInjectChsMu.Unlock()
+	ch, ok := a.convInjectChs[convID]
+	if !ok {
+		return false, false
+	}
+	select {
+	case ch <- msg:
+		return true, false
+	default:
+		return false, true
+	}
+}
+
+// ReleaseConv atomically removes and closes the inject channel for convID.
+// Must be called from the agent goroutine's cleanup, not from chatSendMessage.
+func (a *App) ReleaseConv(convID string) {
+	a.convInjectChsMu.Lock()
+	defer a.convInjectChsMu.Unlock()
+	if ch, ok := a.convInjectChs[convID]; ok {
+		delete(a.convInjectChs, convID)
+		close(ch)
+	}
 }
 
 // RegisterSSEClient registers a new SSE client channel for a conversation.
