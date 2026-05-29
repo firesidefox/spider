@@ -357,6 +357,8 @@ function markDevicesDone(hostNames: string[], failed: boolean) {
 // Per-conversation EventSource subscriptions
 const convSubscriptions = new Map<string, () => void>()
 
+let pendingSendCtrl: AbortController | null = null
+
 let scrollRafId: number | null = null
 function scheduleScrollToBottom() {
   if (scrollRafId !== null) return
@@ -611,6 +613,9 @@ function handleEscCancel(e: KeyboardEvent) {
 async function cancelSend() {
   const convId = activeConvId.value
   if (!convId) return
+  pendingSendCtrl?.abort()
+  pendingSendCtrl = null
+  queuedMessages.value = []
   await cancelConversation(convId)
   setConversationStreaming(convId, false)
   // Reload from DB to replace the truncated in-memory assistant message
@@ -723,6 +728,7 @@ function handleConvEvent(convId: string, event: ChatEvent) {
       break
     case 'error': {
       clearRetryState()
+      queuedMessages.value = []
       const errText = `\n\n**Error:** ${event.content?.error || 'unknown error'}`
       const lastBlk = last.blocks[last.blocks.length - 1]
       if (lastBlk?.type === 'text') {
@@ -742,6 +748,7 @@ function handleConvEvent(convId: string, event: ChatEvent) {
     }
     case 'done':
       clearRetryState()
+      queuedMessages.value = []
       last.isStreaming = false
       setConversationStreaming(convId, false)
       for (const b of last.blocks) {
@@ -784,17 +791,41 @@ function handleConvEvent(convId: string, event: ChatEvent) {
     case 'mid_turn_user_message': {
       const text = event.content?.text as string | undefined
       if (!text) break
-      // Remove from queued display (match first occurrence)
+      // Backend joins multiple queued messages with \n\n.
+      // Try exact match first (single message or message containing \n\n).
+      // Fall back to removing any queued entries that are exact components of the joined text.
       const idx = queuedMessages.value.indexOf(text)
       if (idx !== -1) {
         queuedMessages.value.splice(idx, 1)
       } else {
-        // Multi-message merge: clear any queued messages that are substrings
-        queuedMessages.value = queuedMessages.value.filter(q => !text.includes(q))
+        // Build the expected joined string from queued messages and remove matched ones.
+        // Walk from the front: greedily consume queued messages that form a prefix of text.
+        const remaining = [...queuedMessages.value]
+        const consumed: string[] = []
+        let joined = ''
+        for (let i = 0; i < remaining.length; i++) {
+          const candidate = joined ? joined + '\n\n' + remaining[i] : remaining[i]
+          if (text === candidate || text.startsWith(candidate + '\n\n')) {
+            joined = candidate
+            consumed.push(remaining[i])
+          }
+        }
+        if (consumed.length > 0) {
+          const consumedSet = new Set(consumed)
+          queuedMessages.value = queuedMessages.value.filter(q => !consumedSet.has(q))
+        }
       }
       // Insert as a real user message in the conversation
       const convMsgsForInject = messagesMap.value[convId]
       if (convMsgsForInject) {
+        // Close any in-progress streaming assistant message before injecting user message
+        const prevLast = convMsgsForInject[convMsgsForInject.length - 1]
+        if (prevLast?.role === 'assistant' && prevLast.isStreaming) {
+          prevLast.isStreaming = false
+          for (const b of prevLast.blocks) {
+            if (b.type === 'tool' && b.call.durationMs == null) b.call.durationMs = 0
+          }
+        }
         convMsgsForInject.push({
           id: `u-injected-${Date.now()}`,
           role: 'user',
@@ -855,12 +886,15 @@ async function send(overrideText?: string) {
     if (!activeConvId.value) return
     const convId = activeConvId.value
     sendMessage(convId, text, selectedHostIds.value).then(res => {
-      if (res.status === 'queued') {
+      // Guard: if streaming ended (error/cancel) before response arrived, don't add ghost entry
+      if (res.status === 'queued' && isStreaming.value) {
         queuedMessages.value.push(text)
       }
     }).catch((e: any) => {
       if (e?.status === 429) {
         addSystemMessage('队列已满，请稍后再试')
+      } else {
+        addSystemMessage(`发送失败：${e?.message || 'unknown error'}`)
       }
     })
     return
@@ -901,7 +935,18 @@ async function send(overrideText?: string) {
   await nextTick()
   scrollToBottom()
 
-  sendMessage(convId, text, selectedHostIds.value).catch(() => { /* errors come via EventSource */ })
+  pendingSendCtrl = new AbortController()
+  sendMessage(convId, text, selectedHostIds.value, pendingSendCtrl.signal).catch((e: any) => {
+    if (e?.name === 'AbortError') return
+    // 503 = LLM not configured; surface it since no SSE event will arrive
+    const msg = e?.status === 503
+      ? 'LLM 未配置，请先在设置中添加 Provider'
+      : `发送失败：${e?.message || 'unknown error'}`
+    addSystemMessage(msg)
+    setConversationStreaming(convId, false)
+    const msgs = messagesMap.value[convId]
+    if (msgs) msgs.splice(msgs.length - 2, 2) // remove optimistic user+assistant msgs
+  }).finally(() => { pendingSendCtrl = null })
 }
 
 function parseExportFormat(text: string): 'md' | 'json' | 'invalid' | 'default' {

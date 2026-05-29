@@ -94,11 +94,13 @@ export async function sendMessage(
   conversationId: string,
   content: string,
   hostIds?: string[] | null,
+  signal?: AbortSignal,
 ): Promise<{ status: 'accepted' | 'queued' }> {
   const body: Record<string, unknown> = { content }
   if (hostIds && hostIds.length > 0) body.host_ids = hostIds
   const res = await fetch(`/api/v1/chat/conversations/${conversationId}/messages`, {
     method: 'POST',
+    signal,
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify(body),
   })
