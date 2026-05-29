@@ -43,6 +43,29 @@ func (m *mockLLMClient) CountTokens(_ context.Context, msgs []llm.Message) (int,
 	return total, nil
 }
 
+// capturingLLMClient calls onStream for each request, allowing tests to inspect history.
+type capturingLLMClient struct {
+	onStream func(req *llm.ChatRequest) (<-chan llm.StreamEvent, error)
+}
+
+func (c *capturingLLMClient) ChatStream(_ context.Context, req *llm.ChatRequest) (<-chan llm.StreamEvent, error) {
+	return c.onStream(req)
+}
+
+func (c *capturingLLMClient) Chat(_ context.Context, _ *llm.ChatRequest) (string, error) {
+	return "summary", nil
+}
+
+func (c *capturingLLMClient) CountTokens(_ context.Context, msgs []llm.Message) (int, error) {
+	total := 0
+	for _, msg := range msgs {
+		if s, ok := msg.Content.(string); ok {
+			total += llm.EstimateTokens(s)
+		}
+	}
+	return total, nil
+}
+
 type mockMsgStore struct {
 	messages []struct{ convID, role, content, toolCalls string }
 }
@@ -286,19 +309,37 @@ func TestDrainInjectCh(t *testing.T) {
 
 func TestMidTurnInjection(t *testing.T) {
 	toolCall := &llm.ToolCall{ID: "t1", Name: "echo"}
-	client := &mockLLMClient{
-		responses: [][]llm.StreamEvent{
-			// First turn: emit a tool call so we enter the tool-batch path
-			{
-				{Type: "tool_start", ToolCall: toolCall},
-				{Type: "tool_input_delta", Text: `{"msg":"hi"}`},
-				{Type: "message_stop"},
-			},
-			// Second turn: pure text response
-			{
-				{Type: "text_delta", Text: "got it"},
-				{Type: "message_stop"},
-			},
+
+	// capturingLLMClient records each ChatRequest so we can verify history contents.
+	type capturedCall struct{ msgs []llm.Message }
+	var captured []capturedCall
+	responses := [][]llm.StreamEvent{
+		// First turn: tool call → triggers drain-after-tool-batch path
+		{
+			{Type: "tool_start", ToolCall: toolCall},
+			{Type: "tool_input_delta", Text: `{"msg":"hi"}`},
+			{Type: "message_stop"},
+		},
+		// Second turn: pure text → agent done
+		{
+			{Type: "text_delta", Text: "got it"},
+			{Type: "message_stop"},
+		},
+	}
+	callIdx := 0
+	capClient := &capturingLLMClient{
+		onStream: func(req *llm.ChatRequest) (<-chan llm.StreamEvent, error) {
+			captured = append(captured, capturedCall{msgs: req.Messages})
+			ch := make(chan llm.StreamEvent, 32)
+			evs := responses[callIdx]
+			callIdx++
+			go func() {
+				defer close(ch)
+				for _, e := range evs {
+					ch <- e
+				}
+			}()
+			return ch, nil
 		},
 	}
 
@@ -309,7 +350,7 @@ func TestMidTurnInjection(t *testing.T) {
 	reg.Register(&mockResultTool{name: "echo", result: &ToolResult{Content: "ok", RiskLevel: RiskL1}})
 
 	store := &mockMsgStore{}
-	ag := newTestAgent(client, store, reg)
+	ag := newTestAgent(capClient, store, reg)
 
 	events, err := ag.Run(context.Background(), "conv1", "start", nil, injectCh)
 	if err != nil {
@@ -332,15 +373,18 @@ func TestMidTurnInjection(t *testing.T) {
 		t.Fatalf("expected mid_turn_user_message event, got: %v", eventTypes)
 	}
 
-	// The injected message must have been saved to the store
+	// Second LLM call must include the injected message in its history
+	if len(captured) < 2 {
+		t.Fatalf("expected at least 2 LLM calls, got %d", len(captured))
+	}
 	hasInjected := false
-	for _, msg := range store.messages {
-		if msg.role == "user" && msg.content == "please stop" {
+	for _, m := range captured[1].msgs {
+		if s, ok := m.Content.(string); ok && s == "please stop" {
 			hasInjected = true
 		}
 	}
 	if !hasInjected {
-		t.Fatalf("injected message not found in message store: %+v", store.messages)
+		t.Fatalf("injected message not found in second LLM call history: %+v", captured[1].msgs)
 	}
 }
 
