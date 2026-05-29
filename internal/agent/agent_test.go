@@ -397,6 +397,23 @@ func TestMidTurnInjection(t *testing.T) {
 	if !savedToStore {
 		t.Fatalf("injected message not saved to msgStore: %+v", store.messages)
 	}
+
+	// EventMidTurnUserMessage must come before EventTurnUsage for the same turn
+	midIdx, usageIdx := -1, -1
+	for i, et := range eventTypes {
+		if et == string(EventMidTurnUserMessage) && midIdx == -1 {
+			midIdx = i
+		}
+		if et == string(EventTurnUsage) && usageIdx == -1 {
+			usageIdx = i
+		}
+	}
+	if midIdx == -1 || usageIdx == -1 {
+		t.Fatalf("missing mid_turn_user_message or turn_usage in events: %v", eventTypes)
+	}
+	if midIdx > usageIdx {
+		t.Fatalf("EventMidTurnUserMessage (idx %d) must come before EventTurnUsage (idx %d)", midIdx, usageIdx)
+	}
 }
 
 func TestMidTurnInjection_PureTextPath(t *testing.T) {

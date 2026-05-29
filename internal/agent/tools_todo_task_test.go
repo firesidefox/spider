@@ -32,6 +32,11 @@ func newTestTodoTool(t *testing.T) (*TodoTool, *mockBroadcaster) {
 		t.Fatalf("open db: %v", err)
 	}
 	t.Cleanup(func() { database.Close() })
+	// Seed required FK rows so todo_tasks can reference conv-1
+	database.Exec(`INSERT OR IGNORE INTO users (id, username, password, role, enabled, created_at)
+		VALUES ('test-user', 'testuser', '', 'user', 1, datetime('now'))`)
+	database.Exec(`INSERT OR IGNORE INTO conversations (id, user_id, title, created_at, updated_at)
+		VALUES ('conv-1', 'test-user', '', datetime('now'), datetime('now'))`)
 	bc := &mockBroadcaster{}
 	return NewTodoTool(store.NewTodoStore(database), bc, "conv-1"), bc
 }

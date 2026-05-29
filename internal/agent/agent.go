@@ -291,27 +291,39 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 				}
 			}
 
-			for ev := range stream {
-				switch ev.Type {
-				case "text_delta":
-					assistantText += ev.Text
-					events <- Event{Type: EventTextDelta, Content: map[string]any{"text": ev.Text}}
-				case "tool_start":
-					finishToolInput()
-					toolCalls = append(toolCalls, *ev.ToolCall)
-				case "tool_input_delta":
-					currentToolInput += ev.Text
-				case "usage":
-					if ev.Usage != nil {
-						if ev.Usage.InputTokens > 0 {
-							usage.InputTokens = ev.Usage.InputTokens
-						}
-						if ev.Usage.OutputTokens > 0 {
-							usage.OutputTokens = ev.Usage.OutputTokens
-						}
+			var streamInjected []string
+		streamLoop:
+			for {
+				select {
+				case ev, ok := <-stream:
+					if !ok {
+						break streamLoop
 					}
-				case "message_stop":
-					finishToolInput()
+					switch ev.Type {
+					case "text_delta":
+						assistantText += ev.Text
+						events <- Event{Type: EventTextDelta, Content: map[string]any{"text": ev.Text}}
+					case "tool_start":
+						finishToolInput()
+						toolCalls = append(toolCalls, *ev.ToolCall)
+					case "tool_input_delta":
+						currentToolInput += ev.Text
+					case "usage":
+						if ev.Usage != nil {
+							if ev.Usage.InputTokens > 0 {
+								usage.InputTokens = ev.Usage.InputTokens
+							}
+							if ev.Usage.OutputTokens > 0 {
+								usage.OutputTokens = ev.Usage.OutputTokens
+							}
+						}
+					case "message_stop":
+						finishToolInput()
+					}
+				case msg, ok := <-injectCh:
+					if ok {
+						streamInjected = append(streamInjected, msg)
+					}
 				}
 			}
 
@@ -321,7 +333,8 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 				}
 				// Drain queued user messages before deciding to exit.
 				// If any arrived, continue the loop so LLM can respond to them.
-				if parts := drainInjectCh(injectCh); len(parts) > 0 {
+				parts := append(streamInjected, drainInjectCh(injectCh)...)
+				if len(parts) > 0 {
 					merged := strings.Join(parts, "\n\n")
 					a.msgStore.Save(conversationID, "user", merged, "")
 					if assistantText != "" {
@@ -378,7 +391,7 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 			for _, tr := range pendingToolResults {
 				a.msgStore.Save(conversationID, "tool_result", tr, "")
 			}
-			if parts := drainInjectCh(injectCh); len(parts) > 0 {
+			if parts := append(streamInjected, drainInjectCh(injectCh)...); len(parts) > 0 {
 				merged := strings.Join(parts, "\n\n")
 				a.msgStore.Save(conversationID, "user", merged, "")
 				history = append(history, llm.Message{Role: llm.RoleUser, Content: merged})
