@@ -611,7 +611,6 @@ function handleEscCancel(e: KeyboardEvent) {
 async function cancelSend() {
   const convId = activeConvId.value
   if (!convId) return
-  abortCtrl = null
   await cancelConversation(convId)
   setConversationStreaming(convId, false)
   // Reload from DB to replace the truncated in-memory assistant message
@@ -902,7 +901,6 @@ async function send(overrideText?: string) {
   await nextTick()
   scrollToBottom()
 
-  abortCtrl = null
   sendMessage(convId, text, selectedHostIds.value).catch(() => { /* errors come via EventSource */ })
 }
 
