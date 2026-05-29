@@ -238,8 +238,6 @@ func chatSendMessage(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id
 	if err != nil {
 		cancel()
 		app.RemoveConvCancel(id)
-		app.RemoveChatWaiter(id)
-		app.ReleaseConv(id)
 		app.ConvStore.SetStatus(id, "idle") //nolint:errcheck
 		writeError(w, 500, err.Error())
 		return
