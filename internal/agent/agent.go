@@ -29,6 +29,7 @@ const (
 	EventDone            EventType = "done"
 	EventTurnUsage       EventType = "turn_usage"
 	EventRetrying        EventType = "retrying"
+	EventMidTurnUserMessage EventType = "mid_turn_user_message"
 )
 
 type Event struct {
@@ -450,4 +451,24 @@ func (a *Agent) resolveHostNames(input map[string]any) []string {
 		return nil
 	}
 	return a.hosts.ResolveNames(input)
+}
+
+func drainInjectCh(ch <-chan string) []string {
+	if ch == nil {
+		return nil
+	}
+	var parts []string
+loop:
+	for {
+		select {
+		case msg, ok := <-ch:
+			if !ok {
+				break loop
+			}
+			parts = append(parts, msg)
+		default:
+			break loop
+		}
+	}
+	return parts
 }

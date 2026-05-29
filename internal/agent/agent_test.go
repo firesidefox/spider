@@ -255,6 +255,35 @@ func TestActToolDescriptionsContainSideEffectHint(t *testing.T) {
 	}
 }
 
+func TestDrainInjectCh(t *testing.T) {
+	ch := make(chan string, 32)
+	ch <- "hello"
+	ch <- "world"
+
+	parts := drainInjectCh(ch)
+	if len(parts) != 2 {
+		t.Fatalf("expected 2 parts, got %d", len(parts))
+	}
+	if parts[0] != "hello" || parts[1] != "world" {
+		t.Fatalf("unexpected parts: %v", parts)
+	}
+
+	// nil channel returns empty
+	parts = drainInjectCh(nil)
+	if len(parts) != 0 {
+		t.Fatalf("expected 0 parts for nil ch, got %d", len(parts))
+	}
+
+	// closed channel exits cleanly
+	ch2 := make(chan string, 4)
+	ch2 <- "a"
+	close(ch2)
+	parts = drainInjectCh(ch2)
+	if len(parts) != 1 || parts[0] != "a" {
+		t.Fatalf("unexpected parts from closed ch: %v", parts)
+	}
+}
+
 func TestAgent_PerToolResultLimit_Truncates(t *testing.T) {
 	dataDir := t.TempDir()
 	bigContent := strings.Repeat("a", 60_000)
