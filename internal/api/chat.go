@@ -205,15 +205,22 @@ func chatSendMessage(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id
 	// No agent running — try to claim the conv
 	injectCh, claimed := app.TryClaimConv(id)
 	if !claimed {
-		// Lost the race to another concurrent request — try inject again
+		// Lost the race to another concurrent request — try inject again.
+		// If the winning agent already finished (ReleaseConv called between our
+		// TryClaimConv and this TryInject), fall through to claim a new one.
 		if queued, full := app.TryInject(id, content); queued {
 			writeJSON(w, http.StatusAccepted, map[string]string{"status": "queued"})
+			return
 		} else if full {
 			writeError(w, 429, "message queue full")
-		} else {
-			writeError(w, 503, "agent start conflict, retry")
+			return
 		}
-		return
+		// Agent finished between our two checks — try to claim now.
+		injectCh, claimed = app.TryClaimConv(id)
+		if !claimed {
+			writeError(w, 503, "agent start conflict, retry")
+			return
+		}
 	}
 
 	a := factory.NewAgent(id, req.HostIDs)

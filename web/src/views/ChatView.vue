@@ -904,13 +904,17 @@ async function send(overrideText?: string) {
     blocks: [], isStreaming: true,
   }
 
+  // Optimistically show as queued immediately; remove if backend starts a new agent turn
+  queuedMessages.value.push(text)
+
   pendingSendCtrl = new AbortController()
   sendMessage(convId, text, selectedHostIds.value, pendingSendCtrl.signal).then(res => {
     if (res.status === 'queued') {
-      // Backend injected into running agent — show as queued entry, no optimistic messages
-      queuedMessages.value.push(text)
+      // Backend injected into running agent — keep queued display as-is
     } else {
-      // Backend accepted as new agent turn — show optimistic user+assistant messages
+      // Backend accepted as new agent turn — remove from queued, show optimistic messages
+      const idx = queuedMessages.value.lastIndexOf(text)
+      if (idx !== -1) queuedMessages.value.splice(idx, 1)
       convMsgs.push(userMsg)
       convMsgs.push(assistantMsg)
       setConversationStreaming(convId, true)
@@ -919,6 +923,9 @@ async function send(overrideText?: string) {
       nextTick(() => scrollToBottom())
     }
   }).catch((e: any) => {
+    // Remove optimistic queued entry on error
+    const idx = queuedMessages.value.lastIndexOf(text)
+    if (idx !== -1) queuedMessages.value.splice(idx, 1)
     if (e?.name === 'AbortError') return
     // 503 = LLM not configured; surface it since no SSE event will arrive
     const msg = e?.status === 503
