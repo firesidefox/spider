@@ -29,7 +29,7 @@ const (
 	EventDone            EventType = "done"
 	EventTurnUsage       EventType = "turn_usage"
 	EventRetrying        EventType = "retrying"
-	EventMidTurnUserMessage EventType = "mid_turn_user_message"
+	EventMidTurnUserMessage  EventType = "mid_turn_user_message"
 )
 
 type Event struct {
