@@ -877,29 +877,6 @@ async function send(overrideText?: string) {
     }
   }
 
-  // send via HTTP immediately when streaming; backend queues it
-  if (isStreaming.value && !overrideText) {
-    inputText.value = ''
-    nextTick(() => {
-      if (textareaRef.value) textareaRef.value.style.height = 'auto'
-    })
-    if (!activeConvId.value) return
-    const convId = activeConvId.value
-    sendMessage(convId, text, selectedHostIds.value).then(res => {
-      // Guard: if streaming ended (error/cancel) before response arrived, don't add ghost entry
-      if (res.status === 'queued' && isStreaming.value) {
-        queuedMessages.value.push(text)
-      }
-    }).catch((e: any) => {
-      if (e?.status === 429) {
-        addSystemMessage('队列已满，请稍后再试')
-      } else {
-        addSystemMessage(`发送失败：${e?.message || 'unknown error'}`)
-      }
-    })
-    return
-  }
-
   if (!overrideText) {
     inputText.value = ''
     nextTick(() => {
@@ -922,30 +899,32 @@ async function send(overrideText?: string) {
   const userMsg: DisplayMessage = {
     id: `u-${Date.now()}`, role: 'user', blocks: [{ type: 'text', content: text }],
   }
-  convMsgs.push(userMsg)
-
   const assistantMsg: DisplayMessage = {
     id: `a-${Date.now()}`, role: 'assistant',
     blocks: [], isStreaming: true,
   }
-  convMsgs.push(assistantMsg)
-  setConversationStreaming(convId, true)
-  updateAgentStatus({ conversationId: convId, title: getConvTitle(convId), phase: 'thinking' })
-  turnUsage.value = null
-  await nextTick()
-  scrollToBottom()
 
   pendingSendCtrl = new AbortController()
-  sendMessage(convId, text, selectedHostIds.value, pendingSendCtrl.signal).catch((e: any) => {
+  sendMessage(convId, text, selectedHostIds.value, pendingSendCtrl.signal).then(res => {
+    if (res.status === 'queued') {
+      // Backend injected into running agent — show as queued entry, no optimistic messages
+      queuedMessages.value.push(text)
+    } else {
+      // Backend accepted as new agent turn — show optimistic user+assistant messages
+      convMsgs.push(userMsg)
+      convMsgs.push(assistantMsg)
+      setConversationStreaming(convId, true)
+      updateAgentStatus({ conversationId: convId, title: getConvTitle(convId), phase: 'thinking' })
+      turnUsage.value = null
+      nextTick(() => scrollToBottom())
+    }
+  }).catch((e: any) => {
     if (e?.name === 'AbortError') return
     // 503 = LLM not configured; surface it since no SSE event will arrive
     const msg = e?.status === 503
       ? 'LLM 未配置，请先在设置中添加 Provider'
       : `发送失败：${e?.message || 'unknown error'}`
     addSystemMessage(msg)
-    setConversationStreaming(convId, false)
-    const msgs = messagesMap.value[convId]
-    if (msgs) msgs.splice(msgs.length - 2, 2) // remove optimistic user+assistant msgs
   }).finally(() => { pendingSendCtrl = null })
 }
 
