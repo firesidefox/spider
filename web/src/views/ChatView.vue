@@ -354,7 +354,6 @@ function markDevicesDone(hostNames: string[], failed: boolean) {
   }
 }
 
-let abortCtrl: AbortController | null = null
 // Per-conversation EventSource subscriptions
 const convSubscriptions = new Map<string, () => void>()
 
@@ -612,7 +611,6 @@ function handleEscCancel(e: KeyboardEvent) {
 async function cancelSend() {
   const convId = activeConvId.value
   if (!convId) return
-  abortCtrl?.abort()
   abortCtrl = null
   await cancelConversation(convId)
   setConversationStreaming(convId, false)
@@ -621,7 +619,6 @@ async function cancelSend() {
   messagesMap.value[convId] = buildDisplayMessages(data.messages)
   await nextTick()
   scrollToBottom()
-  flushQueue()
 }
 
 function handleConvEvent(convId: string, event: ChatEvent) {
@@ -741,7 +738,6 @@ function handleConvEvent(convId: string, event: ChatEvent) {
       }
       if (activeConvId.value === convId) {
         nextTick(() => scrollToBottom())
-        flushQueue()
       }
       break
     }
@@ -754,7 +750,6 @@ function handleConvEvent(convId: string, event: ChatEvent) {
       }
       if (activeConvId.value === convId) {
         nextTick(() => scrollToBottom())
-        flushQueue()
       }
       setStatus('done')
       loadConversations()
@@ -784,6 +779,29 @@ function handleConvEvent(convId: string, event: ChatEvent) {
       const r = event.content as { attempt: number; max_retries: number; error: string; retry_in_ms: number }
       if (r.attempt >= 3) {
         startRetryCountdown(r.attempt, r.max_retries, r.error, r.retry_in_ms)
+      }
+      break
+    }
+    case 'mid_turn_user_message': {
+      const text = event.content?.text as string | undefined
+      if (!text) break
+      // Remove from queued display (match first occurrence)
+      const idx = queuedMessages.value.indexOf(text)
+      if (idx !== -1) {
+        queuedMessages.value.splice(idx, 1)
+      } else {
+        // Multi-message merge: clear any queued messages that are substrings
+        queuedMessages.value = queuedMessages.value.filter(q => !text.includes(q))
+      }
+      // Insert as a real user message in the conversation
+      const convMsgsForInject = messagesMap.value[convId]
+      if (convMsgsForInject) {
+        convMsgsForInject.push({
+          id: `u-injected-${Date.now()}`,
+          role: 'user',
+          blocks: [{ type: 'text', content: text }],
+        })
+        if (activeConvId.value === convId) nextTick(() => scrollToBottom())
       }
       break
     }
@@ -829,12 +847,22 @@ async function send(overrideText?: string) {
     }
   }
 
-  // enqueue when streaming (only for direct user input, not flush)
+  // send via HTTP immediately when streaming; backend queues it
   if (isStreaming.value && !overrideText) {
-    queuedMessages.value.push(text)
     inputText.value = ''
     nextTick(() => {
       if (textareaRef.value) textareaRef.value.style.height = 'auto'
+    })
+    if (!activeConvId.value) return
+    const convId = activeConvId.value
+    sendMessage(convId, text, selectedHostIds.value).then(res => {
+      if (res.status === 'queued') {
+        queuedMessages.value.push(text)
+      }
+    }).catch((e: any) => {
+      if (e?.status === 429) {
+        addSystemMessage('队列已满，请稍后再试')
+      }
     })
     return
   }
@@ -874,14 +902,8 @@ async function send(overrideText?: string) {
   await nextTick()
   scrollToBottom()
 
-  abortCtrl = sendMessage(convId, text, selectedHostIds.value)
-}
-
-function flushQueue() {
-  if (queuedMessages.value.length === 0) return
-  const merged = queuedMessages.value.join('\n\n')
-  queuedMessages.value = []
-  send(merged)
+  abortCtrl = null
+  sendMessage(convId, text, selectedHostIds.value).catch(() => { /* errors come via EventSource */ })
 }
 
 function parseExportFormat(text: string): 'md' | 'json' | 'invalid' | 'default' {

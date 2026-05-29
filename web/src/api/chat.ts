@@ -20,7 +20,7 @@ export interface ChatMessage {
 }
 
 export interface ChatEvent {
-  type: 'text_delta' | 'tool_start' | 'tool_result' | 'confirm_required' | 'error' | 'done' | 'message' | 'todo_update' | 'turn_usage'
+  type: 'text_delta' | 'tool_start' | 'tool_result' | 'confirm_required' | 'error' | 'done' | 'message' | 'todo_update' | 'turn_usage' | 'mid_turn_user_message'
   content?: Record<string, any>
 }
 
@@ -90,21 +90,25 @@ export function subscribeConversation(
   return () => es.close()
 }
 
-export function sendMessage(
+export async function sendMessage(
   conversationId: string,
   content: string,
   hostIds?: string[] | null,
-): AbortController {
-  const ctrl = new AbortController()
+): Promise<{ status: 'accepted' | 'queued' }> {
   const body: Record<string, unknown> = { content }
   if (hostIds && hostIds.length > 0) body.host_ids = hostIds
-  fetch(`/api/v1/chat/conversations/${conversationId}/messages`, {
+  const res = await fetch(`/api/v1/chat/conversations/${conversationId}/messages`, {
     method: 'POST',
-    signal: ctrl.signal,
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify(body),
-  }).catch(() => { /* errors come via EventSource */ })
-  return ctrl
+  })
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}))
+    const err = new Error(data.error || `HTTP ${res.status}`) as any
+    err.status = res.status
+    throw err
+  }
+  return res.json()
 }
 
 export async function suggestTitle(id: string): Promise<string> {
