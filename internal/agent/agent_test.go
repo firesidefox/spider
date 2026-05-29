@@ -386,6 +386,115 @@ func TestMidTurnInjection(t *testing.T) {
 	if !hasInjected {
 		t.Fatalf("injected message not found in second LLM call history: %+v", captured[1].msgs)
 	}
+
+	// Injected message must also be persisted to the store
+	savedToStore := false
+	for _, msg := range store.messages {
+		if msg.role == "user" && msg.content == "please stop" {
+			savedToStore = true
+		}
+	}
+	if !savedToStore {
+		t.Fatalf("injected message not saved to msgStore: %+v", store.messages)
+	}
+}
+
+func TestMidTurnInjection_PureTextPath(t *testing.T) {
+	// Agent returns pure text (no tool calls) on turn 1.
+	// Injected message causes a continue; turn 2 returns pure text and agent exits.
+	type capturedCall struct{ msgs []llm.Message }
+	var captured []capturedCall
+	responses := [][]llm.StreamEvent{
+		// Turn 1: pure text, no tool calls
+		{
+			{Type: "text_delta", Text: "thinking..."},
+			{Type: "message_stop"},
+		},
+		// Turn 2: pure text, agent exits
+		{
+			{Type: "text_delta", Text: "done"},
+			{Type: "message_stop"},
+		},
+	}
+	callIdx := 0
+	capClient := &capturingLLMClient{
+		onStream: func(req *llm.ChatRequest) (<-chan llm.StreamEvent, error) {
+			captured = append(captured, capturedCall{msgs: req.Messages})
+			ch := make(chan llm.StreamEvent, 32)
+			evs := responses[callIdx]
+			callIdx++
+			go func() {
+				defer close(ch)
+				for _, e := range evs {
+					ch <- e
+				}
+			}()
+			return ch, nil
+		},
+	}
+
+	injectCh := make(chan string, 32)
+	injectCh <- "stop now"
+
+	store := &mockMsgStore{}
+	ag := newTestAgent(capClient, store, NewToolRegistry())
+
+	events, err := ag.Run(context.Background(), "conv1", "start", nil, injectCh)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var eventTypes []string
+	for ev := range events {
+		eventTypes = append(eventTypes, string(ev.Type))
+	}
+
+	// Must see mid_turn_user_message
+	found := false
+	for _, et := range eventTypes {
+		if et == string(EventMidTurnUserMessage) {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected mid_turn_user_message event in pure-text path, got: %v", eventTypes)
+	}
+
+	// Must end with done
+	if len(eventTypes) == 0 || eventTypes[len(eventTypes)-1] != string(EventDone) {
+		t.Fatalf("expected EventDone as last event, got: %v", eventTypes)
+	}
+
+	// Second LLM call must include injected message
+	if len(captured) < 2 {
+		t.Fatalf("expected 2 LLM calls, got %d", len(captured))
+	}
+	hasInjected := false
+	for _, m := range captured[1].msgs {
+		if s, ok := m.Content.(string); ok && s == "stop now" {
+			hasInjected = true
+		}
+	}
+	if !hasInjected {
+		t.Fatalf("injected message not in second LLM call history: %+v", captured[1].msgs)
+	}
+
+	// EventMidTurnUserMessage must come before EventTurnUsage (ordering consistency)
+	midIdx, usageIdx := -1, -1
+	for i, et := range eventTypes {
+		if et == string(EventMidTurnUserMessage) && midIdx == -1 {
+			midIdx = i
+		}
+		if et == string(EventTurnUsage) && usageIdx == -1 {
+			usageIdx = i
+		}
+	}
+	if midIdx == -1 || usageIdx == -1 {
+		t.Fatalf("missing mid_turn_user_message or turn_usage in events: %v", eventTypes)
+	}
+	if midIdx > usageIdx {
+		t.Fatalf("EventMidTurnUserMessage (idx %d) must come before EventTurnUsage (idx %d)", midIdx, usageIdx)
+	}
 }
 
 func TestAgent_PerToolResultLimit_Truncates(t *testing.T) {

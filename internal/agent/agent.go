@@ -328,11 +328,11 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 						history = append(history, llm.Message{Role: llm.RoleAssistant, Content: assistantText})
 					}
 					history = append(history, llm.Message{Role: llm.RoleUser, Content: merged})
+					events <- Event{Type: EventMidTurnUserMessage, Content: map[string]any{"text": merged}}
 					events <- Event{Type: EventTurnUsage, Content: map[string]any{
 						"input_tokens":  usage.InputTokens,
 						"output_tokens": usage.OutputTokens,
 					}}
-					events <- Event{Type: EventMidTurnUserMessage, Content: map[string]any{"text": merged}}
 					continue
 				}
 				log.Debug().Int("turn", turn).Int64("duration_ms", time.Since(turnStart).Milliseconds()).Int("input_tokens", usage.InputTokens).Int("output_tokens", usage.OutputTokens).Str("response", assistantText).Msg("turn done")
