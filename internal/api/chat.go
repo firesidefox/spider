@@ -166,11 +166,6 @@ func chatSendMessage(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id
 	}
 	factory.DisableSearchDocs = allFacesDisableKB(app)
 
-	a := factory.NewAgent(id, req.HostIDs)
-	waiter := agent.NewConfirmationWaiter()
-	app.StoreChatWaiter(id, waiter)
-	defer app.RemoveChatWaiter(id)
-
 	content := req.Content
 	if rs, rsErr := ragStore(app); rsErr == nil {
 		groupLookup := func(name string) *int {
@@ -197,6 +192,41 @@ func chatSendMessage(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id
 		content = expandKBRefs(content, groupLookup, docLookup, search)
 	}
 
+	// Try to inject into a running agent first
+	if queued, full := app.TryInject(id, content); queued || full {
+		if full {
+			writeError(w, 429, "message queue full")
+			return
+		}
+		writeJSON(w, http.StatusAccepted, map[string]string{"status": "queued"})
+		return
+	}
+
+	// No agent running — try to claim the conv
+	injectCh, claimed := app.TryClaimConv(id)
+	if !claimed {
+		// Lost the race to another concurrent request — try inject again
+		if queued, full := app.TryInject(id, content); queued {
+			writeJSON(w, http.StatusAccepted, map[string]string{"status": "queued"})
+		} else if full {
+			writeError(w, 429, "message queue full")
+		} else {
+			writeError(w, 503, "agent start conflict, retry")
+		}
+		return
+	}
+
+	a := factory.NewAgent(id, req.HostIDs)
+	waiter := agent.NewConfirmationWaiter()
+	app.StoreChatWaiter(id, waiter)
+	goroutineLaunched := false
+	defer func() {
+		if !goroutineLaunched {
+			app.RemoveChatWaiter(id)
+			app.ReleaseConv(id)
+		}
+	}()
+
 	app.ConvStore.SetStatus(id, "processing") //nolint:errcheck
 	parent := app.ShutdownCtx
 	if parent == nil {
@@ -204,45 +234,46 @@ func chatSendMessage(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id
 	}
 	ctx, cancel := context.WithCancel(parent)
 	app.StoreConvCancel(id, cancel)
-	defer func() {
+	events, err := a.Run(ctx, id, content, waiter, injectCh)
+	if err != nil {
 		cancel()
 		app.RemoveConvCancel(id)
-	}()
-	events, err := a.Run(ctx, id, content, waiter, nil)
-	if err != nil {
+		app.RemoveChatWaiter(id)
+		app.ReleaseConv(id)
 		app.ConvStore.SetStatus(id, "idle") //nolint:errcheck
 		writeError(w, 500, err.Error())
 		return
 	}
 
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
-	flusher, _ := w.(http.Flusher)
-
-	for ev := range events {
-		if ev.Type == agent.EventToolStart {
-			injectHostNames(app, ev.Content)
-		}
-		if ev.Type == agent.EventToolStart || ev.Type == agent.EventToolResult {
-			name, _ := ev.Content["name"].(string)
-			if name == "" {
-				name, _ = ev.Content["tool"].(string)
+	goroutineLaunched = true
+	go func() {
+		defer func() {
+			cancel()
+			app.RemoveConvCancel(id)
+			app.RemoveChatWaiter(id)
+			app.ReleaseConv(id)
+			app.ClearSSEBuffer(id)
+			app.ConvStore.SetStatus(id, "idle") //nolint:errcheck
+		}()
+		for ev := range events {
+			if ev.Type == agent.EventToolStart {
+				injectHostNames(app, ev.Content)
 			}
-			if name == "Todo" {
-				continue
+			if ev.Type == agent.EventToolStart || ev.Type == agent.EventToolResult {
+				name, _ := ev.Content["name"].(string)
+				if name == "" {
+					name, _ = ev.Content["tool"].(string)
+				}
+				if name == "Todo" {
+					continue
+				}
 			}
+			data, _ := json.Marshal(ev)
+			app.BufferSSEEvent(id, data)
+			app.BroadcastSSE(id, data)
 		}
-		data, _ := json.Marshal(ev)
-		fmt.Fprintf(w, "data: %s\n\n", data)
-		if flusher != nil {
-			flusher.Flush()
-		}
-		app.BufferSSEEvent(id, data)
-		app.BroadcastSSE(id, data)
-	}
-	app.ClearSSEBuffer(id)
-	app.ConvStore.SetStatus(id, "idle") //nolint:errcheck
+	}()
+	writeJSON(w, http.StatusAccepted, map[string]string{"status": "accepted"})
 }
 
 // allFacesDisableKB is retained for compatibility with the agent factory hook.
