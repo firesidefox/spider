@@ -46,7 +46,7 @@ export async function listConversations(): Promise<Conversation[]> {
   return res.json()
 }
 
-export async function getConversation(id: string): Promise<{ conversation: Conversation; messages: ChatMessage[]; todo_tasks: Todo[] }> {
+export async function getConversation(id: string): Promise<{ conversation: Conversation; messages: ChatMessage[]; todo_tasks: Todo[]; queued_messages: string[] }> {
   const res = await fetch(`/api/v1/chat/conversations/${id}`, { headers: authHeaders() })
   if (!res.ok) throw new Error((await res.json()).error)
   return res.json()

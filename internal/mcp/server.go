@@ -71,8 +71,9 @@ type App struct {
 	convCancels   map[string]context.CancelFunc
 	convCancelsMu sync.Mutex
 
-	convInjectChs   map[string]chan string
-	convInjectChsMu sync.Mutex
+	convInjectChs    map[string]chan string
+	convQueuedMsgs   map[string][]string
+	convInjectChsMu  sync.Mutex
 
 	sseClients   map[string][]chan []byte // convID -> SSE client channels
 	sseClientsMu sync.Mutex
@@ -226,10 +227,56 @@ func (a *App) TryInject(convID, msg string) (queued bool, full bool) {
 	}
 	select {
 	case ch <- msg:
+		if a.convQueuedMsgs == nil {
+			a.convQueuedMsgs = make(map[string][]string)
+		}
+		a.convQueuedMsgs[convID] = append(a.convQueuedMsgs[convID], msg)
 		return true, false
 	default:
 		return false, true
 	}
+}
+
+// ConsumeQueuedMsgs removes msgs from the in-memory queue for convID.
+// Called when the agent emits EventMidTurnUserMessage so the queue reflects
+// only messages not yet processed.
+func (a *App) ConsumeQueuedMsgs(convID string, msgs []string) {
+	if len(msgs) == 0 {
+		return
+	}
+	a.convInjectChsMu.Lock()
+	defer a.convInjectChsMu.Unlock()
+	queue := a.convQueuedMsgs[convID]
+	if len(queue) == 0 {
+		return
+	}
+	// Remove the first occurrence of each consumed message.
+	for _, m := range msgs {
+		for i, q := range queue {
+			if q == m {
+				queue = append(queue[:i], queue[i+1:]...)
+				break
+			}
+		}
+	}
+	if len(queue) == 0 {
+		delete(a.convQueuedMsgs, convID)
+	} else {
+		a.convQueuedMsgs[convID] = queue
+	}
+}
+
+// GetQueuedMsgs returns a snapshot of pending queued messages for convID.
+func (a *App) GetQueuedMsgs(convID string) []string {
+	a.convInjectChsMu.Lock()
+	defer a.convInjectChsMu.Unlock()
+	q := a.convQueuedMsgs[convID]
+	if len(q) == 0 {
+		return nil
+	}
+	out := make([]string, len(q))
+	copy(out, q)
+	return out
 }
 
 // ReleaseConv atomically removes and closes the inject channel for convID.
@@ -241,6 +288,7 @@ func (a *App) ReleaseConv(convID string) {
 		delete(a.convInjectChs, convID)
 		close(ch)
 	}
+	delete(a.convQueuedMsgs, convID)
 }
 
 // RegisterSSEClient registers a new SSE client channel for a conversation.
