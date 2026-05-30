@@ -42,7 +42,7 @@ func Middleware() func(http.Handler) http.Handler {
 			start := time.Now()
 			next.ServeHTTP(rec, r.WithContext(ctx))
 
-			level := zerolog.InfoLevel
+			level := zerolog.DebugLevel
 			if rec.status >= 500 {
 				level = zerolog.ErrorLevel
 			}

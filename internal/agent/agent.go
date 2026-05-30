@@ -366,7 +366,13 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 			var pendingToolResults []string // toolID\x00content, saved after assistant
 
 			batches := partitionToolCalls(toolCalls, a.registry)
-			for _, batch := range batches {
+			log.Debug().Int("turn", turn).Int("batches", len(batches)).Int("tool_calls", len(toolCalls)).Msg("tool dispatch start")
+			for batchIdx, batch := range batches {
+				toolNames := make([]string, len(batch.calls))
+				for i, tc := range batch.calls {
+					toolNames[i] = tc.Name
+				}
+				log.Debug().Int("turn", turn).Int("batch", batchIdx).Bool("concurrent", batch.concurrent).Strs("tools", toolNames).Msg("batch start")
 				var results []toolExecResult
 				if batch.concurrent && len(batch.calls) > 1 {
 					results = a.executeConcurrent(ctx, batch.calls, conversationID, waiter, events)
@@ -375,6 +381,7 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 						results = append(results, a.executeOne(ctx, tc, conversationID, waiter, events))
 					}
 				}
+				log.Debug().Int("turn", turn).Int("batch", batchIdx).Msg("batch done")
 				for _, r := range results {
 					history = append(history, r.historyMessages...)
 					if r.pendingResult != "" {
@@ -391,8 +398,10 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 			for _, tr := range pendingToolResults {
 				a.msgStore.Save(conversationID, "tool_result", tr, "")
 			}
-			if parts := append(streamInjected, drainInjectCh(injectCh)...); len(parts) > 0 {
-				merged := strings.Join(parts, "\n\n")
+			drained := append(streamInjected, drainInjectCh(injectCh)...)
+			log.Debug().Int("turn", turn).Int("injected_during_stream", len(streamInjected)).Int("injected_after_tools", len(drained)-len(streamInjected)).Int("total_injected", len(drained)).Msg("inject drain")
+			if len(drained) > 0 {
+				merged := strings.Join(drained, "\n\n")
 				a.msgStore.Save(conversationID, "user", merged, "")
 				history = append(history, llm.Message{Role: llm.RoleUser, Content: merged})
 				events <- Event{Type: EventMidTurnUserMessage, Content: map[string]any{"text": merged}}
