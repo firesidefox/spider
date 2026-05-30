@@ -78,10 +78,6 @@ async function doExport(format: 'md' | 'json') {
 
 const activeConvId = ref<string | null>(null)
 const messagesMap = ref<Record<string, DisplayMessage[]>>({})
-
-const transitionState = ref<'welcome' | 'transitioning' | 'chat'>(
-  route.params.id ? 'chat' : 'welcome'
-)
 const messages = computed(() => messagesMap.value[activeConvId.value ?? ''] ?? [])
 
 const { statuses: agentStatuses } = useAgentStatus()
@@ -98,10 +94,8 @@ function getOrInitMessages(convId: string): DisplayMessage[] {
 }
 
 const toolCallsCache = new Map<string, any[]>()
-const convLastMsgId = new Map<string, string>()  // last server message ID per conv, for SSE cursor
 
-function buildDisplayMessages(msgs: ChatMsg[] | null | undefined): DisplayMessage[] {
-  if (!msgs) return []
+function buildDisplayMessages(msgs: ChatMsg[]): DisplayMessage[] {
   return msgs.filter(m => m.role !== 'tool_result').map(m => {
     const blocks: MessageBlock[] = []
     if (m.content) blocks.push({ type: 'text', content: m.content })
@@ -143,25 +137,21 @@ function addSystemMessage(content: string) {
 }
 
 async function pollUntilIdle(convId: string) {
-  clearPollTimer(convId)
   const check = async () => {
     try {
       const data = await getConversation(convId)
       if (data.conversation.status === 'idle') {
         pollTimers.delete(convId)
-        // Don't overwrite messagesMap — SSE replay via message events already
-        // updated it. Only clear the streaming state.
+        messagesMap.value[convId] = buildDisplayMessages(data.messages)
         setConversationStreaming(convId, false)
         if (activeConvId.value === convId) {
           await nextTick()
           scrollToBottom()
         }
       } else {
-        clearPollTimer(convId)
         pollTimers.set(convId, setTimeout(check, 2000))
       }
     } catch {
-      clearPollTimer(convId)
       pollTimers.set(convId, setTimeout(check, 2000))
     }
   }
@@ -183,6 +173,7 @@ function setConversationStreaming(convId: string, streaming: boolean) {
   const next = new Set(streamingConvIds.value)
   if (streaming) {
     next.add(convId)
+    if (!pollTimers.has(convId)) pollUntilIdle(convId)
   } else next.delete(convId)
   streamingConvIds.value = next
 
@@ -363,10 +354,10 @@ function markDevicesDone(hostNames: string[], failed: boolean) {
   }
 }
 
-let abortCtrl: AbortController | null = null
-let selectingConvId: string | null = null
 // Per-conversation EventSource subscriptions
 const convSubscriptions = new Map<string, () => void>()
+
+let pendingSendCtrl: AbortController | null = null
 
 let scrollRafId: number | null = null
 function scheduleScrollToBottom() {
@@ -550,16 +541,9 @@ async function loadConversations() {
 }
 
 async function selectConversation(id: string) {
-  if (activeConvId.value === id && transitionState.value === 'chat') return
-  if (selectingConvId === id) return  // same conv already loading
-  selectingConvId = id
   clearPollTimer(id)
-  try {
-    const data = await getConversation(id)
-    // If user clicked a different conv while this was loading, abort
-    if (selectingConvId !== id) return
+  const data = await getConversation(id)
   activeConvId.value = id
-  if (transitionState.value !== 'chat') transitionState.value = 'chat'
   const taskMap = new Map<number, Todo>()
   for (const t of data.todo_tasks ?? []) taskMap.set(t.id, t)
   todoTasksMap.value[id] = taskMap
@@ -579,32 +563,23 @@ async function selectConversation(id: string) {
   } else {
     messagesMap.value[id] = buildDisplayMessages(data.messages)
     setConversationStreaming(id, data.conversation.status === 'processing')
+    if (data.conversation.status === 'processing') {
+      pollUntilIdle(id)
+    }
   }
 
   if (data.conversation.status === 'processing') {
     updateAgentStatus({ conversationId: id, title: data.conversation.title || id.slice(0, 8), phase: 'thinking' })
   }
 
-  // Subscribe to SSE first. pollUntilIdle is a fallback only — it will be
-  // cancelled when the done event arrives via SSE.
-  const lastMsg = data.messages[data.messages.length - 1]
-  if (lastMsg?.id) convLastMsgId.set(id, lastMsg.id)
   if (!convSubscriptions.has(id)) {
+    const lastMsg = data.messages[data.messages.length - 1]
     const unsub = subscribeConversation(id, (event) => handleConvEvent(id, event), lastMsg?.id)
     convSubscriptions.set(id, unsub)
   }
 
-  if (data.conversation.status === 'processing') {
-    pollUntilIdle(id)
-  }
-
   await nextTick()
   scrollToBottom()
-  } catch (e) {
-    console.error('selectConversation failed', e)
-  } finally {
-    if (selectingConvId === id) selectingConvId = null
-  }
 }
 
 async function createNewConversation() {
@@ -620,7 +595,6 @@ async function createNewConversation() {
 
 function goNewPage() {
   activeConvId.value = null
-  transitionState.value = 'welcome'
   router.replace('/chat')
 }
 
@@ -639,8 +613,9 @@ function handleEscCancel(e: KeyboardEvent) {
 async function cancelSend() {
   const convId = activeConvId.value
   if (!convId) return
-  abortCtrl?.abort()
-  abortCtrl = null
+  pendingSendCtrl?.abort()
+  pendingSendCtrl = null
+  queuedMessages.value = []
   await cancelConversation(convId)
   setConversationStreaming(convId, false)
   // Reload from DB to replace the truncated in-memory assistant message
@@ -648,7 +623,6 @@ async function cancelSend() {
   messagesMap.value[convId] = buildDisplayMessages(data.messages)
   await nextTick()
   scrollToBottom()
-  flushQueue()
 }
 
 function handleConvEvent(convId: string, event: ChatEvent) {
@@ -673,7 +647,6 @@ function handleConvEvent(convId: string, event: ChatEvent) {
       convMsgs.push(...buildDisplayMessages([msg]))
       if (activeConvId.value === convId) nextTick(() => scrollToBottom())
     }
-    if (msg.id) convLastMsgId.set(convId, msg.id)
     return
   }
 
@@ -755,7 +728,7 @@ function handleConvEvent(convId: string, event: ChatEvent) {
       break
     case 'error': {
       clearRetryState()
-      clearPollTimer(convId)
+      queuedMessages.value = []
       const errText = `\n\n**Error:** ${event.content?.error || 'unknown error'}`
       const lastBlk = last.blocks[last.blocks.length - 1]
       if (lastBlk?.type === 'text') {
@@ -770,13 +743,12 @@ function handleConvEvent(convId: string, event: ChatEvent) {
       }
       if (activeConvId.value === convId) {
         nextTick(() => scrollToBottom())
-        flushQueue()
       }
       break
     }
-    case 'done': {
+    case 'done':
       clearRetryState()
-      clearPollTimer(convId)
+      queuedMessages.value = []
       last.isStreaming = false
       setConversationStreaming(convId, false)
       for (const b of last.blocks) {
@@ -784,23 +756,12 @@ function handleConvEvent(convId: string, event: ChatEvent) {
       }
       if (activeConvId.value === convId) {
         nextTick(() => scrollToBottom())
-        flushQueue()
       }
       setStatus('done')
       loadConversations()
       delete todoTasksMap.value[convId]
       clearAllTimers()
-      // Update cursor to last known message so next send() subscription starts correctly.
-      // Covers turns with no text output (pure tool-use) and error turns where no message events fired.
-      const lastKnown = convMsgs[convMsgs.length - 1]
-      if (lastKnown?.id) convLastMsgId.set(convId, lastKnown.id)
-      // Close SSE — server closes connection after done; prevent browser reconnect loop
-      {
-        const unsub = convSubscriptions.get(convId)
-        if (unsub) { unsub(); convSubscriptions.delete(convId) }
-      }
       break
-    }
     case 'todo_update': {
       const task = event.content as Todo
       if (!todoTasksMap.value[convId]) todoTasksMap.value[convId] = new Map()
@@ -824,6 +785,53 @@ function handleConvEvent(convId: string, event: ChatEvent) {
       const r = event.content as { attempt: number; max_retries: number; error: string; retry_in_ms: number }
       if (r.attempt >= 3) {
         startRetryCountdown(r.attempt, r.max_retries, r.error, r.retry_in_ms)
+      }
+      break
+    }
+    case 'mid_turn_user_message': {
+      const text = event.content?.text as string | undefined
+      if (!text) break
+      // Backend joins multiple queued messages with \n\n.
+      // Try exact match first (single message or message containing \n\n).
+      // Fall back to removing any queued entries that are exact components of the joined text.
+      const idx = queuedMessages.value.indexOf(text)
+      if (idx !== -1) {
+        queuedMessages.value.splice(idx, 1)
+      } else {
+        // Build the expected joined string from queued messages and remove matched ones.
+        // Walk from the front: greedily consume queued messages that form a prefix of text.
+        const remaining = [...queuedMessages.value]
+        const consumed: string[] = []
+        let joined = ''
+        for (let i = 0; i < remaining.length; i++) {
+          const candidate = joined ? joined + '\n\n' + remaining[i] : remaining[i]
+          if (text === candidate || text.startsWith(candidate + '\n\n')) {
+            joined = candidate
+            consumed.push(remaining[i])
+          }
+        }
+        if (consumed.length > 0) {
+          const consumedSet = new Set(consumed)
+          queuedMessages.value = queuedMessages.value.filter(q => !consumedSet.has(q))
+        }
+      }
+      // Insert as a real user message in the conversation
+      const convMsgsForInject = messagesMap.value[convId]
+      if (convMsgsForInject) {
+        // Close any in-progress streaming assistant message before injecting user message
+        const prevLast = convMsgsForInject[convMsgsForInject.length - 1]
+        if (prevLast?.role === 'assistant' && prevLast.isStreaming) {
+          prevLast.isStreaming = false
+          for (const b of prevLast.blocks) {
+            if (b.type === 'tool' && b.call.durationMs == null) b.call.durationMs = 0
+          }
+        }
+        convMsgsForInject.push({
+          id: `u-injected-${Date.now()}`,
+          role: 'user',
+          blocks: [{ type: 'text', content: text }],
+        })
+        if (activeConvId.value === convId) nextTick(() => scrollToBottom())
       }
       break
     }
@@ -869,16 +877,6 @@ async function send(overrideText?: string) {
     }
   }
 
-  // enqueue when streaming (only for direct user input, not flush)
-  if (isStreaming.value && !overrideText) {
-    queuedMessages.value.push(text)
-    inputText.value = ''
-    nextTick(() => {
-      if (textareaRef.value) textareaRef.value.style.height = 'auto'
-    })
-    return
-  }
-
   if (!overrideText) {
     inputText.value = ''
     nextTick(() => {
@@ -888,63 +886,53 @@ async function send(overrideText?: string) {
 
   if (!activeConvId.value) {
     await createNewConversation()
-    triggerLayoutTransition()
   }
 
   const convId = activeConvId.value!
   const convMsgs = getOrInitMessages(convId)
 
   if (!convSubscriptions.has(convId)) {
-    const lastId = convLastMsgId.get(convId)
-    const unsub = subscribeConversation(convId, (event) => handleConvEvent(convId, event), lastId)
+    const unsub = subscribeConversation(convId, (event) => handleConvEvent(convId, event))
     convSubscriptions.set(convId, unsub)
   }
 
   const userMsg: DisplayMessage = {
     id: `u-${Date.now()}`, role: 'user', blocks: [{ type: 'text', content: text }],
   }
-  convMsgs.push(userMsg)
-
   const assistantMsg: DisplayMessage = {
     id: `a-${Date.now()}`, role: 'assistant',
     blocks: [], isStreaming: true,
   }
-  convMsgs.push(assistantMsg)
-  setConversationStreaming(convId, true)
-  pollUntilIdle(convId)
-  updateAgentStatus({ conversationId: convId, title: getConvTitle(convId), phase: 'thinking' })
-  turnUsage.value = null
-  await nextTick()
-  scrollToBottom()
 
-  const sendReq = sendMessage(convId, text, selectedHostIds.value)
-  abortCtrl = sendReq.controller
-  sendReq.request.catch((e: any) => {
-    if (e?.name === 'AbortError') return
-    clearPollTimer(convId)
-    const last = convMsgs[convMsgs.length - 1]
-    if (last?.role === 'assistant') {
-      last.blocks.push({ type: 'text', content: `**Error:** ${e?.message || 'send failed'}` })
-      last.isStreaming = false
+  // Optimistically show as queued immediately; remove if backend starts a new agent turn
+  queuedMessages.value.push(text)
+
+  pendingSendCtrl = new AbortController()
+  sendMessage(convId, text, selectedHostIds.value, pendingSendCtrl.signal).then(res => {
+    if (res.status === 'queued') {
+      // Backend injected into running agent — keep queued display as-is
+    } else {
+      // Backend accepted as new agent turn — remove from queued, show optimistic messages
+      const idx = queuedMessages.value.lastIndexOf(text)
+      if (idx !== -1) queuedMessages.value.splice(idx, 1)
+      convMsgs.push(userMsg)
+      convMsgs.push(assistantMsg)
+      setConversationStreaming(convId, true)
+      updateAgentStatus({ conversationId: convId, title: getConvTitle(convId), phase: 'thinking' })
+      turnUsage.value = null
+      nextTick(() => scrollToBottom())
     }
-    setConversationStreaming(convId, false)
-  })
-}
-
-
-function triggerLayoutTransition() {
-  if (transitionState.value !== 'welcome') return
-  transitionState.value = 'transitioning'
-  setTimeout(() => {
-    if (transitionState.value === 'transitioning') transitionState.value = 'chat'
-  }, 800)
-}
-
-function flushQueue() {
-  if (queuedMessages.value.length === 0) return
-  const merged = queuedMessages.value.join('\n\n')
-  queuedMessages.value = []
-  send(merged)
+  }).catch((e: any) => {
+    // Remove optimistic queued entry on error
+    const idx = queuedMessages.value.lastIndexOf(text)
+    if (idx !== -1) queuedMessages.value.splice(idx, 1)
+    if (e?.name === 'AbortError') return
+    // 503 = LLM not configured; surface it since no SSE event will arrive
+    const msg = e?.status === 503
+      ? 'LLM 未配置，请先在设置中添加 Provider'
+      : `发送失败：${e?.message || 'unknown error'}`
+    addSystemMessage(msg)
+  }).finally(() => { pendingSendCtrl = null })
 }
 
 function parseExportFormat(text: string): 'md' | 'json' | 'invalid' | 'default' {
@@ -1032,10 +1020,8 @@ async function handleDeleteConversation(id: string) {
   // 清理该会话的 tool_calls 缓存
   const msgs = messagesMap.value[id] || []
   for (const m of msgs) toolCallsCache.delete(m.id)
-  convLastMsgId.delete(id)
   if (activeConvId.value === id) {
     activeConvId.value = null
-    transitionState.value = 'welcome'
     delete messagesMap.value[id]
     router.replace('/chat')
   }
@@ -1229,6 +1215,7 @@ async function initView() {
   } else {
     const lastConvId = localStorage.getItem('spider-last-conv')
     if (lastConvId) {
+      router.replace(`/chat/${lastConvId}`)
       await selectConversation(lastConvId)
     }
   }
@@ -1281,19 +1268,10 @@ onDeactivated(() => {
   window.removeEventListener('keydown', handleEscCancel)
 })
 
-onBeforeRouteUpdate((to) => {
+onBeforeRouteUpdate(async (to) => {
   const newId = to.params.id as string | undefined
   if (newId && newId !== activeConvId.value) {
-    selectConversation(newId)  // fire-and-forget — don't hold the navigation lock
-  } else if (!newId) {
-    const oldId = activeConvId.value
-    if (oldId) {
-      const unsub = convSubscriptions.get(oldId)
-      if (unsub) { unsub(); convSubscriptions.delete(oldId) }
-      clearPollTimer(oldId)
-    }
-    activeConvId.value = null
-    transitionState.value = 'welcome'
+    await selectConversation(newId)
   }
 })
 
@@ -1364,14 +1342,8 @@ onUnmounted(() => {
     </div>
 
     <!-- Chat main -->
-    <div class="chat-main"
-         :class="{
-           'welcome-mode': transitionState === 'welcome',
-           'welcome-transitioning': transitionState === 'transitioning',
-           'welcome-chat': transitionState === 'chat',
-         }"
-         @click="showExportMenu = false; showModeDropdown = false; closeConvMenu()">
-      <div v-if="activeConvId || !sidebarOpen" class="chat-header">
+    <div class="chat-main" @click="showExportMenu = false; showModeDropdown = false; closeConvMenu()">
+      <div class="chat-header">
         <button v-if="!sidebarOpen" class="sidebar-toggle" @click="toggleSidebar">≡</button>
         <button v-if="!sidebarOpen" class="header-new-btn" @click="goNewPage()">+</button>
         <input v-if="editingHeaderTitle" class="conv-title-input"
@@ -1405,11 +1377,6 @@ onUnmounted(() => {
           </div>
         </div>
         <button v-if="!targetOpen" class="sidebar-toggle" @click="toggleTarget">‹</button>
-      </div>
-
-      <div class="welcome-greeting">
-        <span class="welcome-logo">✦</span>
-        <span class="welcome-text">你好，<span class="welcome-username">{{ currentUser?.username }}</span></span>
       </div>
 
       <div class="chat-messages" ref="messagesRef">
@@ -1548,78 +1515,6 @@ onUnmounted(() => {
 
 /* Chat main */
 .chat-main { flex: 1; display: flex; flex-direction: column; min-width: 300px; position: relative; }
-
-/* Welcome mode */
-.chat-main.welcome-mode { justify-content: center; align-items: center; }
-.chat-main.welcome-mode .chat-messages { display: none; }
-.chat-main.welcome-mode .todo-panel { display: none; }
-.chat-main.welcome-mode .retry-banner { display: none; }
-.chat-main.welcome-mode .chat-input {
-  max-width: 640px; width: 100%; position: relative;
-  transition: max-width 0.3s ease;
-  border-top: none; background: transparent; padding: 0;
-}
-.chat-main.welcome-transitioning .chat-input,
-.chat-main.welcome-chat .chat-input { max-width: 100%; }
-
-.welcome-greeting {
-  display: none; flex-direction: column; align-items: center; gap: 16px;
-  margin-bottom: 32px; position: relative;
-  transition: opacity 0.8s ease, transform 0.8s ease, filter 0.8s ease;
-}
-.welcome-greeting::before {
-  content: '';
-  position: absolute; top: -40px; left: 50%; transform: translateX(-50%);
-  width: 200px; height: 200px;
-  background: radial-gradient(circle, rgba(99,102,241,0.18) 0%, transparent 70%);
-  pointer-events: none;
-}
-.chat-main.welcome-mode .welcome-greeting { display: flex; }
-.chat-main.welcome-transitioning .welcome-greeting {
-  opacity: 0; transform: translateY(-20px); filter: blur(4px); pointer-events: none;
-}
-.chat-main.welcome-chat .welcome-greeting { display: none; }
-
-.welcome-logo {
-  font-size: 32px; color: color-mix(in srgb, var(--primary) 70%, #fff);
-  filter: drop-shadow(0 0 14px color-mix(in srgb, var(--primary) 65%, transparent));
-  animation: logo-float 3s ease-in-out infinite;
-}
-@keyframes logo-float {
-  0%, 100% { transform: translateY(0); }
-  50%       { transform: translateY(-4px); }
-}
-.welcome-text { font-size: 24px; color: color-mix(in srgb, var(--primary) 40%, var(--text)); }
-.welcome-text .welcome-username { color: var(--text); }
-
-/* Welcome-mode input overrides */
-.chat-main.welcome-mode .input-wrapper {
-  background: rgba(99,102,241,0.05);
-  border: 1px solid rgba(99,102,241,0.28);
-  border-radius: 9px;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 2px 12px rgba(0,0,0,0.08);
-  transition: border-color 0.2s;
-}
-.chat-main.welcome-mode .input-wrapper:focus-within {
-  border-color: rgba(99,102,241,0.55);
-}
-.chat-main.welcome-mode .input-wrapper textarea {
-  border: none; background: transparent; border-radius: 0;
-}
-.chat-main.welcome-mode .send-btn:not(.cancel-btn):not(.queue-btn) {
-  background: linear-gradient(135deg, #6366f1, #818cf8);
-  box-shadow: 0 4px 14px rgba(99,102,241,0.45);
-  transition: transform 0.1s, box-shadow 0.2s;
-}
-.chat-main.welcome-mode .send-btn:not(.cancel-btn):not(.queue-btn):hover {
-  box-shadow: 0 6px 20px rgba(99,102,241,0.6);
-  transform: translateY(-1px);
-}
-.chat-main.welcome-mode .send-btn:not(.cancel-btn):not(.queue-btn):active {
-  transform: scale(0.95);
-}
-
-/* Messages fade-in after welcome exits */
 
 .chat-header { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-bottom: 1px solid var(--border); background: var(--panel); }
 .header-new-btn { background: none; border: 1px solid var(--border); color: var(--text); width: 28px; height: 28px; border-radius: 4px; cursor: pointer; font-size: 16px; flex-shrink: 0; }

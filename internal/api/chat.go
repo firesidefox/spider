@@ -75,9 +75,6 @@ func chatGetConversation(app *mcppkg.App, w http.ResponseWriter, r *http.Request
 		}
 	}
 	msgs = msgs[:n]
-	if msgs == nil {
-		msgs = []*models.Message{}
-	}
 	tasks, err := app.TodoStore.List(id)
 	if err != nil {
 		writeError(w, 500, err.Error())
@@ -169,16 +166,6 @@ func chatSendMessage(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id
 	}
 	factory.DisableSearchDocs = allFacesDisableKB(app)
 
-	a := factory.NewAgent(id, req.HostIDs)
-	waiter := agent.NewConfirmationWaiter()
-	app.StoreChatWaiter(id, waiter)
-	goroutineLaunched := false
-	defer func() {
-		if !goroutineLaunched {
-			app.RemoveChatWaiter(id)
-		}
-	}()
-
 	content := req.Content
 	if rs, rsErr := ragStore(app); rsErr == nil {
 		groupLookup := func(name string) *int {
@@ -205,6 +192,48 @@ func chatSendMessage(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id
 		content = expandKBRefs(content, groupLookup, docLookup, search)
 	}
 
+	// Try to inject into a running agent first
+	if queued, full := app.TryInject(id, content); queued || full {
+		if full {
+			writeError(w, 429, "message queue full")
+			return
+		}
+		writeJSON(w, http.StatusAccepted, map[string]string{"status": "queued"})
+		return
+	}
+
+	// No agent running — try to claim the conv
+	injectCh, claimed := app.TryClaimConv(id)
+	if !claimed {
+		// Lost the race to another concurrent request — try inject again.
+		// If the winning agent already finished (ReleaseConv called between our
+		// TryClaimConv and this TryInject), fall through to claim a new one.
+		if queued, full := app.TryInject(id, content); queued {
+			writeJSON(w, http.StatusAccepted, map[string]string{"status": "queued"})
+			return
+		} else if full {
+			writeError(w, 429, "message queue full")
+			return
+		}
+		// Agent finished between our two checks — try to claim now.
+		injectCh, claimed = app.TryClaimConv(id)
+		if !claimed {
+			writeError(w, 503, "agent start conflict, retry")
+			return
+		}
+	}
+
+	a := factory.NewAgent(id, req.HostIDs)
+	waiter := agent.NewConfirmationWaiter()
+	app.StoreChatWaiter(id, waiter)
+	goroutineLaunched := false
+	defer func() {
+		if !goroutineLaunched {
+			app.RemoveChatWaiter(id)
+			app.ReleaseConv(id)
+		}
+	}()
+
 	app.ConvStore.SetStatus(id, "processing") //nolint:errcheck
 	parent := app.ShutdownCtx
 	if parent == nil {
@@ -212,11 +241,10 @@ func chatSendMessage(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id
 	}
 	ctx, cancel := context.WithCancel(parent)
 	app.StoreConvCancel(id, cancel)
-	events, err := a.Run(ctx, id, content, waiter)
+	events, err := a.Run(ctx, id, content, waiter, injectCh)
 	if err != nil {
 		cancel()
 		app.RemoveConvCancel(id)
-		app.RemoveChatWaiter(id)
 		app.ConvStore.SetStatus(id, "idle") //nolint:errcheck
 		writeError(w, 500, err.Error())
 		return
@@ -228,6 +256,7 @@ func chatSendMessage(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id
 			cancel()
 			app.RemoveConvCancel(id)
 			app.RemoveChatWaiter(id)
+			app.ReleaseConv(id)
 			app.ClearSSEBuffer(id)
 			app.ConvStore.SetStatus(id, "idle") //nolint:errcheck
 		}()
@@ -275,7 +304,6 @@ func chatCancel(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id stri
 		return
 	}
 	app.CancelConv(id)
-	app.RemoveChatWaiter(id)
 	app.ConvStore.SetStatus(id, "idle") //nolint:errcheck
 	writeJSON(w, http.StatusOK, map[string]string{"status": "cancelled"})
 }

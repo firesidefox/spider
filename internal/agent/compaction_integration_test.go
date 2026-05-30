@@ -64,6 +64,7 @@ func (m *mockIntegrationLLMClient) CountTokens(_ context.Context, msgs []llm.Mes
 // Returns all inserted message IDs in order.
 func insertTestMessages(t *testing.T, db *sql.DB, convID string, pairs int, content string, startIdx ...int) []string {
 	t.Helper()
+	ensureConv(t, db, convID)
 	base := 0
 	if len(startIdx) > 0 {
 		base = startIdx[0]
@@ -92,11 +93,22 @@ func insertTestMessages(t *testing.T, db *sql.DB, convID string, pairs int, cont
 	return ids
 }
 
+// ensureConv creates a conversation row (and a stub user) if not already present.
+func ensureConv(t *testing.T, db *sql.DB, convID string) {
+	t.Helper()
+	const stubUserID = "test-user-stub"
+	db.Exec(`INSERT OR IGNORE INTO users (id, username, password, role, created_at)
+		VALUES (?, 'testuser', '', 'user', datetime('now'))`, stubUserID)
+	db.Exec(`INSERT OR IGNORE INTO conversations (id, user_id, title, created_at, updated_at)
+		VALUES (?, ?, '', datetime('now'), datetime('now'))`, convID, stubUserID)
+}
+
 // cleanupConv removes test data for a conversation.
 func cleanupConv(t *testing.T, db *sql.DB, convID string) {
 	t.Helper()
 	db.Exec("DELETE FROM messages WHERE conversation_id = ?", convID)
 	db.Exec("DELETE FROM conversation_summaries WHERE conversation_id = ?", convID)
+	db.Exec("DELETE FROM conversations WHERE id = ?", convID)
 }
 
 // uniqueConvID generates a unique conversation ID for each test.

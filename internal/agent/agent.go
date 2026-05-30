@@ -29,6 +29,7 @@ const (
 	EventDone            EventType = "done"
 	EventTurnUsage       EventType = "turn_usage"
 	EventRetrying        EventType = "retrying"
+	EventMidTurnUserMessage  EventType = "mid_turn_user_message"
 )
 
 type Event struct {
@@ -166,7 +167,7 @@ func (w *ConfirmationWaiter) Resolve(requestID string, approved bool) {
 	}
 }
 
-func (a *Agent) Run(ctx context.Context, conversationID string, userMessage string, waiter *ConfirmationWaiter) (<-chan Event, error) {
+func (a *Agent) Run(ctx context.Context, conversationID string, userMessage string, waiter *ConfirmationWaiter, injectCh <-chan string) (<-chan Event, error) {
 	events := make(chan Event, 64)
 	go func() {
 		defer close(events)
@@ -290,33 +291,62 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 				}
 			}
 
-			for ev := range stream {
-				switch ev.Type {
-				case "text_delta":
-					assistantText += ev.Text
-					events <- Event{Type: EventTextDelta, Content: map[string]any{"text": ev.Text}}
-				case "tool_start":
-					finishToolInput()
-					toolCalls = append(toolCalls, *ev.ToolCall)
-				case "tool_input_delta":
-					currentToolInput += ev.Text
-				case "usage":
-					if ev.Usage != nil {
-						if ev.Usage.InputTokens > 0 {
-							usage.InputTokens = ev.Usage.InputTokens
-						}
-						if ev.Usage.OutputTokens > 0 {
-							usage.OutputTokens = ev.Usage.OutputTokens
-						}
+			var streamInjected []string
+		streamLoop:
+			for {
+				select {
+				case ev, ok := <-stream:
+					if !ok {
+						break streamLoop
 					}
-				case "message_stop":
-					finishToolInput()
+					switch ev.Type {
+					case "text_delta":
+						assistantText += ev.Text
+						events <- Event{Type: EventTextDelta, Content: map[string]any{"text": ev.Text}}
+					case "tool_start":
+						finishToolInput()
+						toolCalls = append(toolCalls, *ev.ToolCall)
+					case "tool_input_delta":
+						currentToolInput += ev.Text
+					case "usage":
+						if ev.Usage != nil {
+							if ev.Usage.InputTokens > 0 {
+								usage.InputTokens = ev.Usage.InputTokens
+							}
+							if ev.Usage.OutputTokens > 0 {
+								usage.OutputTokens = ev.Usage.OutputTokens
+							}
+						}
+					case "message_stop":
+						finishToolInput()
+					}
+				case msg, ok := <-injectCh:
+					if ok {
+						streamInjected = append(streamInjected, msg)
+					}
 				}
 			}
 
 			if len(toolCalls) == 0 {
 				if assistantText != "" {
 					a.msgStore.Save(conversationID, "assistant", assistantText, "")
+				}
+				// Drain queued user messages before deciding to exit.
+				// If any arrived, continue the loop so LLM can respond to them.
+				parts := append(streamInjected, drainInjectCh(injectCh)...)
+				if len(parts) > 0 {
+					merged := strings.Join(parts, "\n\n")
+					a.msgStore.Save(conversationID, "user", merged, "")
+					if assistantText != "" {
+						history = append(history, llm.Message{Role: llm.RoleAssistant, Content: assistantText})
+					}
+					history = append(history, llm.Message{Role: llm.RoleUser, Content: merged})
+					events <- Event{Type: EventMidTurnUserMessage, Content: map[string]any{"text": merged}}
+					events <- Event{Type: EventTurnUsage, Content: map[string]any{
+						"input_tokens":  usage.InputTokens,
+						"output_tokens": usage.OutputTokens,
+					}}
+					continue
 				}
 				log.Debug().Int("turn", turn).Int64("duration_ms", time.Since(turnStart).Milliseconds()).Int("input_tokens", usage.InputTokens).Int("output_tokens", usage.OutputTokens).Str("response", assistantText).Msg("turn done")
 				log.Info().Int("turn", turn).Str("reason", "no_tool_calls").Msg("agent done")
@@ -336,7 +366,13 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 			var pendingToolResults []string // toolID\x00content, saved after assistant
 
 			batches := partitionToolCalls(toolCalls, a.registry)
-			for _, batch := range batches {
+			log.Debug().Int("turn", turn).Int("batches", len(batches)).Int("tool_calls", len(toolCalls)).Msg("tool dispatch start")
+			for batchIdx, batch := range batches {
+				toolNames := make([]string, len(batch.calls))
+				for i, tc := range batch.calls {
+					toolNames[i] = tc.Name
+				}
+				log.Debug().Int("turn", turn).Int("batch", batchIdx).Bool("concurrent", batch.concurrent).Strs("tools", toolNames).Msg("batch start")
 				var results []toolExecResult
 				if batch.concurrent && len(batch.calls) > 1 {
 					results = a.executeConcurrent(ctx, batch.calls, conversationID, waiter, events)
@@ -345,6 +381,7 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 						results = append(results, a.executeOne(ctx, tc, conversationID, waiter, events))
 					}
 				}
+				log.Debug().Int("turn", turn).Int("batch", batchIdx).Msg("batch done")
 				for _, r := range results {
 					history = append(history, r.historyMessages...)
 					if r.pendingResult != "" {
@@ -360,6 +397,14 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 			a.msgStore.Save(conversationID, "assistant", assistantText, string(tcJSON))
 			for _, tr := range pendingToolResults {
 				a.msgStore.Save(conversationID, "tool_result", tr, "")
+			}
+			drained := append(streamInjected, drainInjectCh(injectCh)...)
+			log.Debug().Int("turn", turn).Int("injected_during_stream", len(streamInjected)).Int("injected_after_tools", len(drained)-len(streamInjected)).Int("total_injected", len(drained)).Msg("inject drain")
+			if len(drained) > 0 {
+				merged := strings.Join(drained, "\n\n")
+				a.msgStore.Save(conversationID, "user", merged, "")
+				history = append(history, llm.Message{Role: llm.RoleUser, Content: merged})
+				events <- Event{Type: EventMidTurnUserMessage, Content: map[string]any{"text": merged}}
 			}
 			log.Debug().Int("turn", turn).Int64("duration_ms", time.Since(turnStart).Milliseconds()).Int("input_tokens", usage.InputTokens).Int("output_tokens", usage.OutputTokens).Int("tools", len(tcRecords)).Str("response", assistantText).Msg("turn done")
 			events <- Event{Type: EventTurnUsage, Content: map[string]any{
@@ -450,4 +495,24 @@ func (a *Agent) resolveHostNames(input map[string]any) []string {
 		return nil
 	}
 	return a.hosts.ResolveNames(input)
+}
+
+func drainInjectCh(ch <-chan string) []string {
+	if ch == nil {
+		return nil
+	}
+	var parts []string
+loop:
+	for {
+		select {
+		case msg, ok := <-ch:
+			if !ok {
+				break loop
+			}
+			parts = append(parts, msg)
+		default:
+			break loop
+		}
+	}
+	return parts
 }

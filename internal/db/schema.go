@@ -306,6 +306,40 @@ func migrate(db *sql.DB) error {
 		return err
 	}
 	db.Exec(`DROP TABLE IF EXISTS host_knowledge_sources`)
+
+	// Prometheus integration tables (must exist before migrateAccessFacesPrometheus)
+	db.Exec(`CREATE TABLE IF NOT EXISTS prometheus_sources (
+		id                 TEXT PRIMARY KEY,
+		name               TEXT NOT NULL,
+		base_url           TEXT NOT NULL,
+		timeout_seconds    INTEGER NOT NULL DEFAULT 30,
+		auth_type          TEXT NOT NULL DEFAULT 'none',
+		username           TEXT NOT NULL DEFAULT '',
+		encrypted_password TEXT NOT NULL DEFAULT '',
+		encrypted_token    TEXT NOT NULL DEFAULT '',
+		skip_tls_verify    INTEGER NOT NULL DEFAULT 0,
+		created_at         DATETIME NOT NULL,
+		updated_at         DATETIME NOT NULL
+	)`)
+	db.Exec(`CREATE TABLE IF NOT EXISTS prometheus_bindings (
+		id          TEXT PRIMARY KEY,
+		source_id   TEXT NOT NULL REFERENCES prometheus_sources(id) ON DELETE CASCADE,
+		scope_type  TEXT NOT NULL CHECK(scope_type IN ('topology_layer','host')),
+		topology_id TEXT REFERENCES topologies(id) ON DELETE CASCADE,
+		layer       TEXT,
+		host_id     TEXT REFERENCES hosts(id) ON DELETE CASCADE,
+		created_at  DATETIME NOT NULL
+	)`)
+	db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_pb_topology_layer
+		ON prometheus_bindings(topology_id, layer)
+		WHERE scope_type = 'topology_layer'`)
+	db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_pb_host
+		ON prometheus_bindings(host_id)
+		WHERE scope_type = 'host'`)
+
+	if err := migrateAccessFacesPrometheus(db); err != nil {
+		return err
+	}
 	// Context compaction
 	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS conversation_summaries (
 		id               INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -546,9 +580,6 @@ func migrate(db *sql.DB) error {
 	db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_pb_host
 		ON prometheus_bindings(host_id)
 		WHERE scope_type = 'host'`)
-	if err := migrateAccessFacesPrometheus(db); err != nil {
-		return err
-	}
 	return nil
 }
 

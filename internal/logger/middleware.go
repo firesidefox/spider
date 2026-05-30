@@ -30,6 +30,7 @@ func Middleware() func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			reqID := uuid.New().String()
 			l := global.With().
+				Str("module", "http").
 				Str("req_id", reqID).
 				Str("method", r.Method).
 				Str("path", r.URL.Path).
@@ -42,7 +43,7 @@ func Middleware() func(http.Handler) http.Handler {
 			start := time.Now()
 			next.ServeHTTP(rec, r.WithContext(ctx))
 
-			level := zerolog.InfoLevel
+			level := zerolog.DebugLevel
 			if rec.status >= 500 {
 				level = zerolog.ErrorLevel
 			}

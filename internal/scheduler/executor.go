@@ -131,7 +131,7 @@ func (e *Executor) executeAsync(ctx context.Context, task *models.Task, run *mod
 
 	convID := "task-run-" + run.ID
 	ag := e.agentFactory.NewHeadlessAgent(convID, taskContext)
-	events, err := ag.Run(execCtx, convID, task.Goal, nil)
+	events, err := ag.Run(execCtx, convID, task.Goal, nil, nil)
 	if err != nil {
 		now := time.Now()
 		run.Status = models.TaskRunStatusFailed
