@@ -159,7 +159,7 @@ async function pollUntilIdle(convId: string) {
 }
 
 const inputText = ref('')
-const queuedMessages = ref<string[]>([])
+const queuedMessages = ref<Map<string, string[]>>(new Map())
 const streamingConvIds = ref<Set<string>>(new Set())
 const isStreaming = computed({
   get: () => activeConvId.value ? streamingConvIds.value.has(activeConvId.value) : false,
@@ -557,6 +557,11 @@ async function selectConversation(id: string) {
   localStorage.setItem('spider-last-conv', id)
   router.replace(`/chat/${id}`)
 
+  // Sync queued messages from backend (in-memory store, survives page refresh within session)
+  const next = new Map(queuedMessages.value)
+  next.set(id, data.queued_messages ?? [])
+  queuedMessages.value = next
+
   if (data.conversation.status === 'processing' && messagesMap.value[id]) {
     // SSE is still writing into messagesMap[id] — don't overwrite it.
     setConversationStreaming(id, true)
@@ -615,7 +620,8 @@ async function cancelSend() {
   if (!convId) return
   pendingSendCtrl?.abort()
   pendingSendCtrl = null
-  queuedMessages.value = []
+  queuedMessages.value.delete(convId)
+  queuedMessages.value = new Map(queuedMessages.value)
   await cancelConversation(convId)
   setConversationStreaming(convId, false)
   // Reload from DB to replace the truncated in-memory assistant message
@@ -728,7 +734,8 @@ function handleConvEvent(convId: string, event: ChatEvent) {
       break
     case 'error': {
       clearRetryState()
-      queuedMessages.value = []
+      queuedMessages.value = new Map(queuedMessages.value)
+      queuedMessages.value.delete(convId)
       const errText = `\n\n**Error:** ${event.content?.error || 'unknown error'}`
       const lastBlk = last.blocks[last.blocks.length - 1]
       if (lastBlk?.type === 'text') {
@@ -748,7 +755,8 @@ function handleConvEvent(convId: string, event: ChatEvent) {
     }
     case 'done':
       clearRetryState()
-      queuedMessages.value = []
+      queuedMessages.value = new Map(queuedMessages.value)
+      queuedMessages.value.delete(convId)
       last.isStreaming = false
       setConversationStreaming(convId, false)
       for (const b of last.blocks) {
@@ -794,13 +802,16 @@ function handleConvEvent(convId: string, event: ChatEvent) {
       // Backend joins multiple queued messages with \n\n.
       // Try exact match first (single message or message containing \n\n).
       // Fall back to removing any queued entries that are exact components of the joined text.
-      const idx = queuedMessages.value.indexOf(text)
+      const convQueue = queuedMessages.value.get(convId) ?? []
+      const idx = convQueue.indexOf(text)
+      let newQueue: string[]
       if (idx !== -1) {
-        queuedMessages.value.splice(idx, 1)
+        newQueue = [...convQueue]
+        newQueue.splice(idx, 1)
       } else {
         // Build the expected joined string from queued messages and remove matched ones.
         // Walk from the front: greedily consume queued messages that form a prefix of text.
-        const remaining = [...queuedMessages.value]
+        const remaining = [...convQueue]
         const consumed: string[] = []
         let joined = ''
         for (let i = 0; i < remaining.length; i++) {
@@ -812,9 +823,15 @@ function handleConvEvent(convId: string, event: ChatEvent) {
         }
         if (consumed.length > 0) {
           const consumedSet = new Set(consumed)
-          queuedMessages.value = queuedMessages.value.filter(q => !consumedSet.has(q))
+          newQueue = convQueue.filter(q => !consumedSet.has(q))
+        } else {
+          newQueue = convQueue
         }
       }
+      const nextMap = new Map(queuedMessages.value)
+      if (newQueue.length === 0) nextMap.delete(convId)
+      else nextMap.set(convId, newQueue)
+      queuedMessages.value = nextMap
       // Insert as a real user message in the conversation
       const convMsgsForInject = messagesMap.value[convId]
       if (convMsgsForInject) {
@@ -905,7 +922,24 @@ async function send(overrideText?: string) {
   }
 
   // Optimistically show as queued immediately; remove if backend starts a new agent turn
-  queuedMessages.value.push(text)
+  const pushQueued = () => {
+    const next = new Map(queuedMessages.value)
+    next.set(convId, [...(next.get(convId) ?? []), text])
+    queuedMessages.value = next
+  }
+  const removeQueued = () => {
+    const queue = queuedMessages.value.get(convId) ?? []
+    const idx = queue.lastIndexOf(text)
+    if (idx !== -1) {
+      const next = new Map(queuedMessages.value)
+      const newQueue = [...queue]
+      newQueue.splice(idx, 1)
+      if (newQueue.length === 0) next.delete(convId)
+      else next.set(convId, newQueue)
+      queuedMessages.value = next
+    }
+  }
+  pushQueued()
 
   pendingSendCtrl = new AbortController()
   sendMessage(convId, text, selectedHostIds.value, pendingSendCtrl.signal).then(res => {
@@ -913,8 +947,7 @@ async function send(overrideText?: string) {
       // Backend injected into running agent — keep queued display as-is
     } else {
       // Backend accepted as new agent turn — remove from queued, show optimistic messages
-      const idx = queuedMessages.value.lastIndexOf(text)
-      if (idx !== -1) queuedMessages.value.splice(idx, 1)
+      removeQueued()
       convMsgs.push(userMsg)
       convMsgs.push(assistantMsg)
       setConversationStreaming(convId, true)
@@ -924,8 +957,7 @@ async function send(overrideText?: string) {
     }
   }).catch((e: any) => {
     // Remove optimistic queued entry on error
-    const idx = queuedMessages.value.lastIndexOf(text)
-    if (idx !== -1) queuedMessages.value.splice(idx, 1)
+    removeQueued()
     if (e?.name === 'AbortError') return
     // 503 = LLM not configured; surface it since no SSE event will arrive
     const msg = e?.status === 503
@@ -1440,7 +1472,7 @@ onUnmounted(() => {
         <span class="retry-countdown">Retrying in {{ Math.max(0, Math.round((retryState.retryInMs - retryState.countdownMs) / 1000)) }}s… (attempt {{ retryState.attempt }}/{{ retryState.maxRetries }})</span>
       </div>
 
-      <div v-for="(qm, i) in queuedMessages" :key="`queued-${i}`" class="queued-message">
+      <div v-for="(qm, i) in (queuedMessages.get(activeConvId ?? '') ?? [])" :key="`queued-${i}`" class="queued-message">
         <span class="queued-message-text">{{ i + 1 }}: {{ qm }}</span>
       </div>
 

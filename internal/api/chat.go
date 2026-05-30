@@ -83,7 +83,11 @@ func chatGetConversation(app *mcppkg.App, w http.ResponseWriter, r *http.Request
 	if tasks == nil {
 		tasks = []*models.Todo{}
 	}
-	writeJSON(w, 200, map[string]any{"conversation": conv, "messages": msgs, "todo_tasks": tasks})
+	queuedMsgs := app.GetQueuedMsgs(id)
+	if queuedMsgs == nil {
+		queuedMsgs = []string{}
+	}
+	writeJSON(w, 200, map[string]any{"conversation": conv, "messages": msgs, "todo_tasks": tasks, "queued_messages": queuedMsgs})
 }
 
 func chatDeleteConversation(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id string) {
@@ -261,6 +265,11 @@ func chatSendMessage(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id
 			app.ConvStore.SetStatus(id, "idle") //nolint:errcheck
 		}()
 		for ev := range events {
+			if ev.Type == agent.EventMidTurnUserMessage {
+				if text, _ := ev.Content["text"].(string); text != "" {
+					app.ConsumeQueuedMsgs(id, strings.Split(text, "\n\n"))
+				}
+			}
 			if ev.Type == agent.EventToolStart {
 				injectHostNames(app, ev.Content)
 			}
