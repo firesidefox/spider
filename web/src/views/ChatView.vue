@@ -126,9 +126,10 @@ function clearPollTimer(convId: string) {
   if (t !== undefined) { clearTimeout(t); pollTimers.delete(convId) }
 }
 
-function addSystemMessage(content: string) {
-  if (activeConvId.value) {
-    getOrInitMessages(activeConvId.value).push({
+function addSystemMessage(content: string, targetConvId?: string) {
+  const cid = targetConvId ?? activeConvId.value
+  if (cid) {
+    getOrInitMessages(cid).push({
       id: Date.now().toString(),
       role: 'assistant',
       blocks: [{ type: 'text', content }],
@@ -548,6 +549,7 @@ async function selectConversation(id: string) {
   for (const t of data.todo_tasks ?? []) taskMap.set(t.id, t)
   todoTasksMap.value[id] = taskMap
   clearAllTimers()
+  queuedMessages.value = []
   turnUsage.value = null
   completedFolded.value = true
   pendingFolded.value = true
@@ -665,10 +667,11 @@ function handleConvEvent(convId: string, event: ChatEvent) {
   }
 
   const last = convMsgs[convMsgs.length - 1]
-  if (!last || last.role !== 'assistant') return
-  const blocks = last.blocks
+  // tool_result can arrive after mid_turn_user_message pushed a user message — don't gate on last.role
+  if (!last || (last.role !== 'assistant' && event.type !== 'tool_result')) return
+  const blocks = last.role === 'assistant' ? last.blocks : []
   if (!last.toolIndex) last.toolIndex = new Map<string, number>()
-  const toolIndex = last.toolIndex
+  const toolIndex = last.role === 'assistant' ? last.toolIndex : new Map<string, number>()
 
   switch (event.type) {
     case 'text_delta': {
@@ -700,10 +703,25 @@ function handleConvEvent(convId: string, event: ChatEvent) {
       break
     }
     case 'tool_result': {
-      const idx = toolIndex.get(event.content?.id || '')
-      if (idx !== undefined && idx < blocks.length) {
-        const old = (blocks[idx] as { type: 'tool'; call: ToolCallBlock }).call
-        blocks[idx] = { type: 'tool', call: {
+      const toolId = event.content?.id || ''
+      // Search backwards through all assistant messages for the one that owns this tool call.
+      // After mid_turn_user_message, the last message is a user message, so last.toolIndex won't have it.
+      let ownerBlocks = blocks
+      let ownerToolIndex = toolIndex
+      if (toolIndex.get(toolId) === undefined) {
+        for (let i = convMsgs.length - 1; i >= 0; i--) {
+          const m = convMsgs[i]
+          if (m.role === 'assistant' && m.toolIndex?.has(toolId)) {
+            ownerBlocks = m.blocks
+            ownerToolIndex = m.toolIndex!
+            break
+          }
+        }
+      }
+      const idx = ownerToolIndex.get(toolId)
+      if (idx !== undefined && idx < ownerBlocks.length) {
+        const old = (ownerBlocks[idx] as { type: 'tool'; call: ToolCallBlock }).call
+        ownerBlocks[idx] = { type: 'tool', call: {
           ...old,
           input: event.content?.input ?? old.input,
           result: event.content?.result,
@@ -931,7 +949,7 @@ async function send(overrideText?: string) {
     const msg = e?.status === 503
       ? 'LLM 未配置，请先在设置中添加 Provider'
       : `发送失败：${e?.message || 'unknown error'}`
-    addSystemMessage(msg)
+    addSystemMessage(msg, convId)
   }).finally(() => { pendingSendCtrl = null })
 }
 
