@@ -69,7 +69,7 @@ func (t *ListMetricsTool) InputSchema() map[string]any {
 		"properties": map[string]any{
 			"host_id": map[string]any{
 				"type":        "string",
-				"description": "Host ID to query metrics for.",
+				"description": "Host UUID from GetHosts `id` field. Must NOT be the host name.",
 			},
 			"filter": map[string]any{
 				"type":        "string",
@@ -84,15 +84,27 @@ const listMetricsPromptSection = `## ListMetrics
 
 **When to use:** Before writing PromQL queries — discover available metric names for a host. Use in Explore phase.
 
-**When NOT to use:** When you already know the metric name; do not call repeatedly in a loop.
+**When NOT to use:**
+- Host has no access face with type="prometheus" in GetHosts result — do NOT call ListMetrics for that host.
+- You already know the metric name.
+- Do not call repeatedly in a loop.
 
 **Rules:**
+- host_id MUST be the UUID from GetHosts `+"`"+`id`+"`"+` field (e.g. "14fb05b0-50c8-425e-a9eb-c4d20aaea7e8"), never the host name.
+- Check GetHosts access_faces first: only call if face with type="prometheus" exists.
 - Use filter prefix to narrow results for common namespaces (e.g. "node_", "go_")
 - Combine with QueryMetrics to inspect actual values
 
 <example>
-User: What CPU metrics are available for host h1?
-Assistant: ListMetrics host_id=h1 filter="node_cpu" → QueryMetrics host_id=h1 query="node_cpu_seconds_total{...}"
+User: What CPU metrics are available for host aisg-v706?
+GetHosts result: {"id":"14fb05b0-50c8-425e-a9eb-c4d20aaea7e8","name":"aisg-v706","access_faces":[{"type":"prometheus",...}]}
+Assistant: ListMetrics host_id="14fb05b0-50c8-425e-a9eb-c4d20aaea7e8" filter="node_cpu"
+</example>
+
+<example>
+User: Check metrics for host foo-bar.
+GetHosts result: {"id":"abc123","name":"foo-bar","access_faces":[{"type":"ssh",...}]}
+Assistant: No prometheus face — skip ListMetrics, use SSH instead.
 </example>`
 
 func (t *ListMetricsTool) SystemPromptSection() string {
@@ -162,7 +174,7 @@ func (t *QueryMetricsTool) InputSchema() map[string]any {
 		"properties": map[string]any{
 			"host_id": map[string]any{
 				"type":        "string",
-				"description": "Host ID to query.",
+				"description": "Host UUID from GetHosts `id` field. Must NOT be the host name.",
 			},
 			"query": map[string]any{
 				"type":        "string",
@@ -193,17 +205,21 @@ const queryMetricsPromptSection = `## QueryMetrics
 
 **When to use:** After identifying metric names via ListMetrics, or when you already know the PromQL expression.
 
-**When NOT to use:** Browsing available metrics — use ListMetrics instead.
+**When NOT to use:**
+- Host has no access face with type="prometheus" in GetHosts result.
+- Browsing available metrics — use ListMetrics instead.
 
 **Rules:**
+- host_id MUST be the UUID from GetHosts `+"`"+`id`+"`"+` field, never the host name.
 - Omit start/end for instant query (current value)
 - Provide both start AND end for range query; never provide only one
 - Use step to control data density (e.g. "1m" for 1-hour window)
 - Use raw=true only when the caller needs the full JSON for further processing
 
 <example>
-User: Show CPU usage trend for last hour on h1.
-Assistant: QueryMetrics host_id=h1 query="rate(node_cpu_seconds_total{mode='idle'}[5m])" start="now-1h" end="now" step="1m"
+User: Show CPU usage trend for last hour on aisg-v706.
+GetHosts result: {"id":"14fb05b0-50c8-425e-a9eb-c4d20aaea7e8","access_faces":[{"type":"prometheus"}]}
+Assistant: QueryMetrics host_id="14fb05b0-50c8-425e-a9eb-c4d20aaea7e8" query="rate(node_cpu_seconds_total{mode='idle'}[5m])" start="now-1h" end="now" step="1m"
 </example>`
 
 func (t *QueryMetricsTool) SystemPromptSection() string {

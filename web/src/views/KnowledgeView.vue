@@ -199,7 +199,7 @@
                           @change="trySourceId = { ...trySourceId, [entry.id]: ($event.target as HTMLSelectElement).value }">
                           <option value="" disabled>选择数据源…</option>
                           <option v-for="s in prometheusSources" :key="s.id" :value="s.id">
-                            {{ s.name }}
+                            {{ s.name }} · {{ s.base_url }}
                           </option>
                         </select>
                       </div>
