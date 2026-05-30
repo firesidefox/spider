@@ -30,6 +30,7 @@ func Middleware() func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			reqID := uuid.New().String()
 			l := global.With().
+				Str("module", "http").
 				Str("req_id", reqID).
 				Str("method", r.Method).
 				Str("path", r.URL.Path).
