@@ -148,16 +148,8 @@ func (r *Runtime) ReleaseConv(convID string) {
 	defer r.convInjectChsMu.Unlock()
 	if ch, ok := r.convInjectChs[convID]; ok {
 		delete(r.convInjectChs, convID)
-		// Drain any remaining messages from the channel before closing
-		for {
-			select {
-			case <-ch:
-			default:
-				close(ch)
-				goto done
-			}
-		}
-	done:
+		// TryInject is non-blocking; after delete, no new sends can race with close.
+		close(ch)
 	}
 	delete(r.convQueuedMsgs, convID)
 }

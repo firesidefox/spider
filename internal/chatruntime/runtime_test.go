@@ -79,13 +79,16 @@ func TestTryClaimInjectConsumeAndRelease(t *testing.T) {
 	if got := rt.GetQueuedMsgs("conv-1"); got != nil {
 		t.Fatalf("expected release to clear queue, got %#v", got)
 	}
-	select {
-	case _, open := <-ch:
-		if open {
-			t.Fatal("expected release to close injection channel")
+	// Drain any remaining messages from the channel
+	for {
+		select {
+		case _, open := <-ch:
+			if !open {
+				return // Channel is closed, test passes
+			}
+		case <-time.After(time.Second):
+			t.Fatal("expected released injection channel to close")
 		}
-	case <-time.After(time.Second):
-		t.Fatal("expected released injection channel to close")
 	}
 }
 
@@ -226,5 +229,33 @@ func TestCancelRemoveWithoutCalling(t *testing.T) {
 	}
 	if rt.CancelConv("conv-1") {
 		t.Fatal("expected removed cancel to be absent")
+	}
+}
+
+func TestSSEBufferCapEviction(t *testing.T) {
+	rt := New()
+	for i := 0; i < 501; i++ {
+		rt.BufferSSEEvent("conv-1", []byte{byte(i % 256)})
+	}
+	ch := make(chan []byte, 501)
+	buffered := rt.RegisterSSEClientAndDrain("conv-1", ch)
+	if len(buffered) != 500 {
+		t.Fatalf("expected 500 buffered events after cap eviction, got %d", len(buffered))
+	}
+	// oldest event (i=0) should be evicted; first retained is i=1
+	if buffered[0][0] != 1 {
+		t.Fatalf("expected oldest event evicted, first retained byte=1, got %d", buffered[0][0])
+	}
+}
+
+func TestClearSSEBuffer(t *testing.T) {
+	rt := New()
+	rt.BufferSSEEvent("conv-1", []byte("keep"))
+	rt.ClearSSEBuffer("conv-1")
+
+	ch := make(chan []byte, 1)
+	buffered := rt.RegisterSSEClientAndDrain("conv-1", ch)
+	if len(buffered) != 0 {
+		t.Fatalf("expected empty buffer after ClearSSEBuffer, got %#v", buffered)
 	}
 }
