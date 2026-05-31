@@ -9,6 +9,7 @@ import TargetPanel from '../components/TargetPanel.vue'
 import type { DeviceStatus } from '../components/TargetPanel.vue'
 import { useTargetHosts } from '../composables/useTargetHosts'
 import { useConversationList } from '../composables/chat/useConversationList'
+import { useTodoPanel } from '../composables/chat/useTodoPanel'
 import {
   sendMessage, subscribeConversation,
   getConversation, confirmAction, cancelConversation,
@@ -70,17 +71,8 @@ const conversationList = useConversationList({
     const data = await getConversation(convId)
     if (conversationList.activeConvId.value !== convId) return  // user switched to another conv while loading
     if (transitionState.value !== 'chat') transitionState.value = 'chat'
-    const taskMap = new Map<number, Todo>()
-    for (const t of data.todo_tasks ?? []) taskMap.set(t.id, t)
-    todoTasksMap.value[convId] = taskMap
-    clearAllTimers()
+    todoPanel.loadTodoTasks(convId, data.todo_tasks ?? [])
     queuedMessages.value.delete(convId)
-    turnUsage.value = null
-    completedFolded.value = true
-    pendingFolded.value = true
-    for (const task of taskMap.values()) {
-      if (task.status === 'in_progress') startTimer(task)
-    }
     router.replace(`/chat/${convId}`)
 
     // Sync queued messages from backend (in-memory store, survives page refresh within session)
@@ -109,6 +101,11 @@ const conversationList = useConversationList({
     await nextTick()
     scrollToBottom()
   }
+})
+
+// Initialize todo panel composable
+const todoPanel = useTodoPanel({
+  activeConvId: conversationList.activeConvId
 })
 
 const showExportMenu = ref(false)
@@ -236,11 +233,6 @@ const slashHint = computed(() => {
   return ''
 })
 
-const todoTasksMap = ref<Record<string, Map<number, Todo>>>({})
-const completedFolded = ref(true)
-const pendingFolded = ref(true)
-const turnUsage = ref<number | null>(null)
-
 interface RetryState {
   attempt: number
   maxRetries: number
@@ -253,85 +245,6 @@ const retryState = ref<RetryState | null>(null)
 
 // Removed startRetryCountdown and clearRetryState - retrying event handling removed
 
-const taskTimers = ref<Map<number, ReturnType<typeof setInterval>>>(new Map())
-const taskElapsed = ref<Map<number, number>>(new Map())
-
-const allTasks = computed(() =>
-  Array.from((todoTasksMap.value[conversationList.activeConvId.value ?? ''] ?? new Map<number, Todo>()).values())
-)
-const inProgressTasks = computed(() =>
-  allTasks.value.filter(t => t.status === 'in_progress').sort((a, b) => a.id - b.id)
-)
-const pendingTasks = computed(() =>
-  allTasks.value.filter(t => t.status === 'pending').sort((a, b) => a.id - b.id)
-)
-const completedTasks = computed(() =>
-  allTasks.value.filter(t => t.status === 'completed').sort((a, b) => a.id - b.id)
-)
-const visiblePending = computed(() =>
-  pendingFolded.value ? pendingTasks.value.slice(0, 2) : pendingTasks.value
-)
-const hiddenPendingCount = computed(() =>
-  pendingTasks.value.length - visiblePending.value.length
-)
-const visibleCompleted = computed(() =>
-  completedFolded.value ? [] : completedTasks.value
-)
-const hasTasks = computed(() =>
-  allTasks.value.length > 0
-)
-const panelHeader = computed(() => {
-  const active = inProgressTasks.value[0]
-  const tokenSuffix = turnUsage.value !== null
-    ? '  ↓ ' + fmtTokens(turnUsage.value)
-    : ''
-  if (active) {
-    const label = active.active_form ?? active.subject
-    const elapsed = taskElapsed.value.get(active.id) ?? 0
-    return label + '… (' + fmtElapsed(elapsed) + ')' + tokenSuffix
-  }
-  const total = allTasks.value.length
-  const done = completedTasks.value.length
-  return `TASKS ${done}/${total}` + tokenSuffix
-})
-
-function fmtElapsed(seconds: number): string {
-  if (seconds >= 60) {
-    const m = Math.floor(seconds / 60)
-    const s = seconds % 60
-    return `${m}m ${s}s`
-  }
-  return `${seconds}s`
-}
-
-function fmtTokens(n: number): string {
-  if (n >= 1000) return (n / 1000).toFixed(1) + 'k'
-  return String(n)
-}
-
-function startTimer(task: Todo) {
-  if (taskTimers.value.has(task.id)) return
-  const startTime = new Date(task.updated_at).getTime()
-  const tick = () => {
-    taskElapsed.value.set(task.id, Math.floor((Date.now() - startTime) / 1000))
-    taskElapsed.value = new Map(taskElapsed.value)
-  }
-  tick()
-  taskTimers.value.set(task.id, setInterval(tick, 1000))
-}
-
-function stopTimer(taskId: number) {
-  const t = taskTimers.value.get(taskId)
-  if (t) { clearInterval(t); taskTimers.value.delete(taskId) }
-  taskElapsed.value.delete(taskId)
-  taskElapsed.value = new Map(taskElapsed.value)
-}
-
-function clearAllTimers() {
-  taskTimers.value.forEach(t => clearInterval(t))
-  taskTimers.value.clear()
-  taskElapsed.value.clear()
-}
 const messagesRef = ref<HTMLElement | null>(null)
 const devices = ref<DeviceStatus[]>([])
 const allHosts = ref<Host[]>([])
@@ -684,25 +597,17 @@ function handleConvEvent(convId: string, event: ChatEvent) {
       }
       setStatus('done')
       conversationList.loadConversations()
-      delete todoTasksMap.value[convId]
-      clearAllTimers()
+      todoPanel.clearAllTimers()
       break
     case 'todo_update': {
       const task = event.content as Todo
-      if (!todoTasksMap.value[convId]) todoTasksMap.value[convId] = new Map()
-      todoTasksMap.value[convId].set(task.id, task)
-      todoTasksMap.value[convId] = todoTasksMap.value[convId]
-      if (task.status === 'in_progress') {
-        startTimer(task)
-      } else {
-        stopTimer(task.id)
-      }
+      todoPanel.updateTodoFromEvent(convId, task)
       break
     }
     case 'turn_usage': {
       const u = event.content as { output_tokens: number }
       if (conversationList.activeConvId.value === convId) {
-        turnUsage.value = u.output_tokens
+        todoPanel.setTurnUsage(u.output_tokens)
       }
       break
     }
@@ -871,7 +776,7 @@ async function send(overrideText?: string) {
       convMsgs.push(assistantMsg)
       setConversationStreaming(convId, true)
       updateAgentStatus({ conversationId: convId, title: conversationList.getConvTitle(convId), phase: 'thinking' })
-      turnUsage.value = null
+      todoPanel.setTurnUsage(null)
       nextTick(() => scrollToBottom())
     }
   }).catch((e: any) => {
@@ -1208,7 +1113,7 @@ onActivated(() => {
 })
 
 onDeactivated(() => {
-  clearAllTimers()
+  todoPanel.clearAllTimers()
   streamingTimeouts.forEach(t => clearTimeout(t))
   streamingTimeouts.clear()
   document.removeEventListener('click', closeModeDropdown)
@@ -1224,7 +1129,7 @@ onBeforeRouteUpdate(async (to) => {
 
 onUnmounted(() => {
   globalEs?.close()
-  clearAllTimers()
+  todoPanel.clearAllTimers()
   convSubscriptions.forEach(unsub => unsub())
   convSubscriptions.clear()
   toolCallsCache.clear()
@@ -1364,28 +1269,28 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <div v-if="hasTasks" class="todo-panel">
-        <div class="todo-header">{{ panelHeader }}</div>
+      <div v-if="todoPanel.hasTasks.value" class="todo-panel">
+        <div class="todo-header">{{ todoPanel.panelHeader.value }}</div>
 
-        <div v-for="task in inProgressTasks" :key="task.id" class="todo-row todo-in_progress">
+        <div v-for="task in todoPanel.inProgressTasks.value" :key="task.id" class="todo-row todo-in_progress">
           <span class="todo-icon">●</span>
           <span class="todo-subject">{{ task.seq }}: {{ task.subject }}</span>
         </div>
 
-        <div v-for="task in visiblePending" :key="task.id" class="todo-row todo-pending">
+        <div v-for="task in todoPanel.visiblePending.value" :key="task.id" class="todo-row todo-pending">
           <span class="todo-icon">○</span>
           <span class="todo-subject">{{ task.seq }}: {{ task.subject }}</span>
         </div>
-        <div v-if="hiddenPendingCount > 0" class="todo-row todo-fold" @click="pendingFolded = !pendingFolded">
+        <div v-if="todoPanel.hiddenPendingCount.value > 0" class="todo-row todo-fold" @click="todoPanel.pendingFolded.value = !todoPanel.pendingFolded.value">
           <span class="todo-icon">○</span>
-          <span class="todo-subject">+{{ hiddenPendingCount }} more{{ pendingFolded ? '' : ' ▲' }}</span>
+          <span class="todo-subject">+{{ todoPanel.hiddenPendingCount.value }} more{{ todoPanel.pendingFolded.value ? '' : ' ▲' }}</span>
         </div>
 
-        <div v-if="completedTasks.length > 0" class="todo-row todo-fold" @click="completedFolded = !completedFolded">
+        <div v-if="todoPanel.completedTasks.value.length > 0" class="todo-row todo-fold" @click="todoPanel.completedFolded.value = !todoPanel.completedFolded.value">
           <span class="todo-icon">✓</span>
-          <span class="todo-subject">+{{ completedTasks.length }} completed{{ completedFolded ? '' : ' ▲' }}</span>
+          <span class="todo-subject">+{{ todoPanel.completedTasks.value.length }} completed{{ todoPanel.completedFolded.value ? '' : ' ▲' }}</span>
         </div>
-        <div v-for="task in visibleCompleted" :key="task.id" class="todo-row todo-completed todo-completed-indent">
+        <div v-for="task in todoPanel.visibleCompleted.value" :key="task.id" class="todo-row todo-completed todo-completed-indent">
           <span class="todo-icon">✓</span>
           <span class="todo-subject">{{ task.seq }}: {{ task.subject }}</span>
         </div>
