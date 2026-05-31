@@ -105,7 +105,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import CodeBlock from '../components/CodeBlock.vue'
+import CodeBlock from '../../components/CodeBlock.vue'
 
 const encodeSkillName = (name: string) => name.split('/').map(encodeURIComponent).join('/')
 

@@ -108,7 +108,7 @@ import {
   testPrometheusConnection,
   type PrometheusSource,
   type PrometheusAuthType,
-} from '../api/prometheus'
+} from '../../api/prometheus'
 
 const sources = ref<PrometheusSource[]>([])
 const loading = ref(false)
