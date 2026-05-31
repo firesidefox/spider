@@ -1,33 +1,18 @@
-import { authHeaders } from './auth'
+import { api } from '@/shared/api/client'
 import type { UserInfo } from './auth'
 
 export async function listUsers(): Promise<UserInfo[]> {
-  const res = await fetch('/api/v1/users', { headers: authHeaders() })
-  if (!res.ok) throw new Error((await res.json()).error)
-  return res.json()
+  return api.get('/users')
 }
 
 export async function createUser(username: string, password: string, role: string): Promise<UserInfo> {
-  const res = await fetch('/api/v1/users', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify({ username, password, role }),
-  })
-  if (!res.ok) throw new Error((await res.json()).error)
-  return res.json()
+  return api.post('/users', { username, password, role })
 }
 
 export async function updateUser(id: string, data: { role?: string; enabled?: boolean; password?: string }): Promise<UserInfo> {
-  const res = await fetch(`/api/v1/users/${id}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify(data),
-  })
-  if (!res.ok) throw new Error((await res.json()).error)
-  return res.json()
+  return api.patch(`/users/${id}`, data)
 }
 
 export async function deleteUser(id: string): Promise<void> {
-  const res = await fetch(`/api/v1/users/${id}`, { method: 'DELETE', headers: authHeaders() })
-  if (!res.ok) throw new Error((await res.json()).error)
+  return api.delete(`/users/${id}`, { responseType: 'void' })
 }
