@@ -90,6 +90,9 @@
       <template v-else-if="activeTab === 'ssh-keys'">
         <SSHKeySettings />
       </template>
+      <template v-else-if="activeTab === 'logs'">
+        <LogsViewer />
+      </template>
       <template v-else>
         <div class="detail-topbar">
           <span class="detail-title">{{ tabTitle }}</span>
@@ -125,48 +128,6 @@
             </div>
           </div>
           <PasswordSettings />
-        </template>
-
-        <template v-if="activeTab === 'logs'">
-          <div class="edit-card">
-            <div class="edit-card-title">我的操作日志</div>
-            <table class="table">
-              <thead><tr><th>主机</th><th>命令</th><th>状态</th><th>耗时</th><th>时间</th></tr></thead>
-              <tbody>
-                <template v-for="log in logs" :key="log.id">
-                  <tr class="log-row" @click="toggleLog(log.id)">
-                    <td style="font-weight:500;color:var(--text)">{{ log.host_name || '—' }}</td>
-                    <td class="cmd-cell">{{ log.command.length > 48 ? log.command.slice(0, 48) + '…' : log.command }}</td>
-                    <td>
-                      <span class="status-badge" :class="log.exit_code === 0 ? 'ok' : 'fail'">
-                        {{ log.exit_code === 0 ? '✓ 成功' : `✗ ${log.exit_code}` }}
-                      </span>
-                    </td>
-                    <td class="dim">{{ log.duration_ms != null ? log.duration_ms + 'ms' : '—' }}</td>
-                    <td class="dim">{{ new Date(log.created_at).toLocaleString() }}</td>
-                  </tr>
-                  <tr v-if="expandedLog === log.id" class="log-expand">
-                    <td colspan="5">
-                      <div class="log-output">
-                        <div v-if="log.stdout" class="output-block">
-                          <div class="output-label">stdout</div>
-                          <pre class="code output-pre">{{ log.stdout }}</pre>
-                        </div>
-                        <div v-if="log.stderr" class="output-block">
-                          <div class="output-label err-label">stderr</div>
-                          <pre class="code output-pre err-pre">{{ log.stderr }}</pre>
-                        </div>
-                        <div v-if="!log.stdout && !log.stderr" class="dim" style="padding:8px 0">无输出</div>
-                      </div>
-                    </td>
-                  </tr>
-                </template>
-                <tr v-if="logs.length === 0">
-                  <td colspan="5" class="dim" style="text-align:center;padding:32px">暂无操作日志</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
         </template>
 
         <!-- Tab: 智能体 -->
@@ -689,6 +650,7 @@ import PasswordSettings from '../components/settings/PasswordSettings.vue'
 import ChatThemeSettings from '../components/settings/ChatThemeSettings.vue'
 import TokenSettings from '../components/settings/TokenSettings.vue'
 import SSHKeySettings from '@/components/settings/SSHKeySettings.vue'
+import LogsViewer from '@/components/settings/LogsViewer.vue'
 
 const { currentUser, isAdmin } = useAuth()
 const route = useRoute()
@@ -716,34 +678,11 @@ const tabTitle = computed(() => ({
 
 onMounted(() => {
   const tab = activeTab.value
-  if (tab === 'logs') loadLogs()
-  else if (tab === 'agent') { loadAgentSettings(); loadProviders() }
+  if (tab === 'agent') { loadAgentSettings(); loadProviders() }
   else if (tab === 'kb') loadRagConfig()
   else if (tab === 'settings') loadSettings()
   else if (tab === 'notify') loadNotifyChannels()
 })
-
-interface LogEntry {
-  id: string; host_name: string; command: string; exit_code: number
-  duration_ms: number | null; created_at: string; stdout: string; stderr: string
-}
-const logs = ref<LogEntry[]>([])
-const expandedLog = ref<string | null>(null)
-let logsLoaded = false
-
-async function loadLogs() {
-  if (logsLoaded) return
-  logsLoaded = true
-  try {
-    const res = await fetch('/api/v1/logs?triggered_by=me&limit=50', { headers: authHeaders() })
-    if (!res.ok) throw new Error()
-    logs.value = await res.json()
-  } catch {}
-}
-
-function toggleLog(id: string) {
-  expandedLog.value = expandedLog.value === id ? null : id
-}
 
 interface ProviderModel { model_id: string; display_name: string }
 interface Provider {
