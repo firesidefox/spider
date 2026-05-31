@@ -37,36 +37,72 @@ Refactor Spider.ai frontend to reduce complexity in large view files (ChatView 1
 class ApiClient {
   private baseURL = '/api/v1'
   
-  async get<T>(path: string): Promise<T>
-  async post<T>(path: string, body?: any): Promise<T>
-  async patch<T>(path: string, body?: any): Promise<T>
-  async delete<T>(path: string): Promise<T>
+  async get<T>(path: string, options?: RequestOptions): Promise<T>
+  async post<T>(path: string, body?: any, options?: RequestOptions): Promise<T>
+  async patch<T>(path: string, body?: any, options?: RequestOptions): Promise<T>
+  async delete<T>(path: string, options?: RequestOptions): Promise<T>
   async download(path: string): Promise<Blob>
+  async upload<T>(path: string, formData: FormData): Promise<T>
   
-  private async request<T>(method: string, path: string, body?: any): Promise<T> {
+  private async request<T>(method: string, path: string, body?: any, options?: RequestOptions): Promise<T> {
+    const headers: Record<string, string> = { ...authHeaders() }
+    
+    // Auto-detect body type
+    let requestBody: any = body
+    if (body && !(body instanceof FormData)) {
+      headers['Content-Type'] = 'application/json'
+      requestBody = JSON.stringify(body)
+    }
+    // FormData sets its own Content-Type with boundary
+    
+    // Merge custom headers
+    if (options?.headers) {
+      Object.assign(headers, options.headers)
+    }
+    
     const res = await fetch(`${this.baseURL}${path}`, {
       method,
-      headers: {
-        'Content-Type': 'application/json',
-        ...authHeaders(),
-      },
-      body: body ? JSON.stringify(body) : undefined,
+      headers,
+      body: requestBody,
     })
     
     if (res.status === 401) {
-      // Clear auth and redirect
-      localStorage.removeItem('token')
+      // Clear auth state and redirect
+      localStorage.removeItem('spider_token')
+      // Trigger useAuth refresh to clear currentUser
+      window.dispatchEvent(new Event('auth-expired'))
       window.location.href = '/login'
       throw new ApiError(401, 'Unauthorized')
     }
     
     if (!res.ok) {
-      const error = await res.json()
-      throw new ApiError(res.status, error.error || 'Request failed')
+      const contentType = res.headers.get('content-type')
+      if (contentType?.includes('application/json')) {
+        const error = await res.json()
+        throw new ApiError(res.status, error.error || 'Request failed')
+      }
+      throw new ApiError(res.status, `HTTP ${res.status}`)
     }
     
-    return res.json()
+    // Handle response based on type
+    const responseType = options?.responseType || 'json'
+    switch (responseType) {
+      case 'void':
+        return undefined as T
+      case 'text':
+        return (await res.text()) as T
+      case 'blob':
+        return (await res.blob()) as T
+      case 'json':
+      default:
+        return res.json()
+    }
   }
+}
+
+interface RequestOptions {
+  headers?: Record<string, string>
+  responseType?: 'json' | 'text' | 'blob' | 'void'
 }
 
 export class ApiError extends Error {
@@ -76,6 +112,29 @@ export class ApiError extends Error {
 }
 
 export const api = new ApiClient()
+```
+
+**Usage examples**:
+
+```typescript
+// JSON request/response (default)
+await api.post('/chat/conversations', { title: 'New chat' })
+
+// FormData upload
+const formData = new FormData()
+formData.append('file', file)
+await api.upload('/knowledge/documents', formData)
+
+// Custom headers (e.g., YAML)
+await api.post('/topology/import', yamlContent, {
+  headers: { 'Content-Type': 'application/x-yaml' }
+})
+
+// Blob download
+const blob = await api.download('/topology/export')
+
+// Void response (delete, logout, prefs update)
+await api.delete('/chat/conversations/123', { responseType: 'void' })
 ```
 
 **Migration example** (`api/chat.ts`):
@@ -137,6 +196,10 @@ components/settings/
   NotifyChannelSettings.vue  # Notify channel CRUD
   ChatThemeSettings.vue      # Chat theme selector
   AuditLogs.vue              # Audit logs display
+  UsersPanel.vue             # User management (admin only)
+  InstallPanel.vue           # Install panel (admin only)
+  SkillsPanel.vue            # Skills management (admin only)
+  PrometheusDataSourcesPanel.vue  # Prometheus datasources (admin only)
 ```
 
 **SettingView.vue becomes tab router** (~200 lines):
@@ -166,6 +229,10 @@ components/settings/
       <AgentSettings v-else-if="activeTab === 'agent'" />
       <NotifyChannelSettings v-else-if="activeTab === 'notify'" />
       <AuditLogs v-else-if="activeTab === 'audit'" />
+      <UsersPanel v-else-if="activeTab === 'users'" />
+      <InstallPanel v-else-if="activeTab === 'install'" />
+      <SkillsPanel v-else-if="activeTab === 'skills'" />
+      <PrometheusDataSourcesPanel v-else-if="activeTab === 'datasources'" />
     </div>
   </div>
 </template>
@@ -181,7 +248,7 @@ const router = useRouter()
 
 const allowedTabs = computed(() => {
   const base = ['info', 'tokens', 'ssh-keys', 'logs', 'chat-theme', 'settings', 'kb', 'agent', 'notify']
-  return isAdmin.value ? [...base, 'audit'] : base
+  return isAdmin.value ? [...base, 'audit', 'users', 'install', 'skills', 'datasources'] : base
 })
 
 const queryTab = route.query.tab as string
@@ -199,6 +266,10 @@ const tabTitle = computed(() => ({
   agent: 'Agent 设置',
   notify: '通知渠道',
   audit: '审计日志',
+  users: '用户管理',
+  install: '安装',
+  skills: 'Skills',
+  datasources: 'Prometheus 数据源',
 }))
 
 watch(activeTab, (tab) => {
@@ -227,10 +298,14 @@ watch(activeTab, (tab) => {
 4. `SSHKeySettings.vue` — standard CRUD
 5. `LogsViewer.vue` — read-only list
 6. `NotifyChannelSettings.vue` — CRUD + toggle
-7. `ProviderSettings.vue` — complex: CRUD + model refresh + enable/disable
-8. `RagSettings.vue` — complex: model fetch + validate
-9. `AgentSettings.vue` — complex: permission rules CRUD
-10. `AuditLogs.vue` — read-only list
+7. `UsersPanel.vue` — user management (already exists as separate component, move to settings/)
+8. `InstallPanel.vue` — install panel (already exists, move to settings/)
+9. `SkillsPanel.vue` — skills management (already exists, move to settings/)
+10. `PrometheusDataSourcesPanel.vue` — datasources (already exists, move to settings/)
+11. `ProviderSettings.vue` — complex: CRUD + model refresh + enable/disable
+12. `RagSettings.vue` — complex: model fetch + validate
+13. `AgentSettings.vue` — complex: permission rules CRUD
+14. `AuditLogs.vue` — read-only list (already exists as AuditView, move to settings/)
 
 **Verification after each component**:
 - Tab switches correctly
@@ -307,9 +382,11 @@ export function useConversationList() {
 
 **Key logic**:
 - `loadConversations`: fetch from API, sort by updated_at
-- `selectConversation`: set activeConvId, load messages via `useChatStream`
+- `selectConversation`: set activeConvId (ChatView watches this and loads messages)
 - `createConversation`: POST to API, add to list, select new conversation
 - Batch mode: toggle selection, delete multiple conversations
+
+**Note**: `selectConversation` only updates `activeConvId`. Message loading is handled by ChatView watching `activeConvId` and calling `useChatStream` methods. This avoids circular dependency between composables.
 
 #### 3.2 `composables/useChatStream.ts`
 
@@ -327,7 +404,15 @@ const globalEventSource = ref<EventSource | null>(null)
 
 **Interface**:
 ```typescript
-export function useChatStream(activeConvId: Ref<string | null>) {
+export function useChatStream(
+  activeConvId: Ref<string | null>,
+  callbacks?: {
+    onAgentStatusUpdate?: (status: any) => void
+    onDeviceStatusUpdate?: (hostName: string, status: string) => void
+    onTodoUpdate?: (convId: string, todos: Todo[]) => void
+    onScrollToBottom?: () => void
+  }
+) {
   return {
     // State
     messages: ComputedRef<DisplayMessage[]>  // Current conversation messages
@@ -342,7 +427,6 @@ export function useChatStream(activeConvId: Ref<string | null>) {
     
     // Internal (called by view)
     startGlobalSSE(): void
-    handleConvEvent(convId: string, event: ChatEvent): void
     
     // Lifecycle
     cleanup(): void  // Close EventSource, clear timers
@@ -352,21 +436,25 @@ export function useChatStream(activeConvId: Ref<string | null>) {
 
 **Key logic**:
 - `messagesMap`: indexed by convId, supports multiple conversations
-- `startGlobalSSE`: open persistent EventSource for all conversations
-- `handleConvEvent`: dispatch by event type (text_delta, tool_start, tool_result, done, error, todo_update, etc.)
+- `startGlobalSSE`: open persistent EventSource to `/api/v1/stream` (global stream for all conversations)
+- Event handling: dispatch by event type, delegate side effects via callbacks
 - `buildDisplayMessages`: parse tool_calls JSON, merge into DisplayMessage
 - `sendMessage`: POST to API, add user message, start streaming
 - Retry logic: exponential backoff on error, countdown display
 
-**Event handling**:
+**Event handling pattern**:
 ```typescript
 function handleConvEvent(convId: string, event: ChatEvent) {
   switch (event.type) {
     case 'text_delta':
       appendTextDelta(convId, event.content.delta)
+      callbacks?.onScrollToBottom?.()
       break
     case 'tool_start':
       addToolCall(convId, event.content)
+      if (SSH_TOOLS.has(event.content.tool_name)) {
+        callbacks?.onDeviceStatusUpdate?.(event.content.host, 'executing')
+      }
       break
     case 'tool_result':
       updateToolResult(convId, event.content)
@@ -378,14 +466,19 @@ function handleConvEvent(convId: string, event: ChatEvent) {
       handleError(convId, event.content)
       break
     case 'todo_update':
-      // Delegate to useTodoPanel
+      callbacks?.onTodoUpdate?.(convId, event.content.todos)
       break
     case 'message':
       addMessage(convId, event.content)
       break
+    case 'agent_status':
+      callbacks?.onAgentStatusUpdate?.(event.content)
+      break
   }
 }
 ```
+
+**SSE stream model**: Uses global `/api/v1/stream` EventSource (no `last_event_id` parameter). Per-conversation subscriptions removed in recent refactor. Messages loaded from DB on conversation select, then global stream provides real-time updates.
 
 #### 3.3 `composables/useTodoPanel.ts`
 
@@ -470,17 +563,6 @@ const {
 } = useConversationList()
 
 const { 
-  messages, 
-  isStreaming, 
-  sendMessage, 
-  cancelSend,
-  handleConfirm,
-  startGlobalSSE,
-  handleConvEvent,
-  cleanup: cleanupStream,
-} = useChatStream(activeConvId)
-
-const { 
   allTasks, 
   inProgressTasks, 
   completedTasks,
@@ -492,6 +574,35 @@ const {
   setTurnUsage,
   clearAllTimers,
 } = useTodoPanel(activeConvId)
+
+const { 
+  messages, 
+  isStreaming, 
+  sendMessage, 
+  cancelSend,
+  handleConfirm,
+  startGlobalSSE,
+  cleanup: cleanupStream,
+} = useChatStream(activeConvId, {
+  onTodoUpdate: updateTodoFromEvent,
+  onAgentStatusUpdate: (status) => {
+    // Update agent status display
+  },
+  onDeviceStatusUpdate: (hostName, status) => {
+    // Update device status in host panel
+  },
+  onScrollToBottom: () => {
+    // Scroll messages to bottom
+  },
+})
+
+// Watch activeConvId to load messages when conversation changes
+watch(activeConvId, async (newId) => {
+  if (newId) {
+    const { messages } = await getConversation(newId)
+    // useChatStream will update messagesMap
+  }
+})
 
 onMounted(() => {
   loadConversations()
@@ -505,9 +616,9 @@ onUnmounted(() => {
 ```
 
 **Extraction order**:
-1. `useConversationList` — most independent, zero dependencies
+1. `useConversationList` — most independent, only manages list and activeConvId
 2. `useTodoPanel` — independent, only depends on activeConvId
-3. `useChatStream` — most complex, depends on activeConvId, calls `updateTodoFromEvent`
+3. `useChatStream` — most complex, depends on activeConvId, uses callbacks for side effects
 
 **Verification after each composable**:
 - Extract composable
@@ -613,9 +724,22 @@ web/src/
 ### API Client
 
 **401 Unauthorized**:
-- Clear local auth token
+- Clear local auth token (`spider_token`)
+- Dispatch `auth-expired` event to trigger `useAuth` state refresh
 - Redirect to `/login`
 - Don't throw (avoid duplicate handling)
+
+**Implementation**:
+```typescript
+if (res.status === 401) {
+  localStorage.removeItem('spider_token')
+  window.dispatchEvent(new Event('auth-expired'))
+  window.location.href = '/login'
+  throw new ApiError(401, 'Unauthorized')
+}
+```
+
+**Note**: Current auth uses cookies (auto-sent by browser). `spider_token` in localStorage is for display state only. The `auth-expired` event ensures `useAuth` composable clears `currentUser` state.
 
 **Other errors**:
 - Throw `ApiError` with `status` and `message`
@@ -648,8 +772,9 @@ web/src/
 
 **SSE reconnection**:
 - `startGlobalSSE()` called in `onMounted`
+- Opens `/api/v1/stream` (global stream, no per-conversation subscriptions)
 - EventSource auto-reconnects (browser behavior)
-- Use `last_event_id` to avoid duplicate messages
+- No `last_event_id` parameter (messages loaded from DB on conversation select)
 
 **Memory leak prevention**:
 - `useTodoPanel`: call `clearAllTimers()` in `onUnmounted`
@@ -659,6 +784,7 @@ web/src/
 **Composable dependencies**:
 - `useChatStream` and `useTodoPanel` both depend on `activeConvId`
 - Pass as parameter, don't call `useConversationList` inside composables
+- Side effects (agent status, device status, scroll) injected via callbacks
 - Maintain unidirectional dependency, avoid cycles
 
 ## Testing Strategy
@@ -807,12 +933,16 @@ export default {
 ## Rollback Strategy
 
 If verification fails in any phase:
-1. `git reset --hard` to phase start
-2. Analyze failure cause
-3. Adjust design or implementation
-4. Re-execute phase
+1. Create a temporary branch or commit before starting each phase
+2. On failure, use `git reset --mixed HEAD~1` to unstage changes while preserving working directory
+3. Or create a reverse patch: `git diff > /tmp/phase-N.patch` then `git apply -R /tmp/phase-N.patch`
+4. Analyze failure cause
+5. Adjust design or implementation
+6. Re-execute phase
 
-No "partial completion" allowed. Each phase must fully pass verification before proceeding.
+**Never use `git reset --hard`** — it destroys uncommitted work and violates safety constraints.
+
+Each phase should be committed incrementally (e.g., after extracting each settings component). Small commits make rollback surgical.
 
 ## Timeline
 
