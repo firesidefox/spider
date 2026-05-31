@@ -1,4 +1,4 @@
-import { authHeaders } from './auth'
+import { api } from '@/shared/api/client'
 
 export type PrometheusAuthType = 'none' | 'basic' | 'bearer'
 export type PrometheusScopeType = 'topology_layer' | 'host'
@@ -48,43 +48,23 @@ export interface UpdatePrometheusSourceRequest {
 }
 
 export async function listPrometheusSources(): Promise<PrometheusSource[]> {
-  const res = await fetch('/api/v1/prometheus/sources', { headers: authHeaders() })
-  if (!res.ok) throw new Error(await res.text())
-  return (await res.json()) ?? []
+  return api.get<PrometheusSource[]>('/prometheus/sources')
 }
 
 export async function addPrometheusSource(req: AddPrometheusSourceRequest): Promise<PrometheusSource> {
-  const res = await fetch('/api/v1/prometheus/sources', {
-    method: 'POST',
-    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-    body: JSON.stringify(req),
-  })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
+  return api.post<PrometheusSource>('/prometheus/sources', req)
 }
 
 export async function updatePrometheusSource(id: string, req: UpdatePrometheusSourceRequest): Promise<PrometheusSource> {
-  const res = await fetch(`/api/v1/prometheus/sources/${id}`, {
-    method: 'PUT',
-    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-    body: JSON.stringify(req),
-  })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
+  return api.put<PrometheusSource>(`/prometheus/sources/${id}`, req)
 }
 
 export async function deletePrometheusSource(id: string): Promise<void> {
-  const res = await fetch(`/api/v1/prometheus/sources/${id}`, {
-    method: 'DELETE',
-    headers: authHeaders(),
-  })
-  if (!res.ok) throw new Error(await res.text())
+  return api.delete<void>(`/prometheus/sources/${id}`, { responseType: 'void' })
 }
 
 export async function testPrometheusConnection(id: string): Promise<{ ok: boolean; latency_ms?: number; error?: string }> {
-  const res = await fetch(`/api/v1/prometheus/sources/${id}/test`, { headers: authHeaders() })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
+  return api.get<{ ok: boolean; latency_ms?: number; error?: string }>(`/prometheus/sources/${id}/test`)
 }
 
 export async function addPrometheusBinding(req: {
@@ -94,19 +74,9 @@ export async function addPrometheusBinding(req: {
   layer?: string
   host_id?: string
 }): Promise<PrometheusBinding> {
-  const res = await fetch('/api/v1/prometheus/bindings', {
-    method: 'POST',
-    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-    body: JSON.stringify(req),
-  })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
+  return api.post<PrometheusBinding>('/prometheus/bindings', req)
 }
 
 export async function deletePrometheusBinding(id: string): Promise<void> {
-  const res = await fetch(`/api/v1/prometheus/bindings/${id}`, {
-    method: 'DELETE',
-    headers: authHeaders(),
-  })
-  if (!res.ok) throw new Error(await res.text())
+  return api.delete<void>(`/prometheus/bindings/${id}`, { responseType: 'void' })
 }
