@@ -320,6 +320,7 @@ func chatCancel(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id stri
 		return
 	}
 	app.ChatRuntime.CancelConv(id)
+	app.ChatRuntime.ReleaseConv(id) // close inject channel immediately; goroutine defer's ReleaseConv is idempotent
 	app.ConvStore.SetStatus(id, "idle") //nolint:errcheck
 	writeJSON(w, http.StatusOK, map[string]string{"status": "cancelled"})
 }
