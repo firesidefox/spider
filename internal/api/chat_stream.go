@@ -58,18 +58,20 @@ func chatStreamGet(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id s
 		}
 	}
 
+	// Atomically register SSE client and drain in-flight buffer.
+	// Combining these two operations eliminates the race window where events
+	// produced between a separate drain and register would be lost.
+	ch := make(chan []byte, 10)
+	buffered := app.RegisterSSEClientAndDrain(id, ch)
+	defer app.UnregisterSSEClient(id, ch)
+
 	// Replay in-flight events from current agent run (not yet persisted)
-	for _, data := range app.DrainSSEBuffer(id) {
+	for _, data := range buffered {
 		fmt.Fprintf(w, "data: %s\n\n", data)
 		if flusher != nil {
 			flusher.Flush()
 		}
 	}
-
-	// Subscribe to live updates
-	ch := make(chan []byte, 10)
-	app.RegisterSSEClient(id, ch)
-	defer app.UnregisterSSEClient(id, ch)
 
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()

@@ -355,6 +355,26 @@ func (a *App) DrainSSEBuffer(convID string) [][]byte {
 	return buf
 }
 
+// RegisterSSEClientAndDrain atomically registers an SSE client channel and drains
+// the in-flight buffer. This eliminates the race window that exists when DrainSSEBuffer
+// and RegisterSSEClient are called separately: events emitted between those two calls
+// would be broadcast to an empty client list and buffered into an already-drained buffer,
+// causing them to be lost. Holding both locks together closes that window.
+// Lock order: sseBuffersMu → sseClientsMu (always acquire in this order).
+func (a *App) RegisterSSEClientAndDrain(convID string, ch chan []byte) [][]byte {
+	a.sseBuffersMu.Lock()
+	defer a.sseBuffersMu.Unlock()
+	a.sseClientsMu.Lock()
+	defer a.sseClientsMu.Unlock()
+	if a.sseClients == nil {
+		a.sseClients = make(map[string][]chan []byte)
+	}
+	a.sseClients[convID] = append(a.sseClients[convID], ch)
+	buf := a.sseBuffers[convID]
+	delete(a.sseBuffers, convID)
+	return buf
+}
+
 // ClearSSEBuffer removes the in-flight buffer when a turn completes.
 func (a *App) ClearSSEBuffer(convID string) {
 	a.sseBuffersMu.Lock()
