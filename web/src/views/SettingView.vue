@@ -855,7 +855,7 @@ import { useAuth } from '../composables/useAuth'
 import { authHeaders } from '../api/auth'
 import { listTokens, createToken, deleteToken } from '../api/tokens'
 import type { TokenInfo } from '../api/tokens'
-import { listSSHKeys, addSSHKey, deleteSSHKey } from '../api/ssh-keys'
+import { listSSHKeys, createSSHKey, deleteSSHKey } from '../api/ssh-keys'
 import type { SafeSSHKey } from '../api/ssh-keys'
 import {
   listNotifyChannels,
@@ -1029,7 +1029,7 @@ async function handleAddKey() {
   if (!keyForm.value.name.trim()) { keyFormError.value = '请输入名称'; return }
   if (!keyForm.value.privateKey.trim()) { keyFormError.value = '请输入私钥内容'; return }
   try {
-    await addSSHKey(keyForm.value.name, keyForm.value.privateKey, keyForm.value.passphrase || undefined)
+    await createSSHKey(keyForm.value.name, keyForm.value.privateKey, keyForm.value.passphrase || '')
     showAddKey.value = false
     keyForm.value = { name: '', privateKey: '', passphrase: '' }
     sshKeysLoaded = false
