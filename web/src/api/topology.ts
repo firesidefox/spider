@@ -1,4 +1,4 @@
-import { authHeaders } from './auth'
+import { api } from '@/shared/api/client'
 
 export interface Topology {
   id: string
@@ -37,46 +37,27 @@ export interface TopologyFull extends Topology {
   edges: TopologyEdge[]
 }
 
-const BASE = '/api/v1/topologies'
-
 export async function listTopologies(): Promise<Topology[]> {
-  const r = await fetch(BASE, { headers: authHeaders() })
-  if (!r.ok) throw new Error(await r.text())
-  return r.json()
+  return api.get<Topology[]>('/topologies')
 }
 
 export async function getTopologyFull(id: string): Promise<TopologyFull> {
-  const r = await fetch(`${BASE}/${id}`, { headers: authHeaders() })
-  if (!r.ok) throw new Error(await r.text())
-  return r.json()
+  return api.get<TopologyFull>(`/topologies/${id}`)
 }
 
 export async function createTopology(name: string, notes = ''): Promise<Topology> {
-  const r = await fetch(BASE, {
-    method: 'POST',
-    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, notes }),
-  })
-  if (!r.ok) throw new Error(await r.text())
-  return r.json()
+  return api.post<Topology>('/topologies', { name, notes })
 }
 
 export async function deleteTopology(id: string): Promise<void> {
-  const r = await fetch(`${BASE}/${id}`, { method: 'DELETE', headers: authHeaders() })
-  if (!r.ok) throw new Error(await r.text())
+  return api.delete<void>(`/topologies/${id}`, { responseType: 'void' })
 }
 
 export async function createNode(
   topoID: string,
   req: { layer: string; name: string; role?: string; host_id?: string }
 ): Promise<TopologyNode> {
-  const r = await fetch(`${BASE}/${topoID}/nodes`, {
-    method: 'POST',
-    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-    body: JSON.stringify(req),
-  })
-  if (!r.ok) throw new Error(await r.text())
-  return r.json()
+  return api.post<TopologyNode>(`/topologies/${topoID}/nodes`, req)
 }
 
 export async function updateNode(
@@ -84,53 +65,33 @@ export async function updateNode(
   nodeID: string,
   req: { layer: string; name: string; role?: string; host_id?: string; notes?: string; pos_x?: number; pos_y?: number }
 ): Promise<TopologyNode> {
-  const r = await fetch(`${BASE}/${topoID}/nodes/${nodeID}`, {
-    method: 'PUT',
-    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-    body: JSON.stringify(req),
-  })
-  if (!r.ok) throw new Error(await r.text())
-  return r.json()
+  return api.put<TopologyNode>(`/topologies/${topoID}/nodes/${nodeID}`, req)
 }
 
 export async function deleteNode(topoID: string, nodeID: string): Promise<void> {
-  const r = await fetch(`${BASE}/${topoID}/nodes/${nodeID}`, { method: 'DELETE', headers: authHeaders() })
-  if (!r.ok) throw new Error(await r.text())
+  return api.delete<void>(`/topologies/${topoID}/nodes/${nodeID}`, { responseType: 'void' })
 }
 
 export async function createEdge(topoID: string, fromNode: string, toNode: string): Promise<TopologyEdge> {
-  const r = await fetch(`${BASE}/${topoID}/edges`, {
-    method: 'POST',
-    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from_node: fromNode, to_node: toNode }),
-  })
-  if (!r.ok) throw new Error(await r.text())
-  return r.json()
+  return api.post<TopologyEdge>(`/topologies/${topoID}/edges`, { from_node: fromNode, to_node: toNode })
 }
 
 export async function deleteEdge(topoID: string, edgeID: string): Promise<void> {
-  const r = await fetch(`${BASE}/${topoID}/edges/${edgeID}`, { method: 'DELETE', headers: authHeaders() })
-  if (!r.ok) throw new Error(await r.text())
+  return api.delete<void>(`/topologies/${topoID}/edges/${edgeID}`, { responseType: 'void' })
 }
 
 export async function importYAML(topoID: string, yamlText: string): Promise<TopologyFull> {
-  const r = await fetch(`${BASE}/${topoID}/import`, {
-    method: 'POST',
-    headers: { ...authHeaders(), 'Content-Type': 'application/x-yaml' },
-    body: yamlText,
+  return api.post<TopologyFull>(`/topologies/${topoID}/import`, yamlText, {
+    headers: { 'Content-Type': 'application/x-yaml' }
   })
-  if (!r.ok) throw new Error(await r.text())
-  return r.json()
 }
 
 export async function exportYAML(topoID: string): Promise<void> {
-  const r = await fetch(`${BASE}/${topoID}/export`, { headers: authHeaders() })
-  if (!r.ok) throw new Error(await r.text())
-  const blob = await r.blob()
+  const blob = await api.download(`/topologies/${topoID}/export`)
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = r.headers.get('Content-Disposition')?.match(/filename="(.+)"/)?.[1] ?? 'topology.yaml'
+  a.download = `topology-${topoID}.yaml`
   a.click()
   URL.revokeObjectURL(url)
 }
