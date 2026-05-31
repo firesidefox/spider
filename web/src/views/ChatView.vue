@@ -4,24 +4,22 @@ import { ref, onMounted, onActivated, onDeactivated, onUnmounted, nextTick, comp
 import { useRoute, useRouter, onBeforeRouteUpdate } from 'vue-router'
 import ChatMessage from '../components/ChatMessage.vue'
 import RuntimeStatusBar from '../components/RuntimeStatusBar.vue'
-import type { MessageBlock, ToolCallBlock } from '../components/ChatMessage.vue'
 import TargetPanel from '../components/TargetPanel.vue'
 import type { DeviceStatus } from '../components/TargetPanel.vue'
 import { useTargetHosts } from '../composables/useTargetHosts'
 import { useConversationList } from '../composables/chat/useConversationList'
 import { useTodoPanel } from '../composables/chat/useTodoPanel'
+import { useChatStream } from '../composables/chat/useChatStream'
 import {
-  sendMessage, subscribeConversation,
-  getConversation, confirmAction, cancelConversation,
+  getConversation,
   getActiveModel, setActiveModel, exportConversation,
   suggestTitle,
-  type ChatMessage as ChatMsg, type ChatEvent, type Todo,
 } from '../api/chat'
 import { listHosts, type Host } from '../api/hosts'
 import { authHeaders, getUIPrefs, setUIPrefs } from '../api/auth'
 import { useAuth } from '../composables/useAuth'
 import { listGroups, listDocumentsByGroup, type DocumentGroup, type Document as KbDocument } from '../api/documents'
-import { updateAgentStatus, useAgentStatus, type AgentStatus } from '../composables/useAgentStatus'
+import { useAgentStatus } from '../composables/useAgentStatus'
 import {
   chatThemes, densityPresets,
   getSavedChatTheme, saveChatTheme,
@@ -55,49 +53,14 @@ onUnmounted(() => window.removeEventListener('storage', syncChatThemeFromStorage
 const route = useRoute()
 const router = useRouter()
 
-interface DisplayMessage {
-  id: string
-  role: string
-  blocks: MessageBlock[]
-  confirm?: { requestId: string; tool: string; input: any; riskLevel: string } | null
-  isStreaming?: boolean
-  toolIndex?: Map<string, number>
-}
-
 // Initialize conversation list composable
 const conversationList = useConversationList({
   onConversationSelected: async (convId) => {
-    // Message loading logic from original selectConversation
+    await chatStream.loadConversationMessages(convId)
     const data = await getConversation(convId)
-    if (conversationList.activeConvId.value !== convId) return  // user switched to another conv while loading
-    if (transitionState.value !== 'chat') transitionState.value = 'chat'
     todoPanel.loadTodoTasks(convId, data.todo_tasks ?? [])
-    queuedMessages.value.delete(convId)
+    if (transitionState.value !== 'chat') transitionState.value = 'chat'
     router.replace(`/chat/${convId}`)
-
-    // Sync queued messages from backend (in-memory store, survives page refresh within session)
-    const next = new Map(queuedMessages.value)
-    next.set(convId, data.queued_messages ?? [])
-    queuedMessages.value = next
-
-    if (data.conversation.status === 'processing' && messagesMap.value[convId]) {
-      // SSE is still writing into messagesMap[id] — don't overwrite it.
-      setConversationStreaming(convId, true)
-    } else {
-      messagesMap.value[convId] = buildDisplayMessages(data.messages)
-      setConversationStreaming(convId, data.conversation.status === 'processing')
-    }
-
-    if (data.conversation.status === 'processing') {
-      updateAgentStatus({ conversationId: convId, title: data.conversation.title || convId.slice(0, 8), phase: 'thinking' })
-    }
-
-    if (!convSubscriptions.has(convId)) {
-      const lastMsg = data.messages[data.messages.length - 1]
-      const unsub = subscribeConversation(convId, (event) => handleConvEvent(convId, event), lastMsg?.id)
-      convSubscriptions.set(convId, unsub)
-    }
-
     await nextTick()
     scrollToBottom()
   }
@@ -108,6 +71,24 @@ const todoPanel = useTodoPanel({
   activeConvId: conversationList.activeConvId
 })
 
+// Initialize chat stream composable
+const chatStream = useChatStream({
+  activeConvId: conversationList.activeConvId,
+  getConvTitle: conversationList.getConvTitle,
+  onScrollToBottom: scrollToBottom,
+  onDeviceStatusUpdate: (hostName, status) => {
+    setDeviceStatus(hostName, status as DeviceStatus['status'])
+  },
+  onLoadConversations: async () => {
+    await conversationList.loadConversations()
+  },
+  todoTasksMap: todoPanel.todoTasksMap,
+  startTimer: todoPanel.startTimer,
+  stopTimer: todoPanel.stopTimer,
+  clearAllTimers: todoPanel.clearAllTimers,
+  turnUsage: todoPanel.turnUsage,
+})
+
 const showExportMenu = ref(false)
 
 async function doExport(format: 'md' | 'json') {
@@ -116,103 +97,20 @@ async function doExport(format: 'md' | 'json') {
   await exportConversation(conversationList.activeConvId.value, format)
 }
 
-const messagesMap = ref<Record<string, DisplayMessage[]>>({})
 const transitionState = ref<'welcome' | 'transitioning' | 'chat'>('welcome')
-const messages = computed(() => messagesMap.value[conversationList.activeConvId.value ?? ''] ?? [])
+const messages = computed(() => chatStream.messages.value)
+const isStreaming = computed(() => chatStream.isStreaming.value)
+const queuedMessages = computed(() => chatStream.queuedMessages.value)
 
 const { statuses: agentStatuses } = useAgentStatus()
 const currentAgentStatus = computed(() => {
   const id = conversationList.activeConvId.value
-  return id ? agentStatuses.value.get(id) ?? null : null
+  const status = id ? agentStatuses.value.get(id) ?? null : null
+  return status as any
 })
-
-function getOrInitMessages(convId: string): DisplayMessage[] {
-  if (!messagesMap.value[convId]) {
-    messagesMap.value[convId] = []
-  }
-  return messagesMap.value[convId]
-}
-
-const toolCallsCache = new Map<string, any[]>()
-
-function buildDisplayMessages(msgs: ChatMsg[]): DisplayMessage[] {
-  return msgs.filter(m => m.role !== 'tool_result').map(m => {
-    const blocks: MessageBlock[] = []
-    if (m.content) blocks.push({ type: 'text', content: m.content })
-    if (m.tool_calls) {
-      let parsed = toolCallsCache.get(m.id)
-      if (!parsed) {
-        try {
-          parsed = JSON.parse(m.tool_calls)
-          toolCallsCache.set(m.id, parsed ?? [])
-        } catch { parsed = [] }
-      }
-      const toolCalls = (Array.isArray(parsed) ? parsed : []) as any[]
-      for (const tc of toolCalls) {
-        blocks.push({ type: 'tool', call: {
-          id: tc.id, name: tc.name, input: tc.input,
-          result: tc.result, isError: tc.is_error, durationMs: tc.duration_ms,
-          summary: tc.summary, hostNames: tc.host_names,
-        }})
-      }
-    }
-    return { id: m.id, role: m.role, blocks } as DisplayMessage
-  }).filter(m => m.blocks.length > 0)
-}
-
-function addSystemMessage(content: string, targetConvId?: string) {
-  const cid = targetConvId ?? conversationList.activeConvId.value
-  if (cid) {
-    getOrInitMessages(cid).push({
-      id: Date.now().toString(),
-      role: 'assistant',
-      blocks: [{ type: 'text', content }],
-    })
-  }
-}
-
 
 const inputText = ref('')
-const queuedMessages = ref<Map<string, string[]>>(new Map())
-const streamingConvIds = ref<Set<string>>(new Set())
-const streamingTimeouts = new Map<string, ReturnType<typeof setTimeout>>()
-const isStreaming = computed({
-  get: () => conversationList.activeConvId.value ? streamingConvIds.value.has(conversationList.activeConvId.value) : false,
-  set: (streaming: boolean) => {
-    if (!conversationList.activeConvId.value) return
-    setConversationStreaming(conversationList.activeConvId.value, streaming)
-  },
-})
-
-function setConversationStreaming(convId: string, streaming: boolean) {
-  const next = new Set(streamingConvIds.value)
-  if (streaming) {
-    next.add(convId)
-    // Fallback: if SSE done/error never arrives (server crash, network drop),
-    // poll DB once after 90s to recover from stuck streaming state.
-    if (!streamingTimeouts.has(convId)) {
-      streamingTimeouts.set(convId, setTimeout(async () => {
-        streamingTimeouts.delete(convId)
-        if (!streamingConvIds.value.has(convId)) return
-        try {
-          const data = await getConversation(convId)
-          if (data.conversation.status !== 'processing') {
-            messagesMap.value[convId] = buildDisplayMessages(data.messages)
-            setConversationStreaming(convId, false)
-          }
-        } catch { /* ignore — will retry on next user action */ }
-      }, 90_000))
-    }
-  } else {
-    next.delete(convId)
-    const t = streamingTimeouts.get(convId)
-    if (t !== undefined) { clearTimeout(t); streamingTimeouts.delete(convId) }
-  }
-  streamingConvIds.value = next
-
-  const conv = conversationList.conversations.value.find(c => c.id === convId)
-  if (conv) (conv as any).status = streaming ? 'processing' : 'idle'
-}
+const retryState = computed(() => chatStream.retryState.value)
 
 const slashCommands = [
   { cmd: '/rename', hint: '[name] — 重命名会话（空=AI生成）' },
@@ -233,71 +131,15 @@ const slashHint = computed(() => {
   return ''
 })
 
-interface RetryState {
-  attempt: number
-  maxRetries: number
-  error: string
-  retryInMs: number
-  countdownMs: number
-  timer: ReturnType<typeof setInterval> | null
-}
-const retryState = ref<RetryState | null>(null)
-
-// Removed startRetryCountdown and clearRetryState - retrying event handling removed
-
 const messagesRef = ref<HTMLElement | null>(null)
 const devices = ref<DeviceStatus[]>([])
 const allHosts = ref<Host[]>([])
 const { selectedHostIds } = useTargetHosts()
 
-const deviceResetTimers = new Map<string, ReturnType<typeof setTimeout>>()
-const SSH_TOOLS = new Set(['RunCommand', 'RunCommandBatch'])
-const executingHosts = new Set<string>()
-
 function setDeviceStatus(hostName: string, status: DeviceStatus['status']) {
   const idx = devices.value.findIndex(d => d.name === hostName)
   if (idx === -1) return
   devices.value = devices.value.map((d, i) => i === idx ? { ...d, status } : d)
-}
-
-function markDevicesExecuting(hostNames: string[]) {
-  for (const name of hostNames) {
-    const d = devices.value.find(d => d.name === name)
-    if (d) executingHosts.add(d.id)
-    const t = deviceResetTimers.get(name)
-    if (t) { clearTimeout(t); deviceResetTimers.delete(name) }
-    setDeviceStatus(name, 'executing')
-  }
-}
-
-function markDevicesDone(hostNames: string[], failed: boolean) {
-  const finalStatus = failed ? 'failed' : 'success'
-  for (const name of hostNames) {
-    setDeviceStatus(name, finalStatus)
-    const d = devices.value.find(d => d.name === name)
-    const t = setTimeout(() => {
-      if (d) {
-        executingHosts.delete(d.id)
-        setDeviceStatus(name, 'online')
-      }
-      deviceResetTimers.delete(name)
-    }, 2000)
-    deviceResetTimers.set(name, t)
-  }
-}
-
-// Per-conversation EventSource subscriptions
-const convSubscriptions = new Map<string, () => void>()
-
-let pendingSendCtrl: AbortController | null = null
-
-let scrollRafId: number | null = null
-function scheduleScrollToBottom() {
-  if (scrollRafId !== null) return
-  scrollRafId = requestAnimationFrame(() => {
-    scrollRafId = null
-    scrollToBottom()
-  })
 }
 
 const sidebarOpen = ref(localStorage.getItem('spider-sidebar') !== 'closed')
@@ -407,8 +249,8 @@ function startDrag(e: MouseEvent) {
 
 async function createNewConversation() {
   const convId = await conversationList.createConversation()
-  messagesMap.value[convId] = []
-  setConversationStreaming(convId, false)
+  chatStream.getOrInitMessages(convId)
+  chatStream.setConversationStreaming(convId, false)
   await conversationList.selectConversation(convId)
   await nextTick()
   textareaRef.value?.focus()
@@ -427,250 +269,12 @@ function scrollToBottom() {
 
 function handleEscCancel(e: KeyboardEvent) {
   if (e.key === 'Escape' && isStreaming.value && !kbDropdownMode.value) {
-    cancelSend()
+    handleCancelSend()
   }
 }
 
-async function cancelSend() {
-  const convId = conversationList.activeConvId.value
-  if (!convId) return
-  pendingSendCtrl?.abort()
-  pendingSendCtrl = null
-  queuedMessages.value.delete(convId)
-  queuedMessages.value = new Map(queuedMessages.value)
-  await cancelConversation(convId)
-  setConversationStreaming(convId, false)
-  // Reload from DB to replace the truncated in-memory assistant message
-  const data = await getConversation(convId)
-  messagesMap.value[convId] = buildDisplayMessages(data.messages)
-  await nextTick()
-  scrollToBottom()
-}
-
-function handleConvEvent(convId: string, event: ChatEvent) {
-  const convMsgs = messagesMap.value[convId]
-  if (!convMsgs) return
-
-  function setStatus(phase: AgentStatus['phase'], toolName?: string, toolInput?: unknown, hosts?: string[]) {
-    updateAgentStatus({
-      conversationId: convId,
-      title: conversationList.getConvTitle(convId),
-      phase,
-      toolName,
-      toolInput: toolInput ? JSON.stringify(toolInput) : undefined,
-      hosts,
-    })
-  }
-
-  if (event.type === 'message') {
-    const msg = event.content as ChatMsg
-    if (!msg || msg.role === 'user' || msg.role === 'tool_result') return
-    if (!convMsgs.find(m => m.id === msg.id)) {
-      convMsgs.push(...buildDisplayMessages([msg]))
-      if (conversationList.activeConvId.value === convId) nextTick(() => scrollToBottom())
-    }
-    return
-  }
-
-  // Ensure there's a streaming assistant message to receive live events.
-  // Passive tabs (multi-tab sync) never call send(), so we create one on demand.
-  if (['text_delta', 'tool_start', 'confirm_required'].includes(event.type)) {
-    const last = convMsgs[convMsgs.length - 1]
-    if (!last || last.role !== 'assistant' || !last.isStreaming) {
-      const newMsg: DisplayMessage = { id: `a-${Date.now()}`, role: 'assistant', blocks: [], isStreaming: true, toolIndex: new Map() }
-      convMsgs.push(newMsg)
-      setConversationStreaming(convId, true)
-      if (conversationList.activeConvId.value === convId) {
-        nextTick(() => scrollToBottom())
-      }
-    }
-  }
-
-  const last = convMsgs[convMsgs.length - 1]
-  // tool_result can arrive after mid_turn_user_message pushed a user message — don't gate on last.role
-  if (!last || (last.role !== 'assistant' && event.type !== 'tool_result')) return
-  const blocks = last.role === 'assistant' ? last.blocks : []
-  if (!last.toolIndex) last.toolIndex = new Map<string, number>()
-  const toolIndex = last.role === 'assistant' ? last.toolIndex : new Map<string, number>()
-
-  switch (event.type) {
-    case 'text_delta': {
-      const lastIdx = blocks.length - 1
-      const lastBlock = blocks[lastIdx]
-      if (lastBlock?.type === 'text') {
-        blocks[lastIdx] = { type: 'text', content: lastBlock.content + (event.content?.text || '') }
-      } else {
-        blocks.push({ type: 'text', content: event.content?.text || '' })
-      }
-      setStatus('thinking')
-      break
-    }
-    case 'tool_start': {
-      const toolName = event.content?.name || 'unknown'
-      const toolId = event.content?.id || `t-${Date.now()}`
-      const idx = blocks.length
-      blocks.push({ type: 'tool', call: {
-        id: toolId,
-        name: toolName,
-        input: event.content?.input,
-        hostNames: event.content?.host_names,
-      }})
-      toolIndex.set(toolId, idx)
-      if (SSH_TOOLS.has(toolName) && event.content?.host_names?.length) {
-        markDevicesExecuting(event.content.host_names)
-      }
-      setStatus('tool', toolName, event.content?.input, event.content?.host_names)
-      break
-    }
-    case 'tool_result': {
-      const toolId = event.content?.id || ''
-      // Search backwards through all assistant messages for the one that owns this tool call.
-      // After mid_turn_user_message, the last message is a user message, so last.toolIndex won't have it.
-      let ownerBlocks = blocks
-      let ownerToolIndex = toolIndex
-      if (toolIndex.get(toolId) === undefined) {
-        for (let i = convMsgs.length - 1; i >= 0; i--) {
-          const m = convMsgs[i]
-          if (m.role === 'assistant' && m.toolIndex?.has(toolId)) {
-            ownerBlocks = m.blocks
-            ownerToolIndex = m.toolIndex!
-            break
-          }
-        }
-      }
-      const idx = ownerToolIndex.get(toolId)
-      if (idx !== undefined && idx < ownerBlocks.length) {
-        const old = (ownerBlocks[idx] as { type: 'tool'; call: ToolCallBlock }).call
-        ownerBlocks[idx] = { type: 'tool', call: {
-          ...old,
-          input: event.content?.input ?? old.input,
-          result: event.content?.result,
-          summary: event.content?.summary,
-          isError: event.content?.is_error,
-          durationMs: event.content?.duration_ms,
-        }}
-        if (SSH_TOOLS.has(old.name) && old.hostNames?.length) {
-          markDevicesDone(old.hostNames, !!event.content?.is_error)
-        }
-      }
-      break
-    }
-    case 'confirm_required':
-      last.confirm = {
-        requestId: event.content?.request_id || '',
-        tool: event.content?.tool || '',
-        input: event.content?.input || {},
-        riskLevel: event.content?.risk_level || 'moderate',
-      }
-      setStatus('confirm', event.content?.tool || '', event.content?.input)
-      break
-    case 'error': {
-      queuedMessages.value = new Map(queuedMessages.value)
-      queuedMessages.value.delete(convId)
-      const errText = `\n\n**Error:** ${event.content?.error || 'unknown error'}`
-      const lastBlk = last.blocks[last.blocks.length - 1]
-      if (lastBlk?.type === 'text') {
-        lastBlk.content += errText
-      } else {
-        last.blocks.push({ type: 'text', content: errText })
-      }
-      last.isStreaming = false
-      setConversationStreaming(convId, false)
-      for (const b of last.blocks) {
-        if (b.type === 'tool' && b.call.durationMs == null) b.call.durationMs = 0
-      }
-      if (conversationList.activeConvId.value === convId) {
-        nextTick(() => scrollToBottom())
-      }
-      break
-    }
-    case 'done':
-      queuedMessages.value = new Map(queuedMessages.value)
-      queuedMessages.value.delete(convId)
-      last.isStreaming = false
-      setConversationStreaming(convId, false)
-      for (const b of last.blocks) {
-        if (b.type === 'tool' && b.call.durationMs == null) b.call.durationMs = 0
-      }
-      if (conversationList.activeConvId.value === convId) {
-        nextTick(() => scrollToBottom())
-      }
-      setStatus('done')
-      conversationList.loadConversations()
-      todoPanel.clearAllTimers()
-      break
-    case 'todo_update': {
-      const task = event.content as Todo
-      todoPanel.updateTodoFromEvent(convId, task)
-      break
-    }
-    case 'turn_usage': {
-      const u = event.content as { output_tokens: number }
-      if (conversationList.activeConvId.value === convId) {
-        todoPanel.setTurnUsage(u.output_tokens)
-      }
-      break
-    }
-    case 'mid_turn_user_message': {
-      const text = event.content?.text as string | undefined
-      if (!text) break
-      // Backend joins multiple queued messages with \n\n.
-      // Try exact match first (single message or message containing \n\n).
-      // Fall back to removing any queued entries that are exact components of the joined text.
-      const convQueue = queuedMessages.value.get(convId) ?? []
-      const idx = convQueue.indexOf(text)
-      let newQueue: string[]
-      if (idx !== -1) {
-        newQueue = [...convQueue]
-        newQueue.splice(idx, 1)
-      } else {
-        // Build the expected joined string from queued messages and remove matched ones.
-        // Walk from the front: greedily consume queued messages that form a prefix of text.
-        const remaining = [...convQueue]
-        const consumed: string[] = []
-        let joined = ''
-        for (let i = 0; i < remaining.length; i++) {
-          const candidate = joined ? joined + '\n\n' + remaining[i] : remaining[i]
-          if (text === candidate || text.startsWith(candidate + '\n\n')) {
-            joined = candidate
-            consumed.push(remaining[i])
-          }
-        }
-        if (consumed.length > 0) {
-          const consumedSet = new Set(consumed)
-          newQueue = convQueue.filter(q => !consumedSet.has(q))
-        } else {
-          newQueue = convQueue
-        }
-      }
-      const nextMap = new Map(queuedMessages.value)
-      if (newQueue.length === 0) nextMap.delete(convId)
-      else nextMap.set(convId, newQueue)
-      queuedMessages.value = nextMap
-      // Insert as a real user message in the conversation
-      const convMsgsForInject = messagesMap.value[convId]
-      if (convMsgsForInject) {
-        // Close any in-progress streaming assistant message before injecting user message
-        const prevLast = convMsgsForInject[convMsgsForInject.length - 1]
-        if (prevLast?.role === 'assistant' && prevLast.isStreaming) {
-          prevLast.isStreaming = false
-          for (const b of prevLast.blocks) {
-            if (b.type === 'tool' && b.call.durationMs == null) b.call.durationMs = 0
-          }
-        }
-        convMsgsForInject.push({
-          id: `u-injected-${Date.now()}`,
-          role: 'user',
-          blocks: [{ type: 'text', content: text }],
-        })
-        if (conversationList.activeConvId.value === convId) nextTick(() => scrollToBottom())
-      }
-      break
-    }
-  }
-  if (conversationList.activeConvId.value === convId) {
-    scheduleScrollToBottom()
-  }
+async function handleCancelSend() {
+  await chatStream.cancelSend()
 }
 
 function triggerLayoutTransition() {
@@ -695,12 +299,12 @@ async function send(overrideText?: string) {
     if (text === '/export' || text.startsWith('/export ')) {
       const fmt = parseExportFormat(text)
       if (fmt === 'invalid') {
-        addSystemMessage('用法：/export [md|json] 或 /export --format [md|json]')
+        chatStream.addSystemMessage('用法：/export [md|json] 或 /export --format [md|json]')
         return
       }
       inputText.value = ''
       if (!conversationList.activeConvId.value) {
-        addSystemMessage('没有活跃的会话')
+        chatStream.addSystemMessage('没有活跃的会话')
         return
       }
       await exportConversation(conversationList.activeConvId.value, fmt === 'default' ? 'md' : fmt)
@@ -709,7 +313,7 @@ async function send(overrideText?: string) {
     if (text === '/rename' || text.startsWith('/rename ')) {
       inputText.value = ''
       if (!conversationList.activeConvId.value) {
-        addSystemMessage('没有活跃的会话')
+        chatStream.addSystemMessage('没有活跃的会话')
         return
       }
       await handleRenameCommand(text)
@@ -729,66 +333,7 @@ async function send(overrideText?: string) {
     await createNewConversation()
   }
 
-  const convId = conversationList.activeConvId.value!
-  const convMsgs = getOrInitMessages(convId)
-
-  if (!convSubscriptions.has(convId)) {
-    const unsub = subscribeConversation(convId, (event) => handleConvEvent(convId, event))
-    convSubscriptions.set(convId, unsub)
-  }
-
-  const userMsg: DisplayMessage = {
-    id: `u-${Date.now()}`, role: 'user', blocks: [{ type: 'text', content: text }],
-  }
-  const assistantMsg: DisplayMessage = {
-    id: `a-${Date.now()}`, role: 'assistant',
-    blocks: [], isStreaming: true,
-  }
-
-  // Optimistically show as queued immediately; remove if backend starts a new agent turn
-  const pushQueued = () => {
-    const next = new Map(queuedMessages.value)
-    next.set(convId, [...(next.get(convId) ?? []), text])
-    queuedMessages.value = next
-  }
-  const removeQueued = () => {
-    const queue = queuedMessages.value.get(convId) ?? []
-    const idx = queue.lastIndexOf(text)
-    if (idx !== -1) {
-      const next = new Map(queuedMessages.value)
-      const newQueue = [...queue]
-      newQueue.splice(idx, 1)
-      if (newQueue.length === 0) next.delete(convId)
-      else next.set(convId, newQueue)
-      queuedMessages.value = next
-    }
-  }
-  pushQueued()
-
-  pendingSendCtrl = new AbortController()
-  sendMessage(convId, text, selectedHostIds.value, pendingSendCtrl.signal).then(res => {
-    if (res.status === 'queued') {
-      // Backend injected into running agent — keep queued display as-is
-    } else {
-      // Backend accepted as new agent turn — remove from queued, show optimistic messages
-      removeQueued()
-      convMsgs.push(userMsg)
-      convMsgs.push(assistantMsg)
-      setConversationStreaming(convId, true)
-      updateAgentStatus({ conversationId: convId, title: conversationList.getConvTitle(convId), phase: 'thinking' })
-      todoPanel.setTurnUsage(null)
-      nextTick(() => scrollToBottom())
-    }
-  }).catch((e: any) => {
-    // Remove optimistic queued entry on error
-    removeQueued()
-    if (e?.name === 'AbortError') return
-    // 503 = LLM not configured; surface it since no SSE event will arrive
-    const msg = e?.status === 503
-      ? 'LLM 未配置，请先在设置中添加 Provider'
-      : `发送失败：${e?.message || 'unknown error'}`
-    addSystemMessage(msg, convId)
-  }).finally(() => { pendingSendCtrl = null })
+  await chatStream.sendMessage(text, selectedHostIds.value)
 }
 
 function parseExportFormat(text: string): 'md' | 'json' | 'invalid' | 'default' {
@@ -807,7 +352,7 @@ async function handleModelCommand() {
     currentModel.value = model
 
     if (!currentProvider.value) {
-      addSystemMessage('未配置模型供应商。请在 个人设置 → 模型供应商 中配置。')
+      chatStream.addSystemMessage('未配置模型供应商。请在 个人设置 → 模型供应商 中配置。')
       return
     }
 
@@ -817,7 +362,7 @@ async function handleModelCommand() {
     availableModels.value = models.map((m: any) => ({ id: m.model_id, display_name: m.display_name }))
     showModelPicker.value = true
   } catch (e: any) {
-    addSystemMessage(`获取模型列表失败: ${e.message}`)
+    chatStream.addSystemMessage(`获取模型列表失败: ${e.message}`)
   }
 }
 
@@ -826,17 +371,14 @@ async function selectModel(modelId: string) {
     await setActiveModel(currentProvider.value, modelId)
     currentModel.value = modelId
     showModelPicker.value = false
-    addSystemMessage(`模型已切换为 **${modelId}**`)
+    chatStream.addSystemMessage(`模型已切换为 **${modelId}**`)
   } catch (e: any) {
-    addSystemMessage(`切换模型失败: ${e.message}`)
+    chatStream.addSystemMessage(`切换模型失败: ${e.message}`)
   }
 }
 
 async function handleConfirm(requestId: string, approved: boolean) {
-  if (!conversationList.activeConvId.value) return
-  await confirmAction(conversationList.activeConvId.value, requestId, approved)
-  const msg = messages.value.find(m => m.confirm?.requestId === requestId)
-  if (msg) msg.confirm = null
+  await chatStream.handleConfirm(requestId, approved)
 }
 
 async function applyConvTitle(id: string, title: string) {
@@ -849,32 +391,26 @@ async function handleRenameCommand(text: string) {
   if (arg) {
     try {
       await applyConvTitle(id, arg)
-      addSystemMessage(`已重命名为 **${arg}**`)
+      chatStream.addSystemMessage(`已重命名为 **${arg}**`)
     } catch (e: any) {
-      addSystemMessage(`重命名失败: ${e.message}`)
+      chatStream.addSystemMessage(`重命名失败: ${e.message}`)
     }
     return
   }
   try {
-    addSystemMessage('正在生成命名建议…')
+    chatStream.addSystemMessage('正在生成命名建议…')
     const title = await suggestTitle(id)
     await applyConvTitle(id, title)
-    addSystemMessage(`已重命名为 **${title}**`)
+    chatStream.addSystemMessage(`已重命名为 **${title}**`)
   } catch (e: any) {
-    addSystemMessage(`生成命名失败: ${e.message}`)
+    chatStream.addSystemMessage(`生成命名失败: ${e.message}`)
   }
 }
 
 async function handleDeleteConversation(id: string) {
   await conversationList.deleteConversation(id)
-  const unsub = convSubscriptions.get(id)
-  if (unsub) { unsub(); convSubscriptions.delete(id) }
-  // 清理该会话的 tool_calls 缓存
-  const msgs = messagesMap.value[id] || []
-  for (const m of msgs) toolCallsCache.delete(m.id)
   if (conversationList.activeConvId.value === id) {
     transitionState.value = 'welcome'
-    delete messagesMap.value[id]
     await goNewPage()
   }
 }
@@ -1114,8 +650,6 @@ onActivated(() => {
 
 onDeactivated(() => {
   todoPanel.clearAllTimers()
-  streamingTimeouts.forEach(t => clearTimeout(t))
-  streamingTimeouts.clear()
   document.removeEventListener('click', closeModeDropdown)
   window.removeEventListener('keydown', handleEscCancel)
 })
@@ -1129,10 +663,8 @@ onBeforeRouteUpdate(async (to) => {
 
 onUnmounted(() => {
   globalEs?.close()
+  chatStream.cleanup()
   todoPanel.clearAllTimers()
-  convSubscriptions.forEach(unsub => unsub())
-  convSubscriptions.clear()
-  toolCallsCache.clear()
   window.removeEventListener('keydown', handleEscCancel)
 })
 </script>
@@ -1328,7 +860,7 @@ onUnmounted(() => {
           ></textarea>
           <span v-if="slashHint" class="slash-hint" aria-hidden="true">{{ inputText }}<span class="ghost">{{ slashHint }}</span></span>
         </div>
-        <button v-if="isStreaming" @click="cancelSend" class="send-btn cancel-btn">取消</button>
+        <button v-if="isStreaming" @click="handleCancelSend" class="send-btn cancel-btn">取消</button>
         <button v-if="isStreaming" @click="send()" :disabled="!inputText.trim()" class="send-btn queue-btn">排队</button>
         <button v-if="!isStreaming" @click="send()" :disabled="!inputText.trim()" class="send-btn">发送</button>
       </div>

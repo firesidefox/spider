@@ -20,12 +20,15 @@ export interface UseTodoPanelReturn {
   pendingFolded: Ref<boolean>
   taskElapsed: Ref<Map<number, number>>
   turnUsage: Ref<number | null>
+  todoTasksMap: Ref<Record<string, Map<number, Todo>>>
 
   // Operations
   updateTodoFromEvent(convId: string, task: Todo): void
   loadTodoTasks(convId: string, tasks: Todo[]): void
   setTurnUsage(tokens: number | null): void
   clearAllTimers(): void
+  startTimer(task: Todo): void
+  stopTimer(taskId: number): void
 
   // Utils
   fmtElapsed(seconds: number): string
@@ -175,12 +178,15 @@ export function useTodoPanel(options: UseTodoPanelOptions): UseTodoPanelReturn {
     pendingFolded,
     taskElapsed,
     turnUsage,
+    todoTasksMap,
 
     // Operations
     updateTodoFromEvent,
     loadTodoTasks,
     setTurnUsage,
     clearAllTimers,
+    startTimer,
+    stopTimer,
 
     // Utils
     fmtElapsed,
