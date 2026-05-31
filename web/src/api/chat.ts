@@ -1,4 +1,4 @@
-import { authHeaders } from './auth'
+import { api } from '@/shared/api/client'
 
 export interface Conversation {
   id: string
@@ -31,39 +31,23 @@ export interface Todo {
 }
 
 export async function createConversation(title?: string): Promise<Conversation> {
-  const res = await fetch('/api/v1/chat/conversations', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: title ? JSON.stringify({ title }) : undefined,
-  })
-  if (!res.ok) throw new Error((await res.json()).error)
-  return res.json()
+  return api.post<Conversation>('/chat/conversations', title ? { title } : undefined)
 }
 
 export async function listConversations(): Promise<Conversation[]> {
-  const res = await fetch('/api/v1/chat/conversations', { headers: authHeaders() })
-  if (!res.ok) throw new Error((await res.json()).error)
-  return res.json()
+  return api.get<Conversation[]>('/chat/conversations')
 }
 
 export async function getConversation(id: string): Promise<{ conversation: Conversation; messages: ChatMessage[]; todo_tasks: Todo[]; queued_messages: string[] }> {
-  const res = await fetch(`/api/v1/chat/conversations/${id}`, { headers: authHeaders() })
-  if (!res.ok) throw new Error((await res.json()).error)
-  return res.json()
+  return api.get(`/chat/conversations/${id}`)
 }
 
 export async function deleteConversation(id: string): Promise<void> {
-  const res = await fetch(`/api/v1/chat/conversations/${id}`, { method: 'DELETE', headers: authHeaders() })
-  if (!res.ok) throw new Error((await res.json()).error)
+  return api.delete(`/chat/conversations/${id}`, { responseType: 'void' })
 }
 
 export async function updateTitle(id: string, title: string): Promise<void> {
-  const res = await fetch(`/api/v1/chat/conversations/${id}`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify({ title }),
-  })
-  if (!res.ok) throw new Error((await res.json()).error)
+  return api.patch(`/chat/conversations/${id}`, { title }, { responseType: 'void' })
 }
 
 // subscribeConversation opens a persistent EventSource for a conversation.
@@ -98,10 +82,12 @@ export async function sendMessage(
 ): Promise<{ status: 'accepted' | 'queued' }> {
   const body: Record<string, unknown> = { content }
   if (hostIds && hostIds.length > 0) body.host_ids = hostIds
+
+  // Note: api client doesn't support AbortSignal yet, so we use fetch directly for this function
   const res = await fetch(`/api/v1/chat/conversations/${conversationId}/messages`, {
     method: 'POST',
     signal,
-    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   })
   if (!res.ok) {
@@ -114,33 +100,26 @@ export async function sendMessage(
 }
 
 export async function suggestTitle(id: string): Promise<string> {
-  const res = await fetch(`/api/v1/chat/conversations/${id}/suggest-title`, {
-    method: 'POST',
-    headers: authHeaders(),
-  })
-  if (!res.ok) throw new Error((await res.json()).error)
-  const data = await res.json()
+  const data = await api.post<{ title: string }>(`/chat/conversations/${id}/suggest-title`)
   return data.title
 }
 
 export async function getActiveModel(): Promise<{provider_id: string, model: string, provider_name: string}> {
-  const res = await fetch('/api/v1/providers', { headers: authHeaders() })
-  if (!res.ok) return { provider_id: '', model: '', provider_name: '' }
-  const providers = await res.json()
-  const active = providers.find((p: any) => p.is_active)
-  return {
-    provider_id: active?.id || '',
-    model: active?.selected_model || '',
-    provider_name: active?.name || '',
+  try {
+    const providers = await api.get<any[]>('/providers')
+    const active = providers.find((p: any) => p.is_active)
+    return {
+      provider_id: active?.id || '',
+      model: active?.selected_model || '',
+      provider_name: active?.name || '',
+    }
+  } catch {
+    return { provider_id: '', model: '', provider_name: '' }
   }
 }
 
 export async function setActiveModel(providerId: string, model: string): Promise<void> {
-  await fetch(`/api/v1/providers/${providerId}/model`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify({ model }),
-  })
+  return api.put(`/providers/${providerId}/model`, { model }, { responseType: 'void' })
 }
 
 export async function confirmAction(
@@ -148,29 +127,24 @@ export async function confirmAction(
   requestId: string,
   approved: boolean,
 ): Promise<void> {
-  const res = await fetch(
-    `/api/v1/chat/conversations/${conversationId}/confirm/${requestId}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...authHeaders() },
-      body: JSON.stringify({ approved }),
-    },
+  return api.post(
+    `/chat/conversations/${conversationId}/confirm/${requestId}`,
+    { approved },
+    { responseType: 'void' }
   )
-  if (!res.ok) throw new Error((await res.json()).error)
 }
 
 export async function cancelConversation(id: string): Promise<void> {
-  await fetch(`/api/v1/chat/conversations/${id}/cancel`, {
-    method: 'POST',
-    headers: authHeaders(),
-  })
+  return api.post(`/chat/conversations/${id}/cancel`, undefined, { responseType: 'void' })
 }
 
 export async function exportConversation(id: string, format: 'md' | 'json'): Promise<void> {
-  const res = await fetch(`/api/v1/chat/conversations/${id}/export?format=${format}`, {
-    headers: authHeaders(),
-  })
-  if (!res.ok) throw new Error((await res.json()).error)
+  // Use fetch directly to access response headers for filename
+  const res = await fetch(`/api/v1/chat/conversations/${id}/export?format=${format}`)
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({}))
+    throw new Error(error.error || 'Export failed')
+  }
   const blob = await res.blob()
   const disposition = res.headers.get('Content-Disposition') || ''
   const match = disposition.match(/filename="([^"]+)"/)
