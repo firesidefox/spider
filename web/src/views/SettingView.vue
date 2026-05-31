@@ -32,7 +32,7 @@
           <div class="nav-row" :class="{ selected: activeTab === 'audit' }" @click="activeTab = 'audit'">
             <span class="nav-icon">📋</span><span class="nav-label">审计日志</span>
           </div>
-          <div class="nav-row" :class="{ selected: activeTab === 'notify' }" @click="activeTab = 'notify'; loadNotifyChannels()">
+          <div class="nav-row" :class="{ selected: activeTab === 'notify' }" @click="activeTab = 'notify'">
             <span class="nav-icon">🔔</span><span class="nav-label">通知渠道</span>
           </div>
           <div class="nav-row" :class="{ selected: activeTab === 'settings' }" @click="activeTab = 'settings'; loadSettings()">
@@ -65,7 +65,7 @@
         <TokenSettings />
       </template>
       <template v-else-if="activeTab === 'audit'">
-        <AuditView />
+        <AuditLogs />
       </template>
       <template v-else-if="activeTab === 'install'">
         <InstallPanel @switch-tab="activeTab = $event as any" />
@@ -93,10 +93,12 @@
       <template v-else-if="activeTab === 'logs'">
         <LogsViewer />
       </template>
+      <template v-else-if="activeTab === 'notify'">
+        <NotifyChannelSettings />
+      </template>
       <template v-else>
         <div class="detail-topbar">
           <span class="detail-title">{{ tabTitle }}</span>
-          <button v-if="activeTab === 'notify'" class="btn btn-primary btn-sm" @click="showAddChannelModal = true">添加渠道</button>
 
           <template v-if="activeTab === 'settings'">
             <div v-if="settingsEditing" style="display:flex;gap:8px">
@@ -641,11 +643,11 @@ import {
   deleteNotifyChannel,
   type NotifyChannel,
 } from '../api/notify-channels'
-import UsersPanel from './UsersPanel.vue'
-import AuditView from './AuditView.vue'
-import InstallPanel from './InstallPanel.vue'
-import SkillsPanel from './SkillsPanel.vue'
-import PrometheusDataSourcesPanel from '../components/PrometheusDataSourcesPanel.vue'
+import UsersPanel from '@/components/settings/UsersPanel.vue'
+import AuditLogs from '@/components/settings/AuditLogs.vue'
+import InstallPanel from '@/components/settings/InstallPanel.vue'
+import SkillsPanel from '@/components/settings/SkillsPanel.vue'
+import PrometheusDataSourcesPanel from '@/components/settings/PrometheusDataSourcesPanel.vue'
 import PasswordSettings from '../components/settings/PasswordSettings.vue'
 import ChatThemeSettings from '../components/settings/ChatThemeSettings.vue'
 import TokenSettings from '../components/settings/TokenSettings.vue'

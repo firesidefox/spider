@@ -81,10 +81,10 @@
 
 <script setup lang="ts">
 import { ref, onMounted, inject } from 'vue'
-import { listLogs, type ExecutionLog } from '../api/logs'
-import { listHosts } from '../api/hosts'
-import { useHighlight } from '../composables/useHighlight'
-import CodeBlock from '../components/CodeBlock.vue'
+import { listLogs, type ExecutionLog } from '../../api/logs'
+import { listHosts } from '../../api/hosts'
+import { useHighlight } from '../../composables/useHighlight'
+import CodeBlock from '../../components/CodeBlock.vue'
 
 const { ready: hlReady, highlight } = useHighlight()
 const isDark = inject<() => boolean>('isDark', () => true)

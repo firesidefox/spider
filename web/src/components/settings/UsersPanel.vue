@@ -112,9 +112,9 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { listUsers, createUser, updateUser, deleteUser } from '../api/users'
-import { useAuth } from '../composables/useAuth'
-import type { UserInfo } from '../api/auth'
+import { listUsers, createUser, updateUser, deleteUser } from '../../api/users'
+import { useAuth } from '../../composables/useAuth'
+import type { UserInfo } from '../../api/auth'
 
 const { currentUser } = useAuth()
 const users = ref<UserInfo[]>([])
