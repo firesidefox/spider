@@ -278,7 +278,8 @@ async function addProvider() {
 }
 
 async function removeProvider(id: string) {
-  await fetch(`/api/v1/providers/${id}`, { method: 'DELETE', headers: authHeaders() })
+  const res = await fetch(`/api/v1/providers/${id}`, { method: 'DELETE', headers: authHeaders() })
+  if (!res.ok) { fetchError.value = '删除失败'; return }
   providers.value = providers.value.filter(p => p.id !== id)
 }
 
@@ -341,12 +342,12 @@ async function loadAgentSettings() {
     const data = await res.json()
     agentSettings.value = {
       permission_mode: data.permission_mode || 'ask',
-      approval_timeout: data.approval_timeout || 300,
+      approval_timeout: data.approval_timeout ?? 300,
     }
     const rulesRes = await fetch('/api/v1/permission/rules', { headers: authHeaders() })
-    customRules.value = await rulesRes.json()
+    if (rulesRes.ok) customRules.value = await rulesRes.json()
     const builtinRes = await fetch('/api/v1/permission/builtin-rules', { headers: authHeaders() })
-    builtinRules.value = await builtinRes.json()
+    if (builtinRes.ok) builtinRules.value = await builtinRes.json()
   } catch (e: any) {
     agentError.value = e.message
   }
@@ -356,11 +357,15 @@ async function saveAgentSettings() {
   agentSaving.value = true
   agentError.value = ''
   try {
-    await fetch('/api/v1/settings', {
+    const res = await fetch('/api/v1/settings', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify(agentSettings.value),
     })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      agentError.value = data.error || '保存失败'
+    }
   } catch (e: any) {
     agentError.value = e.message
   }
@@ -392,10 +397,15 @@ async function addRule() {
 async function deleteRule(idx: number) {
   agentError.value = ''
   try {
-    await fetch(`/api/v1/permission/rules/${idx}`, {
+    const res = await fetch(`/api/v1/permission/rules/${idx}`, {
       method: 'DELETE',
       headers: authHeaders(),
     })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      agentError.value = data.error || '删除失败'
+      return
+    }
     await loadAgentSettings()
   } catch (e: any) {
     agentError.value = e.message
