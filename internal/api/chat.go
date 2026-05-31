@@ -299,7 +299,7 @@ func chatSendMessage(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id
 
 // allFacesDisableKB is retained for compatibility with the agent factory hook.
 // SearchDocs remains available even when faces do not expose KB bindings.
-func allFacesDisableKB(app *mcppkg.App) bool {
+func allFacesDisableKB(_ *mcppkg.App) bool {
 	return false
 }
 
