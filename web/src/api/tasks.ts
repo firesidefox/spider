@@ -1,4 +1,4 @@
-import { authHeaders } from './auth'
+import { api } from '@/shared/api/client'
 
 export interface Task {
   id: string
@@ -27,30 +27,17 @@ export interface TaskRun {
 }
 
 export async function listTasks(): Promise<Task[]> {
-  const res = await fetch('/api/v1/tasks', { headers: authHeaders() })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
+  return api.get('/tasks')
 }
 
 export async function getTask(id: string): Promise<Task> {
-  const res = await fetch(`/api/v1/tasks/${id}`, { headers: authHeaders() })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
+  return api.get(`/tasks/${id}`)
 }
 
 export async function triggerTask(id: string): Promise<{ run_id: string; status: string }> {
-  const res = await fetch(`/api/v1/tasks/${id}/trigger`, {
-    method: 'POST',
-    headers: authHeaders(),
-  })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
+  return api.post(`/tasks/${id}/trigger`)
 }
 
 export async function listTaskRuns(id: string, limit = 20, offset = 0): Promise<TaskRun[]> {
-  const res = await fetch(`/api/v1/tasks/${id}/runs?limit=${limit}&offset=${offset}`, {
-    headers: authHeaders(),
-  })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
+  return api.get(`/tasks/${id}/runs?limit=${limit}&offset=${offset}`)
 }
