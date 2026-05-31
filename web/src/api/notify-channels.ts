@@ -1,4 +1,4 @@
-import { authHeaders } from './auth'
+import { api } from '@/shared/api/client'
 
 export interface NotifyChannel {
   id: number
@@ -8,56 +8,29 @@ export interface NotifyChannel {
   created_at: string
 }
 
+export interface CreateNotifyChannelRequest {
+  type: string
+  name: string
+  config: string
+  enabled: boolean
+}
+
 export async function listNotifyChannels(): Promise<NotifyChannel[]> {
-  const res = await fetch('/api/v1/notify-channels', { headers: authHeaders() })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
+  return api.get('/notify-channels')
 }
 
-export async function createNotifyChannel(data: {
-  type: string
-  name: string
-  config: string
-  enabled: boolean
-}): Promise<NotifyChannel> {
-  const res = await fetch('/api/v1/notify-channels', {
-    method: 'POST',
-    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
+export async function createNotifyChannel(data: CreateNotifyChannelRequest): Promise<NotifyChannel> {
+  return api.post('/notify-channels', data)
 }
 
-export async function updateNotifyChannel(id: number, data: Partial<{
-  type: string
-  name: string
-  config: string
-  enabled: boolean
-}>): Promise<NotifyChannel> {
-  const res = await fetch(`/api/v1/notify-channels/${id}`, {
-    method: 'PUT',
-    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
-}
-
-export async function toggleNotifyChannel(id: number, enabled: boolean): Promise<NotifyChannel> {
-  const res = await fetch(`/api/v1/notify-channels/${id}/enabled`, {
-    method: 'PATCH',
-    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-    body: JSON.stringify({ enabled }),
-  })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
+export async function updateNotifyChannel(id: number, data: Partial<NotifyChannel>): Promise<NotifyChannel> {
+  return api.patch(`/notify-channels/${id}`, data)
 }
 
 export async function deleteNotifyChannel(id: number): Promise<void> {
-  const res = await fetch(`/api/v1/notify-channels/${id}`, {
-    method: 'DELETE',
-    headers: authHeaders(),
-  })
-  if (!res.ok) throw new Error(await res.text())
+  return api.delete(`/notify-channels/${id}`, { responseType: 'void' })
+}
+
+export async function toggleNotifyChannel(id: number, enabled: boolean): Promise<NotifyChannel> {
+  return api.patch(`/notify-channels/${id}/enabled`, { enabled })
 }
