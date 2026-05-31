@@ -10,6 +10,8 @@ import { TodoUpdateHandler } from './TodoUpdateHandler'
 import { TurnUsageHandler } from './TurnUsageHandler'
 import { MessageHandler } from './MessageHandler'
 
+export type { EventHandlerContext } from './EventHandler'
+
 export class EventHandlerRegistry {
   private handlers = new Map<string, EventHandler>()
 
