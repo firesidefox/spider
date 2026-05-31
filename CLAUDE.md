@@ -44,3 +44,35 @@ go build -a -o /tmp/spider-test ./cmd/spider
 - 用 `**When to use:**` / `**When NOT to use:**` 明确边界
 - 用 `**Rules:**` 列状态机约束
 - 反例比正例更有效
+
+## 前端架构
+
+### ChatView 设计模式
+
+- **Strategy Pattern**: SSE 事件处理（9 个 handler）
+  - TextDeltaHandler, ToolStartHandler, ToolResultHandler, ConfirmRequiredHandler
+  - ErrorHandler, DoneHandler, TodoUpdateHandler, TurnUsageHandler, MessageHandler
+  - 新增事件类型：实现 `EventHandler` 接口并在 `EventHandlerRegistry` 注册
+
+- **State Pattern**: 会话状态机（idle/streaming/waiting_confirm）
+  - IdleState: 可发送消息
+  - StreamingState: 流式中，可取消
+  - WaitingConfirmState: 等待用户确认
+  - 新增会话状态：继承 `BaseConversationState` 并实现状态转换逻辑
+
+- **Observer Pattern**: 事件总线（chatEventBus）
+  - 解耦组件间通信
+  - 事件：SCROLL_TO_BOTTOM, DEVICE_STATUS_UPDATE, AGENT_STATUS_UPDATE, TODO_UPDATE, CONVERSATION_SELECTED, MESSAGE_SENT
+
+### Composables
+
+- `useConversationList` - 会话列表管理（创建、删除、批量操作、标题编辑）
+- `useChatStream` - SSE 流 + 消息管理 + 状态机 + 事件处理
+- `useTodoPanel` - 任务面板 + 计时器
+
+### 代码统计
+
+- ChatView: 1803 → 1137 行（-37%）
+- 新增 composables: ~1200 行
+- 新增 handlers: ~600 行
+- 新增 states: ~300 行
