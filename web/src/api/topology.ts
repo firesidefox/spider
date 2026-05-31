@@ -87,11 +87,21 @@ export async function importYAML(topoID: string, yamlText: string): Promise<Topo
 }
 
 export async function exportYAML(topoID: string): Promise<void> {
-  const blob = await api.download(`/topologies/${topoID}/export`)
+  // Use fetch directly to access Content-Disposition header for filename
+  const res = await fetch(`/api/v1/topologies/${topoID}/export`)
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({}))
+    throw new Error(error.error || 'Export failed')
+  }
+  const blob = await res.blob()
+  const disposition = res.headers.get('Content-Disposition') || ''
+  const match = disposition.match(/filename="([^"]+)"/)
+  const filename = match?.[1] || `topology-${topoID}.yaml`
+
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `topology-${topoID}.yaml`
+  a.download = filename
   a.click()
   URL.revokeObjectURL(url)
 }

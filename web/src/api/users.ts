@@ -10,7 +10,7 @@ export async function createUser(username: string, password: string, role: strin
 }
 
 export async function updateUser(id: string, updates: Partial<UserInfo>): Promise<UserInfo> {
-  return api.patch(`/users/${id}`, updates)
+  return api.put(`/users/${id}`, updates)
 }
 
 export async function deleteUser(id: string): Promise<void> {

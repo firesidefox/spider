@@ -978,7 +978,7 @@ async function handleCreate() {
   formError.value = ''
   if (!form.value.name.trim()) { formError.value = '请输入名称'; return }
   try {
-    const res = await createToken(form.value.name, form.value.expiresAt || undefined)
+    const res = await createToken(form.value.name, form.value.expiresAt || '')
     newToken.value = res.token
     showCreate.value = false
     form.value = { name: '', expiresAt: '' }
