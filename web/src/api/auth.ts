@@ -18,41 +18,26 @@ export interface UIPrefs {
   target_panel_width: number
 }
 
+import { api } from '@/shared/api/client'
+
 export async function login(username: string, password: string): Promise<LoginResponse> {
-  const res = await fetch('/api/v1/auth/login', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username, password }),
-  })
-  if (!res.ok) throw new Error((await res.json()).error)
-  return res.json()
+  return api.post('/auth/login', { username, password })
 }
 
 export async function logout(): Promise<void> {
-  await fetch('/api/v1/auth/logout', {
-    method: 'POST',
-    headers: authHeaders(),
-  })
+  return api.post('/auth/logout', undefined, { responseType: 'void' })
 }
 
 export async function getMe(): Promise<UserInfo> {
-  const res = await fetch('/api/v1/me', { headers: authHeaders() })
-  if (!res.ok) throw new Error((await res.json()).error)
-  return res.json()
+  return api.get('/me')
 }
 
 export async function getUIPrefs(): Promise<UIPrefs> {
-  const res = await fetch('/api/v1/me/prefs', { headers: authHeaders() })
-  if (!res.ok) throw new Error((await res.json()).error)
-  return res.json()
+  return api.get('/me/prefs')
 }
 
 export async function setUIPrefs(prefs: UIPrefs): Promise<void> {
-  await fetch('/api/v1/me/prefs', {
-    method: 'PUT',
-    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-    body: JSON.stringify(prefs),
-  })
+  return api.put('/me/prefs', prefs, { responseType: 'void' })
 }
 
 export function authHeaders(): Record<string, string> {
