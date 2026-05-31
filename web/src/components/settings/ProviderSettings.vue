@@ -172,7 +172,7 @@ async function saveSettings() {
     body: JSON.stringify(settings.value),
   })
   if (!res.ok) {
-    settingsError.value = (await res.json()).error
+    settingsError.value = (await res.json().catch(() => ({}))).error || '保存失败'
     return
   }
   const lvlRes = await fetch('/api/v1/log-level', {
@@ -181,7 +181,7 @@ async function saveSettings() {
     body: JSON.stringify({ level: logLevel.value }),
   })
   if (!lvlRes.ok) {
-    logLevelError.value = (await lvlRes.json()).error
+    logLevelError.value = (await lvlRes.json().catch(() => ({}))).error || '保存失败'
     return
   }
   const modResults = await Promise.allSettled(LOG_MODULES.map(m =>
