@@ -1,4 +1,4 @@
-import { authHeaders } from './auth'
+import { api } from '@/shared/api/client'
 
 export interface TokenInfo {
   id: string
@@ -13,24 +13,15 @@ export interface CreateTokenResponse extends TokenInfo {
 }
 
 export async function listTokens(): Promise<TokenInfo[]> {
-  const res = await fetch('/api/v1/tokens', { headers: authHeaders() })
-  if (!res.ok) throw new Error((await res.json()).error)
-  return res.json()
+  return api.get('/tokens')
 }
 
 export async function createToken(name: string, expiresAt?: string): Promise<CreateTokenResponse> {
   const body: any = { name }
   if (expiresAt) body.expires_at = expiresAt
-  const res = await fetch('/api/v1/tokens', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify(body),
-  })
-  if (!res.ok) throw new Error((await res.json()).error)
-  return res.json()
+  return api.post('/tokens', body)
 }
 
 export async function deleteToken(id: string): Promise<void> {
-  const res = await fetch(`/api/v1/tokens/${id}`, { method: 'DELETE', headers: authHeaders() })
-  if (!res.ok) throw new Error((await res.json()).error)
+  return api.delete(`/tokens/${id}`, { responseType: 'void' })
 }
