@@ -1,4 +1,5 @@
-import { authHeaders } from './auth'
+import { api } from '@/shared/api/client'
+import { ApiError } from '@/shared/api/client'
 
 export interface Host {
   id: string
@@ -112,67 +113,62 @@ export interface AddAccessFaceRequest {
   prometheus_source_id?: string
 }
 
-async function apiFetch(url: string, init?: RequestInit) {
-  const res = await fetch(url, { ...init, headers: { ...authHeaders(), ...(init?.headers as Record<string, string>) } })
-  if (!res.ok) throw new Error((await res.json()).error)
-  return res
-}
-
-const json = (body: unknown) => ({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-const put  = (body: unknown) => ({ method: 'PUT',  headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-
 export async function listHosts(tag?: string): Promise<Host[]> {
-  const url = tag ? `/api/v1/hosts?tag=${encodeURIComponent(tag)}` : '/api/v1/hosts'
-  return (await apiFetch(url)).json()
+  const path = tag ? `/hosts?tag=${encodeURIComponent(tag)}` : '/hosts'
+  return api.get<Host[]>(path)
 }
 
 export async function getHost(id: string): Promise<Host> {
-  return (await apiFetch(`/api/v1/hosts/${id}`)).json()
+  return api.get<Host>(`/hosts/${id}`)
 }
 
 export async function addHost(req: AddHostRequest): Promise<Host> {
-  return (await apiFetch('/api/v1/hosts', json(req))).json()
+  return api.post<Host>('/hosts', req)
 }
 
 export async function updateHost(id: string, req: UpdateHostRequest): Promise<Host> {
-  return (await apiFetch(`/api/v1/hosts/${id}`, put(req))).json()
+  return api.put<Host>(`/hosts/${id}`, req)
 }
 
 export async function deleteHost(id: string): Promise<void> {
-  await apiFetch(`/api/v1/hosts/${id}`, { method: 'DELETE' })
+  return api.delete<void>(`/hosts/${id}`, { responseType: 'void' })
 }
 
 export async function listAccessFaces(hostId: string): Promise<AccessFace[]> {
-  return (await apiFetch(`/api/v1/hosts/${hostId}/faces`)).json()
+  return api.get<AccessFace[]>(`/hosts/${hostId}/faces`)
 }
 
 export async function addAccessFace(hostId: string, req: AddAccessFaceRequest): Promise<AccessFace> {
-  return (await apiFetch(`/api/v1/hosts/${hostId}/faces`, json(req))).json()
+  return api.post<AccessFace>(`/hosts/${hostId}/faces`, req)
 }
 
 export async function updateAccessFace(hostId: string, faceId: string, req: Partial<AddAccessFaceRequest>): Promise<AccessFace> {
-  return (await apiFetch(`/api/v1/hosts/${hostId}/faces/${faceId}`, put(req))).json()
+  return api.put<AccessFace>(`/hosts/${hostId}/faces/${faceId}`, req)
 }
 
 export async function deleteAccessFace(hostId: string, faceId: string): Promise<void> {
-  await apiFetch(`/api/v1/hosts/${hostId}/faces/${faceId}`, { method: 'DELETE' })
+  return api.delete<void>(`/hosts/${hostId}/faces/${faceId}`, { responseType: 'void' })
 }
 
 export async function getFingerprint(hostId: string): Promise<Fingerprint | null> {
-  const res = await fetch(`/api/v1/hosts/${hostId}/fingerprint`)
-  if (res.status === 404) return null
-  if (!res.ok) throw new Error((await res.json()).error)
-  return res.json()
+  try {
+    return await api.get<Fingerprint>(`/hosts/${hostId}/fingerprint`)
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) {
+      return null
+    }
+    throw err
+  }
 }
 
 export async function listMemories(hostId: string): Promise<Memory[]> {
-  return (await apiFetch(`/api/v1/hosts/${hostId}/memories`)).json()
+  return api.get<Memory[]>(`/hosts/${hostId}/memories`)
 }
 
 export async function addMemory(hostId: string, content: string): Promise<Memory> {
-  return (await apiFetch(`/api/v1/hosts/${hostId}/memories`, json({ content }))).json()
+  return api.post<Memory>(`/hosts/${hostId}/memories`, { content })
 }
 
 export async function deleteMemory(hostId: string, memId: number): Promise<void> {
-  await apiFetch(`/api/v1/hosts/${hostId}/memories/${memId}`, { method: 'DELETE' })
+  return api.delete<void>(`/hosts/${hostId}/memories/${memId}`, { responseType: 'void' })
 }
