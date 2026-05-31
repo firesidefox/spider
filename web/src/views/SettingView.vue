@@ -35,14 +35,14 @@
           <div class="nav-row" :class="{ selected: activeTab === 'notify' }" @click="activeTab = 'notify'">
             <span class="nav-icon">🔔</span><span class="nav-label">通知渠道</span>
           </div>
-          <div class="nav-row" :class="{ selected: activeTab === 'settings' }" @click="activeTab = 'settings'; loadSettings()">
+          <div class="nav-row" :class="{ selected: activeTab === 'settings' }" @click="activeTab = 'settings'">
             <span class="nav-icon">⚙️</span><span class="nav-label">偏好设置</span>
           </div>
           <div class="nav-section-label">Agent</div>
           <div class="nav-row" :class="{ selected: activeTab === 'agent' }" @click="activeTab = 'agent'; loadAgentSettings(); loadProviders()">
             <span class="nav-icon">🧠</span><span class="nav-label">智能体</span>
           </div>
-          <div class="nav-row" :class="{ selected: activeTab === 'kb' }" @click="activeTab = 'kb'; loadRagConfig()">
+          <div class="nav-row" :class="{ selected: activeTab === 'kb' }" @click="activeTab = 'kb'">
             <span class="nav-icon">📚</span><span class="nav-label">知识库</span>
           </div>
           <div class="nav-row" :class="{ selected: activeTab === 'skills' }" @click="activeTab = 'skills'">
@@ -96,18 +96,15 @@
       <template v-else-if="activeTab === 'notify'">
         <NotifyChannelSettings />
       </template>
+      <template v-else-if="activeTab === 'kb'">
+        <RagSettings />
+      </template>
+      <template v-else-if="activeTab === 'settings'">
+        <ProviderSettings />
+      </template>
       <template v-else>
         <div class="detail-topbar">
           <span class="detail-title">{{ tabTitle }}</span>
-
-          <template v-if="activeTab === 'settings'">
-            <div v-if="settingsEditing" style="display:flex;gap:8px">
-              <button class="btn btn-primary btn-sm" @click="saveSettings">保存</button>
-              <button class="btn btn-sm" @click="cancelSettings">取消</button>
-            </div>
-            <button v-else class="btn btn-sm" @click="settingsEditing = true">编辑</button>
-          </template>
-
         </div>
         <div class="detail-body">
         <template v-if="activeTab === 'info'">
@@ -352,224 +349,6 @@
           </div>
         </template>
 
-        <!-- Tab: 知识库 -->
-        <template v-if="activeTab === 'kb'">
-          <div v-if="ragConfigError" class="err" style="margin-bottom:12px">{{ ragConfigError }}</div>
-          <div class="edit-card emb-card">
-            <!-- 卡头 -->
-            <div class="emb-card-header">
-              <div class="emb-card-identity">
-                <div class="emb-card-icon">🧠</div>
-                <div>
-                  <div class="emb-card-title">Embedding 模型</div>
-                  <div class="emb-card-subtitle dim">{{ ragConfig.name || ragConfig.model || '未配置' }}</div>
-                </div>
-              </div>
-              <div class="emb-card-header-right">
-                <span v-if="ragConfig.validated_at" class="status-badge ok">✓ 已验证</span>
-                <span v-else-if="ragConfig.base_url" class="status-badge" style="border-color:var(--border)">未验证</span>
-                <button v-if="!ragConfigEditing" class="btn btn-sm" @click="startEditRagConfig">编辑</button>
-              </div>
-            </div>
-
-            <!-- 只读态 -->
-            <template v-if="!ragConfigEditing">
-              <div class="emb-divider"></div>
-              <div class="emb-fields">
-                <div class="emb-field">
-                  <span class="emb-field-label">供应商</span>
-                  <span class="emb-field-value">{{ ragConfig.name || '—' }}</span>
-                </div>
-                <div class="emb-field">
-                  <span class="emb-field-label">接口类型</span>
-                  <span class="emb-field-value">
-                    <span class="mc-tag-inline">{{ ragConfig.type === 'anthropic' ? 'Anthropic 兼容' : 'OpenAI 兼容' }}</span>
-                  </span>
-                </div>
-                <div class="emb-field">
-                  <span class="emb-field-label">请求地址</span>
-                  <span class="emb-field-value">{{ ragConfig.base_url || '—' }}</span>
-                </div>
-                <div class="emb-field">
-                  <span class="emb-field-label">APIKey</span>
-                  <span class="emb-field-value dim">{{ ragConfig.api_key_set ? '已配置' : '—' }}</span>
-                </div>
-              </div>
-            </template>
-
-            <!-- 编辑态 -->
-            <template v-else>
-              <div class="emb-divider"></div>
-              <!-- 行1：供应商名称 | 接口类型 -->
-              <div class="emb-form-grid">
-                <div class="emb-form-col">
-                  <label class="emb-label">供应商名称</label>
-                  <input v-model="ragConfigForm.name" class="input" placeholder="如 OpenAI、MiniMax（仅标识）" />
-                </div>
-                <div class="emb-form-col">
-                  <label class="emb-label">接口类型</label>
-                  <select v-model="ragConfigForm.type" class="input" @change="onBaseUrlChange">
-                    <option value="openai">OpenAI 兼容</option>
-                    <option value="anthropic">Anthropic 兼容</option>
-                  </select>
-                </div>
-              </div>
-              <!-- 行2：请求地址 | APIKey -->
-              <div class="emb-form-grid" style="margin-bottom:4px">
-                <div class="emb-form-col">
-                  <label class="emb-label">请求地址</label>
-                  <input v-model="ragConfigForm.base_url" class="input"
-                    placeholder="https://api.openai.com/v1"
-                    list="provider-urls" @change="onBaseUrlChange" @input="onBaseUrlInput" />
-                  <datalist id="provider-urls">
-                    <option v-for="p in kbProviders" :key="p.id" :value="p.base_url">{{ p.name }}</option>
-                  </datalist>
-                </div>
-                <div class="emb-form-col">
-                  <label class="emb-label">APIKey</label>
-                  <input v-model="ragConfigForm.api_key" class="input" type="password"
-                    :placeholder="ragConfig.api_key_set ? '已设置，留空保留原值' : 'API Key'"
-                    @input="clearModelCache" />
-                </div>
-              </div>
-              <!-- URL hint + 查询按钮 -->
-              <div class="emb-url-hint-row">
-                <span class="emb-url-hint">
-                  查询接口：<span class="emb-url-hint-url">{{ ragConfigForm.base_url ? ragConfigForm.base_url.replace(/\/$/, '') + '/v1/models' : '—' }}</span>
-                </span>
-                <button class="btn btn-amber btn-sm" :disabled="!ragConfigForm.base_url || kbFetchingModels" @click="fetchEmbeddingModels">
-                  {{ kbFetchingModels ? '查询中…' : '查询模型列表' }}
-                </button>
-              </div>
-              <!-- 模型 ID -->
-              <div class="emb-form-col" style="margin-bottom:8px">
-                <label class="emb-label">模型 ID</label>
-                <input v-model="ragConfigForm.model" class="input" placeholder="可手动输入，或点击下方快速选择" />
-              </div>
-              <!-- chips -->
-              <div v-if="kbModelOptions.length">
-                <div class="emb-chips-label">可用模型（点击快速选择）<span v-if="kbFetchedAt" class="emb-fetched-at">{{ kbFetchedAt }}</span></div>
-                <div class="emb-chips">
-                  <span v-for="m in kbModelOptions" :key="m"
-                    class="emb-chip" :class="{ active: ragConfigForm.model === m }"
-                    @click="ragConfigForm.model = m">{{ m }}</span>
-                </div>
-              </div>
-              <div v-if="kbFetchModelsError" class="err" style="font-size:12px;margin-top:4px">{{ kbFetchModelsError }}</div>
-              <div class="emb-edit-actions">
-                <button class="btn btn-primary btn-sm" :disabled="ragConfigSaving" @click="saveRagConfig">
-                  {{ ragConfigSaving ? '保存中…' : '保存' }}
-                </button>
-                <button class="btn btn-sm" @click="cancelRagConfigEdit">取消</button>
-                <button class="btn btn-sm" :disabled="kbValidating" @click="validateRagConfig">
-                  {{ kbValidating ? '验证中…' : '验证' }}
-                </button>
-                <span v-if="kbValidateResult === 'ok'" style="color:var(--green);font-size:12px">✓ 有效</span>
-                <span v-else-if="kbValidateResult === 'error'" style="color:var(--red);font-size:12px">{{ kbValidateError }}</span>
-              </div>
-              <div v-if="ragConfigSaveError" class="err" style="margin-top:8px;font-size:13px">{{ ragConfigSaveError }}</div>
-            </template>
-
-            <div v-if="ragConfigOk" style="margin-top:8px;font-size:13px;color:var(--green)">已保存 ✓</div>
-          </div>
-        </template>
-
-        <!-- Tab: 偏好设置 -->
-        <template v-if="activeTab === 'settings'">
-          <!-- 只读视图 -->
-          <template v-if="!settingsEditing">
-            <div class="edit-card">
-              <div class="edit-card-title">MCP Server</div>
-              <div class="detail-grid">
-                <div class="detail-field">
-                  <div class="detail-label">监听地址</div>
-                  <div class="detail-value">{{ settings.sse_addr || '—' }}</div>
-                </div>
-                <div class="detail-field">
-                  <div class="detail-label">Base URL</div>
-                  <div class="detail-value">{{ settings.sse_base_url || '—' }}</div>
-                </div>
-              </div>
-            </div>
-            <div class="edit-card">
-              <div class="edit-card-title">SSH 默认配置</div>
-              <div class="detail-grid">
-                <div class="detail-field">
-                  <div class="detail-label">命令超时（秒）</div>
-                  <div class="detail-value">{{ settings.ssh_default_timeout_seconds }}</div>
-                </div>
-                <div class="detail-field">
-                  <div class="detail-label">连接池 TTL（秒）</div>
-                  <div class="detail-value">{{ settings.ssh_pool_ttl_seconds }}</div>
-                </div>
-                <div class="detail-field">
-                  <div class="detail-label">最大连接数</div>
-                  <div class="detail-value">{{ settings.ssh_max_pool_size }}</div>
-                </div>
-                <div class="detail-field">
-                  <div class="detail-label">直连地址（No Proxy）</div>
-                  <div class="detail-value">{{ settings.ssh_no_proxy || '—' }}</div>
-                </div>
-              </div>
-            </div>
-            <div class="edit-card">
-              <div class="edit-card-title">日志</div>
-              <div class="log-cfg-row">
-                <span class="log-cfg-lbl">全局级别</span>
-                <span :class="['log-cfg-badge', `log-cfg-badge--${logLevel}`]">{{ levelLabel(logLevel) }}</span>
-              </div>
-              <hr class="log-cfg-divider">
-              <div v-for="m in LOG_MODULES" :key="m" class="log-cfg-row">
-                <span class="log-cfg-mod">{{ m }}</span>
-                <span :class="['log-cfg-badge', `log-cfg-badge--${moduleLevels[m] ?? 'inherit'}`]">{{ levelLabel(moduleLevels[m] ?? 'inherit') }}</span>
-              </div>
-            </div>
-          </template>
-          <!-- 编辑视图 -->
-          <template v-else>
-            <div class="edit-card">
-              <div class="edit-card-title">MCP Server</div>
-              <div class="block-grid">
-                <div class="form-row"><label>监听地址</label><input v-model="settings.sse_addr" class="input" placeholder=":8000" /></div>
-                <div class="form-row"><label>Base URL</label><input v-model="settings.sse_base_url" class="input" placeholder="http://localhost:8000" /></div>
-              </div>
-            </div>
-            <div class="edit-card">
-              <div class="edit-card-title">SSH 默认配置</div>
-              <div class="block-grid">
-                <div class="form-row"><label>命令超时（秒）</label><input v-model.number="settings.ssh_default_timeout_seconds" class="input" type="number" /></div>
-                <div class="form-row"><label>连接池 TTL（秒）</label><input v-model.number="settings.ssh_pool_ttl_seconds" class="input" type="number" /></div>
-                <div class="form-row"><label>最大连接数</label><input v-model.number="settings.ssh_max_pool_size" class="input" type="number" /></div>
-                <div class="form-row"><label>直连地址（No Proxy）</label><input v-model="settings.ssh_no_proxy" class="input" placeholder="10.0.0.0/8,192.168.0.0/16" /></div>
-              </div>
-            </div>
-            <div class="edit-card">
-              <div class="edit-card-title">日志</div>
-              <div class="log-cfg-row">
-                <span class="log-cfg-lbl">全局级别</span>
-                <select v-model="logLevel" class="input log-cfg-select">
-                  <option value="debug">调试 debug</option>
-                  <option value="info">信息 info</option>
-                  <option value="warn">警告 warn</option>
-                  <option value="error">错误 error</option>
-                </select>
-              </div>
-              <div v-if="logLevelError" class="err" style="margin-top:4px;font-size:12px">{{ logLevelError }}</div>
-              <hr class="log-cfg-divider">
-              <div v-for="m in LOG_MODULES" :key="m" class="log-cfg-row">
-                <span class="log-cfg-mod">{{ m }}</span>
-                <select v-model="moduleLevels[m]" class="input log-cfg-select">
-                  <option value="inherit">继承 inherit</option>
-                  <option value="debug">调试 debug</option>
-                  <option value="info">信息 info</option>
-                  <option value="warn">警告 warn</option>
-                  <option value="error">错误 error</option>
-                </select>
-              </div>
-            </div>
-            <div v-if="settingsError" class="err" style="margin-top:4px">{{ settingsError }}</div>
-          </template>
-        </template>
 
 
       </div>
@@ -596,6 +375,8 @@ import TokenSettings from '../components/settings/TokenSettings.vue'
 import SSHKeySettings from '@/components/settings/SSHKeySettings.vue'
 import LogsViewer from '@/components/settings/LogsViewer.vue'
 import NotifyChannelSettings from '@/components/settings/NotifyChannelSettings.vue'
+import ProviderSettings from '@/components/settings/ProviderSettings.vue'
+import RagSettings from '@/components/settings/RagSettings.vue'
 
 const { currentUser, isAdmin } = useAuth()
 const route = useRoute()
@@ -624,8 +405,6 @@ const tabTitle = computed(() => ({
 onMounted(() => {
   const tab = activeTab.value
   if (tab === 'agent') { loadAgentSettings(); loadProviders() }
-  else if (tab === 'kb') loadRagConfig()
-  else if (tab === 'settings') loadSettings()
 })
 
 interface ProviderModel { model_id: string; display_name: string }
@@ -636,38 +415,11 @@ interface Provider {
   models: ProviderModel[]
   created_at: string; updated_at: string
 }
-interface Settings {
-  sse_addr: string; sse_base_url: string
-  ssh_default_timeout_seconds: number; ssh_pool_ttl_seconds: number; ssh_max_pool_size: number
-  ssh_no_proxy: string
-}
 const providers = ref<Provider[]>([])
 const editingProviderId = ref('')
 const editForm = ref({ name: '', type: 'anthropic', api_key: '', base_url: '' })
 const fetchError = ref('')
 let providersLoaded = false
-
-const settings = ref<Settings>({
-  sse_addr: '', sse_base_url: '',
-  ssh_default_timeout_seconds: 30, ssh_pool_ttl_seconds: 300, ssh_max_pool_size: 50,
-  ssh_no_proxy: '',
-})
-const settingsEditing = ref(false)
-const settingsError = ref('')
-const LOG_MODULES = ['main', 'scheduler', 'agent', 'mcp', 'ssh'] as const
-const logLevel = ref('info')
-const logLevelError = ref('')
-const moduleLevels = ref<Record<string, string>>({})
-
-const LEVEL_LABELS: Record<string, string> = {
-  inherit: '继承 inherit',
-  debug: '调试 debug',
-  info: '信息 info',
-  warn: '警告 warn',
-  error: '错误 error',
-}
-function levelLabel(v: string): string { return LEVEL_LABELS[v] ?? v }
-let settingsLoaded = false
 
 async function loadProviders() {
   if (providersLoaded) return
@@ -675,69 +427,6 @@ async function loadProviders() {
   const res = await fetch('/api/v1/providers', { headers: authHeaders() })
   if (!res.ok) return
   providers.value = await res.json()
-}
-
-async function loadSettings() {
-  if (settingsLoaded) return
-  settingsLoaded = true
-  const [res, lvlRes] = await Promise.all([
-    fetch('/api/v1/settings', { headers: authHeaders() }),
-    fetch('/api/v1/log-level', { headers: authHeaders() }),
-  ])
-  if (!res.ok) return
-  const data = await res.json()
-  settings.value = {
-    sse_addr: data.sse_addr || '',
-    sse_base_url: data.sse_base_url || '',
-    ssh_default_timeout_seconds: data.ssh_default_timeout_seconds ?? 30,
-    ssh_pool_ttl_seconds: data.ssh_pool_ttl_seconds ?? 300,
-    ssh_max_pool_size: data.ssh_max_pool_size ?? 50,
-    ssh_no_proxy: data.ssh_no_proxy || '',
-  }
-  if (lvlRes.ok) {
-    const lvlData = await lvlRes.json()
-    logLevel.value = lvlData.level || 'info'
-    const mods = lvlData.modules ?? {}
-    for (const m of LOG_MODULES) {
-      moduleLevels.value[m] = mods[m] ?? 'inherit'
-    }
-  }
-}
-
-async function saveSettings() {
-  settingsError.value = ''
-  logLevelError.value = ''
-  const res = await fetch('/api/v1/settings', {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify(settings.value),
-  })
-  if (!res.ok) {
-    settingsError.value = (await res.json()).error
-    return
-  }
-  const lvlRes = await fetch('/api/v1/log-level', {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify({ level: logLevel.value }),
-  })
-  if (!lvlRes.ok) {
-    logLevelError.value = (await lvlRes.json()).error
-    return
-  }
-  const modResults = await Promise.allSettled(LOG_MODULES.map(m =>
-    fetch('/api/v1/log-level', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', ...authHeaders() },
-      body: JSON.stringify({ module: m, level: moduleLevels.value[m] ?? 'inherit' }),
-    }).then(r => { if (!r.ok) throw new Error(m) })
-  ))
-  const failed = modResults.filter(r => r.status === 'rejected').map(r => (r as PromiseRejectedResult).reason?.message ?? '?')
-  if (failed.length) {
-    logLevelError.value = `模块保存失败: ${failed.join(', ')}`
-    return
-  }
-  settingsEditing.value = false
 }
 
 async function saveProvider() {
@@ -810,206 +499,6 @@ async function refreshModels(id: string) {
   const p = providers.value.find(x => x.id === id)
   if (p) p.models = models
   fetchError.value = ''
-}
-
-function cancelSettings() {
-  settingsEditing.value = false
-  settingsLoaded = false
-  loadSettings()
-}
-
-// ── 知识库 / Embedding 配置 ──
-const ragConfig = ref({ name: '', type: 'openai', base_url: '', model: '', api_key_set: false, validated_at: '' })
-const ragConfigForm = ref({ name: '', type: 'openai', base_url: '', model: '', api_key: '' })
-const ragConfigEditing = ref(false)
-const ragConfigSaving = ref(false)
-const ragConfigError = ref('')
-const ragConfigSaveError = ref('')
-const ragConfigOk = ref(false)
-let ragConfigLoaded = false
-
-function startEditRagConfig() {
-  ragConfigForm.value = { name: ragConfig.value.name, type: ragConfig.value.type || 'openai', base_url: ragConfig.value.base_url, model: ragConfig.value.model, api_key: '' }
-  kbFetchModelsError.value = ''
-  // 恢复验证状态：后端已持久化，validated_at 非空则视为已验证
-  kbValidateResult.value = ragConfig.value.validated_at ? 'ok' : ''
-  kbValidateError.value = ''
-  ragConfigEditing.value = true
-}
-
-function cancelRagConfigEdit() {
-  ragConfigEditing.value = false
-  kbValidateResult.value = ''
-  kbFetchModelsError.value = ''
-}
-
-// kb combobox state
-const kbProviders = ref<Provider[]>([])
-const kbModelOptions = ref<string[]>([])
-const kbFetchingModels = ref(false)
-const kbFetchModelsError = ref('')
-const kbFetchedAt = ref('')
-const kbValidating = ref(false)
-const kbValidateResult = ref<'ok' | 'error' | ''>('')
-const kbValidateError = ref('')
-
-async function loadRagConfig() {
-  if (ragConfigLoaded) return
-  ragConfigLoaded = true
-  ragConfigError.value = ''
-  try {
-    const [ragRes, provRes] = await Promise.all([
-      fetch('/api/v1/rag-config', { headers: authHeaders() }),
-      fetch('/api/v1/providers', { headers: authHeaders() }),
-    ])
-    if (ragRes.ok) {
-      const data = await ragRes.json()
-      ragConfig.value = data
-      ragConfigForm.value = { name: data.name ?? '', type: data.type ?? 'openai', base_url: data.base_url ?? '', model: data.model ?? '', api_key: '' }
-      if (data.cached_models?.length) {
-        kbModelOptions.value = data.cached_models
-        kbFetchedAt.value = '已缓存'
-      }
-    }
-    if (provRes.ok) {
-      kbProviders.value = await provRes.json()
-    }
-  } catch (e: any) {
-    ragConfigError.value = e.message
-  }
-}
-
-function saveCachedModels(models: string[]) {
-  const body: any = {
-    name: ragConfigForm.value.name,
-    type: ragConfigForm.value.type || 'openai',
-    base_url: ragConfigForm.value.base_url,
-    model: ragConfigForm.value.model,
-    cached_models: models,
-  }
-  fetch('/api/v1/rag-config', {
-    method: 'PUT',
-    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  }).catch(() => {})
-}
-
-function clearModelCache() {
-  const hadCache = kbModelOptions.value.length > 0
-  kbModelOptions.value = []
-  kbFetchedAt.value = ''
-  kbFetchModelsError.value = ''
-  kbValidateResult.value = ''
-  kbValidateError.value = ''
-  if (hadCache) saveCachedModels([])
-}
-
-function onBaseUrlChange() {
-  clearModelCache()
-  const url = ragConfigForm.value.base_url
-  const match = kbProviders.value.find(p => p.base_url === url)
-  if (match) {
-    if (match.api_key) ragConfigForm.value.api_key = match.api_key
-  }
-}
-
-function onBaseUrlInput() {
-  clearModelCache()
-  const url = ragConfigForm.value.base_url
-  const match = kbProviders.value.find(p => p.base_url === url)
-  if (match) {
-    if (match.api_key) ragConfigForm.value.api_key = match.api_key
-  }
-}
-
-async function fetchEmbeddingModels() {
-  kbFetchingModels.value = true
-  kbFetchModelsError.value = ''
-  try {
-    const res = await fetch('/api/v1/rag-config/models', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...authHeaders() },
-      body: JSON.stringify({
-        type: ragConfigForm.value.type || 'openai',
-        base_url: ragConfigForm.value.base_url,
-        api_key: ragConfigForm.value.api_key,
-      }),
-    })
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}))
-      kbFetchModelsError.value = err.error || '获取模型失败'
-      return
-    }
-    const models: { id: string }[] = await res.json()
-    kbModelOptions.value = models.map(m => m.id)
-    kbFetchedAt.value = new Date().toLocaleTimeString()
-    saveCachedModels(kbModelOptions.value)
-  } catch (e: any) {
-    kbFetchModelsError.value = e.message
-  } finally {
-    kbFetchingModels.value = false
-  }
-}
-
-async function validateRagConfig() {
-  kbValidating.value = true
-  kbValidateResult.value = ''
-  kbValidateError.value = ''
-  try {
-    const res = await fetch('/api/v1/rag-config/validate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...authHeaders() },
-      body: JSON.stringify({
-        type: ragConfigForm.value.type || 'openai',
-        base_url: ragConfigForm.value.base_url,
-        api_key: ragConfigForm.value.api_key,
-        model: ragConfigForm.value.model,
-      }),
-    })
-    if (res.ok) {
-      kbValidateResult.value = 'ok'
-    } else {
-      const err = await res.json().catch(() => ({}))
-      kbValidateResult.value = 'error'
-      kbValidateError.value = err.error || '验证失败'
-    }
-  } catch (e: any) {
-    kbValidateResult.value = 'error'
-    kbValidateError.value = e.message
-  } finally {
-    kbValidating.value = false
-  }
-}
-
-async function saveRagConfig() {
-  ragConfigSaveError.value = ''
-  ragConfigOk.value = false
-  ragConfigSaving.value = true
-  try {
-    const body: any = { name: ragConfigForm.value.name, type: ragConfigForm.value.type || 'openai', base_url: ragConfigForm.value.base_url, model: ragConfigForm.value.model, cached_models: kbModelOptions.value }
-    if (ragConfigForm.value.api_key) body.api_key = ragConfigForm.value.api_key
-    const res = await fetch('/api/v1/rag-config', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', ...authHeaders() },
-      body: JSON.stringify(body),
-    })
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}))
-      ragConfigSaveError.value = err.error || '保存失败'
-      return
-    }
-    const saved = await res.json()
-    ragConfig.value = saved
-    if (!saved.cached_models?.length) kbModelOptions.value = []
-    ragConfigForm.value.api_key = ''
-    ragConfigEditing.value = false
-    ragConfigOk.value = true
-    setTimeout(() => { ragConfigOk.value = false }, 2000)
-  } catch (e: any) {
-    ragConfigSaveError.value = e.message
-  } finally {
-    ragConfigSaving.value = false
-  }
 }
 
 // ── Agent / 智能体 ──
@@ -1312,76 +801,7 @@ async function deleteRule(idx: number) {
 .no { color: #f87171; }
 .plan-cell { color: #a78bfa; }
 
-.emb-card-header {
-  display: flex; justify-content: space-between; align-items: center;
-}
-.emb-card-identity { display: flex; align-items: center; gap: 12px; }
-.emb-card-icon {
-  width: 36px; height: 36px; border-radius: 8px;
-  background: rgba(99,102,241,0.12); border: 1px solid rgba(99,102,241,0.25);
-  display: flex; align-items: center; justify-content: center; font-size: 18px;
-  flex-shrink: 0;
-}
-.emb-card-title { font-size: 14px; font-weight: 600; color: var(--text); }
-.emb-card-subtitle { font-size: 12px; margin-top: 2px; }
-.emb-card-header-right { display: flex; align-items: center; gap: 8px; }
-.emb-divider { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
-.emb-fields { display: flex; flex-direction: column; gap: 8px; }
-.emb-field { display: flex; align-items: center; gap: 8px; font-size: 13px; }
-.emb-field-label {
-  width: 64px; flex-shrink: 0;
-  font-size: 11px; font-weight: 600; color: var(--muted);
-  text-transform: uppercase; letter-spacing: 0.06em;
-}
-.emb-field-value { color: var(--text); }
-.mc-tag-inline {
-  display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 4px;
-  background: rgba(96,165,250,0.12); color: #60a5fa; border: 1px solid rgba(96,165,250,0.25);
-}
-.emb-query-row {
-  display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
-}
-.emb-type-select { flex: 0 0 140px; }
-.emb-model-input { flex: 1; }
-.btn-amber {
-  background: #d97706; color: #fff; border: none; white-space: nowrap;
-  flex-shrink: 0;
-}
-.btn-amber:hover:not(:disabled) { background: #b45309; }
-.btn-amber:disabled { background: #d97706; opacity: 0.5; cursor: not-allowed; }
-.emb-url-row {
-  display: flex; gap: 8px; margin-bottom: 10px;
-}
-.emb-form-grid {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;
-}
-.emb-form-col {
-  display: flex; flex-direction: column; gap: 4px;
-}
-.emb-label {
-  font-size: 12px; color: var(--text-2); font-weight: 500;
-}
-.emb-url-hint-row {
-  display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  margin-bottom: 10px; padding: 6px 10px; border-radius: 6px;
-  background: rgba(255,255,255,0.03); border: 1px solid var(--border);
-}
-.emb-url-hint { font-size: 12px; color: var(--text-2); }
-.emb-url-hint-url { color: var(--text-1); font-family: monospace; word-break: break-all; }
-.emb-chips-label { font-size: 11px; color: var(--text-2); margin-bottom: 6px; }
-.emb-fetched-at { margin-left: 6px; font-size: 10px; color: var(--text-3, #666); }
-.emb-fetched-at { margin-left: 8px; font-size: 10px; color: var(--text-3, #64748b); }
-.emb-chips {
-  display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px;
-}
-.emb-chip {
-  padding: 3px 10px; border-radius: 12px; font-size: 12px; cursor: pointer;
-  border: 1px solid var(--border); color: var(--text-2); background: transparent;
-  transition: all .15s;
-}
-.emb-chip:hover { border-color: var(--primary); color: var(--primary); }
-.emb-chip.active { background: var(--primary); color: #fff; border-color: var(--primary); }
-.emb-edit-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
 .theme-cards { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
 .theme-card { cursor: pointer; border: 2px solid var(--border); border-radius: 8px; overflow: hidden; width: 100px; }
 .theme-card.selected { border-color: var(--primary); }
