@@ -145,12 +145,6 @@ func chatUpdateTitle(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id
 }
 
 func chatSendMessage(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id string) {
-	factory, err := app.NewAgentFactory()
-	if err != nil {
-		writeError(w, 503, "LLM not configured: "+err.Error())
-		return
-	}
-	factory.DataDir = app.Config.DataDir
 	var req struct {
 		Content string   `json:"content"`
 		HostIDs []string `json:"host_ids"`
@@ -165,10 +159,6 @@ func chatSendMessage(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id
 		writeError(w, 404, "conversation not found")
 		return
 	}
-	if conv.PermissionMode != "" {
-		factory.PermissionMode = permission.Mode(conv.PermissionMode)
-	}
-	factory.DisableSearchDocs = allFacesDisableKB(app)
 
 	content := req.Content
 	if rs, rsErr := ragStore(app); rsErr == nil {
@@ -227,6 +217,19 @@ func chatSendMessage(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id
 		}
 	}
 
+	// Build factory only after claiming — avoids 503 when agent already running.
+	factory, err := app.NewAgentFactory()
+	if err != nil {
+		app.ReleaseConv(id)
+		writeError(w, 503, "LLM not configured: "+err.Error())
+		return
+	}
+	factory.DataDir = app.Config.DataDir
+	if conv.PermissionMode != "" {
+		factory.PermissionMode = permission.Mode(conv.PermissionMode)
+	}
+	factory.DisableSearchDocs = allFacesDisableKB(app)
+
 	a := factory.NewAgent(id, req.HostIDs)
 	waiter := agent.NewConfirmationWaiter()
 	app.StoreChatWaiter(id, waiter)
@@ -249,6 +252,7 @@ func chatSendMessage(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id
 	if err != nil {
 		cancel()
 		app.RemoveConvCancel(id)
+		app.ClearSSEBuffer(id)
 		app.ConvStore.SetStatus(id, "idle") //nolint:errcheck
 		writeError(w, 500, err.Error())
 		return
@@ -267,7 +271,11 @@ func chatSendMessage(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id
 		for ev := range events {
 			if ev.Type == agent.EventMidTurnUserMessage {
 				if text, _ := ev.Content["text"].(string); text != "" {
-					app.ConsumeQueuedMsgs(id, strings.Split(text, "\n\n"))
+					count, _ := ev.Content["count"].(int)
+					if count <= 0 {
+						count = len(strings.Split(text, "\n\n"))
+					}
+					app.ConsumeQueuedMsgs(id, count)
 				}
 			}
 			if ev.Type == agent.EventToolStart {
@@ -283,8 +291,7 @@ func chatSendMessage(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id
 				}
 			}
 			data, _ := json.Marshal(ev)
-			app.BufferSSEEvent(id, data)
-			app.BroadcastSSE(id, data)
+			app.BufferAndBroadcastSSE(id, data)
 		}
 	}()
 	writeJSON(w, http.StatusAccepted, map[string]string{"status": "accepted"})

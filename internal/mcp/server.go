@@ -237,11 +237,13 @@ func (a *App) TryInject(convID, msg string) (queued bool, full bool) {
 	}
 }
 
-// ConsumeQueuedMsgs removes msgs from the in-memory queue for convID.
-// Called when the agent emits EventMidTurnUserMessage so the queue reflects
-// only messages not yet processed.
-func (a *App) ConsumeQueuedMsgs(convID string, msgs []string) {
-	if len(msgs) == 0 {
+// ConsumeQueuedMsgs removes the first n entries from the in-memory queue for
+// convID. Called when the agent emits EventMidTurnUserMessage. n is the number
+// of original injected parts that were merged into the event — using a count
+// avoids the content-match bug where messages containing "\n\n" would not match
+// after the join/split round-trip.
+func (a *App) ConsumeQueuedMsgs(convID string, n int) {
+	if n <= 0 {
 		return
 	}
 	a.convInjectChsMu.Lock()
@@ -250,19 +252,10 @@ func (a *App) ConsumeQueuedMsgs(convID string, msgs []string) {
 	if len(queue) == 0 {
 		return
 	}
-	// Remove the first occurrence of each consumed message.
-	for _, m := range msgs {
-		for i, q := range queue {
-			if q == m {
-				queue = append(queue[:i], queue[i+1:]...)
-				break
-			}
-		}
-	}
-	if len(queue) == 0 {
+	if n >= len(queue) {
 		delete(a.convQueuedMsgs, convID)
 	} else {
-		a.convQueuedMsgs[convID] = queue
+		a.convQueuedMsgs[convID] = queue[n:]
 	}
 }
 
@@ -311,6 +304,34 @@ func (a *App) UnregisterSSEClient(convID string, ch chan []byte) {
 func (a *App) BroadcastSSE(convID string, data []byte) {
 	a.sseClientsMu.Lock()
 	defer a.sseClientsMu.Unlock()
+	for _, ch := range a.sseClients[convID] {
+		select {
+		case ch <- data:
+		default:
+		}
+	}
+}
+
+// BufferAndBroadcastSSE atomically buffers an event and broadcasts it to all
+// registered SSE clients. Holding both locks together closes the duplicate-event
+// window that exists when BufferSSEEvent and BroadcastSSE are called separately:
+// a reconnecting client calling RegisterSSEClientAndDrain between those two calls
+// would receive the event from the buffer AND from the subsequent broadcast.
+// Lock order: sseBuffersMu → sseClientsMu (matches RegisterSSEClientAndDrain).
+func (a *App) BufferAndBroadcastSSE(convID string, data []byte) {
+	a.sseBuffersMu.Lock()
+	defer a.sseBuffersMu.Unlock()
+	a.sseClientsMu.Lock()
+	defer a.sseClientsMu.Unlock()
+	if a.sseBuffers == nil {
+		a.sseBuffers = make(map[string][][]byte)
+	}
+	buf := a.sseBuffers[convID]
+	if len(buf) >= maxSSEBufferEvents {
+		a.sseBuffers[convID] = append(buf[1:], data)
+	} else {
+		a.sseBuffers[convID] = append(buf, data)
+	}
 	for _, ch := range a.sseClients[convID] {
 		select {
 		case ch <- data:

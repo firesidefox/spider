@@ -323,6 +323,8 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 				case msg, ok := <-injectCh:
 					if ok {
 						streamInjected = append(streamInjected, msg)
+					} else {
+						injectCh = nil // closed; remove from select to avoid spin
 					}
 				}
 			}
@@ -341,7 +343,7 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 						history = append(history, llm.Message{Role: llm.RoleAssistant, Content: assistantText})
 					}
 					history = append(history, llm.Message{Role: llm.RoleUser, Content: merged})
-					events <- Event{Type: EventMidTurnUserMessage, Content: map[string]any{"text": merged}}
+					events <- Event{Type: EventMidTurnUserMessage, Content: map[string]any{"text": merged, "count": len(parts)}}
 					events <- Event{Type: EventTurnUsage, Content: map[string]any{
 						"input_tokens":  usage.InputTokens,
 						"output_tokens": usage.OutputTokens,
@@ -404,7 +406,7 @@ func (a *Agent) Run(ctx context.Context, conversationID string, userMessage stri
 				merged := strings.Join(drained, "\n\n")
 				a.msgStore.Save(conversationID, "user", merged, "")
 				history = append(history, llm.Message{Role: llm.RoleUser, Content: merged})
-				events <- Event{Type: EventMidTurnUserMessage, Content: map[string]any{"text": merged}}
+				events <- Event{Type: EventMidTurnUserMessage, Content: map[string]any{"text": merged, "count": len(drained)}}
 			}
 			log.Debug().Int("turn", turn).Int64("duration_ms", time.Since(turnStart).Milliseconds()).Int("input_tokens", usage.InputTokens).Int("output_tokens", usage.OutputTokens).Int("tools", len(tcRecords)).Str("response", assistantText).Msg("turn done")
 			events <- Event{Type: EventTurnUsage, Content: map[string]any{

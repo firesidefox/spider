@@ -60,7 +60,10 @@ func tryKnowledgeEntry(ds docStore, ss prometheusSourceStore, w http.ResponseWri
 		return
 	}
 	entry := entries[0]
-	_, path := splitMethodPath(entry.Title)
+	method, path := splitMethodPath(entry.Title)
+	if method == "" {
+		method = http.MethodGet
+	}
 
 	src, err := ss.GetByID(req.SourceID)
 	if errors.Is(err, store.ErrNotFound) {
@@ -78,7 +81,7 @@ func tryKnowledgeEntry(ds docStore, ss prometheusSourceStore, w http.ResponseWri
 		return
 	}
 
-	result, err := doProxyRequest(r.Context(), src, pwd, tok, path, req.Params)
+	result, err := doProxyRequest(r.Context(), src, pwd, tok, method, path, req.Params)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, fmt.Sprintf("upstream: %s", err.Error()))
 		return
@@ -87,7 +90,7 @@ func tryKnowledgeEntry(ds docStore, ss prometheusSourceStore, w http.ResponseWri
 	writeJSON(w, http.StatusOK, result)
 }
 
-func doProxyRequest(ctx context.Context, src *models.PrometheusSource, pwd, tok, path string, params map[string]string) (*tryResult, error) {
+func doProxyRequest(ctx context.Context, src *models.PrometheusSource, pwd, tok, method, path string, params map[string]string) (*tryResult, error) {
 	baseURL := strings.TrimRight(src.BaseURL, "/")
 
 	resolvedPath := path
@@ -116,7 +119,7 @@ func doProxyRequest(ctx context.Context, src *models.PrometheusSource, pwd, tok,
 	}
 	client := &http.Client{Timeout: timeout, Transport: transport}
 
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, fullURL, nil)
+	httpReq, err := http.NewRequestWithContext(ctx, method, fullURL, nil)
 	if err != nil {
 		return nil, err
 	}
