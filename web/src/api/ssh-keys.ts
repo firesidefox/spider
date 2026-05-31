@@ -17,5 +17,5 @@ export async function createSSHKey(name: string, privateKey: string, passphrase:
 }
 
 export async function deleteSSHKey(id: string): Promise<void> {
-  return api.delete(`/ssh-keys/${id}`, { responseType: 'void' })
+  return api.delete(`/ssh-keys/${id}`, undefined, { responseType: 'void' })
 }

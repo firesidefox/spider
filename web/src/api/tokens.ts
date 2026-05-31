@@ -16,12 +16,10 @@ export async function listTokens(): Promise<TokenInfo[]> {
   return api.get('/tokens')
 }
 
-export async function createToken(name: string, expiresAt?: string): Promise<CreateTokenResponse> {
-  const body: any = { name }
-  if (expiresAt) body.expires_at = expiresAt
-  return api.post('/tokens', body)
+export async function createToken(name: string, expiresAt: string): Promise<CreateTokenResponse> {
+  return api.post('/tokens', { name, expires_at: expiresAt })
 }
 
 export async function deleteToken(id: string): Promise<void> {
-  return api.delete(`/tokens/${id}`, { responseType: 'void' })
+  return api.delete(`/tokens/${id}`, undefined, { responseType: 'void' })
 }

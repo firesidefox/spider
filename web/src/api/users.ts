@@ -14,5 +14,5 @@ export async function updateUser(id: string, updates: Partial<UserInfo>): Promis
 }
 
 export async function deleteUser(id: string): Promise<void> {
-  return api.delete(`/users/${id}`, { responseType: 'void' })
+  return api.delete(`/users/${id}`, undefined, { responseType: 'void' })
 }

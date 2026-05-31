@@ -50,7 +50,7 @@ export async function createTopology(name: string, notes = ''): Promise<Topology
 }
 
 export async function deleteTopology(id: string): Promise<void> {
-  return api.delete<void>(`/topologies/${id}`, { responseType: 'void' })
+  return api.delete<void>(`/topologies/${id}`, undefined, { responseType: 'void' })
 }
 
 export async function createNode(
@@ -69,7 +69,7 @@ export async function updateNode(
 }
 
 export async function deleteNode(topoID: string, nodeID: string): Promise<void> {
-  return api.delete<void>(`/topologies/${topoID}/nodes/${nodeID}`, { responseType: 'void' })
+  return api.delete<void>(`/topologies/${topoID}/nodes/${nodeID}`, undefined, { responseType: 'void' })
 }
 
 export async function createEdge(topoID: string, fromNode: string, toNode: string): Promise<TopologyEdge> {
@@ -77,7 +77,7 @@ export async function createEdge(topoID: string, fromNode: string, toNode: strin
 }
 
 export async function deleteEdge(topoID: string, edgeID: string): Promise<void> {
-  return api.delete<void>(`/topologies/${topoID}/edges/${edgeID}`, { responseType: 'void' })
+  return api.delete<void>(`/topologies/${topoID}/edges/${edgeID}`, undefined, { responseType: 'void' })
 }
 
 export async function importYAML(topoID: string, yamlText: string): Promise<TopologyFull> {

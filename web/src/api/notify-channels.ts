@@ -28,7 +28,7 @@ export async function updateNotifyChannel(id: number, data: Partial<NotifyChanne
 }
 
 export async function deleteNotifyChannel(id: number): Promise<void> {
-  return api.delete(`/notify-channels/${id}`, { responseType: 'void' })
+  return api.delete(`/notify-channels/${id}`, undefined, { responseType: 'void' })
 }
 
 export async function toggleNotifyChannel(id: number, enabled: boolean): Promise<NotifyChannel> {

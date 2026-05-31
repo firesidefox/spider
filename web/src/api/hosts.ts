@@ -131,7 +131,7 @@ export async function updateHost(id: string, req: UpdateHostRequest): Promise<Ho
 }
 
 export async function deleteHost(id: string): Promise<void> {
-  return api.delete<void>(`/hosts/${id}`, { responseType: 'void' })
+  return api.delete<void>(`/hosts/${id}`, undefined, { responseType: 'void' })
 }
 
 export async function listAccessFaces(hostId: string): Promise<AccessFace[]> {
@@ -147,7 +147,7 @@ export async function updateAccessFace(hostId: string, faceId: string, req: Part
 }
 
 export async function deleteAccessFace(hostId: string, faceId: string): Promise<void> {
-  return api.delete<void>(`/hosts/${hostId}/faces/${faceId}`, { responseType: 'void' })
+  return api.delete<void>(`/hosts/${hostId}/faces/${faceId}`, undefined, { responseType: 'void' })
 }
 
 export async function getFingerprint(hostId: string): Promise<Fingerprint | null> {
@@ -170,5 +170,5 @@ export async function addMemory(hostId: string, content: string): Promise<Memory
 }
 
 export async function deleteMemory(hostId: string, memId: number): Promise<void> {
-  return api.delete<void>(`/hosts/${hostId}/memories/${memId}`, { responseType: 'void' })
+  return api.delete<void>(`/hosts/${hostId}/memories/${memId}`, undefined, { responseType: 'void' })
 }

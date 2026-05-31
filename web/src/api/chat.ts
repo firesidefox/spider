@@ -43,7 +43,7 @@ export async function getConversation(id: string): Promise<{ conversation: Conve
 }
 
 export async function deleteConversation(id: string): Promise<void> {
-  return api.delete(`/chat/conversations/${id}`, { responseType: 'void' })
+  return api.delete(`/chat/conversations/${id}`, undefined, { responseType: 'void' })
 }
 
 export async function updateTitle(id: string, title: string): Promise<void> {

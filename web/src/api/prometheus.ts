@@ -60,7 +60,7 @@ export async function updatePrometheusSource(id: string, req: UpdatePrometheusSo
 }
 
 export async function deletePrometheusSource(id: string): Promise<void> {
-  return api.delete<void>(`/prometheus/sources/${id}`, { responseType: 'void' })
+  return api.delete<void>(`/prometheus/sources/${id}`, undefined, { responseType: 'void' })
 }
 
 export async function testPrometheusConnection(id: string): Promise<{ ok: boolean; latency_ms?: number; error?: string }> {
@@ -78,5 +78,5 @@ export async function addPrometheusBinding(req: {
 }
 
 export async function deletePrometheusBinding(id: string): Promise<void> {
-  return api.delete<void>(`/prometheus/bindings/${id}`, { responseType: 'void' })
+  return api.delete<void>(`/prometheus/bindings/${id}`, undefined, { responseType: 'void' })
 }
