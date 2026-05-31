@@ -88,19 +88,27 @@ func (r *Runtime) TryClaimConv(convID string) (chan string, bool)
 func (r *Runtime) TryInject(convID string, msg string) (queued bool, full bool)
 func (r *Runtime) ReleaseConv(convID string)
 func (r *Runtime) GetQueuedMsgs(convID string) []string
-func (r *Runtime) ClearQueuedMsgs(convID string)
+func (r *Runtime) ConsumeQueuedMsgs(convID string, n int)
 
 func (r *Runtime) RegisterSSEClientAndDrain(convID string, ch chan []byte) [][]byte
 func (r *Runtime) UnregisterSSEClient(convID string, ch chan []byte)
 func (r *Runtime) BroadcastSSE(convID string, data []byte)
+func (r *Runtime) BufferSSEEvent(convID string, data []byte)
+func (r *Runtime) BufferAndBroadcastSSE(convID string, data []byte)
 func (r *Runtime) ClearSSEBuffer(convID string)
 
-func (r *Runtime) RegisterGlobalSSEClient(ch chan []byte)
-func (r *Runtime) UnregisterGlobalSSEClient(ch chan []byte)
-func (r *Runtime) BroadcastGlobal(data []byte)
+func (r *Runtime) AddGlobalSSEClient(ch chan []byte)
+func (r *Runtime) RemoveGlobalSSEClient(ch chan []byte)
+func (r *Runtime) BroadcastGlobalSSE(data []byte)
 ```
 
 If importing `agent.ConfirmationWaiter` into `internal/chatruntime` creates an undesirable dependency, use a small interface or keep waiter management in a separate `ChatSessions` type. The simplest first pass can use the direct type because this is still an internal package.
+
+`ConsumeQueuedMsgs` must keep the existing count-based behavior. The `n` argument represents the number of original injected message parts merged into an `EventMidTurnUserMessage`. Do not replace it with content matching or a clear-all method; content matching previously failed for messages containing `\n\n` after join/split round trips.
+
+`BufferAndBroadcastSSE` must remain atomic over the buffer and client list. It prevents the duplicate-event window that can happen if a reconnecting client calls `RegisterSSEClientAndDrain` between separate buffer and broadcast operations. `BufferSSEEvent` remains available for call sites that only need to append to the reconnect buffer.
+
+Global SSE methods should keep the current names: `AddGlobalSSEClient`, `RemoveGlobalSSEClient`, and `BroadcastGlobalSSE`. This phase is a boundary extraction, not an API rename.
 
 ### Migration Approach
 
@@ -110,8 +118,12 @@ Handler changes should be mechanical:
 
 - `app.TryClaimConv(id)` becomes `app.ChatRuntime.TryClaimConv(id)`.
 - `app.TryInject(id, content)` becomes `app.ChatRuntime.TryInject(id, content)`.
+- `app.ConsumeQueuedMsgs(id, count)` becomes `app.ChatRuntime.ConsumeQueuedMsgs(id, count)`.
+- `app.BufferAndBroadcastSSE(id, data)` becomes `app.ChatRuntime.BufferAndBroadcastSSE(id, data)`.
 - `app.RegisterSSEClientAndDrain(id, ch)` becomes `app.ChatRuntime.RegisterSSEClientAndDrain(id, ch)`.
-- SSE broadcaster methods on `mcp.App` can either delegate to `ChatRuntime` or be moved if the agent broadcaster interface allows it cleanly.
+- `app.BufferSSEEvent(id, data)` becomes `app.ChatRuntime.BufferSSEEvent(id, data)`.
+- Global stream call sites move from `app.AddGlobalSSEClient`, `app.RemoveGlobalSSEClient`, and `app.BroadcastGlobalSSE` to the same method names on `app.ChatRuntime`.
+- `mcp.App.BroadcastSSE` should remain as a small delegating method to `app.ChatRuntime.BroadcastSSE`. This preserves the existing `agent.SSEBroadcaster` assignment (`f.SSEBroadcaster = a`) and avoids unnecessary `NewAgentFactory` churn.
 
 ### Tests
 
@@ -120,9 +132,12 @@ Add focused tests for:
 - one caller can claim a conversation; concurrent claim fails
 - inject succeeds only when a conversation is running
 - full inject channel returns `(false, true)`
+- `ConsumeQueuedMsgs` removes exactly the first `n` queued messages and preserves later queued messages
 - release removes inject channel and queued messages
 - cancel calls the stored cancel function and removes it
 - `RegisterSSEClientAndDrain` atomically registers and returns buffered events
+- `BufferAndBroadcastSSE` appends to the reconnect buffer and broadcasts while holding the same lock order as `RegisterSSEClientAndDrain`
+- `BufferSSEEvent` appends only to the reconnect buffer
 - broadcast stores in-flight buffer and sends to current clients
 - unregister removes only the target client
 - global broadcast reaches registered global clients
@@ -216,10 +231,12 @@ Inside it:
 ```go
 func NewRouter(app *mcp.App) http.Handler {
     mux := http.NewServeMux()
+    kbEmbedder := buildKnowledgeEmbedder(app)
     deps := routeDeps{
         app: app,
         adminOnly: authmw.RequireRole(models.RoleAdmin),
         operatorOrAbove: authmw.RequireRole(models.RoleAdmin, models.RoleOperator),
+        kbEmbedder: kbEmbedder,
     }
 
     registerHostRoutes(mux, deps)
@@ -233,6 +250,8 @@ func NewRouter(app *mcp.App) http.Handler {
     return authmw.AuthMiddleware(app.JWTManager, app.TokenStore)(loggingMiddleware(mux))
 }
 ```
+
+The `kbEmbedder` initialization currently happens inside `NewRouter` and is used by `importKnowledgeDocument` and `reindexKnowledgeDocuments`. Phase 3 should keep this startup-time embedder construction and pass it through `routeDeps` to the knowledge route registrar. Do not silently move these handlers to request-time `GetOrBuildRagStore` in the route split; that would be a behavior and lifecycle change better handled separately.
 
 Use small helpers only when they remove real duplication:
 
