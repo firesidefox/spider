@@ -3,7 +3,7 @@
     <button class="btn btn-sm" @click="showPwModal = true">修改密码</button>
 
     <!-- 修改密码弹窗 -->
-    <div v-if="showPwModal" class="modal-overlay" @click.self="showPwModal = false">
+    <div v-if="showPwModal" class="modal-overlay" @click.self="closeModal()">
       <div class="modal">
         <h3>修改密码</h3>
         <div class="form-row"><label>旧密码</label><input v-model="pw.old" type="password" class="input" placeholder="当前密码" /></div>
@@ -12,7 +12,7 @@
         <div v-if="pwError" class="err" style="margin-bottom:10px">{{ pwError }}</div>
         <div v-if="pwSuccess" class="ok" style="margin-bottom:10px">{{ pwSuccess }}</div>
         <div class="modal-footer">
-          <button class="btn" @click="showPwModal = false; pw = { old: '', new1: '', new2: '' }; pwError = ''; pwSuccess = ''">取消</button>
+          <button class="btn" @click="closeModal()">取消</button>
           <button class="btn btn-primary" @click="handleChangePassword" :disabled="pwLoading">{{ pwLoading ? '保存中…' : '保存密码' }}</button>
         </div>
       </div>
@@ -29,6 +29,13 @@ const pwError = ref('')
 const pwSuccess = ref('')
 const pwLoading = ref(false)
 const showPwModal = ref(false)
+
+function closeModal() {
+  showPwModal.value = false
+  pw.value = { old: '', new1: '', new2: '' }
+  pwError.value = ''
+  pwSuccess.value = ''
+}
 
 async function handleChangePassword() {
   pwError.value = ''
