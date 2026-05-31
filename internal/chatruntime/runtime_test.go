@@ -120,8 +120,8 @@ func TestRegisterSSEClientAndDrain(t *testing.T) {
 	}
 
 	buffered = rt.RegisterSSEClientAndDrain("conv-1", make(chan []byte, 1))
-	if len(buffered) != 0 {
-		t.Fatalf("expected second drain to be empty, got %#v", buffered)
+	if len(buffered) != 2 || string(buffered[0]) != "old-1" || string(buffered[1]) != "old-2" {
+		t.Fatalf("expected second drain to return same buffer, got %#v", buffered)
 	}
 }
 

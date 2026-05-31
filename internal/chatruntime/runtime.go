@@ -225,8 +225,12 @@ func (r *Runtime) RegisterSSEClientAndDrain(convID string, ch chan []byte) [][]b
 		r.sseClients = make(map[string][]chan []byte)
 	}
 	r.sseClients[convID] = append(r.sseClients[convID], ch)
-	buf := r.sseBuffers[convID]
-	delete(r.sseBuffers, convID)
+	src := r.sseBuffers[convID]
+	if len(src) == 0 {
+		return nil
+	}
+	buf := make([][]byte, len(src))
+	copy(buf, src)
 	return buf
 }
 

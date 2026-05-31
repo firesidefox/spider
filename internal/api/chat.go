@@ -320,7 +320,6 @@ func chatCancel(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id stri
 		return
 	}
 	app.ChatRuntime.CancelConv(id)
-	app.ChatRuntime.ReleaseConv(id) // prevent new TryInject from queuing into the dying channel
 	app.ConvStore.SetStatus(id, "idle") //nolint:errcheck
 	writeJSON(w, http.StatusOK, map[string]string{"status": "cancelled"})
 }
