@@ -8,12 +8,13 @@ import type { MessageBlock, ToolCallBlock } from '../components/ChatMessage.vue'
 import TargetPanel from '../components/TargetPanel.vue'
 import type { DeviceStatus } from '../components/TargetPanel.vue'
 import { useTargetHosts } from '../composables/useTargetHosts'
+import { useConversationList } from '../composables/chat/useConversationList'
 import {
-  sendMessage, subscribeConversation, createConversation, listConversations,
-  getConversation, deleteConversation, confirmAction, cancelConversation,
-  getActiveModel, setActiveModel, updateTitle, exportConversation,
+  sendMessage, subscribeConversation,
+  getConversation, confirmAction, cancelConversation,
+  getActiveModel, setActiveModel, exportConversation,
   suggestTitle,
-  type Conversation, type ChatMessage as ChatMsg, type ChatEvent, type Todo,
+  type ChatMessage as ChatMsg, type ChatEvent, type Todo,
 } from '../api/chat'
 import { listHosts, type Host } from '../api/hosts'
 import { authHeaders, getUIPrefs, setUIPrefs } from '../api/auth'
@@ -62,28 +63,69 @@ interface DisplayMessage {
   toolIndex?: Map<string, number>
 }
 
-const conversations = ref<Conversation[]>([])
+// Initialize conversation list composable
+const conversationList = useConversationList({
+  onConversationSelected: async (convId) => {
+    // Message loading logic from original selectConversation
+    const data = await getConversation(convId)
+    if (conversationList.activeConvId.value !== convId) return  // user switched to another conv while loading
+    if (transitionState.value !== 'chat') transitionState.value = 'chat'
+    const taskMap = new Map<number, Todo>()
+    for (const t of data.todo_tasks ?? []) taskMap.set(t.id, t)
+    todoTasksMap.value[convId] = taskMap
+    clearAllTimers()
+    queuedMessages.value.delete(convId)
+    turnUsage.value = null
+    completedFolded.value = true
+    pendingFolded.value = true
+    for (const task of taskMap.values()) {
+      if (task.status === 'in_progress') startTimer(task)
+    }
+    router.replace(`/chat/${convId}`)
 
-function getConvTitle(convId: string): string {
-  return conversations.value.find(c => c.id === convId)?.title || convId.slice(0, 8)
-}
+    // Sync queued messages from backend (in-memory store, survives page refresh within session)
+    const next = new Map(queuedMessages.value)
+    next.set(convId, data.queued_messages ?? [])
+    queuedMessages.value = next
+
+    if (data.conversation.status === 'processing' && messagesMap.value[convId]) {
+      // SSE is still writing into messagesMap[id] — don't overwrite it.
+      setConversationStreaming(convId, true)
+    } else {
+      messagesMap.value[convId] = buildDisplayMessages(data.messages)
+      setConversationStreaming(convId, data.conversation.status === 'processing')
+    }
+
+    if (data.conversation.status === 'processing') {
+      updateAgentStatus({ conversationId: convId, title: data.conversation.title || convId.slice(0, 8), phase: 'thinking' })
+    }
+
+    if (!convSubscriptions.has(convId)) {
+      const lastMsg = data.messages[data.messages.length - 1]
+      const unsub = subscribeConversation(convId, (event) => handleConvEvent(convId, event), lastMsg?.id)
+      convSubscriptions.set(convId, unsub)
+    }
+
+    await nextTick()
+    scrollToBottom()
+  }
+})
 
 const showExportMenu = ref(false)
 
 async function doExport(format: 'md' | 'json') {
   showExportMenu.value = false
-  if (!activeConvId.value) return
-  await exportConversation(activeConvId.value, format)
+  if (!conversationList.activeConvId.value) return
+  await exportConversation(conversationList.activeConvId.value, format)
 }
 
-const activeConvId = ref<string | null>(null)
 const messagesMap = ref<Record<string, DisplayMessage[]>>({})
 const transitionState = ref<'welcome' | 'transitioning' | 'chat'>('welcome')
-const messages = computed(() => messagesMap.value[activeConvId.value ?? ''] ?? [])
+const messages = computed(() => messagesMap.value[conversationList.activeConvId.value ?? ''] ?? [])
 
 const { statuses: agentStatuses } = useAgentStatus()
 const currentAgentStatus = computed(() => {
-  const id = activeConvId.value
+  const id = conversationList.activeConvId.value
   return id ? agentStatuses.value.get(id) ?? null : null
 })
 
@@ -105,10 +147,11 @@ function buildDisplayMessages(msgs: ChatMsg[]): DisplayMessage[] {
       if (!parsed) {
         try {
           parsed = JSON.parse(m.tool_calls)
-          toolCallsCache.set(m.id, parsed)
+          toolCallsCache.set(m.id, parsed ?? [])
         } catch { parsed = [] }
       }
-      for (const tc of (Array.isArray(parsed) ? parsed : [])) {
+      const toolCalls = (Array.isArray(parsed) ? parsed : []) as any[]
+      for (const tc of toolCalls) {
         blocks.push({ type: 'tool', call: {
           id: tc.id, name: tc.name, input: tc.input,
           result: tc.result, isError: tc.is_error, durationMs: tc.duration_ms,
@@ -121,7 +164,7 @@ function buildDisplayMessages(msgs: ChatMsg[]): DisplayMessage[] {
 }
 
 function addSystemMessage(content: string, targetConvId?: string) {
-  const cid = targetConvId ?? activeConvId.value
+  const cid = targetConvId ?? conversationList.activeConvId.value
   if (cid) {
     getOrInitMessages(cid).push({
       id: Date.now().toString(),
@@ -137,10 +180,10 @@ const queuedMessages = ref<Map<string, string[]>>(new Map())
 const streamingConvIds = ref<Set<string>>(new Set())
 const streamingTimeouts = new Map<string, ReturnType<typeof setTimeout>>()
 const isStreaming = computed({
-  get: () => activeConvId.value ? streamingConvIds.value.has(activeConvId.value) : false,
+  get: () => conversationList.activeConvId.value ? streamingConvIds.value.has(conversationList.activeConvId.value) : false,
   set: (streaming: boolean) => {
-    if (!activeConvId.value) return
-    setConversationStreaming(activeConvId.value, streaming)
+    if (!conversationList.activeConvId.value) return
+    setConversationStreaming(conversationList.activeConvId.value, streaming)
   },
 })
 
@@ -170,8 +213,8 @@ function setConversationStreaming(convId: string, streaming: boolean) {
   }
   streamingConvIds.value = next
 
-  const conv = conversations.value.find(c => c.id === convId)
-  if (conv) conv.status = streaming ? 'processing' : 'idle'
+  const conv = conversationList.conversations.value.find(c => c.id === convId)
+  if (conv) (conv as any).status = streaming ? 'processing' : 'idle'
 }
 
 const slashCommands = [
@@ -208,30 +251,13 @@ interface RetryState {
 }
 const retryState = ref<RetryState | null>(null)
 
-function startRetryCountdown(attempt: number, maxRetries: number, error: string, retryInMs: number) {
-  if (retryState.value?.timer) clearInterval(retryState.value.timer)
-  const state: RetryState = { attempt, maxRetries, error, retryInMs, countdownMs: 0, timer: null }
-  state.timer = setInterval(() => {
-    state.countdownMs += 1000
-    retryState.value = { ...state }
-    if (state.countdownMs >= retryInMs) {
-      clearInterval(state.timer!)
-      state.timer = null
-    }
-  }, 1000)
-  retryState.value = state
-}
-
-function clearRetryState() {
-  if (retryState.value?.timer) clearInterval(retryState.value.timer)
-  retryState.value = null
-}
+// Removed startRetryCountdown and clearRetryState - retrying event handling removed
 
 const taskTimers = ref<Map<number, ReturnType<typeof setInterval>>>(new Map())
 const taskElapsed = ref<Map<number, number>>(new Map())
 
 const allTasks = computed(() =>
-  Array.from((todoTasksMap.value[activeConvId.value ?? ''] ?? new Map<number, Todo>()).values())
+  Array.from((todoTasksMap.value[conversationList.activeConvId.value ?? ''] ?? new Map<number, Todo>()).values())
 )
 const inProgressTasks = computed(() =>
   allTasks.value.filter(t => t.status === 'in_progress').sort((a, b) => a.id - b.id)
@@ -409,7 +435,7 @@ const currentModel = ref('')
 const currentProvider = ref('')
 
 const activeConv = computed(() =>
-  conversations.value.find(c => c.id === activeConvId.value) || null
+  conversationList.conversations.value.find(c => c.id === conversationList.activeConvId.value) || null
 )
 
 const showModeDropdown = ref(false)
@@ -421,85 +447,22 @@ const effectiveMode = computed(() => {
 })
 
 const editingHeaderTitle = ref(false)
-const editingConvId = ref<string | null>(null)
-const editTitleText = ref('')
-const menuOpenConvId = ref<string | null>(null)
-const batchMode = ref(false)
-const selectedConvIds = ref<Set<string>>(new Set())
 
 function startEditHeaderTitle() {
   if (!activeConv.value) return
   editingHeaderTitle.value = true
-  editTitleText.value = activeConv.value.title
+  conversationList.editTitleText.value = activeConv.value.title
 }
 
 async function saveHeaderTitle() {
   editingHeaderTitle.value = false
-  const text = editTitleText.value.trim()
+  const text = conversationList.editTitleText.value.trim()
   if (!activeConv.value || !text || text === activeConv.value.title) return
-  await updateTitle(activeConv.value.id, text)
-  activeConv.value.title = text
+  await conversationList.updateTitle(activeConv.value.id, text)
 }
 
-function startEditConvTitle(id: string, title: string) {
-  editingConvId.value = id
-  editTitleText.value = title
-}
-
-async function saveConvTitle(id: string) {
-  editingConvId.value = null
-  const text = editTitleText.value.trim()
-  const conv = conversations.value.find(c => c.id === id)
-  if (!conv || !text || text === conv.title) return
-  await updateTitle(id, text)
-  conv.title = text
-}
-
-function cancelEdit() {
+function cancelEditHeader() {
   editingHeaderTitle.value = false
-  editingConvId.value = null
-}
-
-function openConvMenu(id: string) {
-  menuOpenConvId.value = menuOpenConvId.value === id ? null : id
-}
-
-function closeConvMenu() {
-  menuOpenConvId.value = null
-}
-
-function enterBatchMode() {
-  menuOpenConvId.value = null
-  batchMode.value = true
-  selectedConvIds.value = new Set()
-}
-
-function exitBatchMode() {
-  batchMode.value = false
-  selectedConvIds.value = new Set()
-}
-
-function toggleSelectConv(id: string) {
-  const s = new Set(selectedConvIds.value)
-  if (s.has(id)) s.delete(id)
-  else s.add(id)
-  selectedConvIds.value = s
-}
-
-function toggleSelectAll() {
-  if (selectedConvIds.value.size === conversations.value.length) {
-    selectedConvIds.value = new Set()
-  } else {
-    selectedConvIds.value = new Set(conversations.value.map(c => c.id))
-  }
-}
-
-async function handleBatchDelete() {
-  const ids = Array.from(selectedConvIds.value)
-  for (const id of ids) {
-    await handleDeleteConversation(id)
-  }
-  exitBatchMode()
 }
 
 function toggleSidebar() {
@@ -529,69 +492,16 @@ function startDrag(e: MouseEvent) {
 }
 
 
-async function loadConversations() {
-  conversations.value = await listConversations()
-}
-
-async function selectConversation(id: string) {
-  activeConvId.value = id  // set immediately so concurrent calls see it
-  const data = await getConversation(id)
-  if (activeConvId.value !== id) return  // user switched to another conv while loading
-  if (transitionState.value !== 'chat') transitionState.value = 'chat'
-  const taskMap = new Map<number, Todo>()
-  for (const t of data.todo_tasks ?? []) taskMap.set(t.id, t)
-  todoTasksMap.value[id] = taskMap
-  clearAllTimers()
-  queuedMessages.value.delete(id)
-  turnUsage.value = null
-  completedFolded.value = true
-  pendingFolded.value = true
-  for (const task of taskMap.values()) {
-    if (task.status === 'in_progress') startTimer(task)
-  }
-  localStorage.setItem('spider-last-conv', id)
-  router.replace(`/chat/${id}`)
-
-  // Sync queued messages from backend (in-memory store, survives page refresh within session)
-  const next = new Map(queuedMessages.value)
-  next.set(id, data.queued_messages ?? [])
-  queuedMessages.value = next
-
-  if (data.conversation.status === 'processing' && messagesMap.value[id]) {
-    // SSE is still writing into messagesMap[id] — don't overwrite it.
-    setConversationStreaming(id, true)
-  } else {
-    messagesMap.value[id] = buildDisplayMessages(data.messages)
-    setConversationStreaming(id, data.conversation.status === 'processing')
-  }
-
-  if (data.conversation.status === 'processing') {
-    updateAgentStatus({ conversationId: id, title: data.conversation.title || id.slice(0, 8), phase: 'thinking' })
-  }
-
-  if (!convSubscriptions.has(id)) {
-    const lastMsg = data.messages[data.messages.length - 1]
-    const unsub = subscribeConversation(id, (event) => handleConvEvent(id, event), lastMsg?.id)
-    convSubscriptions.set(id, unsub)
-  }
-
-  await nextTick()
-  scrollToBottom()
-}
-
 async function createNewConversation() {
-  const conv = await createConversation()
-  conversations.value.unshift(conv)
-  activeConvId.value = conv.id
-  messagesMap.value[conv.id] = []
-  setConversationStreaming(conv.id, false)
-  router.replace(`/chat/${conv.id}`)
+  const convId = await conversationList.createConversation()
+  messagesMap.value[convId] = []
+  setConversationStreaming(convId, false)
+  await conversationList.selectConversation(convId)
   await nextTick()
   textareaRef.value?.focus()
 }
 
-function goNewPage() {
-  activeConvId.value = null
+async function goNewPage() {
   transitionState.value = 'welcome'
   router.replace('/chat')
 }
@@ -609,7 +519,7 @@ function handleEscCancel(e: KeyboardEvent) {
 }
 
 async function cancelSend() {
-  const convId = activeConvId.value
+  const convId = conversationList.activeConvId.value
   if (!convId) return
   pendingSendCtrl?.abort()
   pendingSendCtrl = null
@@ -631,7 +541,7 @@ function handleConvEvent(convId: string, event: ChatEvent) {
   function setStatus(phase: AgentStatus['phase'], toolName?: string, toolInput?: unknown, hosts?: string[]) {
     updateAgentStatus({
       conversationId: convId,
-      title: getConvTitle(convId),
+      title: conversationList.getConvTitle(convId),
       phase,
       toolName,
       toolInput: toolInput ? JSON.stringify(toolInput) : undefined,
@@ -644,7 +554,7 @@ function handleConvEvent(convId: string, event: ChatEvent) {
     if (!msg || msg.role === 'user' || msg.role === 'tool_result') return
     if (!convMsgs.find(m => m.id === msg.id)) {
       convMsgs.push(...buildDisplayMessages([msg]))
-      if (activeConvId.value === convId) nextTick(() => scrollToBottom())
+      if (conversationList.activeConvId.value === convId) nextTick(() => scrollToBottom())
     }
     return
   }
@@ -657,7 +567,7 @@ function handleConvEvent(convId: string, event: ChatEvent) {
       const newMsg: DisplayMessage = { id: `a-${Date.now()}`, role: 'assistant', blocks: [], isStreaming: true, toolIndex: new Map() }
       convMsgs.push(newMsg)
       setConversationStreaming(convId, true)
-      if (activeConvId.value === convId) {
+      if (conversationList.activeConvId.value === convId) {
         nextTick(() => scrollToBottom())
       }
     }
@@ -742,7 +652,6 @@ function handleConvEvent(convId: string, event: ChatEvent) {
       setStatus('confirm', event.content?.tool || '', event.content?.input)
       break
     case 'error': {
-      clearRetryState()
       queuedMessages.value = new Map(queuedMessages.value)
       queuedMessages.value.delete(convId)
       const errText = `\n\n**Error:** ${event.content?.error || 'unknown error'}`
@@ -757,13 +666,12 @@ function handleConvEvent(convId: string, event: ChatEvent) {
       for (const b of last.blocks) {
         if (b.type === 'tool' && b.call.durationMs == null) b.call.durationMs = 0
       }
-      if (activeConvId.value === convId) {
+      if (conversationList.activeConvId.value === convId) {
         nextTick(() => scrollToBottom())
       }
       break
     }
     case 'done':
-      clearRetryState()
       queuedMessages.value = new Map(queuedMessages.value)
       queuedMessages.value.delete(convId)
       last.isStreaming = false
@@ -771,11 +679,11 @@ function handleConvEvent(convId: string, event: ChatEvent) {
       for (const b of last.blocks) {
         if (b.type === 'tool' && b.call.durationMs == null) b.call.durationMs = 0
       }
-      if (activeConvId.value === convId) {
+      if (conversationList.activeConvId.value === convId) {
         nextTick(() => scrollToBottom())
       }
       setStatus('done')
-      loadConversations()
+      conversationList.loadConversations()
       delete todoTasksMap.value[convId]
       clearAllTimers()
       break
@@ -793,15 +701,8 @@ function handleConvEvent(convId: string, event: ChatEvent) {
     }
     case 'turn_usage': {
       const u = event.content as { output_tokens: number }
-      if (activeConvId.value === convId) {
+      if (conversationList.activeConvId.value === convId) {
         turnUsage.value = u.output_tokens
-      }
-      break
-    }
-    case 'retrying': {
-      const r = event.content as { attempt: number; max_retries: number; error: string; retry_in_ms: number }
-      if (r.attempt >= 3) {
-        startRetryCountdown(r.attempt, r.max_retries, r.error, r.retry_in_ms)
       }
       break
     }
@@ -857,12 +758,12 @@ function handleConvEvent(convId: string, event: ChatEvent) {
           role: 'user',
           blocks: [{ type: 'text', content: text }],
         })
-        if (activeConvId.value === convId) nextTick(() => scrollToBottom())
+        if (conversationList.activeConvId.value === convId) nextTick(() => scrollToBottom())
       }
       break
     }
   }
-  if (activeConvId.value === convId) {
+  if (conversationList.activeConvId.value === convId) {
     scheduleScrollToBottom()
   }
 }
@@ -893,16 +794,16 @@ async function send(overrideText?: string) {
         return
       }
       inputText.value = ''
-      if (!activeConvId.value) {
+      if (!conversationList.activeConvId.value) {
         addSystemMessage('没有活跃的会话')
         return
       }
-      await exportConversation(activeConvId.value, fmt === 'default' ? 'md' : fmt)
+      await exportConversation(conversationList.activeConvId.value, fmt === 'default' ? 'md' : fmt)
       return
     }
     if (text === '/rename' || text.startsWith('/rename ')) {
       inputText.value = ''
-      if (!activeConvId.value) {
+      if (!conversationList.activeConvId.value) {
         addSystemMessage('没有活跃的会话')
         return
       }
@@ -918,12 +819,12 @@ async function send(overrideText?: string) {
     })
   }
 
-  if (!activeConvId.value) {
+  if (!conversationList.activeConvId.value) {
     if (!overrideText) setTimeout(triggerLayoutTransition, 0)
     await createNewConversation()
   }
 
-  const convId = activeConvId.value!
+  const convId = conversationList.activeConvId.value!
   const convMsgs = getOrInitMessages(convId)
 
   if (!convSubscriptions.has(convId)) {
@@ -969,7 +870,7 @@ async function send(overrideText?: string) {
       convMsgs.push(userMsg)
       convMsgs.push(assistantMsg)
       setConversationStreaming(convId, true)
-      updateAgentStatus({ conversationId: convId, title: getConvTitle(convId), phase: 'thinking' })
+      updateAgentStatus({ conversationId: convId, title: conversationList.getConvTitle(convId), phase: 'thinking' })
       turnUsage.value = null
       nextTick(() => scrollToBottom())
     }
@@ -996,7 +897,7 @@ function parseExportFormat(text: string): 'md' | 'json' | 'invalid' | 'default' 
 
 async function handleModelCommand() {
   try {
-    const { provider_id, model, provider_name } = await getActiveModel()
+    const { provider_id, model } = await getActiveModel()
     currentProvider.value = provider_id
     currentModel.value = model
 
@@ -1027,20 +928,18 @@ async function selectModel(modelId: string) {
 }
 
 async function handleConfirm(requestId: string, approved: boolean) {
-  if (!activeConvId.value) return
-  await confirmAction(activeConvId.value, requestId, approved)
+  if (!conversationList.activeConvId.value) return
+  await confirmAction(conversationList.activeConvId.value, requestId, approved)
   const msg = messages.value.find(m => m.confirm?.requestId === requestId)
   if (msg) msg.confirm = null
 }
 
 async function applyConvTitle(id: string, title: string) {
-  await updateTitle(id, title)
-  const conv = conversations.value.find(c => c.id === id)
-  if (conv) conv.title = title
+  await conversationList.updateTitle(id, title)
 }
 
 async function handleRenameCommand(text: string) {
-  const id = activeConvId.value!
+  const id = conversationList.activeConvId.value!
   const arg = text.slice('/rename'.length).trim()
   if (arg) {
     try {
@@ -1062,18 +961,16 @@ async function handleRenameCommand(text: string) {
 }
 
 async function handleDeleteConversation(id: string) {
-  await deleteConversation(id)
-  conversations.value = conversations.value.filter(c => c.id !== id)
+  await conversationList.deleteConversation(id)
   const unsub = convSubscriptions.get(id)
   if (unsub) { unsub(); convSubscriptions.delete(id) }
   // 清理该会话的 tool_calls 缓存
   const msgs = messagesMap.value[id] || []
   for (const m of msgs) toolCallsCache.delete(m.id)
-  if (activeConvId.value === id) {
-    activeConvId.value = null
+  if (conversationList.activeConvId.value === id) {
     transitionState.value = 'welcome'
     delete messagesMap.value[id]
-    router.replace('/chat')
+    await goNewPage()
   }
 }
 
@@ -1255,18 +1152,18 @@ function selectKbItem(item: DocumentGroup | KbDocument) {
 let initialized = false
 
 async function initView() {
-  await Promise.all([loadConversations(), loadDevices()])
+  await Promise.all([conversationList.loadConversations(), loadDevices()])
   getActiveModel().then(m => { currentModel.value = m.model })
   const paramId = route.params.id as string | undefined
   if (paramId) {
-    if (paramId !== activeConvId.value) {
-      await selectConversation(paramId)
+    if (paramId !== conversationList.activeConvId.value) {
+      await conversationList.selectConversation(paramId)
     }
   } else {
     const lastConvId = localStorage.getItem('spider-last-conv')
     if (lastConvId) {
       router.replace(`/chat/${lastConvId}`)
-      await selectConversation(lastConvId)
+      await conversationList.selectConversation(lastConvId)
     }
   }
   try {
@@ -1320,8 +1217,8 @@ onDeactivated(() => {
 
 onBeforeRouteUpdate(async (to) => {
   const newId = to.params.id as string | undefined
-  if (newId && newId !== activeConvId.value) {
-    await selectConversation(newId)
+  if (newId && newId !== conversationList.activeConvId.value) {
+    await conversationList.selectConversation(newId)
   }
 })
 
@@ -1340,7 +1237,7 @@ onUnmounted(() => {
     <!-- Sidebar -->
     <div class="sidebar" :class="{ collapsed: !sidebarOpen }" :style="{ width: sidebarOpen ? sidebarWidth + 'px' : '0' }">
       <div class="sidebar-header">
-        <template v-if="!batchMode">
+        <template v-if="!conversationList.batchMode.value">
           <button class="sidebar-toggle" @click="toggleSidebar">≡</button>
           <div class="sidebar-tabs">
             <button class="sidebar-tab active">对话</button>
@@ -1350,41 +1247,41 @@ onUnmounted(() => {
         <template v-else>
           <span class="batch-mode-label">批量管理</span>
           <span style="flex:1"></span>
-          <button class="batch-select-all" @click="toggleSelectAll">{{ selectedConvIds.size === conversations.length ? '取消全选' : '全选' }}</button>
-          <button class="batch-cancel" @click="exitBatchMode">取消</button>
+          <button class="batch-select-all" @click="conversationList.toggleSelectAll">{{ conversationList.selectedConvIds.value.size === conversationList.conversations.value.length ? '取消全选' : '全选' }}</button>
+          <button class="batch-cancel" @click="conversationList.exitBatchMode">取消</button>
         </template>
       </div>
-      <div class="sidebar-body" @click="closeConvMenu()">
-        <div v-for="c in conversations" :key="c.id" class="conv-item"
-             :class="{ active: c.id === activeConvId, 'batch-selected': batchMode && selectedConvIds.has(c.id) }"
-             @click="batchMode ? toggleSelectConv(c.id) : selectConversation(c.id)">
-          <input type="checkbox" v-if="batchMode" class="conv-checkbox"
-                 :checked="selectedConvIds.has(c.id)"
-                 @click.stop="toggleSelectConv(c.id)" />
-          <span v-if="batchMode" class="conv-item-title">{{ c.title || '未命名对话' }}</span>
-          <input v-else-if="editingConvId === c.id" class="conv-item-input"
-                 v-model="editTitleText"
-                 @keydown.enter="saveConvTitle(c.id)"
-                 @keydown.escape="cancelEdit"
-                 @blur="saveConvTitle(c.id)"
+      <div class="sidebar-body" @click="conversationList.closeConvMenu()">
+        <div v-for="c in conversationList.conversations.value" :key="c.id" class="conv-item"
+             :class="{ active: c.id === conversationList.activeConvId.value, 'batch-selected': conversationList.batchMode.value && conversationList.selectedConvIds.value.has(c.id) }"
+             @click="conversationList.batchMode.value ? conversationList.toggleSelectConv(c.id) : conversationList.selectConversation(c.id)">
+          <input type="checkbox" v-if="conversationList.batchMode.value" class="conv-checkbox"
+                 :checked="conversationList.selectedConvIds.value.has(c.id)"
+                 @click.stop="conversationList.toggleSelectConv(c.id)" />
+          <span v-if="conversationList.batchMode.value" class="conv-item-title">{{ c.title || '未命名对话' }}</span>
+          <input v-else-if="conversationList.editingConvId.value === c.id" class="conv-item-input"
+                 v-model="conversationList.editTitleText.value"
+                 @keydown.enter="conversationList.saveConvTitle(c.id)"
+                 @keydown.escape="conversationList.cancelEdit"
+                 @blur="conversationList.saveConvTitle(c.id)"
                  @click.stop
                  @vue:mounted="($event: any) => $event.el.focus()" />
-          <span v-else class="conv-item-title" @dblclick.stop="startEditConvTitle(c.id, c.title)">{{ c.title || '未命名对话' }}</span>
+          <span v-else class="conv-item-title" @dblclick.stop="conversationList.startEditConvTitle(c.id, c.title)">{{ c.title || '未命名对话' }}</span>
           <span v-if="c.status === 'processing'" class="conv-processing-dot" title="处理中"></span>
-          <div v-if="!batchMode" class="conv-menu-wrap">
-            <button class="conv-more" @click.stop="openConvMenu(c.id)" title="更多">⋯</button>
-            <div v-if="menuOpenConvId === c.id" class="conv-menu" @click.stop>
-              <button class="conv-menu-item" @click="startEditConvTitle(c.id, c.title); closeConvMenu()">✏ 重命名</button>
-              <button class="conv-menu-item" @click="enterBatchMode()">☑ 批量管理</button>
+          <div v-if="!conversationList.batchMode.value" class="conv-menu-wrap">
+            <button class="conv-more" @click.stop="conversationList.openConvMenu(c.id)" title="更多">⋯</button>
+            <div v-if="conversationList.menuOpenConvId.value === c.id" class="conv-menu" @click.stop>
+              <button class="conv-menu-item" @click="conversationList.startEditConvTitle(c.id, c.title); conversationList.closeConvMenu()">✏ 重命名</button>
+              <button class="conv-menu-item" @click="conversationList.enterBatchMode()">☑ 批量管理</button>
               <div class="conv-menu-divider"></div>
-              <button class="conv-menu-item conv-menu-item--danger" @click="handleDeleteConversation(c.id); closeConvMenu()">✕ 删除</button>
+              <button class="conv-menu-item conv-menu-item--danger" @click="handleDeleteConversation(c.id); conversationList.closeConvMenu()">✕ 删除</button>
             </div>
           </div>
         </div>
       </div>
-      <div v-if="batchMode" class="batch-action-bar">
-        <span class="batch-count">已选 {{ selectedConvIds.size }}</span>
-        <button class="batch-delete-btn" :disabled="selectedConvIds.size === 0" @click="handleBatchDelete">删除选中</button>
+      <div v-if="conversationList.batchMode.value" class="batch-action-bar">
+        <span class="batch-count">已选 {{ conversationList.selectedConvIds.value.size }}</span>
+        <button class="batch-delete-btn" :disabled="conversationList.selectedConvIds.value.size === 0" @click="conversationList.batchDelete">删除选中</button>
       </div>
     </div>
     <div class="sidebar-resize-handle" @mousedown="startDrag">
@@ -1396,14 +1293,14 @@ onUnmounted(() => {
       'welcome-mode': transitionState === 'welcome',
       'welcome-transitioning': transitionState === 'transitioning',
       'welcome-chat': transitionState === 'chat',
-    }" @click="showExportMenu = false; showModeDropdown = false; closeConvMenu()">
-      <div v-if="activeConvId && transitionState === 'chat'" class="chat-header">
+    }" @click="showExportMenu = false; showModeDropdown = false; conversationList.closeConvMenu()">
+      <div v-if="conversationList.activeConvId.value && transitionState === 'chat'" class="chat-header">
         <button v-if="!sidebarOpen" class="sidebar-toggle" @click="toggleSidebar">≡</button>
         <button v-if="!sidebarOpen" class="header-new-btn" @click="goNewPage()">+</button>
         <input v-if="editingHeaderTitle" class="conv-title-input"
-               v-model="editTitleText"
+               v-model="conversationList.editTitleText.value"
                @keydown.enter="saveHeaderTitle"
-               @keydown.escape="cancelEdit"
+               @keydown.escape="cancelEditHeader"
                @blur="saveHeaderTitle"
                @vue:mounted="($event: any) => $event.el.focus()" />
         <span v-else class="conv-title" @click="startEditHeaderTitle">{{ activeConv?.title || '新对话' }}</span>
@@ -1499,7 +1396,7 @@ onUnmounted(() => {
         <span class="retry-countdown">Retrying in {{ Math.max(0, Math.round((retryState.retryInMs - retryState.countdownMs) / 1000)) }}s… (attempt {{ retryState.attempt }}/{{ retryState.maxRetries }})</span>
       </div>
 
-      <div v-for="(qm, i) in (queuedMessages.get(activeConvId ?? '') ?? [])" :key="`queued-${i}`" class="queued-message">
+      <div v-for="(qm, i) in (queuedMessages.get(conversationList.activeConvId.value ?? '') ?? [])" :key="`queued-${i}`" class="queued-message">
         <span class="queued-message-text">{{ i + 1 }}: {{ qm }}</span>
       </div>
 
