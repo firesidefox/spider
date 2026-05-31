@@ -18,6 +18,7 @@ import (
 	"github.com/spiderai/spider/internal/agent"
 	apipkg "github.com/spiderai/spider/internal/api"
 	"github.com/spiderai/spider/internal/auth"
+	"github.com/spiderai/spider/internal/chatruntime"
 	"github.com/spiderai/spider/internal/knowledge"
 	"github.com/spiderai/spider/internal/logger"
 	mcppkg "github.com/spiderai/spider/internal/mcp"
@@ -243,6 +244,7 @@ func serve(cfgFile, addrOverride, dataDirOverride string, debug bool) error {
 		FingerprintStore: fps,
 		MemoryStore:      ms,
 		ShutdownCtx:      shutdownCtx,
+		ChatRuntime:      chatruntime.New(),
 	}
 
 	app.ConvStore = store.NewConversationStore(database)
