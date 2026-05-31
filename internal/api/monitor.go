@@ -18,8 +18,8 @@ func globalStream(app *mcppkg.App, w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Connection", "keep-alive")
 
 	ch := make(chan []byte, 32)
-	app.AddGlobalSSEClient(ch)
-	defer app.RemoveGlobalSSEClient(ch)
+	app.ChatRuntime.AddGlobalSSEClient(ch)
+	defer app.ChatRuntime.RemoveGlobalSSEClient(ch)
 
 	fmt.Fprintf(w, "data: {\"type\":\"ping\"}\n\n")
 	flusher.Flush()

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/spiderai/spider/internal/auth"
+	"github.com/spiderai/spider/internal/chatruntime"
 	"github.com/spiderai/spider/internal/config"
 	"github.com/spiderai/spider/internal/crypto"
 	dbpkg "github.com/spiderai/spider/internal/db"
@@ -159,5 +160,6 @@ func newChatSendTestApp(t *testing.T, llmBaseURL string) *mcppkg.App {
 		KnowledgeStore:  knowledge.NewStore(database),
 		ShutdownCtx:     context.Background(),
 		PermissionMode:  "",
+		ChatRuntime:     chatruntime.New(),
 	}
 }

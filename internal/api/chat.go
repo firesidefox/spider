@@ -83,7 +83,7 @@ func chatGetConversation(app *mcppkg.App, w http.ResponseWriter, r *http.Request
 	if tasks == nil {
 		tasks = []*models.Todo{}
 	}
-	queuedMsgs := app.GetQueuedMsgs(id)
+	queuedMsgs := app.ChatRuntime.GetQueuedMsgs(id)
 	if queuedMsgs == nil {
 		queuedMsgs = []string{}
 	}
@@ -187,7 +187,7 @@ func chatSendMessage(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id
 	}
 
 	// Try to inject into a running agent first
-	if queued, full := app.TryInject(id, content); queued || full {
+	if queued, full := app.ChatRuntime.TryInject(id, content); queued || full {
 		if full {
 			writeError(w, 429, "message queue full")
 			return
@@ -197,12 +197,12 @@ func chatSendMessage(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id
 	}
 
 	// No agent running — try to claim the conv
-	injectCh, claimed := app.TryClaimConv(id)
+	injectCh, claimed := app.ChatRuntime.TryClaimConv(id)
 	if !claimed {
 		// Lost the race to another concurrent request — try inject again.
 		// If the winning agent already finished (ReleaseConv called between our
 		// TryClaimConv and this TryInject), fall through to claim a new one.
-		if queued, full := app.TryInject(id, content); queued {
+		if queued, full := app.ChatRuntime.TryInject(id, content); queued {
 			writeJSON(w, http.StatusAccepted, map[string]string{"status": "queued"})
 			return
 		} else if full {
@@ -210,7 +210,7 @@ func chatSendMessage(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id
 			return
 		}
 		// Agent finished between our two checks — try to claim now.
-		injectCh, claimed = app.TryClaimConv(id)
+		injectCh, claimed = app.ChatRuntime.TryClaimConv(id)
 		if !claimed {
 			writeError(w, 503, "agent start conflict, retry")
 			return
@@ -220,7 +220,7 @@ func chatSendMessage(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id
 	// Build factory only after claiming — avoids 503 when agent already running.
 	factory, err := app.NewAgentFactory()
 	if err != nil {
-		app.ReleaseConv(id)
+		app.ChatRuntime.ReleaseConv(id)
 		writeError(w, 503, "LLM not configured: "+err.Error())
 		return
 	}
@@ -232,12 +232,12 @@ func chatSendMessage(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id
 
 	a := factory.NewAgent(id, req.HostIDs)
 	waiter := agent.NewConfirmationWaiter()
-	app.StoreChatWaiter(id, waiter)
+	app.ChatRuntime.StoreChatWaiter(id, waiter)
 	goroutineLaunched := false
 	defer func() {
 		if !goroutineLaunched {
-			app.RemoveChatWaiter(id)
-			app.ReleaseConv(id)
+			app.ChatRuntime.RemoveChatWaiter(id)
+			app.ChatRuntime.ReleaseConv(id)
 		}
 	}()
 
@@ -247,12 +247,12 @@ func chatSendMessage(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id
 		parent = context.Background()
 	}
 	ctx, cancel := context.WithCancel(parent)
-	app.StoreConvCancel(id, cancel)
+	app.ChatRuntime.StoreConvCancel(id, cancel)
 	events, err := a.Run(ctx, id, content, waiter, injectCh)
 	if err != nil {
 		cancel()
-		app.RemoveConvCancel(id)
-		app.ClearSSEBuffer(id)
+		app.ChatRuntime.RemoveConvCancel(id)
+		app.ChatRuntime.ClearSSEBuffer(id)
 		app.ConvStore.SetStatus(id, "idle") //nolint:errcheck
 		writeError(w, 500, err.Error())
 		return
@@ -262,10 +262,10 @@ func chatSendMessage(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id
 	go func() {
 		defer func() {
 			cancel()
-			app.RemoveConvCancel(id)
-			app.RemoveChatWaiter(id)
-			app.ReleaseConv(id)
-			app.ClearSSEBuffer(id)
+			app.ChatRuntime.RemoveConvCancel(id)
+			app.ChatRuntime.RemoveChatWaiter(id)
+			app.ChatRuntime.ReleaseConv(id)
+			app.ChatRuntime.ClearSSEBuffer(id)
 			app.ConvStore.SetStatus(id, "idle") //nolint:errcheck
 		}()
 		for ev := range events {
@@ -275,7 +275,7 @@ func chatSendMessage(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id
 					if count <= 0 {
 						count = len(strings.Split(text, "\n\n"))
 					}
-					app.ConsumeQueuedMsgs(id, count)
+					app.ChatRuntime.ConsumeQueuedMsgs(id, count)
 				}
 			}
 			if ev.Type == agent.EventToolStart {
@@ -291,7 +291,7 @@ func chatSendMessage(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id
 				}
 			}
 			data, _ := json.Marshal(ev)
-			app.BufferAndBroadcastSSE(id, data)
+			app.ChatRuntime.BufferAndBroadcastSSE(id, data)
 		}
 	}()
 	writeJSON(w, http.StatusAccepted, map[string]string{"status": "accepted"})
@@ -319,8 +319,8 @@ func chatCancel(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id stri
 		writeError(w, 404, "conversation not found")
 		return
 	}
-	app.CancelConv(id)
-	app.ReleaseConv(id) // prevent new TryInject from queuing into the dying channel
+	app.ChatRuntime.CancelConv(id)
+	app.ChatRuntime.ReleaseConv(id) // prevent new TryInject from queuing into the dying channel
 	app.ConvStore.SetStatus(id, "idle") //nolint:errcheck
 	writeJSON(w, http.StatusOK, map[string]string{"status": "cancelled"})
 }
@@ -333,7 +333,7 @@ func chatConfirm(app *mcppkg.App, w http.ResponseWriter, r *http.Request, convID
 		writeError(w, 400, "invalid request body")
 		return
 	}
-	waiter := app.GetChatWaiter(convID)
+	waiter := app.ChatRuntime.GetChatWaiter(convID)
 	if waiter == nil {
 		writeError(w, 404, "no active conversation waiter")
 		return

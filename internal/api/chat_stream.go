@@ -62,8 +62,8 @@ func chatStreamGet(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id s
 	// Combining these two operations eliminates the race window where events
 	// produced between a separate drain and register would be lost.
 	ch := make(chan []byte, 10)
-	buffered := app.RegisterSSEClientAndDrain(id, ch)
-	defer app.UnregisterSSEClient(id, ch)
+	buffered := app.ChatRuntime.RegisterSSEClientAndDrain(id, ch)
+	defer app.ChatRuntime.UnregisterSSEClient(id, ch)
 
 	// Replay in-flight events from current agent run (not yet persisted)
 	for _, data := range buffered {
