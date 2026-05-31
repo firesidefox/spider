@@ -135,6 +135,7 @@ function addSystemMessage(content: string, targetConvId?: string) {
 const inputText = ref('')
 const queuedMessages = ref<Map<string, string[]>>(new Map())
 const streamingConvIds = ref<Set<string>>(new Set())
+const streamingTimeouts = new Map<string, ReturnType<typeof setTimeout>>()
 const isStreaming = computed({
   get: () => activeConvId.value ? streamingConvIds.value.has(activeConvId.value) : false,
   set: (streaming: boolean) => {
@@ -147,7 +148,26 @@ function setConversationStreaming(convId: string, streaming: boolean) {
   const next = new Set(streamingConvIds.value)
   if (streaming) {
     next.add(convId)
-  } else next.delete(convId)
+    // Fallback: if SSE done/error never arrives (server crash, network drop),
+    // poll DB once after 90s to recover from stuck streaming state.
+    if (!streamingTimeouts.has(convId)) {
+      streamingTimeouts.set(convId, setTimeout(async () => {
+        streamingTimeouts.delete(convId)
+        if (!streamingConvIds.value.has(convId)) return
+        try {
+          const data = await getConversation(convId)
+          if (data.conversation.status !== 'processing') {
+            messagesMap.value[convId] = buildDisplayMessages(data.messages)
+            setConversationStreaming(convId, false)
+          }
+        } catch { /* ignore — will retry on next user action */ }
+      }, 90_000))
+    }
+  } else {
+    next.delete(convId)
+    const t = streamingTimeouts.get(convId)
+    if (t !== undefined) { clearTimeout(t); streamingTimeouts.delete(convId) }
+  }
   streamingConvIds.value = next
 
   const conv = conversations.value.find(c => c.id === convId)
@@ -514,7 +534,6 @@ async function loadConversations() {
 }
 
 async function selectConversation(id: string) {
-  if (id === activeConvId.value) return  // already active
   activeConvId.value = id  // set immediately so concurrent calls see it
   const data = await getConversation(id)
   if (activeConvId.value !== id) return  // user switched to another conv while loading
@@ -523,7 +542,7 @@ async function selectConversation(id: string) {
   for (const t of data.todo_tasks ?? []) taskMap.set(t.id, t)
   todoTasksMap.value[id] = taskMap
   clearAllTimers()
-  queuedMessages.value = new Map()
+  queuedMessages.value.delete(id)
   turnUsage.value = null
   completedFolded.value = true
   pendingFolded.value = true
@@ -1293,6 +1312,8 @@ onActivated(() => {
 
 onDeactivated(() => {
   clearAllTimers()
+  streamingTimeouts.forEach(t => clearTimeout(t))
+  streamingTimeouts.clear()
   document.removeEventListener('click', closeModeDropdown)
   window.removeEventListener('keydown', handleEscCancel)
 })

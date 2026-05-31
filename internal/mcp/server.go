@@ -291,16 +291,6 @@ func (a *App) ReleaseConv(convID string) {
 	delete(a.convQueuedMsgs, convID)
 }
 
-// RegisterSSEClient registers a new SSE client channel for a conversation.
-func (a *App) RegisterSSEClient(convID string, ch chan []byte) {
-	a.sseClientsMu.Lock()
-	defer a.sseClientsMu.Unlock()
-	if a.sseClients == nil {
-		a.sseClients = make(map[string][]chan []byte)
-	}
-	a.sseClients[convID] = append(a.sseClients[convID], ch)
-}
-
 // UnregisterSSEClient removes an SSE client channel.
 func (a *App) UnregisterSSEClient(convID string, ch chan []byte) {
 	a.sseClientsMu.Lock()
@@ -346,18 +336,9 @@ func (a *App) BufferSSEEvent(convID string, data []byte) {
 	a.sseBuffers[convID] = append(buf, data)
 }
 
-// DrainSSEBuffer returns and clears the in-flight event buffer for a conversation.
-func (a *App) DrainSSEBuffer(convID string) [][]byte {
-	a.sseBuffersMu.Lock()
-	defer a.sseBuffersMu.Unlock()
-	buf := a.sseBuffers[convID]
-	delete(a.sseBuffers, convID)
-	return buf
-}
-
 // RegisterSSEClientAndDrain atomically registers an SSE client channel and drains
-// the in-flight buffer. This eliminates the race window that exists when DrainSSEBuffer
-// and RegisterSSEClient are called separately: events emitted between those two calls
+// the in-flight buffer. This eliminates the race window that exists when drain
+// and register are called separately: events emitted between those two calls
 // would be broadcast to an empty client list and buffered into an already-drained buffer,
 // causing them to be lost. Holding both locks together closes that window.
 // Lock order: sseBuffersMu → sseClientsMu (always acquire in this order).
