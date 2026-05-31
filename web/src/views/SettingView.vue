@@ -15,10 +15,10 @@
         <div class="nav-row" :class="{ selected: activeTab === 'tokens' }" @click="activeTab = 'tokens'">
           <span class="nav-icon">🔑</span><span class="nav-label">访问令牌</span>
         </div>
-        <div class="nav-row" :class="{ selected: activeTab === 'ssh-keys' }" @click="activeTab = 'ssh-keys'; loadSSHKeys()">
+        <div class="nav-row" :class="{ selected: activeTab === 'ssh-keys' }" @click="activeTab = 'ssh-keys'">
           <span class="nav-icon">🔐</span><span class="nav-label">SSH Keys</span>
         </div>
-        <div class="nav-row" :class="{ selected: activeTab === 'logs' }" @click="activeTab = 'logs'; loadLogs()">
+        <div class="nav-row" :class="{ selected: activeTab === 'logs' }" @click="activeTab = 'logs'">
           <span class="nav-icon">📋</span><span class="nav-label">操作日志</span>
         </div>
         <div class="nav-row" :class="{ selected: activeTab === 'chat-theme' }" @click="activeTab = 'chat-theme'">
@@ -87,10 +87,12 @@
       <template v-else-if="activeTab === 'chat-theme'">
         <ChatThemeSettings />
       </template>
+      <template v-else-if="activeTab === 'ssh-keys'">
+        <SSHKeySettings />
+      </template>
       <template v-else>
         <div class="detail-topbar">
           <span class="detail-title">{{ tabTitle }}</span>
-          <button v-if="activeTab === 'ssh-keys'" class="btn btn-primary btn-sm" @click="showAddKey = true">+ 添加 Key</button>
           <button v-if="activeTab === 'notify'" class="btn btn-primary btn-sm" @click="showAddChannelModal = true">添加渠道</button>
 
           <template v-if="activeTab === 'settings'">
@@ -123,26 +125,6 @@
             </div>
           </div>
           <PasswordSettings />
-        </template>
-
-        <template v-if="activeTab === 'ssh-keys'">
-          <div class="edit-card">
-            <p class="dim" style="margin-bottom:16px;font-size:13px">管理 SSH 私钥，可在添加主机时引用。</p>
-            <table class="table">
-              <thead><tr><th>名称</th><th>指纹</th><th>创建时间</th><th>操作</th></tr></thead>
-              <tbody>
-                <tr v-for="k in sshKeys" :key="k.id">
-                  <td style="font-weight:500;color:var(--text)">{{ k.name }}</td>
-                  <td class="dim" style="font-family:'SF Mono',Consolas,monospace;font-size:12px">{{ k.fingerprint.slice(0, 24) }}…</td>
-                  <td class="dim">{{ new Date(k.created_at).toLocaleString() }}</td>
-                  <td><button class="btn btn-sm btn-danger" @click="handleDeleteKey(k.id)">删除</button></td>
-                </tr>
-                <tr v-if="sshKeys.length === 0">
-                  <td colspan="4" class="dim" style="text-align:center;padding:32px">暂无 SSH Key</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
         </template>
 
         <template v-if="activeTab === 'logs'">
@@ -683,23 +665,6 @@
       </div>
     </div>
 
-    <!-- 添加 SSH Key 弹窗 -->
-    <div v-if="showAddKey" class="modal-overlay" @click.self="showAddKey = false">
-      <div class="modal">
-        <h3>添加 SSH Key</h3>
-        <div class="form-row"><label>名称</label><input v-model="keyForm.name" class="input" placeholder="prod-key" /></div>
-        <div class="form-row">
-          <label>私钥内容</label>
-          <textarea v-model="keyForm.privateKey" class="input" rows="5" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----" />
-        </div>
-        <div class="form-row"><label>Passphrase（可选）</label><input v-model="keyForm.passphrase" type="password" class="input" /></div>
-        <div v-if="keyFormError" class="err" style="margin-bottom:12px">{{ keyFormError }}</div>
-        <div class="modal-footer">
-          <button class="btn" @click="showAddKey = false">取消</button>
-          <button class="btn btn-primary" @click="handleAddKey">添加</button>
-        </div>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -708,8 +673,6 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuth } from '../composables/useAuth'
 import { authHeaders } from '../api/auth'
-import { listSSHKeys, createSSHKey, deleteSSHKey } from '../api/ssh-keys'
-import type { SafeSSHKey } from '../api/ssh-keys'
 import {
   listNotifyChannels,
   createNotifyChannel,
@@ -725,6 +688,7 @@ import PrometheusDataSourcesPanel from '../components/PrometheusDataSourcesPanel
 import PasswordSettings from '../components/settings/PasswordSettings.vue'
 import ChatThemeSettings from '../components/settings/ChatThemeSettings.vue'
 import TokenSettings from '../components/settings/TokenSettings.vue'
+import SSHKeySettings from '@/components/settings/SSHKeySettings.vue'
 
 const { currentUser, isAdmin } = useAuth()
 const route = useRoute()
@@ -752,48 +716,12 @@ const tabTitle = computed(() => ({
 
 onMounted(() => {
   const tab = activeTab.value
-  if (tab === 'ssh-keys') loadSSHKeys()
-  else if (tab === 'logs') loadLogs()
+  if (tab === 'logs') loadLogs()
   else if (tab === 'agent') { loadAgentSettings(); loadProviders() }
   else if (tab === 'kb') loadRagConfig()
   else if (tab === 'settings') loadSettings()
   else if (tab === 'notify') loadNotifyChannels()
 })
-
-// ── SSH Keys ──
-const sshKeys = ref<SafeSSHKey[]>([])
-const showAddKey = ref(false)
-const keyForm = ref({ name: '', privateKey: '', passphrase: '' })
-const keyFormError = ref('')
-let sshKeysLoaded = false
-
-async function loadSSHKeys() {
-  if (sshKeysLoaded) return
-  sshKeysLoaded = true
-  sshKeys.value = await listSSHKeys()
-}
-
-async function handleAddKey() {
-  keyFormError.value = ''
-  if (!keyForm.value.name.trim()) { keyFormError.value = '请输入名称'; return }
-  if (!keyForm.value.privateKey.trim()) { keyFormError.value = '请输入私钥内容'; return }
-  try {
-    await createSSHKey(keyForm.value.name, keyForm.value.privateKey, keyForm.value.passphrase || '')
-    showAddKey.value = false
-    keyForm.value = { name: '', privateKey: '', passphrase: '' }
-    sshKeysLoaded = false
-    sshKeys.value = await listSSHKeys()
-    sshKeysLoaded = true
-  } catch (e: any) { keyFormError.value = e.message }
-}
-
-async function handleDeleteKey(id: string) {
-  if (!confirm('确认删除此 SSH Key？')) return
-  try {
-    await deleteSSHKey(id)
-    sshKeys.value = await listSSHKeys()
-  } catch (e: any) { alert(e.message) }
-}
 
 interface LogEntry {
   id: string; host_name: string; command: string; exit_code: number
