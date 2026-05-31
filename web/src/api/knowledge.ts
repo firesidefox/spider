@@ -1,6 +1,4 @@
-import { authHeaders } from './auth'
-
-const BASE = '/api/v1'
+import { api } from '@/shared/api/client'
 
 export interface KnowledgeGroup {
   id: number
@@ -70,97 +68,56 @@ export interface ImportResult {
   section_count: number
 }
 
-async function handleResponse<T>(r: Response): Promise<T> {
-  if (!r.ok) {
-    let msg = `HTTP ${r.status}`
-    try {
-      const json = await r.json()
-      if (json.error) msg = json.error
-    } catch {
-      const text = await r.text()
-      if (text) msg = text
-    }
-    throw new Error(msg)
-  }
-  if (r.status === 204) return undefined as T
-
-  const text = await r.text()
-  if (!text) return undefined as T
-  return JSON.parse(text) as T
-}
-
 export async function listGroups(): Promise<KnowledgeGroup[]> {
-  const r = await fetch(`${BASE}/knowledge-groups`, { headers: authHeaders() })
-  return handleResponse<KnowledgeGroup[]>(r)
+  return api.get('/knowledge-groups')
 }
 
 export async function createGroup(name: string): Promise<KnowledgeGroup> {
-  const r = await fetch(`${BASE}/knowledge-groups`, {
-    method: 'POST',
-    headers: authHeaders(),
-    body: JSON.stringify({ name })
-  })
-  return handleResponse<KnowledgeGroup>(r)
+  return api.post('/knowledge-groups', { name })
 }
 
 export async function deleteGroup(id: number): Promise<void> {
-  const r = await fetch(`${BASE}/knowledge-groups/${id}`, {
-    method: 'DELETE',
-    headers: authHeaders()
-  })
-  await handleResponse<void>(r)
+  return api.delete(`/knowledge-groups/${id}`, undefined, { responseType: 'void' })
 }
 
 export async function deleteGroups(ids: number[]): Promise<void> {
-  const r = await fetch(`${BASE}/knowledge-groups`, {
-    method: 'DELETE',
-    headers: authHeaders(),
-    body: JSON.stringify({ ids })
-  })
-  await handleResponse<void>(r)
+  return api.delete('/knowledge-groups', { ids }, { responseType: 'void' })
 }
 
 export async function listDocuments(groupID: number): Promise<KnowledgeDocument[]> {
-  const r = await fetch(`${BASE}/knowledge-groups/${groupID}/documents`, { headers: authHeaders() })
-  return handleResponse<KnowledgeDocument[]>(r)
+  return api.get(`/knowledge-groups/${groupID}/documents`)
 }
 
 export async function getDocument(docID: number): Promise<KnowledgeDocument> {
-  const r = await fetch(`${BASE}/knowledge-documents/${docID}`, { headers: authHeaders() })
-  return handleResponse<KnowledgeDocument>(r)
+  return api.get(`/knowledge-documents/${docID}`)
+}
+
+export async function deleteDocument(id: number): Promise<void> {
+  return api.delete(`/knowledge-documents/${id}`, undefined, { responseType: 'void' })
+}
+
+export async function reindexDocument(id: number): Promise<void> {
+  return api.post(`/knowledge-documents/${id}/reindex`, undefined, { responseType: 'void' })
 }
 
 export async function getSections(docID: number): Promise<KnowledgeSection[]> {
-  const r = await fetch(`${BASE}/knowledge-documents/${docID}/sections`, { headers: authHeaders() })
-  return handleResponse<KnowledgeSection[]>(r)
+  return api.get(`/knowledge-documents/${docID}/sections`)
 }
 
 export async function getEntries(sectionID: number): Promise<KnowledgeEntry[]> {
-  const r = await fetch(`${BASE}/knowledge-sections/${sectionID}/entries`, { headers: authHeaders() })
-  return handleResponse<KnowledgeEntry[]>(r)
+  return api.get(`/knowledge-sections/${sectionID}/entries`)
 }
 
 export async function getEntry(entryID: number): Promise<KnowledgeEntryDetail> {
-  const r = await fetch(`${BASE}/knowledge-entries/${entryID}`, { headers: authHeaders() })
-  return handleResponse<KnowledgeEntryDetail>(r)
+  return api.get(`/knowledge-entries/${entryID}`)
 }
 
 export async function deleteDocuments(ids: number[]): Promise<void> {
-  const r = await fetch(`${BASE}/knowledge-documents`, {
-    method: 'DELETE',
-    headers: authHeaders(),
-    body: JSON.stringify({ ids })
-  })
-  await handleResponse<void>(r)
+  return api.delete('/knowledge-documents', { ids }, { responseType: 'void' })
 }
 
 export async function moveDocuments(ids: number[], groupID: number): Promise<void> {
-  const r = await fetch(`${BASE}/knowledge-documents`, {
-    method: 'PATCH',
-    headers: authHeaders(),
-    body: JSON.stringify({ ids, group_id: groupID })
-  })
-  await handleResponse<void>(r)
+  return api.patch('/knowledge-documents', { ids, group_id: groupID }, { responseType: 'void' })
 }
 
 export interface ReindexResponse {
@@ -169,24 +126,14 @@ export interface ReindexResponse {
 }
 
 export async function reindexDocuments(ids: number[]): Promise<ReindexResponse> {
-  const r = await fetch(`${BASE}/knowledge-documents/reindex`, {
-    method: 'POST',
-    headers: authHeaders(),
-    body: JSON.stringify({ ids })
-  })
-  return handleResponse<ReindexResponse>(r)
+  return api.post('/knowledge-documents/reindex', { ids })
 }
 
 export async function importDocument(groupID: number, file: File): Promise<ImportResult> {
   const fd = new FormData()
   fd.append('group_id', String(groupID))
   fd.append('file', file)
-  const r = await fetch(`${BASE}/knowledge-documents/import`, {
-    method: 'POST',
-    headers: authHeaders(),
-    body: fd
-  })
-  return handleResponse<ImportResult>(r)
+  return api.upload('/knowledge-documents/import', fd)
 }
 
 export interface TryEntryRequest {
@@ -201,10 +148,5 @@ export interface TryEntryResult {
 }
 
 export async function tryEntry(entryID: number, req: TryEntryRequest): Promise<TryEntryResult> {
-  const r = await fetch(`${BASE}/knowledge-entries/${entryID}/try`, {
-    method: 'POST',
-    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-    body: JSON.stringify(req),
-  })
-  return handleResponse<TryEntryResult>(r)
+  return api.post(`/knowledge-entries/${entryID}/try`, req)
 }
