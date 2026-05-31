@@ -98,7 +98,7 @@ func TestTryInjectFull(t *testing.T) {
 		t.Fatal("expected claim to succeed")
 	}
 
-	for i := 0; i < 32; i++ {
+	for i := range 32 {
 		if queued, full := rt.TryInject("conv-1", "msg"); !queued || full {
 			t.Fatalf("inject %d expected queued=true full=false, got queued=%v full=%v", i, queued, full)
 		}
@@ -234,7 +234,7 @@ func TestCancelRemoveWithoutCalling(t *testing.T) {
 
 func TestSSEBufferCapEviction(t *testing.T) {
 	rt := New()
-	for i := 0; i < 501; i++ {
+	for i := range 501 {
 		rt.BufferSSEEvent("conv-1", []byte{byte(i % 256)})
 	}
 	ch := make(chan []byte, 501)
