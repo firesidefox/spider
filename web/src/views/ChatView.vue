@@ -78,6 +78,7 @@ async function doExport(format: 'md' | 'json') {
 
 const activeConvId = ref<string | null>(null)
 const messagesMap = ref<Record<string, DisplayMessage[]>>({})
+const transitionState = ref<'welcome' | 'transitioning' | 'chat'>('welcome')
 const messages = computed(() => messagesMap.value[activeConvId.value ?? ''] ?? [])
 
 const { statuses: agentStatuses } = useAgentStatus()
@@ -119,13 +120,6 @@ function buildDisplayMessages(msgs: ChatMsg[]): DisplayMessage[] {
   }).filter(m => m.blocks.length > 0)
 }
 
-let pollTimers: Map<string, ReturnType<typeof setTimeout>> = new Map()
-
-function clearPollTimer(convId: string) {
-  const t = pollTimers.get(convId)
-  if (t !== undefined) { clearTimeout(t); pollTimers.delete(convId) }
-}
-
 function addSystemMessage(content: string, targetConvId?: string) {
   const cid = targetConvId ?? activeConvId.value
   if (cid) {
@@ -137,27 +131,6 @@ function addSystemMessage(content: string, targetConvId?: string) {
   }
 }
 
-async function pollUntilIdle(convId: string) {
-  const check = async () => {
-    try {
-      const data = await getConversation(convId)
-      if (data.conversation.status === 'idle') {
-        pollTimers.delete(convId)
-        messagesMap.value[convId] = buildDisplayMessages(data.messages)
-        setConversationStreaming(convId, false)
-        if (activeConvId.value === convId) {
-          await nextTick()
-          scrollToBottom()
-        }
-      } else {
-        pollTimers.set(convId, setTimeout(check, 2000))
-      }
-    } catch {
-      pollTimers.set(convId, setTimeout(check, 2000))
-    }
-  }
-  pollTimers.set(convId, setTimeout(check, 2000))
-}
 
 const inputText = ref('')
 const queuedMessages = ref<Map<string, string[]>>(new Map())
@@ -174,7 +147,6 @@ function setConversationStreaming(convId: string, streaming: boolean) {
   const next = new Set(streamingConvIds.value)
   if (streaming) {
     next.add(convId)
-    if (!pollTimers.has(convId)) pollUntilIdle(convId)
   } else next.delete(convId)
   streamingConvIds.value = next
 
@@ -542,14 +514,16 @@ async function loadConversations() {
 }
 
 async function selectConversation(id: string) {
-  clearPollTimer(id)
+  if (id === activeConvId.value) return  // already active
+  activeConvId.value = id  // set immediately so concurrent calls see it
   const data = await getConversation(id)
-  activeConvId.value = id
+  if (activeConvId.value !== id) return  // user switched to another conv while loading
+  if (transitionState.value !== 'chat') transitionState.value = 'chat'
   const taskMap = new Map<number, Todo>()
   for (const t of data.todo_tasks ?? []) taskMap.set(t.id, t)
   todoTasksMap.value[id] = taskMap
   clearAllTimers()
-  queuedMessages.value = []
+  queuedMessages.value = new Map()
   turnUsage.value = null
   completedFolded.value = true
   pendingFolded.value = true
@@ -570,9 +544,6 @@ async function selectConversation(id: string) {
   } else {
     messagesMap.value[id] = buildDisplayMessages(data.messages)
     setConversationStreaming(id, data.conversation.status === 'processing')
-    if (data.conversation.status === 'processing') {
-      pollUntilIdle(id)
-    }
   }
 
   if (data.conversation.status === 'processing') {
@@ -602,6 +573,7 @@ async function createNewConversation() {
 
 function goNewPage() {
   activeConvId.value = null
+  transitionState.value = 'welcome'
   router.replace('/chat')
 }
 
@@ -876,6 +848,14 @@ function handleConvEvent(convId: string, event: ChatEvent) {
   }
 }
 
+function triggerLayoutTransition() {
+  if (transitionState.value !== 'welcome') return
+  transitionState.value = 'transitioning'
+  setTimeout(() => {
+    if (transitionState.value === 'transitioning') transitionState.value = 'chat'
+  }, 420)
+}
+
 async function send(overrideText?: string) {
   const text = (overrideText ?? inputText.value).trim()
   if (!text) return
@@ -920,6 +900,7 @@ async function send(overrideText?: string) {
   }
 
   if (!activeConvId.value) {
+    if (!overrideText) setTimeout(triggerLayoutTransition, 0)
     await createNewConversation()
   }
 
@@ -1064,7 +1045,6 @@ async function handleRenameCommand(text: string) {
 async function handleDeleteConversation(id: string) {
   await deleteConversation(id)
   conversations.value = conversations.value.filter(c => c.id !== id)
-  clearPollTimer(id)
   const unsub = convSubscriptions.get(id)
   if (unsub) { unsub(); convSubscriptions.delete(id) }
   // 清理该会话的 tool_calls 缓存
@@ -1072,6 +1052,7 @@ async function handleDeleteConversation(id: string) {
   for (const m of msgs) toolCallsCache.delete(m.id)
   if (activeConvId.value === id) {
     activeConvId.value = null
+    transitionState.value = 'welcome'
     delete messagesMap.value[id]
     router.replace('/chat')
   }
@@ -1312,8 +1293,6 @@ onActivated(() => {
 
 onDeactivated(() => {
   clearAllTimers()
-  pollTimers.forEach((t) => clearTimeout(t))
-  pollTimers.clear()
   document.removeEventListener('click', closeModeDropdown)
   window.removeEventListener('keydown', handleEscCancel)
 })
@@ -1392,8 +1371,12 @@ onUnmounted(() => {
     </div>
 
     <!-- Chat main -->
-    <div class="chat-main" @click="showExportMenu = false; showModeDropdown = false; closeConvMenu()">
-      <div class="chat-header">
+    <div class="chat-main" :class="{
+      'welcome-mode': transitionState === 'welcome',
+      'welcome-transitioning': transitionState === 'transitioning',
+      'welcome-chat': transitionState === 'chat',
+    }" @click="showExportMenu = false; showModeDropdown = false; closeConvMenu()">
+      <div v-if="activeConvId && transitionState === 'chat'" class="chat-header">
         <button v-if="!sidebarOpen" class="sidebar-toggle" @click="toggleSidebar">≡</button>
         <button v-if="!sidebarOpen" class="header-new-btn" @click="goNewPage()">+</button>
         <input v-if="editingHeaderTitle" class="conv-title-input"
@@ -1427,6 +1410,11 @@ onUnmounted(() => {
           </div>
         </div>
         <button v-if="!targetOpen" class="sidebar-toggle" @click="toggleTarget">‹</button>
+      </div>
+
+      <div class="welcome-greeting">
+        <span class="welcome-logo">✦</span>
+        <span class="welcome-text">你好，{{ currentUser?.username }}</span>
       </div>
 
       <div class="chat-messages" ref="messagesRef">
@@ -1715,4 +1703,80 @@ onUnmounted(() => {
 .batch-delete-btn { background: var(--red, #e05252); color: #fff; border: none; padding: 4px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; font-family: 'SF Mono', monospace; }
 .batch-delete-btn:hover:not(:disabled) { background: #c94444; }
 .batch-delete-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Welcome mode */
+.chat-main.welcome-mode { justify-content: center; align-items: center; }
+.chat-main.welcome-mode .chat-messages { display: none; }
+.chat-main.welcome-mode .todo-panel { display: none; }
+.chat-main.welcome-mode .retry-banner { display: none; }
+.chat-main.welcome-mode .chat-input {
+  max-width: 640px; width: 100%; position: relative;
+  transition: max-width 0.35s ease;
+  border-top: none; background: transparent; padding: 0;
+}
+.chat-main.welcome-transitioning .chat-input,
+.chat-main.welcome-chat .chat-input { max-width: 100%; }
+
+.welcome-greeting {
+  display: none; flex-direction: column; align-items: center; gap: 16px;
+  margin-bottom: 32px; position: relative;
+  transition: opacity 0.4s ease, transform 0.4s ease, filter 0.4s ease;
+}
+.welcome-greeting::before {
+  content: '';
+  position: absolute; top: -40px; left: 50%; transform: translateX(-50%);
+  width: 200px; height: 200px;
+  background: radial-gradient(circle, rgba(99,102,241,0.18) 0%, transparent 70%);
+  pointer-events: none;
+}
+.chat-main.welcome-mode .welcome-greeting { display: flex; }
+.chat-main.welcome-transitioning .welcome-greeting {
+  opacity: 0; transform: translateY(-20px); filter: blur(4px); pointer-events: none;
+}
+.chat-main.welcome-chat .welcome-greeting { display: none; }
+
+.welcome-logo {
+  font-size: 32px; color: color-mix(in srgb, var(--primary) 70%, #fff);
+  filter: drop-shadow(0 0 14px color-mix(in srgb, var(--primary) 65%, transparent));
+  animation: logo-float 3s ease-in-out infinite;
+}
+@keyframes logo-float {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-4px); }
+}
+.welcome-text { font-size: 24px; color: color-mix(in srgb, var(--primary) 40%, var(--text)); }
+
+.chat-main.welcome-mode .input-wrapper {
+  background: rgba(99,102,241,0.05);
+  border: 1px solid rgba(99,102,241,0.28);
+  border-radius: 9px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 2px 12px rgba(0,0,0,0.08);
+  transition: border-color 0.2s;
+}
+.chat-main.welcome-mode .input-wrapper:focus-within {
+  border-color: rgba(99,102,241,0.55);
+}
+.chat-main.welcome-mode .input-wrapper textarea {
+  border: none; background: transparent; border-radius: 0;
+}
+.chat-main.welcome-mode .send-btn:not(.cancel-btn):not(.queue-btn) {
+  background: linear-gradient(135deg, #6366f1, #818cf8);
+  box-shadow: 0 4px 14px rgba(99,102,241,0.45);
+  transition: transform 0.1s, box-shadow 0.2s;
+}
+.chat-main.welcome-mode .send-btn:not(.cancel-btn):not(.queue-btn):hover {
+  box-shadow: 0 6px 20px rgba(99,102,241,0.6);
+  transform: translateY(-1px);
+}
+.chat-main.welcome-mode .send-btn:not(.cancel-btn):not(.queue-btn):active {
+  transform: scale(0.95);
+}
+
+.chat-main.welcome-chat .chat-messages {
+  animation: messages-fadein 0.7s ease 0.5s both;
+}
+@keyframes messages-fadein {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
 </style>
