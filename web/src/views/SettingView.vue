@@ -81,6 +81,9 @@
           <PrometheusDataSourcesPanel />
         </div>
       </template>
+      <template v-else-if="activeTab === 'chat-theme'">
+        <ChatThemeSettings />
+      </template>
       <template v-else>
         <div class="detail-topbar">
           <span class="detail-title">{{ tabTitle }}</span>
@@ -96,10 +99,6 @@
             <button v-else class="btn btn-sm" @click="settingsEditing = true">编辑</button>
           </template>
 
-          <template v-if="activeTab === 'chat-theme'">
-            <button v-if="!chatThemeEditing" class="btn btn-sm" @click="chatThemeEditing = true">编辑</button>
-            <button v-else class="btn btn-sm" @click="chatThemeEditing = false">完成</button>
-          </template>
         </div>
         <div class="detail-body">
         <template v-if="activeTab === 'info'">
@@ -213,75 +212,6 @@
               </tbody>
             </table>
           </div>
-        </template>
-
-        <template v-if="activeTab === 'chat-theme'">
-          <!-- 展示模式 -->
-          <template v-if="!chatThemeEditing">
-            <div class="edit-card">
-              <div class="field-group">
-                <div class="field-label">配色方案</div>
-                <div class="theme-cards">
-                  <div class="theme-card selected">
-                    <div class="theme-preview" :style="{ background: chatThemes[chatThemeName].codeBg }">
-                      <span class="theme-preview-dot" :style="{ color: chatThemes[chatThemeName].primary }">*</span>
-                      <span class="theme-preview-fn" :style="{ color: chatThemes[chatThemeName].primary }">fn</span>
-                      <span class="theme-preview-text" :style="{ color: chatThemes[chatThemeName].textSub }">text</span>
-                    </div>
-                    <div class="theme-name">{{ chatThemes[chatThemeName].displayName }}</div>
-                  </div>
-                </div>
-              </div>
-              <div class="field-group">
-                <div class="field-label">布局密度</div>
-                <div class="density-btns">
-                  <button
-                    v-for="d in (['compact', 'comfortable', 'spacious'] as ChatDensityName[])"
-                    :key="d"
-                    class="density-btn"
-                    :class="{ selected: chatDensityName === d }"
-                    disabled
-                  >{{ densityLabels[d] }}</button>
-                </div>
-              </div>
-            </div>
-          </template>
-          <!-- 编辑模式 -->
-          <template v-else>
-            <div class="edit-card">
-              <div class="field-group">
-                <div class="field-label">配色方案</div>
-                <div class="theme-cards">
-                  <div
-                    v-for="t in chatThemeList"
-                    :key="t.name"
-                    class="theme-card"
-                    :class="{ selected: chatThemeName === t.name }"
-                    @click="selectChatTheme(t.name)"
-                  >
-                    <div class="theme-preview" :style="{ background: t.codeBg }">
-                      <span class="theme-preview-dot" :style="{ color: t.primary }">*</span>
-                      <span class="theme-preview-fn" :style="{ color: t.primary }">fn</span>
-                      <span class="theme-preview-text" :style="{ color: t.textSub }">text</span>
-                    </div>
-                    <div class="theme-name">{{ t.displayName }}</div>
-                  </div>
-                </div>
-              </div>
-              <div class="field-group">
-                <div class="field-label">布局密度</div>
-                <div class="density-btns">
-                  <button
-                    v-for="d in (['compact', 'comfortable', 'spacious'] as ChatDensityName[])"
-                    :key="d"
-                    class="density-btn"
-                    :class="{ selected: chatDensityName === d }"
-                    @click="selectChatDensity(d)"
-                  >{{ densityLabels[d] }}</button>
-                </div>
-              </div>
-            </div>
-          </template>
         </template>
 
         <!-- Tab: 智能体 -->
@@ -854,12 +784,7 @@ import InstallPanel from './InstallPanel.vue'
 import SkillsPanel from './SkillsPanel.vue'
 import PrometheusDataSourcesPanel from '../components/PrometheusDataSourcesPanel.vue'
 import PasswordSettings from '../components/settings/PasswordSettings.vue'
-import {
-  chatThemes, densityPresets,
-  getSavedChatTheme, saveChatTheme,
-  getSavedChatDensity, saveChatDensity,
-  type ChatThemeName, type ChatDensityName,
-} from '../chatTheme'
+import ChatThemeSettings from '../components/settings/ChatThemeSettings.vue'
 
 const { currentUser, isAdmin } = useAuth()
 const route = useRoute()
@@ -884,22 +809,6 @@ const tabTitle = computed(() => ({
   'chat-theme': '对话框主题',
   users: '用户管理', install: '安装', agent: '智能体', kb: '知识库', settings: '偏好设置', notify: '通知渠道',
 }[activeTab.value]))
-
-const chatThemeName = ref<ChatThemeName>(getSavedChatTheme())
-const chatDensityName = ref<ChatDensityName>(getSavedChatDensity())
-const chatThemeEditing = ref(false)
-const chatThemeList = Object.values(chatThemes)
-const densityLabels: Record<ChatDensityName, string> = { compact: '紧凑', comfortable: '舒适', spacious: '宽松' }
-
-function selectChatTheme(name: ChatThemeName) {
-  chatThemeName.value = name
-  saveChatTheme(name)
-}
-
-function selectChatDensity(name: ChatDensityName) {
-  chatDensityName.value = name
-  saveChatDensity(name)
-}
 
 const tokens = ref<TokenInfo[]>([])
 const showCreate = ref(false)
