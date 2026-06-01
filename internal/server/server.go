@@ -246,6 +246,7 @@ func Run(ctx context.Context, opts Options) error {
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	defer signal.Stop(quit)
 
 	select {
 	case err := <-errCh:
@@ -253,9 +254,9 @@ func Run(ctx context.Context, opts Options) error {
 		return fmt.Errorf("http server: %w", err)
 	case <-quit:
 		shutdownCancel() // close SSE streams before HTTP shutdown
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		drainCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		if err := srv.Shutdown(ctx); err != nil && !errors.Is(err, context.DeadlineExceeded) {
+		if err := srv.Shutdown(drainCtx); err != nil && !errors.Is(err, context.DeadlineExceeded) {
 			return err
 		}
 		return nil
