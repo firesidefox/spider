@@ -299,3 +299,113 @@ func exportTopologyYAML(app *mcppkg.App, w http.ResponseWriter, r *http.Request,
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s.yaml"`, base))
 	w.Write(data)
 }
+
+func registerTopologyRoutes(mux *http.ServeMux, d routeDeps) {
+	app := d.app
+	// Topology routes
+	mux.HandleFunc("/api/v1/topologies", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			listTopologies(app, w, r)
+		case http.MethodPost:
+			d.operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				createTopology(app, w, r)
+			})).ServeHTTP(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+	mux.HandleFunc("/api/v1/topologies/", func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		if strings.HasSuffix(path, "/import") {
+			topoID := idFromTopoPath(strings.TrimSuffix(path, "/import"))
+			if r.Method == http.MethodPost {
+				d.operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					importTopologyYAML(app, w, r, topoID)
+				})).ServeHTTP(w, r)
+			} else {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			}
+			return
+		}
+		if strings.HasSuffix(path, "/export") {
+			topoID := idFromTopoPath(strings.TrimSuffix(path, "/export"))
+			if r.Method == http.MethodGet {
+				exportTopologyYAML(app, w, r, topoID)
+			} else {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			}
+			return
+		}
+		if i := strings.Index(path, "/nodes/"); i != -1 {
+			nid := path[i+len("/nodes/"):]
+			switch r.Method {
+			case http.MethodPut:
+				d.operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					updateTopoNode(app, w, r, nid)
+				})).ServeHTTP(w, r)
+			case http.MethodDelete:
+				d.operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					deleteTopoNode(app, w, r, nid)
+				})).ServeHTTP(w, r)
+			default:
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			}
+			return
+		}
+		if strings.HasSuffix(path, "/nodes") {
+			topoID := idFromTopoPath(strings.TrimSuffix(path, "/nodes"))
+			switch r.Method {
+			case http.MethodGet:
+				listTopoNodes(app, w, r, topoID)
+			case http.MethodPost:
+				d.operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					createTopoNode(app, w, r, topoID)
+				})).ServeHTTP(w, r)
+			default:
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			}
+			return
+		}
+		if i := strings.Index(path, "/edges/"); i != -1 {
+			eid := path[i+len("/edges/"):]
+			if r.Method == http.MethodDelete {
+				d.operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					deleteTopoEdge(app, w, r, eid)
+				})).ServeHTTP(w, r)
+			} else {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			}
+			return
+		}
+		if strings.HasSuffix(path, "/edges") {
+			topoID := idFromTopoPath(strings.TrimSuffix(path, "/edges"))
+			switch r.Method {
+			case http.MethodGet:
+				listTopoEdges(app, w, r, topoID)
+			case http.MethodPost:
+				d.operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					createTopoEdge(app, w, r, topoID)
+				})).ServeHTTP(w, r)
+			default:
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			}
+			return
+		}
+		id := idFromTopoPath(path)
+		switch r.Method {
+		case http.MethodGet:
+			getTopology(app, w, r, id)
+		case http.MethodPut:
+			d.operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				updateTopology(app, w, r, id)
+			})).ServeHTTP(w, r)
+		case http.MethodDelete:
+			d.operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				deleteTopology(app, w, r, id)
+			})).ServeHTTP(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+}

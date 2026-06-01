@@ -81,3 +81,45 @@ func listTaskRuns(app *mcppkg.App, w http.ResponseWriter, r *http.Request, id st
 	}
 	writeJSON(w, http.StatusOK, runs)
 }
+
+func registerTaskRoutes(mux *http.ServeMux, d routeDeps) {
+	app := d.app
+	// Task automation API — reuse app.Executor (created in main.go)
+	mux.HandleFunc("/api/v1/tasks", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			listTasks(app, w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+	mux.HandleFunc("/api/v1/tasks/", func(w http.ResponseWriter, r *http.Request) {
+		rest := r.URL.Path[len("/api/v1/tasks/"):]
+		id := rest
+		sub := ""
+		if idx := indexOf(rest, '/'); idx >= 0 {
+			id = rest[:idx]
+			sub = rest[idx+1:]
+		}
+		switch sub {
+		case "":
+			if r.Method == http.MethodGet {
+				getTask(app, w, r, id)
+				return
+			}
+		case "trigger":
+			if r.Method == http.MethodPost {
+				d.operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					triggerTask(app, w, r, id, app.Executor)
+				})).ServeHTTP(w, r)
+				return
+			}
+		case "runs":
+			if r.Method == http.MethodGet {
+				listTaskRuns(app, w, r, id)
+				return
+			}
+		}
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	})
+}

@@ -544,3 +544,160 @@ func accessFaceErrorStatus(err error) int {
 	}
 	return http.StatusInternalServerError
 }
+
+func registerHostRoutes(mux *http.ServeMux, d routeDeps) {
+	app := d.app
+	operatorOrAbove := d.operatorOrAbove
+
+	mux.HandleFunc("/api/v1/hosts", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			listHosts(app, w, r)
+		case http.MethodPost:
+			operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				addHost(app, w, r)
+			})).ServeHTTP(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	mux.HandleFunc("/api/v1/hosts/", func(w http.ResponseWriter, r *http.Request) {
+		rest := r.URL.Path[len("/api/v1/hosts/"):]
+		id := rest
+		sub := ""
+		if idx := indexOf(rest, '/'); idx >= 0 {
+			id = rest[:idx]
+			sub = rest[idx+1:]
+		}
+		if sub == "" {
+			switch r.Method {
+			case http.MethodGet:
+				getHost(app, w, r, id)
+			case http.MethodPut:
+				operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					updateHost(app, w, r, id)
+				})).ServeHTTP(w, r)
+			case http.MethodDelete:
+				operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					deleteHost(app, w, r, id)
+				})).ServeHTTP(w, r)
+			default:
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			}
+			return
+		}
+		section := sub
+		subID := ""
+		if idx := indexOf(sub, '/'); idx >= 0 {
+			section = sub[:idx]
+			subID = sub[idx+1:]
+		}
+		switch section {
+		case "faces":
+			if subID == "" {
+				switch r.Method {
+				case http.MethodGet:
+					listAccessFaces(app, w, r, id)
+					return
+				case http.MethodPost:
+					operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+						addAccessFace(app, w, r, id)
+					})).ServeHTTP(w, r)
+					return
+				}
+			} else {
+				switch r.Method {
+				case http.MethodPut:
+					operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+						updateAccessFace(app, w, r, id, subID)
+					})).ServeHTTP(w, r)
+					return
+				case http.MethodDelete:
+					operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+						deleteAccessFace(app, w, r, id, subID)
+					})).ServeHTTP(w, r)
+					return
+				}
+			}
+		case "fingerprint":
+			if r.Method == http.MethodGet {
+				getFingerprint(app, w, r, id)
+				return
+			}
+		case "memories":
+			if subID == "" {
+				switch r.Method {
+				case http.MethodGet:
+					listMemories(app, w, r, id)
+					return
+				case http.MethodPost:
+					operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+						addMemory(app, w, r, id)
+					})).ServeHTTP(w, r)
+					return
+				}
+			} else {
+				if r.Method == http.MethodDelete {
+					memID := parseMemID(subID)
+					if memID < 0 {
+						http.NotFound(w, r)
+						return
+					}
+					operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+						deleteMemory(app, w, r, id, memID)
+					})).ServeHTTP(w, r)
+					return
+				}
+			}
+		}
+		http.NotFound(w, r)
+	})
+
+	mux.HandleFunc("/api/v1/exec", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				execCommand(app, w, r)
+			})).ServeHTTP(w, r)
+			return
+		}
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	})
+
+	mux.HandleFunc("/api/v1/exec/stream", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				streamCommand(app, w, r)
+			})).ServeHTTP(w, r)
+			return
+		}
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	})
+
+	mux.HandleFunc("/api/v1/exec/batch", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			operatorOrAbove(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				execBatch(app, w, r)
+			})).ServeHTTP(w, r)
+			return
+		}
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	})
+
+	mux.HandleFunc("/api/v1/logs", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			listLogs(app, w, r)
+			return
+		}
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	})
+
+	mux.HandleFunc("/api/v1/logs/", func(w http.ResponseWriter, r *http.Request) {
+		id := r.URL.Path[len("/api/v1/logs/"):]
+		if r.Method == http.MethodGet {
+			getLog(app, w, r, id)
+			return
+		}
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	})
+}

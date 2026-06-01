@@ -7,6 +7,12 @@ import (
 	mcppkg "github.com/spiderai/spider/internal/mcp"
 )
 
+func registerStreamRoutes(mux *http.ServeMux, d routeDeps) {
+	mux.HandleFunc("GET /api/v1/stream", func(w http.ResponseWriter, r *http.Request) {
+		globalStream(d.app, w, r)
+	})
+}
+
 func globalStream(app *mcppkg.App, w http.ResponseWriter, r *http.Request) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {

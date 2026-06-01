@@ -416,3 +416,49 @@ func chatSuggestTitle(app *mcppkg.App, w http.ResponseWriter, r *http.Request, i
 
 	writeJSON(w, 200, map[string]string{"title": title})
 }
+
+func registerChatRoutes(mux *http.ServeMux, d routeDeps) {
+	mux.HandleFunc("/api/v1/chat/conversations", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost:
+			chatCreateConversation(d.app, w, r)
+		case http.MethodGet:
+			chatListConversations(d.app, w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	mux.HandleFunc("/api/v1/chat/conversations/", func(w http.ResponseWriter, r *http.Request) {
+		rest := r.URL.Path[len("/api/v1/chat/conversations/"):]
+		id := rest
+		action := ""
+		if idx := indexOf(rest, '/'); idx >= 0 {
+			id = rest[:idx]
+			action = rest[idx+1:]
+		}
+		switch {
+		case action == "" && r.Method == http.MethodGet:
+			chatGetConversation(d.app, w, r, id)
+		case action == "" && r.Method == http.MethodDelete:
+			chatDeleteConversation(d.app, w, r, id)
+		case action == "" && r.Method == http.MethodPatch:
+			chatUpdateTitle(d.app, w, r, id)
+		case action == "messages" && r.Method == http.MethodPost:
+			chatSendMessage(d.app, w, r, id)
+		case action == "stream" && r.Method == http.MethodGet:
+			chatStreamGet(d.app, w, r, id)
+		case action == "cancel" && r.Method == http.MethodPost:
+			chatCancel(d.app, w, r, id)
+		case action == "suggest-title" && r.Method == http.MethodPost:
+			chatSuggestTitle(d.app, w, r, id)
+		case action == "export" && r.Method == http.MethodGet:
+			chatExportConversation(d.app, w, r, id)
+		case strings.HasPrefix(action, "confirm/") && r.Method == http.MethodPost:
+			requestID := action[len("confirm/"):]
+			chatConfirm(d.app, w, r, id, requestID)
+		default:
+			http.NotFound(w, r)
+		}
+	})
+}
