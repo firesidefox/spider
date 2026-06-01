@@ -177,3 +177,128 @@ func testMigratePreservesHostKnowledgeSources(t *testing.T, seedAccessFace bool)
 		t.Fatalf("expected host_knowledge_sources table dropped, got name=%q err=%v", tableName, err)
 	}
 }
+
+// TestFreshMigrate verifies that a brand-new in-memory database receives every
+// migration entry in the registry and ends up with the expected core tables.
+func TestFreshMigrate(t *testing.T) {
+	sqldb, err := sql.Open("sqlite", ":memory:?_foreign_keys=on")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { sqldb.Close() })
+
+	if err := Migrate(sqldb); err != nil {
+		t.Fatalf("Migrate: %v", err)
+	}
+
+	var count int
+	if err := sqldb.QueryRow(`SELECT COUNT(*) FROM schema_migrations`).Scan(&count); err != nil {
+		t.Fatalf("count schema_migrations: %v", err)
+	}
+	if count != len(migrations) {
+		t.Fatalf("schema_migrations rows = %d, want %d", count, len(migrations))
+	}
+
+	// Spot-check that key tables across the registry exist.
+	wantTables := []string{
+		"hosts", "execution_logs", "users", "api_tokens", "ssh_keys",
+		"conversations", "messages", "documents", "approvals",
+		"providers", "provider_models",
+		"document_groups", "rag_config",
+		"access_faces", "host_fingerprints", "host_memories",
+		"conversation_summaries", "todo_tasks",
+		"topologies", "topology_nodes", "topology_edges",
+		"tasks", "task_runs", "notify_channels",
+		"knowledge_groups", "knowledge_documents", "knowledge_sections", "knowledge_entries",
+		"prometheus_sources", "prometheus_bindings",
+	}
+	for _, name := range wantTables {
+		var got string
+		err := sqldb.QueryRow(`SELECT name FROM sqlite_master WHERE type='table' AND name=?`, name).Scan(&got)
+		if err != nil {
+			t.Errorf("expected table %s: %v", name, err)
+		}
+	}
+}
+
+// TestIdempotentMigrate verifies that running Migrate twice on the same DB is
+// a no-op and does not duplicate schema_migrations rows.
+func TestIdempotentMigrate(t *testing.T) {
+	sqldb, err := sql.Open("sqlite", ":memory:?_foreign_keys=on")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { sqldb.Close() })
+
+	if err := Migrate(sqldb); err != nil {
+		t.Fatalf("first Migrate: %v", err)
+	}
+	var first int
+	if err := sqldb.QueryRow(`SELECT COUNT(*) FROM schema_migrations`).Scan(&first); err != nil {
+		t.Fatal(err)
+	}
+	if err := Migrate(sqldb); err != nil {
+		t.Fatalf("second Migrate: %v", err)
+	}
+	var second int
+	if err := sqldb.QueryRow(`SELECT COUNT(*) FROM schema_migrations`).Scan(&second); err != nil {
+		t.Fatal(err)
+	}
+	if first != second {
+		t.Fatalf("schema_migrations row count changed: first=%d second=%d", first, second)
+	}
+	if second != len(migrations) {
+		t.Fatalf("schema_migrations rows = %d, want %d", second, len(migrations))
+	}
+}
+
+// TestOldDBMigrate simulates an existing pre-registry database (tables present,
+// no schema_migrations row) and confirms Migrate runs to completion and
+// records every migration ID.
+func TestOldDBMigrate(t *testing.T) {
+	sqldb, err := sql.Open("sqlite", ":memory:?_foreign_keys=on")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { sqldb.Close() })
+
+	// Pre-create the hosts table to mimic a database that already ran the
+	// pre-registry monolithic migrate(). The full registry must still
+	// converge on the same schema.
+	if _, err := sqldb.Exec(`CREATE TABLE hosts (
+		id                   TEXT PRIMARY KEY,
+		name                 TEXT UNIQUE NOT NULL,
+		ip                   TEXT NOT NULL,
+		port                 INTEGER NOT NULL DEFAULT 22,
+		username             TEXT NOT NULL DEFAULT '',
+		auth_type            TEXT NOT NULL DEFAULT '',
+		encrypted_credential TEXT NOT NULL DEFAULT '',
+		encrypted_passphrase TEXT NOT NULL DEFAULT '',
+		tags                 TEXT NOT NULL DEFAULT '[]',
+		created_at           DATETIME NOT NULL,
+		updated_at           DATETIME NOT NULL
+	)`); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Migrate(sqldb); err != nil {
+		t.Fatalf("Migrate on old DB: %v", err)
+	}
+
+	var count int
+	if err := sqldb.QueryRow(`SELECT COUNT(*) FROM schema_migrations`).Scan(&count); err != nil {
+		t.Fatalf("count schema_migrations: %v", err)
+	}
+	if count != len(migrations) {
+		t.Fatalf("schema_migrations rows = %d, want %d", count, len(migrations))
+	}
+
+	// Verify that a column added by a later migration exists.
+	var hasUIPrefs int
+	if err := sqldb.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('users') WHERE name='ui_prefs'`).Scan(&hasUIPrefs); err != nil {
+		t.Fatal(err)
+	}
+	if hasUIPrefs != 1 {
+		t.Fatalf("users.ui_prefs missing after Migrate")
+	}
+}
